@@ -1,0 +1,95 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id                    Int       @id @default(autoincrement())
+  full_name             String
+  father_or_husband_name String?
+  mother_name           String?
+  cnic                  String?   @unique
+  cnic_issue_date       DateTime?
+  cnic_expiry_date      DateTime?
+  date_of_birth         DateTime?
+  gender                String?
+  marital_status        String?
+  nationality           String?
+  religion              String?
+  blood_group           String?
+  domicile_district     String?
+  mobile_number         String?
+  whatsapp_number       String?
+  email                 String?   @unique
+  present_address       String?
+  permanent_address     String?
+  district              String?
+  city                  String?
+  latest_qualification  String?
+  past_experience       String?
+  department            Department? @relation(fields: [department_id], references: [id])
+  department_id         String?
+  designation           Designation? @relation(fields: [designation_id], references: [id])
+  designation_id        String?
+  joining_date_mwo      DateTime?
+  joining_date_pmbmc    DateTime?
+  joining_date_psba     DateTime?
+  termination_or_suspend_date DateTime?
+  grade_scale           String?
+  termination_reason    String?
+  special_duty_note     String?
+  document_missing_note String?
+  disability_status     Boolean   @default(false)
+  disability_description String?
+  medical_fitness_status Boolean   @default(false)
+  medical_fitness_file  String?
+  filer_status          String?   @default("Non-Filer")
+  filer_active_status   String?
+  status                String?   @default("Active")
+  profile_picture_file  String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  documents             Document[]
+  salaries              Salary[] 
+  password              String? // Added to establish relation with Salary model
+}
+
+model Department {
+  id        String    @id @default(uuid())
+  name      String
+  employees Employee[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Designation {
+  id        String    @id @default(uuid())
+  name      String
+  employees Employee[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Document {
+  id          Int       @id @default(autoincrement())
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+  employeeId  Int?
+  file_path   String
+  file_type   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Salary {
+  id          Int       @id @default(autoincrement())
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+  employeeId  Int?
+  amount      Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
