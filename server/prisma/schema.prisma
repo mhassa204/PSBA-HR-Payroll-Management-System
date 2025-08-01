@@ -10,12 +10,14 @@ datasource db {
 
 model Employee {
   id                    Int       @id @default(autoincrement())
+  employee_id           String?   @unique // Frontend uses this field
   full_name             String
-  father_or_husband_name String?
+  father_husband_name   String?   // Updated to match frontend
+  relationship_type     String?   // father/husband - from frontend
   mother_name           String?
   cnic                  String?   @unique
   cnic_issue_date       DateTime?
-  cnic_expiry_date      DateTime?
+  cnic_expire_date      DateTime? // Updated to match frontend
   date_of_birth         DateTime?
   gender                String?
   marital_status        String?
@@ -28,68 +30,161 @@ model Employee {
   email                 String?   @unique
   present_address       String?
   permanent_address     String?
+  same_address          Boolean   @default(false) // New field for address optimization
   district              String?
   city                  String?
-  latest_qualification  String?
-  past_experience       String?
-  department            Department? @relation(fields: [department_id], references: [id])
-  department_id         String?
-  designation           Designation? @relation(fields: [designation_id], references: [id])
-  designation_id        String?
-  joining_date_mwo      DateTime?
-  joining_date_pmbmc    DateTime?
-  joining_date_psba     DateTime?
-  termination_or_suspend_date DateTime?
-  grade_scale           String?
-  termination_reason    String?
-  special_duty_note     String?
-  document_missing_note String?
-  disability_status     Boolean   @default(false)
+
+  // Enhanced disability information
+  has_disability        Boolean   @default(false)
+  disability_type       String?
   disability_description String?
-  medical_fitness_status Boolean   @default(false)
-  medical_fitness_file  String?
-  filer_status          String?   @default("Non-Filer")
-  filer_active_status   String?
+
+  // System fields
+  password              String?
   status                String?   @default("Active")
-  profile_picture_file  String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-  documents             Document[]
-  salaries              Salary[] 
-  password              String? // Added to establish relation with Salary model
+
+  // Relations to normalized tables
+  pastExperiences       PastExperience[]
+  educationQualifications EducationQualification[]
+  documents             EmployeeDocument[]
+  employmentRecords     Employment[]
 }
 
 model Department {
-  id        String    @id @default(uuid())
-  name      String
-  employees Employee[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id          Int       @id @default(autoincrement()) // Changed to Int for consistency
+  name        String
+  code        String?   // Department code from frontend
+  description String?   // Department description from frontend
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations - departments are referenced by employment records
+  designations      Designation[] // Added opposite relation field
+  employmentRecords Employment[]
 }
 
 model Designation {
-  id        String    @id @default(uuid())
-  name      String
-  employees Employee[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id            Int       @id @default(autoincrement()) // Changed to Int for consistency
+  title         String    // Changed from 'name' to 'title' to match frontend
+  department_id Int?      // Reference to department
+  level         Int?      // Hierarchy level from frontend
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  department        Department? @relation(fields: [department_id], references: [id])
+  employmentRecords Employment[]
+
+  // Unique constraint for title and department combination
+  @@unique([title, department_id], name: "title_department_id")
 }
 
-model Document {
-  id          Int       @id @default(autoincrement())
-  employee    Employee? @relation(fields: [employeeId], references: [id])
-  employeeId  Int?
-  file_path   String
-  file_type   String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+// Normalized table for past work experiences
+model PastExperience {
+  id           Int      @id @default(autoincrement())
+  employee     Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  employee_id  Int
+  company_name String
+  start_date   String   // Stored as string to match frontend
+  end_date     String   // Stored as string to match frontend
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
-model Salary {
-  id          Int       @id @default(autoincrement())
-  employee    Employee? @relation(fields: [employeeId], references: [id])
-  employeeId  Int?
-  amount      Float
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+// Normalized table for education qualifications
+model EducationQualification {
+  id                  Int      @id @default(autoincrement())
+  employee            Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  employee_id         Int
+  education_level     String
+  institution_name    String
+  year_of_completion  String   // Stored as string to match frontend
+  marks_gpa          String?  // Stored as string to match frontend
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// Normalized table for employee documents
+model EmployeeDocument {
+  id            Int       @id @default(autoincrement())
+  employee      Employee  @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  employee_id   Int
+  file_path     String
+  file_type     String    // e.g., 'profile_picture', 'cnic_front', 'cnic_back', 'matric', 'fsc', 'domicile', 'other'
+  document_name String?   // Original filename
+  file_size     Int?      // File size in bytes
+  mime_type     String?   // MIME type of the file
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+
+
+// Employment Details Tab - Core employment information only
+model Employment {
+  id                  Int         @id @default(autoincrement())
+  employee            Employee    @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  employee_id         Int
+  organization        String      // MBWO, PMBMC, PSBA
+  department          Department? @relation(fields: [department_id], references: [id])
+  department_id       Int?
+  designation         Designation? @relation(fields: [designation_id], references: [id])
+  designation_id      Int?
+  employment_type     String      @default("Regular") // Regular, Contract, Probation, etc.
+  effective_from      DateTime?   // Start date
+  effective_till      DateTime?   // End date (null for current employment)
+  role_tag            String?
+  reporting_officer_id String?
+  office_location     String?
+  remarks             String?
+
+  // Probation fields
+  is_on_probation     Boolean     @default(false)
+  probation_end_date  DateTime?
+
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  // Relations to salary and location
+  salary              EmploymentSalary?
+  location            EmploymentLocation?
+}
+
+// Employment Salary Tab - All salary-related information
+model EmploymentSalary {
+  id                    Int        @id @default(autoincrement())
+  employment            Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
+  employment_id         Int        @unique
+  basic_salary          Float      @default(0)
+  medical_allowance     Float      @default(0)
+  house_rent            Float      @default(0)
+  conveyance_allowance  Float      @default(0)
+  other_allowances      Float      @default(0)
+  daily_wage_rate       Float?     // For daily wage employees
+  bank_account_primary  String?
+  bank_name_primary     String?
+  bank_branch_code      String?
+  payment_mode          String     @default("Bank Transfer")
+  salary_effective_from DateTime?
+  salary_effective_till DateTime?
+  payroll_status        String     @default("Active")
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
+
+// Employment Location Tab - All location-related information
+model EmploymentLocation {
+  id            Int        @id @default(autoincrement())
+  employment    Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
+  employment_id Int        @unique
+  district      String?
+  city          String?
+  bazaar_name   String?
+  type          String     @default("HEAD_OFFICE") // HEAD_OFFICE, BAZAAR, HEAD_QUARTER, SAHULAT_BAZAAR
+  full_address  String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }

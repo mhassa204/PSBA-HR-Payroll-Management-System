@@ -1,23 +1,56 @@
 // src/controllers/employeeController.js
 const employeeService = require("../services/employeeService");
 const path = require("path");
+const { DOCUMENT_TYPES } = require("../config/multer");
 
 const validateCNIC = (cnic) => /^\d{5}-\d{7}-\d{1}$/.test(cnic);
+
+// Helper function to process uploaded files
+const processUploadedFiles = (files) => {
+  const processedFiles = {};
+  const documentRecords = [];
+
+  if (!files) return { processedFiles, documentRecords };
+
+  // Process each file type
+  Object.keys(files).forEach(fieldName => {
+    const fileArray = files[fieldName];
+    const documentType = DOCUMENT_TYPES[fieldName] || 'other';
+
+    fileArray.forEach(file => {
+      const relativePath = path.join("uploads", file.filename);
+
+      // For profile and medical files, store in main employee record
+      if (fieldName === 'profile_picture_file') {
+        processedFiles.profile_picture_file = relativePath;
+      } else if (fieldName === 'medical_fitness_file') {
+        processedFiles.medical_fitness_file = relativePath;
+      } else {
+        // For all other files, create document records
+        documentRecords.push({
+          file_path: relativePath,
+          file_type: documentType,
+          document_name: file.originalname,
+          file_size: file.size,
+          mime_type: file.mimetype
+        });
+      }
+    });
+  });
+
+  return { processedFiles, documentRecords };
+};
 
 const employeeController = {
   createEmployee: async (req, res) => {
     try {
-      const { full_name, department_id, designation_id, cnic, password } =
-        req.body;
-      // console.log(req.body);
-      console.log("Hello file");
-      console.log(req.file);
-      console.log(req.files);
+      const { full_name, cnic, password } = req.body;
+
+      console.log("Creating employee with files:", req.files);
+
       // Basic required field validation
       const missingFields = [];
       if (!full_name) missingFields.push("full_name");
-      if (!department_id) missingFields.push("department_id");
-      if (!designation_id) missingFields.push("designation_id");
       if (!password) missingFields.push("password");
 
       if (missingFields.length > 0) {
@@ -28,45 +61,33 @@ const employeeController = {
       }
 
       if (cnic && !validateCNIC(cnic)) {
-        console.log("After cninc")
         return res.status(400).json({
           success: false,
           error: "Invalid CNIC format. Must be like 35201-XXXXXXX-X",
         });
       }
 
-      const files = {
-        medical_fitness_file: req.files?.medical_fitness_file?.[0]
-          ? path.join("uploads", req.files.medical_fitness_file[0].filename)
-          : null,
-        profile_picture_file: req.files?.profile_picture_file?.[0]
-          ? path.join("uploads", req.files.profile_picture_file[0].filename)
-          : null,
-      };
+      // Process uploaded files
+      const { processedFiles, documentRecords } = processUploadedFiles(req.files);
 
-      // Pass relative paths instead of full system paths
+      // Create employee with processed files and document records
+      const employee = await employeeService.createEmployee(req.body, processedFiles, documentRecords);
 
-      const employee = await employeeService.createEmployee(req.body, files);
-      console.log(employee);
       res.status(201).json({ success: true, employee });
     } catch (error) {
-      console.log(error.message);
+      console.error("Error creating employee:", error.message);
       res.status(400).json({ success: false, error: error.message });
     }
   },
 
   updateEmployee: async (req, res) => {
     try {
-      const { cnic,full_name, department_id, designation_id } = req.body;
-      console.log(req.body);
-      // console.log(req.params.id)
+      const { cnic, full_name } = req.body;
+      console.log("Updating employee with data:", req.body);
+      console.log("Updating employee with files:", req.files);
 
-
-       const missingFields = [];
+      const missingFields = [];
       if (!full_name) missingFields.push("full_name");
-      if (!department_id) missingFields.push("department_id");
-      if (!designation_id) missingFields.push("designation_id");
-      
 
       if (missingFields.length > 0) {
         return res.status(400).json({
@@ -74,6 +95,7 @@ const employeeController = {
           error: `Missing required fields: ${missingFields.join(", ")}`,
         });
       }
+
       if (cnic && !validateCNIC(cnic)) {
         return res.status(400).json({
           success: false,
@@ -81,25 +103,20 @@ const employeeController = {
         });
       }
 
-      
+      // Process uploaded files
+      const { processedFiles, documentRecords } = processUploadedFiles(req.files);
 
-      const files = {
-        medical_fitness_file: req.files?.medical_fitness_file?.[0]
-          ? path.join("uploads", req.files.medical_fitness_file[0].filename)
-          : null,
-        profile_picture_file: req.files?.profile_picture_file?.[0]
-          ? path.join("uploads", req.files.profile_picture_file[0].filename)
-          : null,
-      };
       const id = String(req.params.id);
       const employee = await employeeService.updateEmployee(
         id,
         req.body,
-        files
+        processedFiles,
+        documentRecords
       );
+
       res.status(200).json({ success: true, employee });
     } catch (error) {
-      console.log(error.message);
+      console.error("Error updating employee:", error.message);
       res.status(400).json({ success: false, error: error.message });
     }
   },

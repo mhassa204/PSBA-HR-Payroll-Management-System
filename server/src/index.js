@@ -3,9 +3,12 @@ const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const employeeRoutes = require("./routes/employeeRoutes");
+const employmentRoutes = require("./routes/employmentRoutes");
+const departmentRoutes = require("./routes/departmentRoutes");
+const designationRoutes = require("./routes/designationRoutes");
 const multer = require("multer");
 
-const app = express();
+const app = express(); 
 const PORT = process.env.PORT || 3000;
 
 // Use project root for consistent relative paths
@@ -32,6 +35,9 @@ app.use(express.json());
 
 // Routes
 app.use("/api/employees", employeeRoutes);
+app.use("/api/employment", employmentRoutes);
+app.use("/api/departments", departmentRoutes);
+app.use("/api/designations", designationRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -42,9 +48,25 @@ app.use((err, req, res, next) => {
   next();
 });
 
+// Error handling for uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
 // Start server
-app.listen(PORT, "172.16.21.178", () => {
-  console.log(`Server running on http://172.16.21.178:${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server also accessible on http://172.16.21.178:${PORT}`);
+});
+
+server.on('error', (err) => {
+  console.error('Server error:', err);
 });
 
 // const express = require("express");

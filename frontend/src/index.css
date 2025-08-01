@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  /* Primary brand color for headers, buttons, links */
+  --color-primary: #1d4ed8;
+
+  /* Lighter variant for hover states and highlights */
+  --color-primary-light: #3b82f6;
+
+  /* Secondary color for success states, badges, etc. */
+  --color-secondary: #22c55e;
+
+  /* Warning or error color for alerts, validations, terminated status */
+  --color-warning: #ef4444;
+
+  /* Light background used for full app layout */
+  --color-background-light: #f9fafb;
+
+  /* Card or section containers background */
+  --color-card: #ffffff;
+
+  /* Border color for inputs, cards, dividers */
+  --color-border: #e5e7eb;
+
+  /* Primary text color for headings and main content */
+  --color-text-dark: #111827;
+
+  /* Secondary text for descriptions, labels */
+  --color-text-light: #4b5563;
+
+  /* Dark background (for dark mode or sidebar) */
+  --color-background-dark: #111827;
+
+  /* Card/section background for dark mode */
+  --color-card-dark: #1f2937;
+
+  /* Light text on dark backgrounds */
+  --color-text-light-contrast: #f3f4f6;
+
+  /* Muted text for less prominent UI text (tooltips, labels) */
+  --color-text-muted: #9ca3af;
+
+  /* Hover state for buttons and links */
+  --color-button-hover: #2563eb;
+
+  /* Success green for status indicators, notifications */
+  --color-success: #10b981;
+
+  /* Background for error alerts or inputs */
+  --color-error-bg: #fee2e2;
+
+  /* Background for success messages or badges */
+  --color-success-bg: #d1fae5;
+}
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: white;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Custom scrollbar styles for better UX */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+  border: 1px solid #f1f5f9;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Ensure smooth scrolling behavior */
+.smooth-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Fix for modal scrolling issues */
+.modal-content {
+  overflow-y: auto;
+  max-height: calc(95vh - 80px);
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
