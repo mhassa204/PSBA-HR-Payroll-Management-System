@@ -178,6 +178,16 @@ export const FILE_UPLOAD_CONFIG = {
     maxSize: 10 * 1024 * 1024, // 10MB
     types: ["image/jpeg", "image/png", "application/pdf"],
   },
+  education_document: {
+    accept: "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    maxSize: 15 * 1024 * 1024, // 15MB
+    types: ["image/jpeg", "image/png", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  },
+  experience_document: {
+    accept: "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    maxSize: 15 * 1024 * 1024, // 15MB
+    types: ["image/jpeg", "image/png", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  },
   other_documents: {
     accept: "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     maxSize: 15 * 1024 * 1024, // 15MB

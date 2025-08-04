@@ -16,14 +16,22 @@ router.post(
     { name: "cnic_front", maxCount: 1 },
     { name: "cnic_back", maxCount: 1 },
     { name: "cnic_documents", maxCount: 2 }, // For both front and back
+    { name: "cnic_documents_file", maxCount: 2 }, // Alternative field name
+    { name: "cnic_front_file", maxCount: 1 },
+    { name: "cnic_back_file", maxCount: 1 },
     { name: "domicile_certificate", maxCount: 1 },
+    { name: "domicile_certificate_file", maxCount: 1 },
     { name: "disability_document", maxCount: 1 },
+    { name: "disability_document_file", maxCount: 1 },
     { name: "certificates", maxCount: 5 }, // Multiple certificates
     { name: "matric_certificate", maxCount: 1 },
     { name: "fsc_certificate", maxCount: 1 },
     { name: "education_documents", maxCount: 10 }, // Multiple education docs
+    { name: "education_documents_file", maxCount: 10 }, // Alternative field name
     { name: "experience_documents", maxCount: 10 }, // Multiple experience docs
+    { name: "experience_documents_file", maxCount: 10 }, // Alternative field name
     { name: "other_documents", maxCount: 20 }, // Multiple other documents
+    { name: "other_documents_file", maxCount: 20 }, // Alternative field name
   ]),
   employeeController.createEmployee
 );
@@ -39,14 +47,22 @@ router.put(
     { name: "cnic_front", maxCount: 1 },
     { name: "cnic_back", maxCount: 1 },
     { name: "cnic_documents", maxCount: 2 }, // For both front and back
+    { name: "cnic_documents_file", maxCount: 2 }, // Alternative field name
+    { name: "cnic_front_file", maxCount: 1 },
+    { name: "cnic_back_file", maxCount: 1 },
     { name: "domicile_certificate", maxCount: 1 },
+    { name: "domicile_certificate_file", maxCount: 1 },
     { name: "disability_document", maxCount: 1 },
+    { name: "disability_document_file", maxCount: 1 },
     { name: "certificates", maxCount: 5 }, // Multiple certificates
     { name: "matric_certificate", maxCount: 1 },
     { name: "fsc_certificate", maxCount: 1 },
     { name: "education_documents", maxCount: 10 }, // Multiple education docs
+    { name: "education_documents_file", maxCount: 10 }, // Alternative field name
     { name: "experience_documents", maxCount: 10 }, // Multiple experience docs
+    { name: "experience_documents_file", maxCount: 10 }, // Alternative field name
     { name: "other_documents", maxCount: 20 }, // Multiple other documents
+    { name: "other_documents_file", maxCount: 20 }, // Alternative field name
   ]),
   employeeController.updateEmployee
 );

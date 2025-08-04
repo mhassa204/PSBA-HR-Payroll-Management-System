@@ -5,6 +5,8 @@ import { useEmployeeStore } from "../store/employeeStore";
 import { useErrorHandler } from "../../../hooks/useErrorHandler";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import ErrorMessage from "../../../components/ui/ErrorMessage";
+import ProfilePicture from "../../../components/ui/ProfilePicture";
+import DocumentViewer, { DocumentGrid } from "../../../components/ui/DocumentViewer";
 import {
   formatDateDisplay,
   displayCNIC,
@@ -218,8 +220,13 @@ const EnhancedUserProfile = () => {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6">
-              <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center">
-                <i className="fas fa-user text-4xl"></i>
+              <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center overflow-hidden">
+                <ProfilePicture
+                  employee={employee}
+                  size="2xl"
+                  className="w-24 h-24 border-2 border-white/30"
+                  showFallback={true}
+                />
               </div>
               <div>
                 <h1 className="text-3xl font-bold mb-2">
@@ -1100,114 +1107,41 @@ const EnhancedUserProfile = () => {
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Personal Documents */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                {/* Profile Picture Section */}
+                {employee.profile_picture && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
                     <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                      <i className="fas fa-id-card mr-2 text-green-600"></i>
-                      Personal Documents
+                      <i className="fas fa-user-circle mr-2 text-blue-600"></i>
+                      Profile Picture
                     </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                        <span className="text-gray-600">Profile Picture:</span>
-                        <span className="text-sm text-gray-500">
-                          {employee.profile_picture ? "Available" : "Not uploaded"}
-                        </span>
+                    <div className="flex items-center space-x-4">
+                      <ProfilePicture
+                        employee={employee}
+                        size="xl"
+                        className="border-2 border-gray-200"
+                        showFallback={true}
+                      />
+                      <div>
+                        <p className="text-sm text-gray-600">
+                          Profile picture uploaded successfully
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Click to view full size
+                        </p>
                       </div>
-                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                        <span className="text-gray-600">CNIC Front:</span>
-                        <span className="text-sm text-gray-500">
-                          {employee.cnic_front ? "Available" : "Not uploaded"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                        <span className="text-gray-600">CNIC Back:</span>
-                        <span className="text-sm text-gray-500">
-                          {employee.cnic_back ? "Available" : "Not uploaded"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                        <span className="text-gray-600">Domicile Certificate:</span>
-                        <span className="text-sm text-gray-500">
-                          {employee.domicile_certificate ? "Available" : "Not uploaded"}
-                        </span>
-                      </div>
-                      {employee.has_disability && (
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                          <span className="text-gray-600">Disability Document:</span>
-                          <span className="text-sm text-gray-500">
-                            {employee.disability_document ? "Available" : "Not uploaded"}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Education & Experience Documents */}
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                      <i className="fas fa-graduation-cap mr-2 text-purple-600"></i>
-                      Education & Experience Documents
-                    </h4>
-                    <div className="space-y-4">
-                      {/* Education Documents */}
-                      {employee.educationQualifications && employee.educationQualifications.length > 0 && (
-                        <div>
-                          <h5 className="text-sm font-semibold text-gray-700 mb-2">Education Documents:</h5>
-                          {employee.educationQualifications.map((education, index) => (
-                            <div key={index} className="flex justify-between items-center py-1 text-sm">
-                              <span className="text-gray-600">{education.education_level || `Education #${index + 1}`}:</span>
-                              <span className="text-gray-500">
-                                {employee.education_documents && employee.education_documents[education.id] ? "Available" : "Not uploaded"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Experience Documents */}
-                      {employee.pastExperiences && employee.pastExperiences.length > 0 && (
-                        <div>
-                          <h5 className="text-sm font-semibold text-gray-700 mb-2">Experience Documents:</h5>
-                          {employee.pastExperiences.map((experience, index) => (
-                            <div key={index} className="flex justify-between items-center py-1 text-sm">
-                              <span className="text-gray-600">{experience.company_name || `Experience #${index + 1}`}:</span>
-                              <span className="text-gray-500">
-                                {employee.experience_documents && employee.experience_documents[experience.id] ? "Available" : "Not uploaded"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {(!employee.educationQualifications || employee.educationQualifications.length === 0) &&
-                       (!employee.pastExperiences || employee.pastExperiences.length === 0) && (
-                        <div className="text-center py-4 text-gray-500">
-                          <i className="fas fa-file-alt text-2xl mb-2"></i>
-                          <p>No education or experience documents</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Other Documents */}
-                {employee.other_documents && employee.other_documents.length > 0 && (
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                      <i className="fas fa-paperclip mr-2 text-orange-600"></i>
-                      Other Documents
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {employee.other_documents.map((doc, index) => (
-                        <div key={index} className="flex items-center p-3 bg-gray-50 rounded-lg">
-                          <i className="fas fa-file mr-3 text-gray-600"></i>
-                          <span className="text-gray-900">{doc.name || `Document ${index + 1}`}</span>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 )}
+
+                {/* Documents Grid */}
+                <DocumentGrid
+                  documents={employee.documents || []}
+                  title="Employee Documents"
+                  emptyMessage="No documents have been uploaded for this employee"
+                  className="mb-6"
+                />
+
+
               </motion.div>
             )}
           </div>

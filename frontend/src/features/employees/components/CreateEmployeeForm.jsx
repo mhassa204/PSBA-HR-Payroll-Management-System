@@ -9,6 +9,8 @@ import EnhancedModal from "../../../components/ui/EnhancedModal";
 import SearchableSelect from "../../../components/ui/SearchableSelect";
 import { useAuditLog } from "../../../hooks/useAuditLog";
 import { forceRestoreScroll } from "../../../utils/scrollUtils";
+import ProfilePicture from "../../../components/ui/ProfilePicture";
+import CNICInput from "../../../components/ui/CNICInput";
 import {
   RELIGION_OPTIONS,
   DISABILITY_TYPES,
@@ -531,25 +533,16 @@ const CreateEmployeeForm = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    CNIC <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    {...form.register("cnic", {
-                      required: "CNIC is required",
-                      validate: (value) => {
-                        const validation = validateCNIC(value);
-                        return validation.isValid || validation.message;
-                      }
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter CNIC (e.g., 12345-1234567-1)"
-                    maxLength="15"
+                  <CNICInput
+                    value={form.watch("cnic")}
+                    onChange={(e) => form.setValue("cnic", e.target.value)}
+                    label="CNIC"
+                    required={true}
+                    placeholder="1234567890123"
+                    error={form.formState.errors.cnic?.message}
+                    name="cnic"
+                    showValidation={true}
                   />
-                  {form.formState.errors.cnic && (
-                    <p className="text-red-600 text-sm mt-1">{form.formState.errors.cnic.message}</p>
-                  )}
                 </div>
 
                 <div>

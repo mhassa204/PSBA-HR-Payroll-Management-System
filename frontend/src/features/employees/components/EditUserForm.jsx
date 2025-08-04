@@ -24,6 +24,9 @@ import {
   validateFileUpload,
   validateMultipleFiles
 } from "../../../utils/employeeValidation";
+import ProfilePicture from "../../../components/ui/ProfilePicture";
+import { getProfilePictureUrl } from "../../../utils/imageUtils";
+import CNICInput from "../../../components/ui/CNICInput";
 
 const EditUserForm = ({ user }) => {
   const navigate = useNavigate();
@@ -364,6 +367,18 @@ const EditUserForm = ({ user }) => {
                         ×
                       </button>
                     </div>
+                  ) : user?.profile_picture ? (
+                    <div className="relative">
+                      <ProfilePicture
+                        employee={user}
+                        size="xl"
+                        className="w-24 h-24 border-2 border-gray-300"
+                        showFallback={true}
+                      />
+                      <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                        <i className="fas fa-check"></i>
+                      </div>
+                    </div>
                   ) : (
                     <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center border-2 border-dashed border-gray-300">
                       <i className="fas fa-user text-gray-400 text-2xl"></i>
@@ -452,22 +467,16 @@ const EditUserForm = ({ user }) => {
               </div>
 
               <div>
-                <label className="form-label required">CNIC</label>
-                <input
-                  type="text"
-                  {...register("cnic", { 
-                    required: "CNIC is required",
-                    pattern: {
-                      value: /^\d{5}-\d{7}-\d{1}$/,
-                      message: "CNIC format should be 12345-1234567-1"
-                    }
-                  })}
-                  className="form-input w-full"
-                  placeholder="12345-1234567-1"
+                <CNICInput
+                  value={watch("cnic")}
+                  onChange={(e) => setValue("cnic", e.target.value)}
+                  label="CNIC"
+                  required={true}
+                  placeholder="1234567890123"
+                  error={errors.cnic?.message}
+                  name="cnic"
+                  showValidation={true}
                 />
-                {errors.cnic && (
-                  <p className="error-message">{errors.cnic.message}</p>
-                )}
               </div>
 
               <div>

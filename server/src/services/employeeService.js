@@ -2,6 +2,9 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const { encrypt, decrypt } = require("../utils/cryptoUtil"); // 👈 Add this line
 
+// Define date fields that need special processing
+const dateFields = ["cnic_issue_date", "cnic_expire_date", "date_of_birth"];
+
 const employeeService = {
   createEmployee: async (data, processedFiles, documentRecords) => {
     const {
@@ -16,18 +19,20 @@ const employeeService = {
     // Generate employee_id if not provided
     const employee_id = data.employee_id || `EMP${new Date().getFullYear()}${String(Date.now()).slice(-3)}`;
 
-    // Process date fields
-    const dateFields = [
-      "cnic_issue_date",
-      "cnic_expire_date",
-      "date_of_birth",
-    ];
+    // Process date fields (using dateFields defined at top of file)
 
-    // Convert date strings to Date objects
+    // Convert date strings to Date objects, handle empty strings as null
     const processedData = { ...rest };
     dateFields.forEach(field => {
-      if (processedData[field] && typeof processedData[field] === 'string') {
-        processedData[field] = new Date(processedData[field]);
+      if (processedData[field] === "" || processedData[field] === null || processedData[field] === undefined) {
+        processedData[field] = null;
+      } else if (processedData[field] && typeof processedData[field] === 'string' && processedData[field].trim() !== '') {
+        try {
+          processedData[field] = new Date(processedData[field]);
+        } catch (error) {
+          console.error(`Invalid date format for ${field}: ${processedData[field]}`);
+          processedData[field] = null;
+        }
       }
     });
 
@@ -165,18 +170,20 @@ const employeeService = {
       ...rest
     } = data;
 
-    // Process date fields
-    const dateFields = [
-      "cnic_issue_date",
-      "cnic_expire_date",
-      "date_of_birth",
-    ];
+    // Use date fields defined at the top of the file
 
-    // Convert date strings to Date objects
+    // Convert date strings to Date objects, handle empty strings as null
     const processedData = { ...rest };
     dateFields.forEach(field => {
-      if (processedData[field] && typeof processedData[field] === 'string') {
-        processedData[field] = new Date(processedData[field]);
+      if (processedData[field] === "" || processedData[field] === null || processedData[field] === undefined) {
+        processedData[field] = null;
+      } else if (processedData[field] && typeof processedData[field] === 'string' && processedData[field].trim() !== '') {
+        try {
+          processedData[field] = new Date(processedData[field]);
+        } catch (error) {
+          console.error(`Invalid date format for ${field}: ${processedData[field]}`);
+          processedData[field] = null;
+        }
       }
     });
 
@@ -192,11 +199,25 @@ const employeeService = {
       "missing_note", "profile_picture"
     ];
 
-    // Process allowed fields
+    // Process allowed fields (dateFields already defined above)
     for (const key of allowedFields) {
       if (processedData[key] !== undefined) {
         if (key === "same_address" || key === "has_disability") {
           employeeUpdateData[key] = processedData[key] === "true" || processedData[key] === true;
+        } else if (dateFields.includes(key)) {
+          // Handle date fields - convert empty strings to null, valid dates to Date objects
+          if (processedData[key] === "" || processedData[key] === null || processedData[key] === undefined) {
+            employeeUpdateData[key] = null;
+          } else if (typeof processedData[key] === 'string' && processedData[key].trim() !== '') {
+            try {
+              employeeUpdateData[key] = new Date(processedData[key]);
+            } catch (error) {
+              console.error(`Invalid date format for ${key}: ${processedData[key]}`);
+              employeeUpdateData[key] = null;
+            }
+          } else {
+            employeeUpdateData[key] = processedData[key]; // Already a Date object
+          }
         } else {
           employeeUpdateData[key] = processedData[key];
         }
