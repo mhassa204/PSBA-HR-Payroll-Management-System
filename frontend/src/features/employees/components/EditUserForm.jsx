@@ -74,7 +74,7 @@ const EditUserForm = ({ user }) => {
       has_disability: user?.has_disability || false,
       disability_type: user?.disability_type || "",
       disability_description: user?.disability_description || "",
-      mission_note: user?.mission_note || "",
+      missing_note: user?.missing_note || "",
       has_past_experience: user?.has_past_experience || false,
       past_experiences: user?.pastExperiences || [],
       // Dynamic education system
@@ -966,9 +966,9 @@ const EditUserForm = ({ user }) => {
             </div>
 
             <div>
-              <label className="form-label">Mission Note</label>
+              <label className="form-label">Missing Note</label>
               <textarea
-                {...register("mission_note")}
+                {...register("missing_note")}
                 className="form-input w-full"
                 rows={3}
                 placeholder="Enter mission note or career objective"

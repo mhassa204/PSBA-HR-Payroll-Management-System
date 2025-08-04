@@ -90,7 +90,7 @@ const CreateEmployeeForm = () => {
       experience_documents_files: {},
       education_documents_files: {},
       other_documents_files: [],
-      mission_note: "",
+      missing_note: "",
       has_past_experience: false,
       past_experiences: [],
       educations: [],
@@ -980,7 +980,7 @@ const CreateEmployeeForm = () => {
                     Missing Note
                   </label>
                   <textarea
-                    {...form.register("mission_note")}
+                    {...form.register("missing_note")}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter missing note or additional information"

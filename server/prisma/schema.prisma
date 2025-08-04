@@ -39,6 +39,12 @@ model Employee {
   disability_type       String?
   disability_description String?
 
+  // File uploads
+  profile_picture       String?   // Profile picture file path
+
+  // Additional fields
+  missing_note          String?   // Missing note from frontend
+
   // System fields
   password              String?
   status                String?   @default("Active")

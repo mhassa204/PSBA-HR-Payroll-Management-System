@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 const { encrypt, decrypt } = require("../utils/cryptoUtil"); // 👈 Add this line
 
 const employeeService = {
-  createEmployee: async (data, files, documentRecords) => {
+  createEmployee: async (data, processedFiles, documentRecords) => {
     const {
       full_name,
       past_experiences,
@@ -61,6 +61,10 @@ const employeeService = {
       disability_description: processedData.disability_description,
       password: data.password ? encrypt(data.password) : null,
       status: processedData.status || "Active",
+      // Add profile picture if uploaded
+      profile_picture: processedFiles?.profile_picture_file || null,
+      // Add missing note if provided
+      missing_note: processedData.missing_note || null
     };
 
     // Create employee with related data in a transaction
@@ -104,14 +108,30 @@ const employeeService = {
 
       // Create document records if any
       if (documentRecords && documentRecords.length > 0) {
+        console.log(`Creating ${documentRecords.length} document records for employee ${employee.id}`);
         const documentsToCreate = documentRecords.map(doc => ({
           ...doc,
           employee_id: employee.id
         }));
+        console.log("Documents to create:", documentsToCreate);
 
-        await tx.employeeDocument.createMany({
-          data: documentsToCreate
-        });
+        try {
+          const result = await tx.employeeDocument.createMany({
+            data: documentsToCreate
+          });
+          console.log("Document records created successfully:", result);
+
+          // Verify documents were created
+          const createdDocs = await tx.employeeDocument.findMany({
+            where: { employee_id: employee.id }
+          });
+          console.log(`Verified: ${createdDocs.length} documents created for employee ${employee.id}`);
+        } catch (docError) {
+          console.error("ERROR creating document records:", docError);
+          throw docError;
+        }
+      } else {
+        console.log("No document records to create");
       }
 
       // Return employee with all related data
@@ -134,7 +154,7 @@ const employeeService = {
     });
   },
 
-  updateEmployee: async (id, data, files, documentRecords) => {
+  updateEmployee: async (id, data, processedFiles, documentRecords) => {
     console.log("Updating employee with data:", data);
 
     const {
@@ -168,7 +188,8 @@ const employeeService = {
       "gender", "marital_status", "nationality", "religion", "blood_group",
       "domicile_district", "mobile_number", "whatsapp_number", "email",
       "present_address", "permanent_address", "same_address", "district", "city",
-      "has_disability", "disability_type", "disability_description", "status"
+      "has_disability", "disability_type", "disability_description", "status",
+      "missing_note", "profile_picture"
     ];
 
     // Process allowed fields
@@ -185,6 +206,11 @@ const employeeService = {
     // Handle password separately
     if (data.password) {
       employeeUpdateData.password = encrypt(data.password);
+    }
+
+    // Handle profile picture from processedFiles
+    if (processedFiles?.profile_picture_file) {
+      employeeUpdateData.profile_picture = processedFiles.profile_picture_file;
     }
 
     // Update employee with related data in a transaction

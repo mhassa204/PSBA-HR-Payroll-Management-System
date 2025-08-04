@@ -69,6 +69,8 @@ const employeeController = {
 
       // Process uploaded files
       const { processedFiles, documentRecords } = processUploadedFiles(req.files);
+      console.log("Processed files:", processedFiles);
+      console.log("Document records to create:", documentRecords);
 
       // Parse JSON fields from FormData
       const processedData = { ...req.body };
