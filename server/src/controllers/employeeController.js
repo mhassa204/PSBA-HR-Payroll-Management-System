@@ -3,7 +3,7 @@ const employeeService = require("../services/employeeService");
 const path = require("path");
 const { DOCUMENT_TYPES } = require("../config/multer");
 
-const validateCNIC = (cnic) => /^\d{5}-\d{7}-\d{1}$/.test(cnic);
+const validateCNIC = (cnic) => /^\d{13}$/.test(cnic);
 
 // Helper function to process uploaded files
 const processUploadedFiles = (files) => {
@@ -63,7 +63,7 @@ const employeeController = {
       if (cnic && !validateCNIC(cnic)) {
         return res.status(400).json({
           success: false,
-          error: "Invalid CNIC format. Must be like 35201-XXXXXXX-X",
+          error: "Invalid CNIC format. Must be 13 digits without dashes",
         });
       }
 
@@ -124,7 +124,7 @@ const employeeController = {
       if (cnic && !validateCNIC(cnic)) {
         return res.status(400).json({
           success: false,
-          error: "Invalid CNIC format. Must be like 35201-XXXXXXX-X",
+          error: "Invalid CNIC format. Must be 13 digits without dashes",
         });
       }
 
