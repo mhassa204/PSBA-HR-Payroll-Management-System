@@ -79,9 +79,9 @@ const EmployeeTable = () => {
       accessor: "employment_status",
       render: (row) => {
         // Get current employment record to show status
-        const currentEmployment = row.employment_records?.find(emp => emp.is_current === true) ||
-                                 row.employment_records?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                 row.employment_records?.[0];
+        const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
+                                 row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
+                                 row.employmentRecords?.[0];
         return currentEmployment?.employment_status || "N/A";
       }
     },
@@ -112,10 +112,10 @@ const EmployeeTable = () => {
       accessor: "scale_grade",
       render: (row) => {
         // Get current employment record to show scale/grade
-    
-        const currentEmployment = row.employment_records?.find(emp => emp.is_current === true) ||
-                                 row.employment_records?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                 row.employment_records?.[0];
+
+        const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
+                                 row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
+                                 row.employmentRecords?.[0];
         return currentEmployment?.scale_grade || "N/A";
       }
     },

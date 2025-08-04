@@ -422,7 +422,7 @@ const CleanEmploymentHistory = () => {
               </h3>
               <p className="text-gray-600">
                 This action cannot be undone. The employment record for{" "}
-                <strong>{deletingRecord?.designation || "N/A"}</strong> at{" "}
+                <strong>{deletingRecord?.designation?.title || deletingRecord?.designation || "N/A"}</strong> at{" "}
                 <strong>
                   {organizationOptions.find((opt) => opt.value === deletingRecord?.organization)?.label ||
                     deletingRecord?.organization ||

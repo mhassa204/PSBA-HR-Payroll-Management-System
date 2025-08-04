@@ -31,8 +31,8 @@ const EditUserForm = ({ user }) => {
   const { error, isLoading, clearError, withErrorHandling } = useErrorHandler();
 
   // State for dynamic sections and file uploads
-  const [educations, setEducations] = useState(user?.educations || []);
-  const [experiences, setExperiences] = useState(user?.past_experiences || []);
+  const [educations, setEducations] = useState(user?.educationQualifications || []);
+  const [experiences, setExperiences] = useState(user?.pastExperiences || []);
   const [availableCities, setAvailableCities] = useState([]);
   const [profilePicturePreview, setProfilePicturePreview] = useState(user?.profile_picture || null);
   const [uploadedFiles, setUploadedFiles] = useState({
@@ -76,9 +76,9 @@ const EditUserForm = ({ user }) => {
       disability_description: user?.disability_description || "",
       mission_note: user?.mission_note || "",
       has_past_experience: user?.has_past_experience || false,
-      past_experiences: user?.past_experiences || [],
+      past_experiences: user?.pastExperiences || [],
       // Dynamic education system
-      educations: user?.educations || [],
+      educations: user?.educationQualifications || [],
     },
   });
 

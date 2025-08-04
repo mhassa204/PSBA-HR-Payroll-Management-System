@@ -246,7 +246,7 @@ const EmploymentRecordActions = ({
             ></i>
             <div>
               <h4 className="font-semibold text-lg text-gray-900">
-                {employmentRecord.designation}
+                {employmentRecord.designation?.title || employmentRecord.designation}
               </h4>
               <p
                 style={{
@@ -311,7 +311,7 @@ const EmploymentRecordActions = ({
           <div>
             <span className="font-medium text-gray-600">Department:</span>
             <span className="ml-2 text-gray-900">
-              {employmentRecord.department || "N/A"}
+              {employmentRecord.department?.name || employmentRecord.department || "N/A"}
             </span>
           </div>
           <div>
@@ -427,7 +427,7 @@ const EmploymentRecordActions = ({
             </h3>
             <p className="text-gray-600">
               This action cannot be undone. The employment record for{" "}
-              <strong>{employmentRecord.designation}</strong> at{" "}
+              <strong>{employmentRecord.designation?.title || employmentRecord.designation}</strong> at{" "}
               <strong>
                 {organizationOptions.find(
                   (opt) => opt.value === employmentRecord.organization
@@ -459,7 +459,7 @@ const EmploymentRecordActions = ({
       <EnhancedModal
         isOpen={showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
-        title={`Employment Record Details - ${employmentRecord.designation}`}
+        title={`Employment Record Details - ${employmentRecord.designation?.title || employmentRecord.designation}`}
         size="lg"
       >
         <div className="p-6 space-y-6">
@@ -474,13 +474,13 @@ const EmploymentRecordActions = ({
             ></i>
             <div>
               <h3 className="text-xl font-bold text-gray-900">
-                {employmentRecord.designation}
+                {employmentRecord.designation?.title || employmentRecord.designation}
               </h3>
               <p className="text-lg font-medium" style={{ color: getOrganizationColor(employmentRecord.organization) }}>
                 {organizationOptions.find(opt => opt.value === employmentRecord.organization)?.label || employmentRecord.organization}
               </p>
               <p className="text-sm text-gray-600">
-                {employmentRecord.department} • {employmentRecord.employment_type}
+                {employmentRecord.department?.name || employmentRecord.department} • {employmentRecord.employment_type}
               </p>
             </div>
           </div>
@@ -499,11 +499,11 @@ const EmploymentRecordActions = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium text-gray-600">Department:</span>
-                  <span className="text-gray-900">{employmentRecord.department || "N/A"}</span>
+                  <span className="text-gray-900">{employmentRecord.department?.name || employmentRecord.department || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium text-gray-600">Designation:</span>
-                  <span className="text-gray-900">{employmentRecord.designation || "N/A"}</span>
+                  <span className="text-gray-900">{employmentRecord.designation?.title || employmentRecord.designation || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium text-gray-600">Employment Type:</span>

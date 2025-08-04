@@ -51,7 +51,7 @@ const employeeController = {
       // Basic required field validation
       const missingFields = [];
       if (!full_name) missingFields.push("full_name");
-      if (!password) missingFields.push("password");
+      // Password is optional - will be set to null if not provided
 
       if (missingFields.length > 0) {
         return res.status(400).json({
@@ -70,8 +70,31 @@ const employeeController = {
       // Process uploaded files
       const { processedFiles, documentRecords } = processUploadedFiles(req.files);
 
+      // Parse JSON fields from FormData
+      const processedData = { ...req.body };
+
+      // Parse past_experiences if it's a JSON string
+      if (processedData.past_experiences && typeof processedData.past_experiences === 'string') {
+        try {
+          processedData.past_experiences = JSON.parse(processedData.past_experiences);
+        } catch (error) {
+          console.error('Error parsing past_experiences:', error);
+          processedData.past_experiences = [];
+        }
+      }
+
+      // Parse educations if it's a JSON string
+      if (processedData.educations && typeof processedData.educations === 'string') {
+        try {
+          processedData.educations = JSON.parse(processedData.educations);
+        } catch (error) {
+          console.error('Error parsing educations:', error);
+          processedData.educations = [];
+        }
+      }
+
       // Create employee with processed files and document records
-      const employee = await employeeService.createEmployee(req.body, processedFiles, documentRecords);
+      const employee = await employeeService.createEmployee(processedData, processedFiles, documentRecords);
 
       res.status(201).json({ success: true, employee });
     } catch (error) {
@@ -106,10 +129,33 @@ const employeeController = {
       // Process uploaded files
       const { processedFiles, documentRecords } = processUploadedFiles(req.files);
 
+      // Parse JSON fields from FormData
+      const processedData = { ...req.body };
+
+      // Parse past_experiences if it's a JSON string
+      if (processedData.past_experiences && typeof processedData.past_experiences === 'string') {
+        try {
+          processedData.past_experiences = JSON.parse(processedData.past_experiences);
+        } catch (error) {
+          console.error('Error parsing past_experiences:', error);
+          processedData.past_experiences = [];
+        }
+      }
+
+      // Parse educations if it's a JSON string
+      if (processedData.educations && typeof processedData.educations === 'string') {
+        try {
+          processedData.educations = JSON.parse(processedData.educations);
+        } catch (error) {
+          console.error('Error parsing educations:', error);
+          processedData.educations = [];
+        }
+      }
+
       const id = String(req.params.id);
       const employee = await employeeService.updateEmployee(
         id,
-        req.body,
+        processedData,
         processedFiles,
         documentRecords
       );
