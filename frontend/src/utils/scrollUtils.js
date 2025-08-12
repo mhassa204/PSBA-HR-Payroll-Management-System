@@ -16,7 +16,7 @@ export const forceRestoreScroll = () => {
     html.style.overflow = "";
     html.style.position = "";
     
-    console.log("✅ ScrollUtils: Body scroll restored");
+
   } catch (error) {
     console.error("❌ ScrollUtils: Error restoring scroll:", error);
   }
@@ -84,13 +84,13 @@ export const emergencyScrollRestore = () => {
   document.body.classList.remove("modal-open", "overflow-hidden");
   document.documentElement.classList.remove("modal-open", "overflow-hidden");
   
-  console.log("✅ ScrollUtils: Emergency scroll restore completed");
+  
 };
 
 // Auto-restore scroll on page visibility change (when user switches tabs)
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && isScrollDisabled()) {
-    console.log("📱 ScrollUtils: Page became visible with disabled scroll, checking...");
+
     // Small delay to allow any modals to properly close
     setTimeout(() => {
       if (isScrollDisabled()) {
@@ -104,7 +104,7 @@ document.addEventListener("visibilitychange", () => {
 // Auto-restore scroll on page focus (when user clicks back to page)
 window.addEventListener("focus", () => {
   if (isScrollDisabled()) {
-    console.log("🎯 ScrollUtils: Page focused with disabled scroll, checking...");
+
     setTimeout(() => {
       if (isScrollDisabled()) {
         console.warn("⚠️ ScrollUtils: Scroll still disabled after focus, restoring...");

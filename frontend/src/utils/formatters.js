@@ -67,13 +67,35 @@ export const parseDateInput = (dateString) => {
  */
 export const formatDateForInput = (dateInput) => {
   if (!dateInput) return "";
-  
+
   try {
     const date = new Date(dateInput);
     if (isNaN(date.getTime())) return "";
-    
+
     return date.toISOString().split('T')[0];
   } catch (error) {
+    return "";
+  }
+};
+
+/**
+ * Format database date for HTML input fields
+ * Handles both ISO strings and Date objects from database
+ * @param {string|Date} dateInput - Date from database
+ * @returns {string} - Date in YYYY-MM-DD format for HTML input
+ */
+export const formatDatabaseDateForInput = (dateInput) => {
+  if (!dateInput) return "";
+
+  try {
+    // Handle ISO date strings from database
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return "";
+
+    // Return in YYYY-MM-DD format for HTML date inputs
+    return date.toISOString().split('T')[0];
+  } catch (error) {
+    console.warn('Invalid database date format:', dateInput);
     return "";
   }
 };

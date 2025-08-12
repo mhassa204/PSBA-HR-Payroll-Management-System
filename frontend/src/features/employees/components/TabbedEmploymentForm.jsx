@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { motion } from "framer-motion";
 import EnhancedModal from "../../../components/ui/EnhancedModal";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
@@ -6,10 +6,14 @@ import SearchableSelect from "../../../components/ui/SearchableSelect";
 import FormField from "./ui/FormField";
 import FormSection from "./ui/FormSection";
 import ActionButton from "./ui/ActionButton";
+import EmploymentDocumentManager from "../../../components/ui/EmploymentDocumentManager";
 import useEmploymentForm from "../hooks/useEmploymentForm";
+import { useEmploymentDocumentManager } from "../hooks/useEmploymentDocumentManager";
 import { useOrganizationFields } from "../hooks/useOrganizationFields";
 import { ORGANIZATION_OPTIONS } from "../../../constants/organizationFieldConfig";
 import { forceRestoreScroll } from "../../../utils/scrollUtils";
+import { validateEmploymentData } from '../../../constants/organizationFieldConfig';
+import { employmentService } from "../services/employmentService";
 
 /**
  * Refactored Tabbed Employment Form Component
@@ -28,7 +32,7 @@ import { forceRestoreScroll } from "../../../utils/scrollUtils";
  * @param {Object} props.editingRecord - Record being edited
  * @param {boolean} props.isEditMode - Whether in edit mode
  */
-const TabbedEmploymentForm = ({
+const TabbedEmploymentForm = forwardRef(({
   isOpen,
   onClose,
   onSubmit,
@@ -38,7 +42,8 @@ const TabbedEmploymentForm = ({
   editingRecord = null,
   isEditMode = false,
   isCreatingFromExisting = false,
-}) => {
+  onRefresh = null,
+}, ref) => {
   // UI state
   const [activeTab, setActiveTab] = useState("employment");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -48,16 +53,42 @@ const TabbedEmploymentForm = ({
   const [successMessage, setSuccessMessage] = useState("");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [isLoadingEmployment, setIsLoadingEmployment] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [previousOrganization, setPreviousOrganization] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Document management - initialize early to avoid reference errors
+  const documentManager = useEmploymentDocumentManager([]);
 
   // Scroll position preservation
   const modalContentRef = useRef(null);
   const [scrollPosition, setScrollPosition] = useState(0);
+  
+  // Track if employment data has been loaded to prevent infinite loops
+  const dataLoadedRef = useRef(false);
+  
+  // Add a refresh trigger to force data reload after updates
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Override isOpen prop during submission to prevent parent from controlling the form
+  // This ensures the form stays open during submission even if parent tries to close it
+  const effectiveIsOpen = isSubmitting ? true : isOpen;
+
+
 
   // Transform editingRecord to the expected structure for the hook
   const transformedInitialData = useMemo(() => {
     if (!editingRecord || (!isEditMode && !isCreatingFromExisting)) return null;
 
-    console.log("🔍 TabbedEmploymentForm: Raw editingRecord:", editingRecord);
+    // Processing editingRecord
+    console.log("🔍 TabbedEmploymentForm: editingRecord structure:", {
+      id: editingRecord.id,
+      employee_id: editingRecord.employee_id,
+      employee: editingRecord.employee,
+      employeeIdFromEmployee: editingRecord.employee?.id,
+      allKeys: Object.keys(editingRecord)
+    });
 
     // Check if editingRecord is already in nested format (from EmploymentRecordActions)
     // or flat format (from other sources)
@@ -69,6 +100,7 @@ const TabbedEmploymentForm = ({
       // Data is already in nested format, use it directly
       transformed = {
         id: editingRecord.id,
+        employee_id: editingRecord.employee_id || editingRecord.employee?.id,
         employment: editingRecord.employment || {},
         salary: editingRecord.salary || {},
         location: editingRecord.location || {},
@@ -78,6 +110,7 @@ const TabbedEmploymentForm = ({
       // Transform flat employment record to structured format
       transformed = {
         id: editingRecord.id,
+        employee_id: editingRecord.employee_id || editingRecord.employee?.id,
         employment: {
           organization: editingRecord.organization || "",
           department: editingRecord.department || "",
@@ -103,9 +136,8 @@ const TabbedEmploymentForm = ({
       };
     }
 
-    console.log("🔄 TabbedEmploymentForm: Transformed initialData:", transformed);
     return transformed;
-  }, [editingRecord, isEditMode, isCreatingFromExisting]);
+  }, [editingRecord?.id, isEditMode, isCreatingFromExisting]);
 
   // Employment form hook
   const {
@@ -125,6 +157,7 @@ const TabbedEmploymentForm = ({
     submitContract,
     validateSalary,
     resetForms,
+    loadDataIntoForms,
     setCompletedTabs,
     setSavedEmploymentId,
     setIsContractual,
@@ -164,6 +197,8 @@ const TabbedEmploymentForm = ({
     organizationDisplayName
   } = useOrganizationFields(currentOrganization);
 
+
+
   // Debug: Log organization changes and field visibility
   useEffect(() => {
     if (currentOrganization) {
@@ -175,6 +210,110 @@ const TabbedEmploymentForm = ({
       console.log(`📝 TabbedEmploymentForm: Available designations count: ${availableDesignations?.length || 0}`);
     }
   }, [currentOrganization, isSectionVisible, isFieldVisible, availableDesignations]);
+
+  // Handle form close with proper cleanup
+  const handleClose = useCallback(() => {
+    console.log("🔄 TabbedEmploymentForm: Closing form and resetting state");
+    console.log("🔄 TabbedEmploymentForm: isOpen prop:", isOpen);
+    console.log("🔄 TabbedEmploymentForm: isEditMode:", isEditMode);
+    console.log("🔄 TabbedEmploymentForm: isSubmitting:", isSubmitting);
+    
+    // Don't close if we're in the middle of submission
+    if (isSubmitting) {
+      console.log("🔄 TabbedEmploymentForm: Skipping close during submission");
+      return;
+    }
+    
+    // Call the original onClose - let the parent handle the actual closing
+    console.log("🔄 TabbedEmploymentForm: Calling onClose");
+    onClose();
+  }, [onClose, isSubmitting, isEditMode]);
+
+  // Handle form close when parent closes the modal
+  // REMOVED: This was causing infinite loops by triggering re-renders
+  // The form state will be reset when the component is actually unmounted
+  // or when the user manually closes the form
+
+  // Handle organization change - reset all forms when organization changes (except during initial load)
+  const handleOrganizationChange = useCallback((newOrganization) => {
+    console.log("🏢 TabbedEmploymentForm: Organization change detected:", {
+      previousOrganization,
+      newOrganization,
+      isInitialLoad,
+      isEditMode
+    });
+
+    // Don't reset during initial load in edit mode
+    if (isInitialLoad && isEditMode) {
+      console.log("🏢 TabbedEmploymentForm: Skipping reset during initial load in edit mode");
+      setPreviousOrganization(newOrganization);
+      return;
+    }
+
+    // Don't reset if this is the first time setting organization (create mode)
+    if (isInitialLoad && !isEditMode) {
+      console.log("🏢 TabbedEmploymentForm: First organization selection in create mode");
+      setPreviousOrganization(newOrganization);
+      setIsInitialLoad(false);
+      return;
+    }
+
+    // Don't reset during submission
+    if (isSubmitting) {
+      console.log("🏢 TabbedEmploymentForm: Skipping reset during submission");
+      setPreviousOrganization(newOrganization);
+      return;
+    }
+
+    // Reset all forms when organization changes (user-initiated change)
+    if (previousOrganization && previousOrganization !== newOrganization) {
+      console.log("🏢 TabbedEmploymentForm: Resetting forms due to organization change");
+      
+      // Reset all forms
+      resetForms();
+      
+      // Reset document manager
+      documentManager.reset();
+      
+      // Reset tab completion status
+      setCompletedTabs({
+        employment: false,
+        salary: false,
+        location: false,
+        contract: false,
+      });
+      
+      // Reset saved employment ID
+      setSavedEmploymentId(null);
+      
+      // Reset to employment tab
+      setActiveTab("employment");
+      
+      // Show confirmation to user
+      alert(`Organization changed from ${previousOrganization} to ${newOrganization}. All form data has been reset. Please fill in the form again.`);
+    }
+
+    setPreviousOrganization(newOrganization);
+    setIsInitialLoad(false);
+  }, [previousOrganization, isInitialLoad, isEditMode, resetForms, documentManager, setCompletedTabs, setSavedEmploymentId, setActiveTab, isSubmitting]);
+
+
+
+  // Debug: Log form options
+  useEffect(() => {
+    console.log("🔍 TabbedEmploymentForm: Form options debug:", {
+      formOptions: formOptions ? {
+        departments: formOptions.departments?.length || 0,
+        designations: formOptions.designations?.length || 0,
+        organizations: formOptions.organizations?.length || 0,
+        employmentTypes: formOptions.employmentTypes?.length || 0,
+        roleTags: formOptions.roleTags?.length || 0,
+        contractTypes: formOptions.contractTypes?.length || 0
+      } : 'null',
+      availableDesignations: availableDesignations?.length || 0,
+      isLoading: formLoading
+    });
+  }, [formOptions, availableDesignations, formLoading]);
 
   // Restore scroll position after form updates
   useEffect(() => {
@@ -250,6 +389,8 @@ const TabbedEmploymentForm = ({
     formState: { errors: employmentErrors },
   } = employmentForm;
 
+  // Debug: Check if form instances are stable - removed to prevent infinite loops
+
   // Watch filer status to conditionally show filer active status
   const watchedFilerStatus = watchEmployment("filer_status");
 
@@ -278,79 +419,27 @@ const TabbedEmploymentForm = ({
   const watchedDepartment = watchEmployment("department");
   const watchedEmploymentType = watchEmployment("employment_type");
 
-  // Reset forms when modal opens/closes
+  // Reset forms when modal opens/closes (only for create mode)
   useEffect(() => {
-    if (isOpen) {
-      if ((isEditMode || isCreatingFromExisting) && editingRecord) {
-        console.log("🔄 TabbedEmploymentForm: Resetting forms with editingRecord:", editingRecord);
-
-        // Check if data is in nested format
-        const isNestedFormat = editingRecord.employment || editingRecord.salary || editingRecord.location || editingRecord.contract;
-
-        if (isNestedFormat) {
-          // Data is already structured, use it directly
-          if (editingRecord.employment) {
-            console.log("📝 Resetting employment form with nested data:", editingRecord.employment);
-            employmentForm.reset(editingRecord.employment);
-          }
-        } else {
-          // Data is flat, populate forms with flat structure
-          console.log("📝 Resetting employment form with flat data");
-          employmentForm.reset({
-            organization: editingRecord.organization || "",
-            department: editingRecord.department || "",
-            designation: editingRecord.designation || "",
-            employment_type: editingRecord.employment_type || "Regular",
-            reporting_officer_id: editingRecord.reporting_officer_id || "",
-            role_tag: editingRecord.role_tag || "",
-            effective_from: editingRecord.effective_from || "",
-            effective_till: editingRecord.effective_till || "",
-            scale_grade: editingRecord.scale_grade || "",
-            medical_fitness_report_pdf: editingRecord.medical_fitness_report_pdf || null,
-            police_character_certificate: editingRecord.police_character_certificate || null,
-            filer_status: editingRecord.filer_status || "non_filer",
-            filer_active_status: editingRecord.filer_active_status || "",
-            employment_status: editingRecord.employment_status || "active",
-            is_current: editingRecord.is_current || false,
-            remarks: editingRecord.remarks || "",
-            // Probation fields
-            is_on_probation: editingRecord.is_on_probation || false,
-            probation_end_date: editingRecord.probation_end_date || "",
-          });
-        }
-
-        // Set saved employment ID only for actual edit mode
-        if (isEditMode) {
-          setSavedEmploymentId(editingRecord.id);
-        }
-
-        // Mark tabs as completed since we have data
-        setCompletedTabs({
-          employment: true,
-          salary: !!(editingRecord.salary || editingRecord.basic_salary),
-          location: !!(editingRecord.location || editingRecord.district),
-          contract: !!(editingRecord.contract || editingRecord.contract_type),
-        });
-
-        // Contractual status is managed by the hook
-      } else {
-        // Reset for new record
-        employmentForm.reset();
-        salaryForm.reset();
-        locationForm.reset();
-        contractForm.reset();
-        setSavedEmploymentId(null);
-        setCompletedTabs({
-          employment: false,
-          salary: false,
-          location: false,
-          contract: false,
-        });
-        // Contractual status is managed by the hook
-      }
+    if (isOpen && !isEditMode) {
+      // Only reset forms for create mode, not edit mode
+      console.log("🔄 TabbedEmploymentForm: Resetting forms for create mode");
+      employmentForm.reset();
+      salaryForm.reset();
+      locationForm.reset();
+      contractForm.reset();
+      setSavedEmploymentId(null);
+      setCompletedTabs({
+        employment: false,
+        salary: false,
+        location: false,
+        contract: false,
+      });
       setActiveTab("employment");
+    } else if (isOpen && isEditMode) {
+      console.log("🔄 TabbedEmploymentForm: Modal opened in edit mode - no form reset");
     }
-  }, [isOpen, isEditMode, isCreatingFromExisting, editingRecord]);
+  }, [isOpen, isEditMode]);
 
   // Note: availableDesignations and isContractual are managed by the useEmploymentForm hook
 
@@ -475,40 +564,55 @@ const TabbedEmploymentForm = ({
     }
   };
 
+
+
   // Handle employment form submission - progress to next tab
   const onEmploymentSubmit = async (data) => {
     try {
       console.log("📝 TabbedEmploymentForm: Employment form submitted with data:", data);
 
-      // Validate required fields before proceeding, respecting organization-specific visibility
-      if (!data.organization?.trim()) {
-        alert("Please select an organization");
-        return;
-      }
+      // Get document data
+      const filesToUpload = documentManager.getFilesToUpload();
+      const documentsToRemove = documentManager.getDocumentsToRemove();
+      const existingDocuments = documentManager.documents.filter(doc => !doc.isNewFile);
 
-      // Only validate fields that are visible for the current organization
-      if (isFieldVisible('employment', 'department') && !data.department?.trim()) {
-        alert("Please select a department");
-        return;
-      }
+      console.log("📁 Files to upload:", Object.keys(filesToUpload));
+      console.log("🗑️ Documents to remove:", documentsToRemove);
+      console.log("📄 Existing documents:", existingDocuments);
 
-      if (isFieldVisible('employment', 'designation') && !data.designation?.trim()) {
-        alert("Please select a designation");
-        return;
-      }
+      // Create document data for validation that includes both new files and existing documents
+      const documentData = { ...filesToUpload };
+      
+      // Add existing documents that haven't been removed
+      existingDocuments.forEach(doc => {
+        if (doc.file_type === 'medical_fitness') {
+          documentData.medical_fitness_report_pdf = doc;
+        } else if (doc.file_type === 'police_character') {
+          documentData.police_character_certificate = doc;
+        }
+      });
 
-      if (isFieldVisible('employment', 'role_tag') && !data.role_tag?.trim()) {
-        alert("Please select a role tag");
-        return;
-      }
+      // Add userId and document data for validation
+      const dataWithUserIdAndDocuments = {
+        ...data,
+        ...documentData, // Include both new and existing documents in validation
+        user_id: userId,
+        employee_id: userId
+      };
 
-      if (isFieldVisible('employment', 'effective_from') && !data.effective_from) {
-        alert("Please select an effective from date");
-        return;
-      }
+      console.log("🔍 TabbedEmploymentForm: Employment validation data:", {
+        organization: dataWithUserIdAndDocuments.organization,
+        hasMedicalFitness: !!dataWithUserIdAndDocuments.medical_fitness_report_pdf,
+        hasPoliceCharacter: !!dataWithUserIdAndDocuments.police_character_certificate,
+        filesToUpload: Object.keys(filesToUpload),
+        existingDocuments: existingDocuments.map(d => ({ type: d.file_type, id: d.id })),
+        allDataKeys: Object.keys(dataWithUserIdAndDocuments)
+      });
 
-      if (isFieldVisible('employment', 'reporting_officer_id') && !data.reporting_officer_id?.trim()) {
-        alert("Please select a reporting officer");
+      // Organization-specific validation using centralized function
+      const validation = validateEmploymentData(dataWithUserIdAndDocuments);
+      if (!validation.isValid) {
+        alert(`Validation errors:\n${validation.errors.join('\n')}`);
         return;
       }
 
@@ -530,9 +634,13 @@ const TabbedEmploymentForm = ({
     try {
       console.log("📝 TabbedEmploymentForm: Salary form submitted with data:", data);
 
-      // Basic validation for salary
-      if (!data.basic_salary || data.basic_salary <= 0) {
-        alert("Please enter a valid basic salary");
+      // Basic validation for salary based on organization
+      const salaryField = currentOrganization === 'MBWO' ? 'gross_salary' : 'basic_salary';
+      const salaryValue = data[salaryField];
+      
+      if (!salaryValue || salaryValue <= 0) {
+        const fieldName = currentOrganization === 'MBWO' ? 'gross salary' : 'basic salary';
+        alert(`Please enter a valid ${fieldName}`);
         return;
       }
 
@@ -653,18 +761,26 @@ const TabbedEmploymentForm = ({
       const contractData = contractForm.getValues();
 
       console.log("📋 TabbedEmploymentForm: Employment data:", employmentData);
+      console.log("📋 TabbedEmploymentForm: Designation value:", employmentData.designation);
+      console.log("📋 TabbedEmploymentForm: Organization value:", employmentData.organization);
+      console.log("📋 TabbedEmploymentForm: Effective from value:", employmentData.effective_from);
       console.log("📋 TabbedEmploymentForm: Salary data:", salaryData);
       console.log("📋 TabbedEmploymentForm: Location data:", locationData);
       console.log("📋 TabbedEmploymentForm: Contract data:", contractData);
+      console.log("🔍 TabbedEmploymentForm: Current organization:", currentOrganization);
+      console.log("🔍 TabbedEmploymentForm: Gross salary value:", salaryData.gross_salary);
+      console.log("🔍 TabbedEmploymentForm: Basic salary value:", salaryData.basic_salary);
 
       // Create comprehensive employment record with all data
       const completeData = {
         id: savedEmploymentId || Date.now(),
-        user_id: userId, // Ensure user_id is included
+        user_id: isEditMode ? (editingRecord?.employee_id || userId) : userId, // Use employee_id from record in edit mode
+        employee_id: isEditMode ? (editingRecord?.employee_id || userId) : userId, // Use employee_id from record in edit mode
         // Employment data
         ...employmentData,
         // Salary data (ensure all values are numbers)
-        basic_salary: safeParseFloat(salaryData.basic_salary),
+        basic_salary: currentOrganization === 'MBWO' ? 0 : safeParseFloat(salaryData.basic_salary),
+        gross_salary: currentOrganization === 'MBWO' ? safeParseFloat(salaryData.gross_salary) : null,
         medical_allowance: safeParseFloat(salaryData.medical_allowance),
         house_rent: safeParseFloat(salaryData.house_rent),
         conveyance_allowance: safeParseFloat(salaryData.conveyance_allowance),
@@ -689,6 +805,9 @@ const TabbedEmploymentForm = ({
         probation_start: contractData.probation_start || "",
         probation_end: contractData.probation_end || "",
         confirmation_status: contractData.confirmation_status || "",
+        confirmation_date: contractData.confirmation_date || "",
+        is_renewed: contractData.is_renewed || false,
+        renewal_count: contractData.renewal_count || 0,
       };
 
       console.log("📤 TabbedEmploymentForm: Showing preview modal with data:", completeData);
@@ -711,11 +830,88 @@ const TabbedEmploymentForm = ({
         return;
       }
 
+      // Set submission state to prevent data reloading
+      setIsSubmitting(true);
       console.log("📤 TabbedEmploymentForm: Final submission with data:", previewData);
+
+      // Get document data first
+      const filesToUpload = documentManager.getFilesToUpload();
+      const documentsToRemove = documentManager.getDocumentsToRemove();
+      const existingDocuments = documentManager.documents.filter(doc => !doc.isNewFile);
+
+      console.log("🔍 TabbedEmploymentForm: Document data for validation:", {
+        filesToUpload,
+        documentsToRemove,
+        documentsToRemoveType: typeof documentsToRemove,
+        documentsToRemoveIsArray: Array.isArray(documentsToRemove),
+        existingDocuments: existingDocuments.map(d => ({ type: d.file_type, id: d.id })),
+        filesToUploadKeys: Object.keys(filesToUpload),
+        filesToUploadValues: Object.values(filesToUpload).map(f => f ? f.name : null)
+      });
+
+      // Create document data for validation that includes both new files and existing documents
+      const documentData = { ...filesToUpload };
+      
+      // Add existing documents that haven't been removed
+      existingDocuments.forEach(doc => {
+        if (doc.file_type === 'medical_fitness') {
+          documentData.medical_fitness_report_pdf = doc;
+        } else if (doc.file_type === 'police_character') {
+          documentData.police_character_certificate = doc;
+        }
+      });
+
+      // Add userId and document data for validation
+      const dataWithUserIdAndDocuments = {
+        ...previewData,
+        ...documentData, // Include both new and existing documents in validation
+        user_id: userId || editingRecord?.employee_id || editingRecord?.employee?.id || transformedInitialData?.employee_id,
+        employee_id: userId || editingRecord?.employee_id || editingRecord?.employee?.id || transformedInitialData?.employee_id
+      };
+
+      console.log("🔍 TabbedEmploymentForm: Employee ID debug:", {
+        userId,
+        editingRecordEmployeeId: editingRecord?.employee_id,
+        editingRecordEmployeeIdFromEmployee: editingRecord?.employee?.id,
+        finalEmployeeId: dataWithUserIdAndDocuments.employee_id,
+        isEditMode,
+        editingRecordId: editingRecord?.id
+      });
+
+      // Ensure we have employee_id before validation
+      if (!dataWithUserIdAndDocuments.employee_id) {
+        console.error("❌ TabbedEmploymentForm: No employee_id available for validation!");
+        throw new Error("Employee ID is required for validation");
+      }
+
+      console.log("🔍 TabbedEmploymentForm: Data for validation:", {
+        organization: dataWithUserIdAndDocuments.organization,
+        hasMedicalFitness: !!dataWithUserIdAndDocuments.medical_fitness_report_pdf,
+        hasPoliceCharacter: !!dataWithUserIdAndDocuments.police_character_certificate,
+        hasRenewalReport: !!dataWithUserIdAndDocuments.renewal_report,
+        filesToUpload: Object.keys(filesToUpload),
+        filesToUploadValues: Object.entries(filesToUpload).map(([key, value]) => ({ key, fileName: value?.name })),
+        medicalFitnessValue: dataWithUserIdAndDocuments.medical_fitness_report_pdf,
+        policeCharacterValue: dataWithUserIdAndDocuments.police_character_certificate,
+        renewalReportValue: dataWithUserIdAndDocuments.renewal_report,
+        allDataKeys: Object.keys(dataWithUserIdAndDocuments)
+      });
+
+      // Organization-specific validation before final submission
+      const validation = validateEmploymentData(dataWithUserIdAndDocuments);
+      if (!validation.isValid) {
+        alert(`Validation errors:\n${validation.errors.join('\n')}`);
+        return;
+      }
 
       // Restructure the flat data into the nested format expected by handleUpdateRecord
       const structuredData = {
+        // Include document fields at top level for parent validation
+        medical_fitness_report_pdf: filesToUpload.medical_fitness_report_pdf || existingDocuments.find(doc => doc.file_type === 'medical_fitness') || null,
+        police_character_certificate: filesToUpload.police_character_certificate || existingDocuments.find(doc => doc.file_type === 'police_character') || null,
+        renewal_report: filesToUpload.renewal_report || previewData.renewal_report || null,
         employment: {
+          id: previewData.id, // Include the employment record ID for updates
           organization: previewData.organization || "",
           department: previewData.department || "",
           designation: previewData.designation || "",
@@ -725,8 +921,6 @@ const TabbedEmploymentForm = ({
           reporting_officer_id: previewData.reporting_officer_id || "",
           effective_from: previewData.effective_from || "",
           effective_till: previewData.effective_till || null,
-          medical_fitness_report_pdf: previewData.medical_fitness_report_pdf || null,
-          police_character_certificate: previewData.police_character_certificate || null,
           filer_status: previewData.filer_status || "non_filer",
           filer_active_status: previewData.filer_active_status || "",
           employment_status: previewData.employment_status || "active",
@@ -735,9 +929,13 @@ const TabbedEmploymentForm = ({
           // Probation fields
           is_on_probation: previewData.is_on_probation || false,
           probation_end_date: previewData.probation_end_date || "",
+          // Document files
+          ...filesToUpload,
+          documents_to_remove: documentsToRemove
         },
         salary: {
-          basic_salary: previewData.basic_salary || 0,
+          basic_salary: previewData.organization === 'MBWO' ? 0 : (previewData.basic_salary || 0),
+          gross_salary: previewData.organization === 'MBWO' ? (previewData.gross_salary || 0) : null,
           medical_allowance: previewData.medical_allowance || 0,
           house_rent: previewData.house_rent || 0,
           conveyance_allowance: previewData.conveyance_allowance || 0,
@@ -769,22 +967,31 @@ const TabbedEmploymentForm = ({
           confirmation_status: previewData.confirmation_status || "",
           confirmation_date: previewData.confirmation_date || "",
           is_renewed: previewData.is_renewed || false,
-          renewal_report: previewData.renewal_report || null,
+          renewal_report: filesToUpload.renewal_report || previewData.renewal_report || null,
         },
       };
 
       console.log("🔄 TabbedEmploymentForm: Restructured data for submission:", structuredData);
+      console.log("🔍 TabbedEmploymentForm: Documents to remove in structured data:", {
+        value: structuredData.employment.documents_to_remove,
+        type: typeof structuredData.employment.documents_to_remove,
+        isArray: Array.isArray(structuredData.employment.documents_to_remove)
+      });
 
       // Close preview modal
       setShowPreviewModal(false);
 
       // Pass the structured data to parent for saving
       if (onSubmit) {
-        // Close the main modal and pass structured data to parent
-        onClose();
+        console.log("📤 TabbedEmploymentForm: Calling onSubmit with data, not closing modal");
+        // Don't close the modal here - let the parent component handle it after successful update
+        // Keep isSubmitting true until parent closes modal
         onSubmit(structuredData);
+        // Don't reset isSubmitting here - let the parent handle the modal state
+        // The form will stay mounted and in submission state until parent closes it
       } else {
         console.error("❌ TabbedEmploymentForm: No onSubmit function provided");
+        setIsSubmitting(false);
       }
     } catch (error) {
       console.error("❌ TabbedEmploymentForm: Error in final submission:", error);
@@ -843,7 +1050,7 @@ const TabbedEmploymentForm = ({
 
   const handleFinishLater = () => {
     setShowSuccessModal(false);
-    onClose();
+    handleClose();
 
     if (onSubmit && completedTabs.employment) {
       // Get all form data to pass to parent
@@ -866,12 +1073,175 @@ const TabbedEmploymentForm = ({
     }
   };
 
+
+
+  // Load employment data when in edit mode
+  useEffect(() => {
+    const loadEmploymentData = async () => {
+      // Only load data when the form is actually open, we haven't loaded it yet, and we're not submitting
+      // Also ensure we're not in the middle of a submission process
+      // AND ensure the modal is actually visible (not just mounted)
+      if (isEditMode && editingRecord?.id && !isLoadingEmployment && !dataLoadedRef.current && effectiveIsOpen && !isSubmitting && isOpen) {
+        try {
+          setIsLoadingEmployment(true);
+          console.log("🔍 Loading employment data for edit:", editingRecord.id);
+          
+          const employmentData = await employmentService.getEmploymentById(editingRecord.id);
+          console.log("✅ Loaded employment data:", employmentData);
+          
+          if (employmentData) {
+            // Transform the data for form population
+            const transformedData = {
+              id: employmentData.id,
+              employee_id: employmentData.employee_id, // Include employee_id from the record
+              user_id: employmentData.employee_id, // Also include as user_id for consistency
+              employment: {
+                organization: employmentData.organization || "",
+                department: employmentData.department_id || "",
+                designation: employmentData.designation_id || "",
+                employment_type: employmentData.employment_type || "Regular",
+                role_tag: employmentData.role_tag || "",
+                effective_from: employmentData.effective_from ? employmentData.effective_from.split('T')[0] : "",
+                effective_till: employmentData.effective_till ? employmentData.effective_till.split('T')[0] : "",
+                reporting_officer_id: employmentData.reporting_officer_id || "",
+                remarks: employmentData.remarks || "",
+                scale_grade: employmentData.scale_grade || "",
+                medical_fitness_report_pdf: employmentData.medical_fitness_report_pdf || null,
+                police_character_certificate: employmentData.police_character_certificate || null,
+                filer_status: employmentData.filer_status || "non_filer",
+                filer_active_status: employmentData.filer_active_status || "",
+                employment_status: employmentData.employment_status || "active",
+                is_current: employmentData.is_current || false,
+                is_on_probation: employmentData.is_on_probation || false,
+                probation_end_date: employmentData.probation_end_date ? employmentData.probation_end_date.split('T')[0] : "",
+              },
+              salary: employmentData.salary ? {
+                ...employmentData.salary,
+                salary_effective_from: employmentData.salary.salary_effective_from ? employmentData.salary.salary_effective_from.split('T')[0] : "",
+                salary_effective_till: employmentData.salary.salary_effective_till ? employmentData.salary.salary_effective_till.split('T')[0] : "",
+              } : {},
+              location: employmentData.location || {},
+              contract: employmentData.contract ? {
+                ...employmentData.contract,
+                start_date: employmentData.contract.start_date ? employmentData.contract.start_date.split('T')[0] : "",
+                end_date: employmentData.contract.end_date ? employmentData.contract.end_date.split('T')[0] : "",
+                probation_start: employmentData.contract.probation_start ? employmentData.contract.probation_start.split('T')[0] : "",
+                probation_end: employmentData.contract.probation_end ? employmentData.contract.probation_end.split('T')[0] : "",
+                confirmation_date: employmentData.contract.confirmation_date ? employmentData.contract.confirmation_date.split('T')[0] : "",
+              } : {},
+            };
+
+            // Use the loadDataIntoForms function to properly load data
+            loadDataIntoForms(transformedData);
+
+            // Initialize document manager with existing documents
+            if (employmentData.documents && employmentData.documents.length > 0) {
+              documentManager.reset(employmentData.documents);
+            }
+
+            // Set initial organization for tracking changes
+            setPreviousOrganization(employmentData.organization);
+            setIsInitialLoad(false);
+
+            console.log("✅ Employment data loaded and forms reset");
+            dataLoadedRef.current = true;
+          }
+        } catch (error) {
+          console.error("❌ Error loading employment data:", error);
+        } finally {
+          setIsLoadingEmployment(false);
+        }
+      }
+    };
+
+    loadEmploymentData();
+  }, [isEditMode, editingRecord?.id, isLoadingEmployment, refreshTrigger]);
+
+  // Handle initial load for create mode
+  useEffect(() => {
+    if (!isEditMode && effectiveIsOpen) {
+      // Reset initial load state when form opens in create mode
+      setIsInitialLoad(true);
+      setPreviousOrganization(null);
+      setIsSubmitting(false);
+      console.log("🏢 TabbedEmploymentForm: Form opened in create mode, resetting initial load state");
+    }
+  }, [effectiveIsOpen, isEditMode]);
+
+  // Handle initial load for edit mode
+  useEffect(() => {
+    if (isEditMode && effectiveIsOpen) {
+      // Reset submission state when form opens in edit mode
+      setIsSubmitting(false);
+      console.log("🏢 TabbedEmploymentForm: Form opened in edit mode, resetting submission state");
+    }
+  }, [effectiveIsOpen, isEditMode]);
+
+  // Reset submission state when form is actually closed by parent
+  useEffect(() => {
+    if (!effectiveIsOpen && isSubmitting) {
+      console.log("🔄 TabbedEmploymentForm: Form closed by parent during submission - resetting submission state");
+      setIsSubmitting(false);
+    }
+  }, [effectiveIsOpen, isSubmitting]);
+
+  // Debug: Log when form opens/closes
+  useEffect(() => {
+    console.log("🔍 TabbedEmploymentForm: Modal state changed - effectiveIsOpen:", effectiveIsOpen, "isEditMode:", isEditMode);
+  }, [effectiveIsOpen, isEditMode]);
+
+  // Handle modal being closed by parent component
+  useEffect(() => {
+    if (!effectiveIsOpen && isEditMode && editingRecord) {
+      console.log("🔍 TabbedEmploymentForm: Modal closed by parent - keeping form state intact");
+      // Don't reset form state when parent closes modal
+      // Just let the form stay mounted but hidden
+    }
+  }, [effectiveIsOpen, isEditMode, editingRecord]);
+
+  // Function to refresh form data (can be called from parent)
+  const refreshFormData = useCallback(() => {
+    console.log("🔄 TabbedEmploymentForm: Refreshing form data");
+    setRefreshTrigger(prev => prev + 1);
+    
+    // Also call parent's onRefresh callback if provided
+    if (onRefresh) {
+      onRefresh();
+    }
+  }, [onRefresh]);
+
+  // Expose refresh function to parent component
+  useImperativeHandle(ref, () => ({
+    refreshFormData
+  }), [refreshFormData]);
+
+  // Reset submission state when modal is closed by parent
+  useEffect(() => {
+    if (!isOpen && isSubmitting) {
+      console.log("🔄 TabbedEmploymentForm: Modal closed by parent during submission - resetting submission state");
+      setIsSubmitting(false);
+    }
+  }, [isOpen, isSubmitting]);
+
+  // Prevent form from being closed during submission by parent component
+  // REMOVED: This was causing infinite loops
+  // The form will handle submission state naturally
+
+  // Prevent form from being reopened during submission
+  // REMOVED: These effects were causing infinite loops
+  // The form will handle submission state naturally
+
+  // Prevent form from being unmounted by parent component during submission
+  // REMOVED: This was causing infinite loops by triggering re-renders
+  // The form will handle unmounting naturally through React's lifecycle
+
+  // Monitor form state changes in edit mode - removed to prevent infinite loops
+
   if (!formOptions) {
-    console.log("⏳ TabbedEmploymentForm: Form options not loaded yet, showing loading spinner");
     return (
       <EnhancedModal
-        isOpen={isOpen}
-        onClose={onClose}
+        isOpen={effectiveIsOpen}
+        onClose={handleClose}
         title="Add Employment Record"
         size="lg"
       >
@@ -882,13 +1252,11 @@ const TabbedEmploymentForm = ({
     );
   }
 
-  console.log("✅ TabbedEmploymentForm: Form options loaded:", formOptions);
-
   return (
     <>
       <EnhancedModal
-        isOpen={isOpen}
-        onClose={onClose}
+        isOpen={effectiveIsOpen}
+        onClose={handleClose}
         title={`${isEditMode ? "Edit" : "Add"} Employment Record${
           employeeName ? ` - ${employeeName}` : ""
         }`}
@@ -981,7 +1349,10 @@ const TabbedEmploymentForm = ({
                         <SearchableSelect
                           options={ORGANIZATION_OPTIONS}
                           value={employmentForm.watch("organization")}
-                          onChange={(value) => employmentForm.setValue("organization", value)}
+                          onChange={(value) => {
+                            employmentForm.setValue("organization", value);
+                            handleOrganizationChange(value);
+                          }}
                           placeholder="Select Organization"
                           register={registerEmployment}
                           name="organization"
@@ -999,16 +1370,29 @@ const TabbedEmploymentForm = ({
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Department <span className="text-red-500">*</span>
                         </label>
-                        <SearchableSelect
-                          options={formOptions?.departments || []}
-                          value={employmentForm.watch("department")}
-                          onChange={(value) => employmentForm.setValue("department", value)}
-                          placeholder="Select Department"
-                          register={registerEmployment}
-                          name="department"
-                          required={getValidationRules('employment', 'department', { required: "Department is required" }).required}
-                          error={employmentErrors.department?.message}
-                        />
+                        {formLoading ? (
+                          <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border">
+                            <LoadingSpinner size="sm" />
+                            <span className="text-sm text-gray-600">Loading departments...</span>
+                          </div>
+                        ) : (
+                          <SearchableSelect
+                            options={formOptions?.departments || []}
+                            value={employmentForm.watch("department")}
+                            onChange={(value) => employmentForm.setValue("department", value)}
+                            placeholder={formOptions?.departments?.length > 0 ? "Select Department" : "No departments available"}
+                            register={registerEmployment}
+                            name="department"
+                            required={getValidationRules('employment', 'department', { required: "Department is required" }).required}
+                            error={employmentErrors.department?.message}
+                            disabled={isEditMode ? false : (!formOptions?.departments || formOptions.departments.length === 0)}
+                          />
+                        )}
+                        {!formLoading && (!formOptions?.departments || formOptions.departments.length === 0) && (
+                          <p className="text-yellow-600 text-sm mt-1">
+                            ⚠️ No departments available. Please check your connection or contact support.
+                          </p>
+                        )}
                         {employmentErrors.department && (
                           <p className="text-red-600 text-sm mt-1">
                             {employmentErrors.department.message}
@@ -1020,16 +1404,29 @@ const TabbedEmploymentForm = ({
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Designation <span className="text-red-500">*</span>
                         </label>
-                        <SearchableSelect
-                          options={availableDesignations || []}
-                          value={employmentForm.watch("designation")}
-                          onChange={(value) => employmentForm.setValue("designation", value)}
-                          placeholder="Select Designation"
-                          register={registerEmployment}
-                          name="designation"
-                          required={getValidationRules('employment', 'designation', { required: "Designation is required" }).required}
-                          error={employmentErrors.designation?.message}
-                        />
+                        {formLoading ? (
+                          <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border">
+                            <LoadingSpinner size="sm" />
+                            <span className="text-sm text-gray-600">Loading designations...</span>
+                          </div>
+                        ) : (
+                          <SearchableSelect
+                            options={availableDesignations || []}
+                            value={employmentForm.watch("designation")}
+                            onChange={(value) => employmentForm.setValue("designation", value)}
+                            placeholder={availableDesignations?.length > 0 ? "Select Designation" : "No designations available"}
+                            register={registerEmployment}
+                            name="designation"
+                            required={getValidationRules('employment', 'designation', { required: "Designation is required" }).required}
+                            error={employmentErrors.designation?.message}
+                            disabled={isEditMode ? false : (!availableDesignations || availableDesignations.length === 0)}
+                          />
+                        )}
+                        {!formLoading && (!availableDesignations || availableDesignations.length === 0) && (
+                          <p className="text-yellow-600 text-sm mt-1">
+                            ⚠️ No designations available. Please select a department first or check your connection.
+                          </p>
+                        )}
                         {employmentErrors.designation && (
                           <p className="text-red-600 text-sm mt-1">
                             {employmentErrors.designation.message}
@@ -1137,6 +1534,7 @@ const TabbedEmploymentForm = ({
                           name="role_tag"
                           required={getValidationRules('employment', 'role_tag', { required: "Role tag is required" }).required}
                           error={employmentErrors.role_tag?.message}
+                          disabled={isEditMode ? false : (!formOptions?.roleTags || formOptions.roleTags.length === 0)}
                         />
                         {employmentErrors.role_tag && (
                           <p className="text-red-600 text-sm mt-1">
@@ -1203,34 +1601,45 @@ const TabbedEmploymentForm = ({
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                           placeholder="Enter scale or grade (e.g., BPS-17, Grade-A)"
                         />
+
                       </div>
 
-                      {/* Medical Fitness Report */}
-                      <div className={getFieldClasses('employment', 'medical_fitness_report_pdf')}>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Medical Fitness Report (PDF)
-                        </label>
-                        <input
-                          type="file"
-                          accept=".pdf"
-                          {...registerEmployment("medical_fitness_report_pdf")}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Upload medical fitness report in PDF format</p>
-                      </div>
+                      {/* Document Uploads Section */}
+                      <div className="col-span-2 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                          <i className="fas fa-file-upload mr-2"></i>
+                          Required Documents
+                        </h4>
 
-                      {/* Police Character Certificate */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Police Character Certificate
-                        </label>
-                        <input
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          {...registerEmployment("police_character_certificate")}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Upload police character certificate</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Medical Fitness Report */}
+                          <div className={getFieldClasses('employment', 'medical_fitness_report_pdf')}>
+                            <EmploymentDocumentManager
+                              documents={documentManager.documents}
+                              documentType="medical_fitness"
+                              title="Medical Fitness Report"
+                              accept="application/pdf,image/jpeg,image/png"
+                              maxSize={15 * 1024 * 1024}
+                              onDocumentAdd={documentManager.addDocument}
+                              onDocumentRemove={documentManager.removeDocument}
+                              isEditMode={isEditMode}
+                            />
+                          </div>
+
+                          {/* Police Character Certificate */}
+                          <div>
+                            <EmploymentDocumentManager
+                              documents={documentManager.documents}
+                              documentType="police_character"
+                              title="Police Character Certificate"
+                              accept="application/pdf,image/jpeg,image/png"
+                              maxSize={15 * 1024 * 1024}
+                              onDocumentAdd={documentManager.addDocument}
+                              onDocumentRemove={documentManager.removeDocument}
+                              isEditMode={isEditMode}
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {/* Filer Status */}
@@ -1445,19 +1854,19 @@ const TabbedEmploymentForm = ({
                           </label>
                           <input
                             type="number"
-                            {...registerSalary("basic_salary", {
-                              required: "Basic salary is required",
+                            {...registerSalary(currentOrganization === 'MBWO' ? "gross_salary" : "basic_salary", {
+                              required: currentOrganization === 'MBWO' ? "Gross salary is required" : "Basic salary is required",
                               min: {
                                 value: 1,
-                                message: "Salary must be greater than 0",
+                                message: currentOrganization === 'MBWO' ? "Gross salary must be greater than 0" : "Basic salary must be greater than 0",
                               },
                             })}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
-                            placeholder="Enter basic salary"
+                            placeholder={currentOrganization === 'MBWO' ? "Enter gross salary" : "Enter basic salary"}
                           />
-                          {salaryErrors.basic_salary && (
+                          {salaryErrors[currentOrganization === 'MBWO' ? "gross_salary" : "basic_salary"] && (
                             <p className="text-red-600 text-sm mt-1">
-                              {salaryErrors.basic_salary.message}
+                              {salaryErrors[currentOrganization === 'MBWO' ? "gross_salary" : "basic_salary"].message}
                             </p>
                           )}
                         </div>
@@ -1907,15 +2316,19 @@ const TabbedEmploymentForm = ({
                       {/* Renewal Report (conditional) */}
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Renewal Report
+                          Contract Renewal Report
                         </label>
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx"
-                          {...registerContract("renewal_report")}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900"
+                        <EmploymentDocumentManager
+                          documents={documentManager.documents}
+                          documentType="renewal_report"
+                          title="Contract Renewal Report"
+                          accept="application/pdf,image/jpeg,image/png"
+                          maxSize={15 * 1024 * 1024}
+                          onDocumentAdd={documentManager.addDocument}
+                          onDocumentRemove={documentManager.removeDocument}
+                          isEditMode={isEditMode}
                         />
-                        <p className="text-xs text-gray-500 mt-1">Upload renewal report (if applicable)</p>
+                        <p className="text-xs text-gray-500 mt-1">Upload contract renewal report (if applicable)</p>
                       </div>
 
                       {/* Confirmation Date */}
@@ -2202,37 +2615,46 @@ const TabbedEmploymentForm = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-600">{previewData.organization === 'MBWO' ? 'Gross Salary:' : 'Basic Salary:'}</span>
-                      <span className="text-gray-900 font-semibold">{displayValue(previewData.basic_salary, 'currency')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Medical Allowance:</span>
-                      <span className="text-gray-900">{displayValue(previewData.medical_allowance, 'currency')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">House Rent:</span>
-                      <span className="text-gray-900">{displayValue(previewData.house_rent, 'currency')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Conveyance Allowance:</span>
-                      <span className="text-gray-900">{displayValue(previewData.conveyance_allowance, 'currency')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Other Allowances:</span>
-                      <span className="text-gray-900">{displayValue(previewData.other_allowances, 'currency')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Total Salary:</span>
-                      <span className="text-gray-900 font-bold text-lg">
+                      <span className="text-gray-900 font-semibold">
                         {displayValue(
-                          (previewData.basic_salary || 0) +
-                          (previewData.medical_allowance || 0) +
-                          (previewData.house_rent || 0) +
-                          (previewData.conveyance_allowance || 0) +
-                          (previewData.other_allowances || 0),
+                          previewData.organization === 'MBWO' ? previewData.gross_salary : previewData.basic_salary, 
                           'currency'
                         )}
                       </span>
                     </div>
+                    {previewData.organization !== 'MBWO' && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Medical Allowance:</span>
+                          <span className="text-gray-900">{displayValue(previewData.medical_allowance, 'currency')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">House Rent:</span>
+                          <span className="text-gray-900">{displayValue(previewData.house_rent, 'currency')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Conveyance Allowance:</span>
+                          <span className="text-gray-900">{displayValue(previewData.conveyance_allowance, 'currency')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Other Allowances:</span>
+                          <span className="text-gray-900">{displayValue(previewData.other_allowances, 'currency')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Total Salary:</span>
+                          <span className="text-gray-900 font-bold text-lg">
+                            {displayValue(
+                              (previewData.basic_salary || 0) +
+                              (previewData.medical_allowance || 0) +
+                              (previewData.house_rent || 0) +
+                              (previewData.conveyance_allowance || 0) +
+                              (previewData.other_allowances || 0),
+                              'currency'
+                            )}
+                          </span>
+                        </div>
+                      </>
+                    )}
                     {previewData.daily_wage_rate > 0 && (
                       <div className="flex justify-between">
                         <span className="font-medium text-gray-600">Daily Wage Rate:</span>
@@ -2380,6 +2802,6 @@ const TabbedEmploymentForm = ({
       </EnhancedModal>
     </>
   );
-};
+});
 
 export default TabbedEmploymentForm;

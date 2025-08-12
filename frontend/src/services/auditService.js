@@ -86,7 +86,7 @@ class AuditService {
     this.saveAuditLogs();
 
     // Console log for development
-    console.log('🔍 AUDIT LOG:', auditRecord);
+    
 
     return auditRecord;
   }
@@ -370,7 +370,7 @@ class AuditService {
     
     this.saveAuditLogs();
     
-    console.log(`🧹 Audit cleanup: Removed ${removedCount} old logs, kept ${this.auditLogs.length} logs`);
+    
     
     return { removed: removedCount, remaining: this.auditLogs.length };
   }

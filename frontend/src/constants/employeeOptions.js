@@ -155,20 +155,52 @@ export const PAKISTAN_DISTRICTS = [
   },
 ];
 
-// Helper function to get cities for a district
+// Helper function to get cities for a district (case-insensitive)
 export const getCitiesForDistrict = (districtValue) => {
-  const district = PAKISTAN_DISTRICTS.find(d => d.value === districtValue);
+  if (!districtValue) return [];
+
+  // Make case-insensitive comparison
+  const normalizedValue = districtValue.toLowerCase();
+  const district = PAKISTAN_DISTRICTS.find(d =>
+    d.value.toLowerCase() === normalizedValue ||
+    d.label.toLowerCase() === normalizedValue
+  );
   return district ? district.cities : [];
 };
 
-// File upload configurations
+// File upload configurations - Only JPG, PNG, and PDF allowed
 export const FILE_UPLOAD_CONFIG = {
   profile_picture: {
-    accept: "image/jpeg,image/png,image/gif",
+    accept: "image/jpeg,image/png",
     maxSize: 5 * 1024 * 1024, // 5MB
-    types: ["image/jpeg", "image/png", "image/gif"],
+    types: ["image/jpeg", "image/png"],
+  },
+  profile_picture_file: {
+    accept: "image/jpeg,image/png",
+    maxSize: 5 * 1024 * 1024, // 5MB
+    types: ["image/jpeg", "image/png"],
   },
   cnic_documents: {
+    accept: "image/jpeg,image/png,application/pdf",
+    maxSize: 10 * 1024 * 1024, // 10MB
+    types: ["image/jpeg", "image/png", "application/pdf"],
+  },
+  cnic_front: {
+    accept: "image/jpeg,image/png,application/pdf",
+    maxSize: 10 * 1024 * 1024, // 10MB
+    types: ["image/jpeg", "image/png", "application/pdf"],
+  },
+  cnic_back: {
+    accept: "image/jpeg,image/png,application/pdf",
+    maxSize: 10 * 1024 * 1024, // 10MB
+    types: ["image/jpeg", "image/png", "application/pdf"],
+  },
+  domicile_certificate: {
+    accept: "image/jpeg,image/png,application/pdf",
+    maxSize: 10 * 1024 * 1024, // 10MB
+    types: ["image/jpeg", "image/png", "application/pdf"],
+  },
+  disability_document: {
     accept: "image/jpeg,image/png,application/pdf",
     maxSize: 10 * 1024 * 1024, // 10MB
     types: ["image/jpeg", "image/png", "application/pdf"],
@@ -179,19 +211,19 @@ export const FILE_UPLOAD_CONFIG = {
     types: ["image/jpeg", "image/png", "application/pdf"],
   },
   education_document: {
-    accept: "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    accept: "image/jpeg,image/png,application/pdf",
     maxSize: 15 * 1024 * 1024, // 15MB
-    types: ["image/jpeg", "image/png", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    types: ["image/jpeg", "image/png", "application/pdf"],
   },
   experience_document: {
-    accept: "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    accept: "image/jpeg,image/png,application/pdf",
     maxSize: 15 * 1024 * 1024, // 15MB
-    types: ["image/jpeg", "image/png", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    types: ["image/jpeg", "image/png", "application/pdf"],
   },
   other_documents: {
-    accept: "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    accept: "image/jpeg,image/png,application/pdf",
     maxSize: 15 * 1024 * 1024, // 15MB
-    types: ["image/jpeg", "image/png", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    types: ["image/jpeg", "image/png", "application/pdf"],
   },
 };
 

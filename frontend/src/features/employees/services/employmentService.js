@@ -6,11 +6,10 @@
  * local state management and API calls without changing component logic.
  *
  * @author PSBA HR Portal Team
- * @version 1.0.0
+ * @version 2.0.0
  */
 
-// Import only the data manager for local storage fallback
-import { dataManager } from "../utils/dataManager";
+import axios from 'axios';
 
 /**
  * Employment Service Class
@@ -21,7 +20,11 @@ class EmploymentService {
   constructor() {
     // Always use API mode for backend integration
     this.apiBaseUrl = this.getApiBaseUrl();
-    this.apiClient = null; // Will be initialized when needed
+    this.apiClient = axios.create({
+      baseURL: this.apiBaseUrl,
+      timeout: 30000,
+      withCredentials: true
+    });
   }
 
   /**
@@ -36,75 +39,82 @@ class EmploymentService {
   }
 
   /**
-   * Initialize API client when needed
-   */
-  initializeApiClient() {
-    // TODO: Initialize your preferred HTTP client (axios, fetch wrapper, etc.)
-    // Example with fetch:
-    this.apiClient = {
-      get: async (url) => {
-        const response = await fetch(`${this.apiBaseUrl}${url}`);
-        if (!response.ok)
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        return response.json();
-      },
-      post: async (url, data) => {
-        const response = await fetch(`${this.apiBaseUrl}${url}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-        if (!response.ok)
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        return response.json();
-      },
-      put: async (url, data) => {
-        const response = await fetch(`${this.apiBaseUrl}${url}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-        if (!response.ok)
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        return response.json();
-      },
-      delete: async (url) => {
-        const response = await fetch(`${this.apiBaseUrl}${url}`, {
-          method: "DELETE",
-        });
-        if (!response.ok)
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        return response.json();
-      },
-    };
-  }
-
-  /**
    * Get form options (departments, designations, etc.)
    * @returns {Promise<Object>} Form options object
    */
   async getFormOptions() {
     try {
-      if (!this.apiClient) this.initializeApiClient();
-      return await this.apiClient.get("/employment/form-options");
+      const response = await this.apiClient.get("/employment/form-options");
+      
+      if (response.data.success && response.data.options) {
+        return response.data.options;
+      } else {
+        throw new Error("Invalid response format from API");
+      }
     } catch (error) {
-      console.error("Error fetching form options:", error);
-      // Return minimal fallback options
+      console.error("❌ Error fetching form options:", error);
+
+      
+      // Return comprehensive fallback options
       return {
-        options: {
-          departments: [],
-          designations: [],
-          organizations: [
-            { value: "MBWO", label: "Model Bazaar Welfare Organization" },
-            { value: "PMBMC", label: "Punjab Model Bazaars Management Company" },
-            { value: "PSBA", label: "Punjab Sahulat Bazaars Authority" }
-          ],
-          employmentTypes: [
-            { value: "Regular", label: "Regular" },
-            { value: "Contract", label: "Contract" },
-            { value: "Probation", label: "Probation" }
-          ]
-        }
+        departments: [
+          { value: 1, label: "Engineering", code: "ENG" },
+          { value: 2, label: "IT", code: "IT" },
+          { value: 3, label: "HR", code: "HR" },
+          { value: 4, label: "Administration", code: "ADMIN" },
+          { value: 5, label: "Finance", code: "FIN" },
+          { value: 6, label: "Legal", code: "LEGAL" },
+          { value: 7, label: "Operations", code: "OPS" }
+        ],
+        designations: [
+          { value: 1, label: "Junior Engineer", department_id: 1, level: 1 },
+          { value: 2, label: "Assistant Engineer", department_id: 1, level: 2 },
+          { value: 3, label: "Engineer", department_id: 1, level: 3 },
+          { value: 4, label: "Senior Engineer", department_id: 1, level: 4 },
+          { value: 5, label: "Software Developer", department_id: 2, level: 1 },
+          { value: 6, label: "Senior Software Developer", department_id: 2, level: 2 },
+          { value: 7, label: "IT Manager", department_id: 2, level: 3 },
+          { value: 8, label: "HR Officer", department_id: 3, level: 1 },
+          { value: 9, label: "Senior HR Officer", department_id: 3, level: 2 },
+          { value: 10, label: "HR Manager", department_id: 3, level: 3 },
+          { value: 11, label: "Administrative Officer", department_id: 4, level: 1 },
+          { value: 12, label: "Senior Administrative Officer", department_id: 4, level: 2 },
+          { value: 13, label: "Administrative Manager", department_id: 4, level: 3 },
+          { value: 14, label: "Accounts Officer", department_id: 5, level: 1 },
+          { value: 15, label: "Senior Accounts Officer", department_id: 5, level: 2 },
+          { value: 16, label: "Finance Manager", department_id: 5, level: 3 },
+          { value: 17, label: "Legal Officer", department_id: 6, level: 1 },
+          { value: 18, label: "Senior Legal Officer", department_id: 6, level: 2 },
+          { value: 19, label: "Legal Manager", department_id: 6, level: 3 },
+          { value: 20, label: "Operations Officer", department_id: 7, level: 1 },
+          { value: 21, label: "Senior Operations Officer", department_id: 7, level: 2 },
+          { value: 22, label: "Operations Manager", department_id: 7, level: 3 }
+        ],
+        organizations: [
+          { value: "MBWO", label: "Model Bazaar Welfare Organization" },
+          { value: "PMBMC", label: "Punjab Model Bazaars Management Company" },
+          { value: "PSBA", label: "Punjab Sahulat Bazaars Authority" }
+        ],
+        employmentTypes: [
+          { value: "Regular", label: "Regular", description: "Permanent employment" },
+          { value: "Contract", label: "Contract", description: "Fixed-term contract" },
+          { value: "Probation", label: "Probation", description: "Probationary period" },
+          { value: "Internship", label: "Internship", description: "Training position" },
+          { value: "Daily Wager", label: "Daily Wager", description: "Daily wage employment" }
+        ],
+        roleTags: [
+          { value: "admin", label: "Administrator" },
+          { value: "manager", label: "Manager" },
+          { value: "supervisor", label: "Supervisor" },
+          { value: "staff", label: "Staff" },
+          { value: "worker", label: "Worker" }
+        ],
+        contractTypes: [
+          { value: "Contractual", label: "Contractual", description: "Fixed-term contract" },
+          { value: "Fixed-term", label: "Fixed-term", description: "Fixed duration contract" },
+          { value: "Project-based", label: "Project-based", description: "Project-specific contract" },
+          { value: "Temporary", label: "Temporary", description: "Temporary contract" }
+        ]
       };
     }
   }
@@ -116,13 +126,58 @@ class EmploymentService {
    */
   async getDesignationsByDepartment(departmentId) {
     try {
-      if (!this.apiClient) this.initializeApiClient();
       const response = await this.apiClient.get(`/employment/designations/${departmentId}`);
-      return response.designations || [];
+      
+      if (response.data.success && response.data.designations) {
+        return response.data.designations;
+      } else {
+        throw new Error("Invalid response format from API");
+      }
     } catch (error) {
       console.error("❌ Error fetching designations:", error);
-      // Return empty array as fallback
-      return [];
+
+      
+      // Fallback designations by department
+      const fallbackDesignations = {
+        1: [ // Engineering
+          { value: 1, label: "Junior Engineer", department_id: 1, level: 1 },
+          { value: 2, label: "Assistant Engineer", department_id: 1, level: 2 },
+          { value: 3, label: "Engineer", department_id: 1, level: 3 },
+          { value: 4, label: "Senior Engineer", department_id: 1, level: 4 }
+        ],
+        2: [ // IT
+          { value: 5, label: "Software Developer", department_id: 2, level: 1 },
+          { value: 6, label: "Senior Software Developer", department_id: 2, level: 2 },
+          { value: 7, label: "IT Manager", department_id: 2, level: 3 }
+        ],
+        3: [ // HR
+          { value: 8, label: "HR Officer", department_id: 3, level: 1 },
+          { value: 9, label: "Senior HR Officer", department_id: 3, level: 2 },
+          { value: 10, label: "HR Manager", department_id: 3, level: 3 }
+        ],
+        4: [ // Administration
+          { value: 11, label: "Administrative Officer", department_id: 4, level: 1 },
+          { value: 12, label: "Senior Administrative Officer", department_id: 4, level: 2 },
+          { value: 13, label: "Administrative Manager", department_id: 4, level: 3 }
+        ],
+        5: [ // Finance
+          { value: 14, label: "Accounts Officer", department_id: 5, level: 1 },
+          { value: 15, label: "Senior Accounts Officer", department_id: 5, level: 2 },
+          { value: 16, label: "Finance Manager", department_id: 5, level: 3 }
+        ],
+        6: [ // Legal
+          { value: 17, label: "Legal Officer", department_id: 6, level: 1 },
+          { value: 18, label: "Senior Legal Officer", department_id: 6, level: 2 },
+          { value: 19, label: "Legal Manager", department_id: 6, level: 3 }
+        ],
+        7: [ // Operations
+          { value: 20, label: "Operations Officer", department_id: 7, level: 1 },
+          { value: 21, label: "Senior Operations Officer", department_id: 7, level: 2 },
+          { value: 22, label: "Operations Manager", department_id: 7, level: 3 }
+        ]
+      };
+      
+      return fallbackDesignations[departmentId] || [];
     }
   }
 
@@ -134,11 +189,6 @@ class EmploymentService {
    */
   async validateSalary(designationId, salary) {
     try {
-      if (this.isApiMode) {
-        // TODO: Replace with actual API call
-        // return await apiClient.post('/api/validate-salary', { designationId, salary });
-      }
-
       // Simple validation logic (no strict salary constraints as per design)
       if (!salary || salary <= 0) {
         return { valid: false, message: "Salary must be greater than 0" };
@@ -172,23 +222,53 @@ class EmploymentService {
    */
   async createEmployment(employmentData) {
     try {
-      console.log("🔍 Creating employment record:", employmentData);
+      
 
-      if (this.isApiMode) {
-        if (!this.apiClient) this.initializeApiClient();
-        const result = await this.apiClient.post('/employment', employmentData);
-        console.log("✅ Employment record created via API:", result);
-        return result.employment || result;
-      }
+      // Create FormData for file uploads
+      const formData = new FormData();
+      
+      // Helper function to flatten nested objects
+      const flattenObject = (obj, prefix = '') => {
+        for (const key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            const value = obj[key];
+            const newKey = prefix ? `${prefix}_${key}` : key;
+            
+            if (value !== null && value !== undefined) {
+              if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof File)) {
+                // Recursively flatten nested objects
+                flattenObject(value, newKey);
+              } else {
+                formData.append(newKey, value);
+        
+              }
+            }
+          }
+        }
+      };
+      
+      // Flatten the entire employment data object
+      flattenObject(employmentData);
 
-      // Use enhanced data manager for local storage
-      const result = await dataManager.saveEmploymentRecord(employmentData);
-      console.log("✅ Employment record created locally:", result);
+      // Handle document files that are passed directly as properties
+      const documentFields = ['medical_fitness_report_pdf', 'police_character_certificate', 'renewal_report'];
+      documentFields.forEach(field => {
+        if (employmentData[field] && employmentData[field] instanceof File) {
+          formData.append(field, employmentData[field]);
+        }
+      });
 
-      return result;
+      const response = await this.apiClient.post('/employment', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+
+      return response.data.employment || response.data;
     } catch (error) {
       console.error("❌ Error creating employment record:", error);
-      throw new Error("Failed to create employment record");
+      throw new Error(error.response?.data?.error || "Failed to create employment record");
     }
   }
 
@@ -200,12 +280,56 @@ class EmploymentService {
    */
   async updateEmployment(employmentId, employmentData) {
     try {
-      if (!this.apiClient) this.initializeApiClient();
-      const result = await this.apiClient.put(`/employment/${employmentId}`, employmentData);
-      return result.employment || result;
+
+
+      // Create FormData for file uploads
+      const formData = new FormData();
+      
+      // Helper function to flatten nested objects
+      const flattenObject = (obj, prefix = '') => {
+        for (const key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            const value = obj[key];
+            const newKey = prefix ? `${prefix}_${key}` : key;
+            
+            if (value !== null && value !== undefined) {
+              if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof File)) {
+                // Recursively flatten nested objects
+                flattenObject(value, newKey);
+              } else if (Array.isArray(value)) {
+                // Handle arrays properly - convert to JSON string to preserve structure
+                formData.append(newKey, JSON.stringify(value));
+
+              } else {
+                formData.append(newKey, value);
+              }
+            }
+          }
+        }
+      };
+      
+      // Flatten the entire employment data object
+      flattenObject(employmentData);
+
+      // Handle document files that are passed directly as properties
+      const documentFields = ['medical_fitness_report_pdf', 'police_character_certificate', 'renewal_report'];
+      documentFields.forEach(field => {
+        if (employmentData[field] && employmentData[field] instanceof File) {
+          formData.append(field, employmentData[field]);
+        }
+      });
+
+      const response = await this.apiClient.put(`/employment/${employmentId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+
+      return response.data.employment || response.data;
     } catch (error) {
       console.error("Error updating employment record:", error);
-      throw new Error("Failed to update employment record");
+      throw new Error(error.response?.data?.error || "Failed to update employment record");
     }
   }
 
@@ -216,12 +340,11 @@ class EmploymentService {
    */
   async deleteEmployment(employmentId) {
     try {
-      if (!this.apiClient) this.initializeApiClient();
-      const result = await this.apiClient.delete(`/employment/${employmentId}`);
-      return result.success || true;
+      const response = await this.apiClient.delete(`/employment/${employmentId}`);
+      return response.data.success || true;
     } catch (error) {
       console.error("Error deleting employment record:", error);
-      throw new Error("Failed to delete employment record");
+      throw new Error(error.response?.data?.error || "Failed to delete employment record");
     }
   }
 
@@ -230,47 +353,47 @@ class EmploymentService {
    * @param {Object} salaryData - Salary data
    * @returns {Promise<Object>} Created salary record
    */
-  async createSalary(salaryData) {
+  async createSalary(employmentId, salaryData) {
     try {
-      console.log("🔍 Creating salary record:", salaryData);
 
-      if (this.isApiMode) {
-        if (!this.apiClient) this.initializeApiClient();
-        const result = await this.apiClient.post('/salary', salaryData);
-        console.log("✅ Salary record created via API:", result);
-        return result;
-      }
 
-      // Use local data storage
-      const result = createSalaryRecord(salaryData);
-      console.log("✅ Salary record created locally:", result);
+      const response = await this.apiClient.post(`/employment/${employmentId}/salary`, salaryData);
 
-      // Store in localStorage for persistence
-      this.saveToLocalStorage('salary_records', result);
-
-      return result;
+      return response.data.salary || response.data;
     } catch (error) {
       console.error("❌ Error creating salary record:", error);
-      throw new Error("Failed to create salary record");
+      throw new Error(error.response?.data?.error || "Failed to create salary record");
     }
   }
 
   /**
    * Update salary record
-   * @param {string} salaryId - Salary ID
+   * @param {string} employmentId - Employment ID
    * @param {Object} salaryData - Updated salary data
    * @returns {Promise<Object>} Updated salary record
    */
-  async updateSalary(salaryId, salaryData) {
+  async updateSalary(employmentId, salaryData) {
     try {
-      if (this.isApiMode) {
-        // TODO: Replace with actual API call
-        // return await apiClient.put(`/api/salary/${salaryId}`, salaryData);
-      }
-      return updateSalaryRecord(salaryId, salaryData);
+      const response = await this.apiClient.put(`/employment/${employmentId}/salary`, salaryData);
+      return response.data.salary || response.data;
     } catch (error) {
       console.error("Error updating salary record:", error);
-      throw new Error("Failed to update salary record");
+      throw new Error(error.response?.data?.error || "Failed to update salary record");
+    }
+  }
+
+  /**
+   * Delete salary record
+   * @param {string} employmentId - Employment ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteSalary(employmentId) {
+    try {
+      const response = await this.apiClient.delete(`/employment/${employmentId}/salary`);
+      return response.data.success || true;
+    } catch (error) {
+      console.error("Error deleting salary record:", error);
+      throw new Error(error.response?.data?.error || "Failed to delete salary record");
     }
   }
 
@@ -279,47 +402,47 @@ class EmploymentService {
    * @param {Object} locationData - Location data
    * @returns {Promise<Object>} Created location record
    */
-  async createLocation(locationData) {
+  async createLocation(employmentId, locationData) {
     try {
-      console.log("🔍 Creating location record:", locationData);
 
-      if (this.isApiMode) {
-        if (!this.apiClient) this.initializeApiClient();
-        const result = await this.apiClient.post('/location', locationData);
-        console.log("✅ Location record created via API:", result);
-        return result;
-      }
 
-      // Use local data storage
-      const result = createLocationRecord(locationData);
-      console.log("✅ Location record created locally:", result);
+      const response = await this.apiClient.post(`/employment/${employmentId}/location`, locationData);
 
-      // Store in localStorage for persistence
-      this.saveToLocalStorage('location_records', result);
-
-      return result;
+      return response.data.location || response.data;
     } catch (error) {
       console.error("❌ Error creating location record:", error);
-      throw new Error("Failed to create location record");
+      throw new Error(error.response?.data?.error || "Failed to create location record");
     }
   }
 
   /**
    * Update location record
-   * @param {string} locationId - Location ID
+   * @param {string} employmentId - Employment ID
    * @param {Object} locationData - Updated location data
    * @returns {Promise<Object>} Updated location record
    */
-  async updateLocation(locationId, locationData) {
+  async updateLocation(employmentId, locationData) {
     try {
-      if (this.isApiMode) {
-        // TODO: Replace with actual API call
-        // return await apiClient.put(`/api/location/${locationId}`, locationData);
-      }
-      return updateLocationRecord(locationId, locationData);
+      const response = await this.apiClient.put(`/employment/${employmentId}/location`, locationData);
+      return response.data.location || response.data;
     } catch (error) {
       console.error("Error updating location record:", error);
-      throw new Error("Failed to update location record");
+      throw new Error(error.response?.data?.error || "Failed to update location record");
+    }
+  }
+
+  /**
+   * Delete location record
+   * @param {string} employmentId - Employment ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteLocation(employmentId) {
+    try {
+      const response = await this.apiClient.delete(`/employment/${employmentId}/location`);
+      return response.data.success || true;
+    } catch (error) {
+      console.error("Error deleting location record:", error);
+      throw new Error(error.response?.data?.error || "Failed to delete location record");
     }
   }
 
@@ -328,47 +451,119 @@ class EmploymentService {
    * @param {Object} contractData - Contract data
    * @returns {Promise<Object>} Created contract record
    */
-  async createContract(contractData) {
+  async createContract(employmentId, contractData) {
     try {
-      console.log("🔍 Creating contract record:", contractData);
 
-      if (this.isApiMode) {
-        if (!this.apiClient) this.initializeApiClient();
-        const result = await this.apiClient.post('/contract', contractData);
-        console.log("✅ Contract record created via API:", result);
-        return result;
+
+      // Create FormData for file uploads
+      const formData = new FormData();
+      
+      // Add all form fields
+      Object.keys(contractData).forEach(key => {
+        if (key !== 'files' && key !== 'documentRecords') {
+          if (contractData[key] !== null && contractData[key] !== undefined) {
+            formData.append(key, contractData[key]);
+          }
+        }
+      });
+
+      // Add files if present
+      if (contractData.files) {
+        Object.keys(contractData.files).forEach(key => {
+          if (contractData.files[key]) {
+            formData.append(key, contractData.files[key]);
+          }
+        });
       }
 
-      // Use local data storage
-      const result = createContractRecord(contractData);
-      console.log("✅ Contract record created locally:", result);
+      const response = await this.apiClient.post(`/employment/${employmentId}/contract`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
-      // Store in localStorage for persistence
-      this.saveToLocalStorage('contract_records', result);
 
-      return result;
+      return response.data.contract || response.data;
     } catch (error) {
       console.error("❌ Error creating contract record:", error);
-      throw new Error("Failed to create contract record");
+      throw new Error(error.response?.data?.error || "Failed to create contract record");
     }
   }
 
   /**
    * Update contract record
-   * @param {string} contractId - Contract ID
+   * @param {string} employmentId - Employment ID
    * @param {Object} contractData - Updated contract data
    * @returns {Promise<Object>} Updated contract record
    */
-  async updateContract(contractId, contractData) {
+  async updateContract(employmentId, contractData) {
     try {
-      if (this.isApiMode) {
-        // TODO: Replace with actual API call
-        // return await apiClient.put(`/api/contract/${contractId}`, contractData);
+
+
+      // Create FormData for file uploads
+      const formData = new FormData();
+      
+      // Add all form fields
+      Object.keys(contractData).forEach(key => {
+        if (key !== 'files' && key !== 'documentRecords') {
+          if (contractData[key] !== null && contractData[key] !== undefined) {
+            formData.append(key, contractData[key]);
+          }
+        }
+      });
+
+      // Add files if present
+      if (contractData.files) {
+        Object.keys(contractData.files).forEach(key => {
+          if (contractData.files[key]) {
+            formData.append(key, contractData.files[key]);
+          }
+        });
       }
-      return updateContractRecord(contractId, contractData);
+
+      const response = await this.apiClient.put(`/employment/${employmentId}/contract`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+
+      return response.data.contract || response.data;
     } catch (error) {
       console.error("Error updating contract record:", error);
-      throw new Error("Failed to update contract record");
+      throw new Error(error.response?.data?.error || "Failed to update contract record");
+    }
+  }
+
+  /**
+   * Delete contract record
+   * @param {string} employmentId - Employment ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteContract(employmentId) {
+    try {
+      const response = await this.apiClient.delete(`/employment/${employmentId}/contract`);
+      return response.data.success || true;
+    } catch (error) {
+      console.error("Error deleting contract record:", error);
+      throw new Error(error.response?.data?.error || "Failed to delete contract record");
+    }
+  }
+
+  /**
+   * Get employment record by ID
+   * @param {string} employmentId - Employment ID
+   * @returns {Promise<Object>} Employment record
+   */
+  async getEmploymentById(employmentId) {
+    try {
+
+      const response = await this.apiClient.get(`/employment/${employmentId}`);
+      
+      return response.data.employment || response.data;
+    } catch (error) {
+      console.error("❌ Error fetching employment record:", error);
+      throw new Error(error.response?.data?.error || "Failed to fetch employment record");
     }
   }
 
@@ -379,12 +574,11 @@ class EmploymentService {
    */
   async getEmploymentByUserId(userId) {
     try {
-      if (!this.apiClient) this.initializeApiClient();
-      const result = await this.apiClient.get(`/employment/employee/${userId}`);
-      return result.employments || [];
+      const response = await this.apiClient.get(`/employment/employee/${userId}`);
+      return response.data.employments || [];
     } catch (error) {
       console.error("Error fetching employment records:", error);
-      throw new Error("Failed to load employment records");
+      throw new Error(error.response?.data?.error || "Failed to load employment records");
     }
   }
 
@@ -395,58 +589,11 @@ class EmploymentService {
    */
   async getEmploymentHistory(employeeId) {
     try {
-      if (this.isApiMode) {
-        if (!this.apiClient) this.initializeApiClient();
-        const result = await this.apiClient.get(`/employment/employee/${employeeId}`);
-        return result.employments || [];
-      }
-
-      // Mock employment history data
-      return [
-        {
-          id: 1,
-          employee_id: employeeId,
-          department: { id: 1, name: "Engineering" },
-          designation: { id: 3, title: "Senior Engineer" },
-          employment_type: "Permanent",
-          start_date: "2023-01-15",
-          end_date: null,
-          is_current: true,
-          salary: {
-            basic_salary: 85000,
-            gross_salary: 120000,
-            grade: "BPS-17",
-            scale: "Senior",
-          },
-          location: {
-            name: "Head Office",
-            address: "Lahore, Punjab",
-          },
-        },
-        {
-          id: 2,
-          employee_id: employeeId,
-          department: { id: 1, name: "Engineering" },
-          designation: { id: 2, title: "Assistant Engineer" },
-          employment_type: "Permanent",
-          start_date: "2021-06-01",
-          end_date: "2023-01-14",
-          is_current: false,
-          salary: {
-            basic_salary: 65000,
-            gross_salary: 90000,
-            grade: "BPS-16",
-            scale: "Junior",
-          },
-          location: {
-            name: "Regional Office",
-            address: "Karachi, Sindh",
-          },
-        },
-      ];
+      const response = await this.apiClient.get(`/employment/employee/${employeeId}`);
+      return response.data.employments || [];
     } catch (error) {
       console.error("Error fetching employment history:", error);
-      throw new Error("Failed to load employment history");
+      throw new Error(error.response?.data?.error || "Failed to load employment history");
     }
   }
 
@@ -457,12 +604,11 @@ class EmploymentService {
    */
   async createEmploymentRecord(recordData) {
     try {
-      if (!this.apiClient) this.initializeApiClient();
-      const result = await this.apiClient.post('/employment', recordData);
-      return result.employment || result;
+      const response = await this.apiClient.post('/employment', recordData);
+      return response.data.employment || response.data;
     } catch (error) {
       console.error("Error creating employment record:", error);
-      throw new Error("Failed to create employment record");
+      throw new Error(error.response?.data?.error || "Failed to create employment record");
     }
   }
 
@@ -474,12 +620,11 @@ class EmploymentService {
    */
   async updateEmploymentRecord(recordId, recordData) {
     try {
-      if (!this.apiClient) this.initializeApiClient();
-      const result = await this.apiClient.put(`/employment/${recordId}`, recordData);
-      return result.employment || result;
+      const response = await this.apiClient.put(`/employment/${recordId}`, recordData);
+      return response.data.employment || response.data;
     } catch (error) {
       console.error("Error updating employment record:", error);
-      throw new Error("Failed to update employment record");
+      throw new Error(error.response?.data?.error || "Failed to update employment record");
     }
   }
 
@@ -490,68 +635,27 @@ class EmploymentService {
    */
   async deleteEmploymentRecord(recordId) {
     try {
-      if (!this.apiClient) this.initializeApiClient();
-      const result = await this.apiClient.delete(`/employment/${recordId}`);
-      return result.success || true;
+      const response = await this.apiClient.delete(`/employment/${recordId}`);
+      return response.data.success || true;
     } catch (error) {
       console.error("Error deleting employment record:", error);
-      throw new Error("Failed to delete employment record");
+      throw new Error(error.response?.data?.error || "Failed to delete employment record");
     }
   }
 
   /**
-   * Save data to localStorage for persistence
-   * @param {string} key - Storage key
-   * @param {Object} data - Data to save
+   * Get employment statistics
+   * @returns {Promise<Object>} Employment statistics
    */
-  saveToLocalStorage(key, data) {
+  async getEmploymentStatistics() {
     try {
-      const existingData = JSON.parse(localStorage.getItem(key) || '[]');
-      const updatedData = Array.isArray(existingData) ? [...existingData, data] : [data];
-      localStorage.setItem(key, JSON.stringify(updatedData));
-      console.log(`💾 Data saved to localStorage under key: ${key}`);
+      const response = await this.apiClient.get('/employment/statistics');
+      return response.data.statistics || {};
     } catch (error) {
-      console.error(`❌ Error saving to localStorage:`, error);
+      console.error("Error fetching employment statistics:", error);
+      throw new Error(error.response?.data?.error || "Failed to load employment statistics");
     }
   }
-
-  /**
-   * Load data from localStorage
-   * @param {string} key - Storage key
-   * @returns {Array} Stored data array
-   */
-  loadFromLocalStorage(key) {
-    try {
-      const data = JSON.parse(localStorage.getItem(key) || '[]');
-      console.log(`📖 Data loaded from localStorage under key: ${key}`, data);
-      return Array.isArray(data) ? data : [];
-    } catch (error) {
-      console.error(`❌ Error loading from localStorage:`, error);
-      return [];
-    }
-  }
-
-  /**
-   * Clear localStorage data
-   * @param {string} key - Storage key (optional, clears all if not provided)
-   */
-  clearLocalStorage(key = null) {
-    try {
-      if (key) {
-        localStorage.removeItem(key);
-        console.log(`🗑️ Cleared localStorage key: ${key}`);
-      } else {
-        // Clear all employment-related data
-        const keys = ['employment_records', 'salary_records', 'location_records', 'contract_records'];
-        keys.forEach(k => localStorage.removeItem(k));
-        console.log(`🗑️ Cleared all employment data from localStorage`);
-      }
-    } catch (error) {
-      console.error(`❌ Error clearing localStorage:`, error);
-    }
-  }
-
-
 }
 
 // Export singleton instance

@@ -93,6 +93,7 @@ model PastExperience {
   employee     Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   employee_id  Int
   company_name String
+  position     String?  // Position/Role field to match frontend
   start_date   String   // Stored as string to match frontend
   end_date     String   // Stored as string to match frontend
   description  String?
@@ -123,8 +124,11 @@ model EmployeeDocument {
   document_name String?   // Original filename
   file_size     Int?      // File size in bytes
   mime_type     String?   // MIME type of the file
+  associated_id Int?      // Links to specific education or experience record ID
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@index([associated_id])
 }
 
 
@@ -147,6 +151,16 @@ model Employment {
   office_location     String?
   remarks             String?
 
+  // Additional employment fields from form
+  scale_grade         String?     // Scale/Grade (e.g., BPS-17, Grade-A)
+  employment_status   String      @default("active") // active, inactive, terminated, resigned
+  is_current          Boolean     @default(true) // Whether this is the current employment
+  filer_status        String      @default("non_filer") // filer, non_filer
+  filer_active_status String?     // active, not_active (only for filers)
+
+
+ 
+
   // Probation fields
   is_on_probation     Boolean     @default(false)
   probation_end_date  DateTime?
@@ -157,6 +171,10 @@ model Employment {
   // Relations to salary and location
   salary              EmploymentSalary?
   location            EmploymentLocation?
+  contract            EmploymentContract?
+  
+  // Relations to documents
+  documents           EmploymentDocument[]
 }
 
 // Employment Salary Tab - All salary-related information
@@ -165,6 +183,7 @@ model EmploymentSalary {
   employment            Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
   employment_id         Int        @unique
   basic_salary          Float      @default(0)
+  gross_salary          Float?     // Added for MBWO organization (nullable)
   medical_allowance     Float      @default(0)
   house_rent            Float      @default(0)
   conveyance_allowance  Float      @default(0)
@@ -193,4 +212,41 @@ model EmploymentLocation {
   full_address  String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+}
+
+// Employment Contract Tab - All contract-related information
+model EmploymentContract {
+  id                    Int        @id @default(autoincrement())
+  employment            Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
+  employment_id         Int        @unique
+  contract_type         String?    // Contract type (e.g., "Contractual", "Fixed-term")
+  contract_number       String?    // Contract number
+  start_date            DateTime?  // Contract start date
+  end_date              DateTime?  // Contract end date
+  renewal_count         Int        @default(0) // Number of renewals
+  probation_start       DateTime?  // Probation start date
+  probation_end         DateTime?  // Probation end date
+  confirmation_status   String?    // Confirmation status
+  confirmation_date     DateTime?  // Confirmation date
+  is_renewed            Boolean    @default(false) // Whether contract is renewed
+  
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
+
+// Normalized table for employment documents
+model EmploymentDocument {
+  id            Int       @id @default(autoincrement())
+  employment    Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
+  employment_id Int
+  file_path     String
+  file_type     String    // e.g., 'medical_fitness', 'police_character', 'contract_document', 'renewal_report'
+  document_name String?   // Original filename
+  file_size     Int?      // File size in bytes
+  mime_type     String?   // MIME type of the file
+  associated_id Int?      // Links to specific contract or other record ID
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([associated_id])
 }

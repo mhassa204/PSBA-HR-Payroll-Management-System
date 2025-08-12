@@ -37,7 +37,9 @@ export const useOrganizationFields = (selectedOrganization, formData, setFormDat
   // Memoized field visibility checker
   const checkFieldVisibility = useMemo(() => {
     return (section, fieldName) => {
-      return isFieldVisible(selectedOrganization, section, fieldName);
+      const isVisible = isFieldVisible(selectedOrganization, section, fieldName);
+
+      return isVisible;
     };
   }, [selectedOrganization]);
 
@@ -63,7 +65,8 @@ export const useOrganizationFields = (selectedOrganization, formData, setFormDat
   const getFieldClasses = useMemo(() => {
     return (section, fieldName, baseClasses = '') => {
       const isVisible = checkFieldVisibility(section, fieldName);
-      const visibilityClass = isVisible ? 'block' : 'hidden';
+      const visibilityClass = isVisible ? '' : 'hidden';
+      // Don't apply any disabling classes that might prevent interaction
       return `${baseClasses} ${visibilityClass}`.trim();
     };
   }, [checkFieldVisibility]);
@@ -72,7 +75,7 @@ export const useOrganizationFields = (selectedOrganization, formData, setFormDat
   const getSectionClasses = useMemo(() => {
     return (section, baseClasses = '') => {
       const isVisible = checkSectionVisibility(section);
-      const visibilityClass = isVisible ? 'block' : 'hidden';
+      const visibilityClass = isVisible ? '' : 'hidden';
       return `${baseClasses} ${visibilityClass}`.trim();
     };
   }, [checkSectionVisibility]);
@@ -109,9 +112,66 @@ export const useOrganizationFields = (selectedOrganization, formData, setFormDat
         return nonRequiredRules;
       }
       
+      // Organization-specific validation rules
+      const organizationRules = {
+        MBWO: {
+          employment: {
+            department: {}, // No validation for hidden field
+            designation: { required: "Designation is required" },
+            employment_type: {}, // No validation for hidden field
+            role_tag: {}, // No validation for hidden field
+            reporting_officer_id: {}, // No validation for hidden field
+            office_location: {}, // No validation for hidden field
+            scale_grade: {}, // No validation for hidden field
+            medical_fitness_report_pdf: {}, // No validation for hidden field
+            filer_status: {}, // No validation for hidden field
+            filer_active_status: {}, // No validation for hidden field
+            employment_status: {}, // No validation for hidden field
+            is_current: {}, // No validation for hidden field
+            is_on_probation: {}, // No validation for hidden field
+            probation_end_date: {} // No validation for hidden field
+          },
+          salary: {
+            medical_allowance: {}, // No validation for hidden field
+            house_rent: {}, // No validation for hidden field
+            conveyance_allowance: {}, // No validation for hidden field
+            other_allowances: {}, // No validation for hidden field
+            daily_wage_rate: {}, // No validation for hidden field
+            payment_mode: {}, // No validation for hidden field
+            bank_account_primary: {}, // No validation for hidden field
+            bank_name_primary: {}, // No validation for hidden field
+            bank_account_secondary: {}, // No validation for hidden field
+            bank_name_secondary: {}, // No validation for hidden field
+            bonus_eligible: {}, // No validation for hidden field
+            payroll_status: {} // No validation for hidden field
+          }
+        },
+        PMBMC: {
+          employment: {
+            scale_grade: {}, // No validation for hidden field
+            reporting_officer_id: {}, // No validation for hidden field
+            office_location: {}, // No validation for hidden field
+            employment_status: {} // No validation for hidden field
+          }
+        },
+        PSBA: {
+          employment: {
+            office_location: {} // No validation for hidden field
+          }
+        }
+      };
+      
+      // Get organization-specific rules
+      const orgRules = organizationRules[selectedOrganization]?.[section]?.[fieldName];
+      
+      if (orgRules) {
+        // Use organization-specific rules
+        return { ...defaultRules, ...orgRules };
+      }
+      
       return defaultRules;
     };
-  }, [checkFieldVisibility]);
+  }, [checkFieldVisibility, selectedOrganization]);
 
   // Check if organization has specific field restrictions
   const hasFieldRestrictions = useMemo(() => {

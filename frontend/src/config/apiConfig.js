@@ -204,7 +204,7 @@ export const devUtils = {
     if (apiConfig.isDevelopment) {
       const currentMode = getApiMode();
       setApiMode(!currentMode);
-      console.log(`API mode switched to: ${!currentMode ? 'API' : 'Local'}`);
+
     } else {
       console.warn('API mode toggle is only available in development');
     }
@@ -232,7 +232,7 @@ export const devUtils = {
       Object.values(apiConfig.storageKeys).forEach(key => {
         localStorage.removeItem(key);
       });
-      console.log('Local storage cleared');
+
     }
   },
 };

@@ -7,6 +7,8 @@ async function main() {
 
   // Clear existing data in reverse dependency order
   console.log('🧹 Cleaning existing data...');
+  await prisma.employmentDocument.deleteMany();
+  await prisma.employmentContract.deleteMany();
   await prisma.employmentLocation.deleteMany();
   await prisma.employmentSalary.deleteMany();
   await prisma.employment.deleteMany();
@@ -188,6 +190,7 @@ async function main() {
     {
       employee_id: createdEmployees[0].id,
       company_name: "Government of Punjab",
+      position: "Junior Engineer",
       start_date: "2008-01-15",
       end_date: "2010-12-31",
       description: "Junior Engineer in Public Works Department"
@@ -195,6 +198,7 @@ async function main() {
     {
       employee_id: createdEmployees[1].id,
       company_name: "Tech Solutions Ltd",
+      position: "Software Developer",
       start_date: "2012-06-01",
       end_date: "2015-08-30",
       description: "Software Developer specializing in web applications"
@@ -275,7 +279,12 @@ async function main() {
       effective_from: new Date("2020-01-15"),
       role_tag: "Technical Lead",
       office_location: "Lahore Head Office",
-      remarks: "Promoted to Senior Engineer after excellent performance"
+      remarks: "Promoted to Senior Engineer after excellent performance",
+      scale_grade: "BPS-17",
+      employment_status: "active",
+      is_current: true,
+      filer_status: "filer",
+      filer_active_status: "active"
     },
     {
       employee_id: createdEmployees[1].id,
@@ -288,7 +297,11 @@ async function main() {
       role_tag: "Full Stack Developer",
       office_location: "Karachi Regional Office",
       is_on_probation: false,
-      remarks: "Contract employee with excellent technical skills"
+      remarks: "Contract employee with excellent technical skills",
+      scale_grade: "Grade-A",
+      employment_status: "active",
+      is_current: true,
+      filer_status: "non_filer"
     },
     {
       employee_id: createdEmployees[2].id,
@@ -301,7 +314,12 @@ async function main() {
       office_location: "Lahore Regional Office",
       is_on_probation: true,
       probation_end_date: new Date("2024-06-01"),
-      remarks: "Currently on probation period"
+      remarks: "Currently on probation period",
+      scale_grade: "BPS-18",
+      employment_status: "active",
+      is_current: true,
+      filer_status: "filer",
+      filer_active_status: "active"
     }
   ];
 
@@ -317,11 +335,11 @@ async function main() {
   const salaryRecords = [
     {
       employment_id: createdEmployments[0].id,
-      basic_salary: 75000,
-      medical_allowance: 8000,
-      house_rent: 25000,
-      conveyance_allowance: 5000,
-      other_allowances: 3000,
+      basic_salary: 75000.0,
+      medical_allowance: 8000.0,
+      house_rent: 25000.0,
+      conveyance_allowance: 5000.0,
+      other_allowances: 3000.0,
       bank_account_primary: "1234567890123456",
       bank_name_primary: "HBL",
       bank_branch_code: "1234",
@@ -331,11 +349,11 @@ async function main() {
     },
     {
       employment_id: createdEmployments[1].id,
-      basic_salary: 85000,
-      medical_allowance: 10000,
-      house_rent: 30000,
-      conveyance_allowance: 6000,
-      other_allowances: 4000,
+      basic_salary: 85000.0,
+      medical_allowance: 10000.0,
+      house_rent: 30000.0,
+      conveyance_allowance: 6000.0,
+      other_allowances: 4000.0,
       bank_account_primary: "2345678901234567",
       bank_name_primary: "UBL",
       bank_branch_code: "5678",
@@ -346,11 +364,11 @@ async function main() {
     },
     {
       employment_id: createdEmployments[2].id,
-      basic_salary: 95000,
-      medical_allowance: 12000,
-      house_rent: 35000,
-      conveyance_allowance: 7000,
-      other_allowances: 5000,
+      basic_salary: 95000.0,
+      medical_allowance: 12000.0,
+      house_rent: 35000.0,
+      conveyance_allowance: 7000.0,
+      other_allowances: 5000.0,
       daily_wage_rate: null,
       bank_account_primary: "3456789012345678",
       bank_name_primary: "MCB",
@@ -399,6 +417,76 @@ async function main() {
     console.log(`✅ Created Location Record: Employment ${employmentLocation.employment_id} - ${employmentLocation.city}`);
   }
 
+  // Seed employment contracts
+  const contractRecords = [
+    {
+      employment_id: createdEmployments[0].id,
+      contract_type: "Permanent",
+      contract_number: "MBWO-EMP2024001-2020",
+      start_date: new Date("2020-01-15"),
+      confirmation_status: "Confirmed",
+      confirmation_date: new Date("2020-07-15")
+    },
+    {
+      employment_id: createdEmployments[1].id,
+      contract_type: "Fixed-term",
+      contract_number: "PMBMC-EMP2024002-2021",
+      start_date: new Date("2021-03-01"),
+      end_date: new Date("2024-02-29"),
+      confirmation_status: "Confirmed",
+      confirmation_date: new Date("2021-09-01")
+    },
+    {
+      employment_id: createdEmployments[2].id,
+      contract_type: "Probation",
+      contract_number: "PSBA-EMP2024003-2022",
+      start_date: new Date("2022-06-01"),
+      probation_start: new Date("2022-06-01"),
+      probation_end: new Date("2024-06-01")
+    }
+  ];
+
+  console.log('📝 Seeding employment contracts...');
+  for (const contract of contractRecords) {
+    const employmentContract = await prisma.employmentContract.create({ data: contract });
+    console.log(`✅ Created Contract Record: Employment ${employmentContract.employment_id} - ${employmentContract.contract_type}`);
+  }
+
+  // Seed employment documents
+  const employmentDocuments = [
+    {
+      employment_id: createdEmployments[0].id,
+      file_path: "/uploads/employment/ahmed_medical_fitness.pdf",
+      file_type: "medical_fitness",
+      document_name: "ahmed_medical_fitness.pdf",
+      file_size: 3145728,
+      mime_type: "application/pdf"
+    },
+    {
+      employment_id: createdEmployments[0].id,
+      file_path: "/uploads/employment/ahmed_police_certificate.pdf",
+      file_type: "police_character",
+      document_name: "ahmed_police_certificate.pdf",
+      file_size: 2097152,
+      mime_type: "application/pdf"
+    },
+    {
+      employment_id: createdEmployments[1].id,
+      file_path: "/uploads/employment/fatima_contract.pdf",
+      file_type: "contract_document",
+      document_name: "fatima_contract.pdf",
+      file_size: 4194304,
+      mime_type: "application/pdf",
+      associated_id: createdEmployments[1].id
+    }
+  ];
+
+  console.log('📄 Seeding employment documents...');
+  for (const doc of employmentDocuments) {
+    const employmentDocument = await prisma.employmentDocument.create({ data: doc });
+    console.log(`✅ Created Employment Document: ${employmentDocument.file_type} for employment ${employmentDocument.employment_id}`);
+  }
+
   console.log('🎉 Database seeding completed successfully!');
   console.log(`📊 Summary:`);
   console.log(`   - Departments: ${createdDepartments.length}`);
@@ -407,9 +495,11 @@ async function main() {
   console.log(`   - Employment Records: ${createdEmployments.length}`);
   console.log(`   - Past Experiences: ${pastExperiences.length}`);
   console.log(`   - Education Qualifications: ${educationQualifications.length}`);
-  console.log(`   - Documents: ${documents.length}`);
+  console.log(`   - Employee Documents: ${documents.length}`);
   console.log(`   - Salary Records: ${salaryRecords.length}`);
   console.log(`   - Location Records: ${locationRecords.length}`);
+  console.log(`   - Contract Records: ${contractRecords.length}`);
+  console.log(`   - Employment Documents: ${employmentDocuments.length}`);
 }
 
 main()

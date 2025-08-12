@@ -400,7 +400,7 @@ export const officeLocations = [
 
 // Transform comprehensive employment records to match the expected structure
 const transformEmploymentRecord = (record) => {
-  console.log("🔄 NormalizedData: Transforming record:", record);
+  
 
   const transformed = {
     id: record.id,
@@ -430,8 +430,7 @@ const transformEmploymentRecord = (record) => {
     updated_at: record.created_at, // Use created_at as updated_at if not available
   };
 
-  console.log("✅ NormalizedData: Transformed record:", transformed);
-  console.log("📅 NormalizedData: Date fields - effective_from:", transformed.effective_from, "effective_till:", transformed.effective_till);
+  
 
   return transformed;
 };
@@ -537,28 +536,24 @@ export const getDepartmentsByName = (name) =>
 export const getDesignationById = (id) =>
   designations.find((des) => des.id === id);
 export const getDesignationsByDepartment = (departmentIdOrName) => {
-  console.log(
-    "🔍 getDesignationsByDepartment called with:",
-    departmentIdOrName
-  );
-  console.log("🔍 Type:", typeof departmentIdOrName);
+
 
   // Handle both department ID and department name
   let targetDepartmentId = departmentIdOrName;
 
   // If it's a string that doesn't look like an ID, treat it as department name
   if (typeof departmentIdOrName === "string" && isNaN(departmentIdOrName)) {
-    console.log("🔍 Searching for department by name:", departmentIdOrName);
+
     const department = departments.find(
       (dept) =>
         dept.name === departmentIdOrName ||
         dept.name.toLowerCase() === departmentIdOrName.toLowerCase()
     );
-    console.log("🔍 Found department:", department);
+
     targetDepartmentId = department?.id;
   }
 
-  console.log("🔍 Target department ID:", targetDepartmentId);
+
 
   if (!targetDepartmentId) {
     console.warn(`❌ Department not found: ${departmentIdOrName}`);
@@ -568,7 +563,7 @@ export const getDesignationsByDepartment = (departmentIdOrName) => {
   const filteredDesignations = designations.filter(
     (des) => des.department_id === targetDepartmentId
   );
-  console.log("🔍 Filtered designations:", filteredDesignations);
+
 
   return filteredDesignations;
 };

@@ -51,7 +51,7 @@ class DataManager {
         this.addToSyncQueue('employment', 'create', record);
       }
 
-      console.log('✅ Employment record saved:', record);
+
       return record;
     } catch (error) {
       console.error('❌ Error saving employment record:', error);
@@ -104,7 +104,7 @@ class DataManager {
         this.addToSyncQueue('employment', 'update', updatedRecord);
       }
 
-      console.log('✅ Employment record updated:', updatedRecord);
+
       return updatedRecord;
     } catch (error) {
       console.error('❌ Error updating employment record:', error);
@@ -129,7 +129,7 @@ class DataManager {
         this.addToSyncQueue('employment', 'delete', { id: recordId });
       }
 
-      console.log('✅ Employment record deleted:', recordId);
+
       return true;
     } catch (error) {
       console.error('❌ Error deleting employment record:', error);
@@ -159,7 +159,7 @@ class DataManager {
       }
       
       localStorage.setItem(fullKey, JSON.stringify(existingData));
-      console.log(`💾 Data saved to storage: ${key}`);
+
     } catch (error) {
       console.error(`❌ Error saving to storage:`, error);
       throw new Error('Failed to save data to local storage');
@@ -191,7 +191,7 @@ class DataManager {
     try {
       const fullKey = this.storagePrefix + key;
       localStorage.setItem(fullKey, JSON.stringify(dataArray));
-      console.log(`💾 Array saved to storage: ${key}`);
+
     } catch (error) {
       console.error(`❌ Error saving array to storage:`, error);
       throw new Error('Failed to save data array to local storage');
@@ -221,7 +221,7 @@ class DataManager {
       timestamp: new Date().toISOString(),
     });
     
-    console.log(`📋 Added to sync queue: ${type} ${operation}`);
+    
   }
 
   /**
@@ -232,12 +232,12 @@ class DataManager {
       return;
     }
 
-    console.log(`🔄 Processing sync queue: ${this.syncQueue.length} items`);
+    
     
     // TODO: Implement actual API sync when backend is ready
     // For now, just mark items as processed
     this.syncQueue = [];
-    console.log('✅ Sync queue processed (mock)');
+    
   }
 
   /**
@@ -249,7 +249,7 @@ class DataManager {
       if (type) {
         const fullKey = this.storagePrefix + type;
         localStorage.removeItem(fullKey);
-        console.log(`🗑️ Cleared local data: ${type}`);
+  
       } else {
         // Clear all employment-related data
         const keys = ['employment_records', 'salary_records', 'location_records', 'contract_records'];
@@ -257,7 +257,7 @@ class DataManager {
           const fullKey = this.storagePrefix + key;
           localStorage.removeItem(fullKey);
         });
-        console.log('🗑️ Cleared all employment data');
+  
       }
     } catch (error) {
       console.error('❌ Error clearing local data:', error);
@@ -309,7 +309,7 @@ class DataManager {
         }
       });
       
-      console.log('✅ Data imported successfully');
+
     } catch (error) {
       console.error('❌ Error importing data:', error);
       throw new Error('Failed to import data');

@@ -1,72 +1,124 @@
-// const { hasRole } = require("../middlewares/authMiddleware");
+// // const { hasRole } = require("../middlewares/authMiddleware");
 
-// router.delete("/:id", hasRole(["admin", "superadmin"]), employeeController.deleteEmployee);
+// // router.delete("/:id", hasRole(["admin", "superadmin"]), employeeController.deleteEmployee);
 
-// src/routes/employeeRoutes.js
+// // src/routes/employeeRoutes.js
+// const express = require("express");
+// const router = express.Router();
+// const employeeController = require("../controllers/employeeController");
+// const upload = require("../config/multer");
+// const multer = require("multer");
+// const { storage } = require("../config/multer");
+
+// // Custom multer configuration that accepts dynamic field names
+// const dynamicUpload = multer({
+//   storage: storage,
+//   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
+//   fileFilter: (req, file, cb) => {
+//     // Allow all field names that match our patterns
+//     const allowedPatterns = [
+//       /^profile_picture(_file)?$/,
+//       /^cnic_(front|back)(_file)?$/,
+//       /^disability_document(_file)?$/,
+//       /^certificates(_file)?$/,
+//       /^(matric|fsc)_certificate(_file)?$/,
+//       /^education_documents(_\d+)?(_file)?$/,
+//       /^experience_documents(_\d+)?(_file)?$/,
+//       /^other_documents(_file)?$/,
+//       /^medical_fitness(_file)?$/,
+//       /^domicile_certificate(_file)?$/
+//     ];
+
+//     const isAllowed = allowedPatterns.some(pattern => pattern.test(file.fieldname));
+//     if (isAllowed) {
+//       cb(null, true);
+//     } else {
+//       cb(new Error(`Unexpected field: ${file.fieldname}`), false);
+//     }
+//   }
+// });
+
+// router.post(
+//   "/",
+//   dynamicUpload.any(), // Accept any field names that pass the filter
+//   employeeController.createEmployee
+// );
+
+// router.get("/", employeeController.getAllEmployees);
+// router.get("/:id", employeeController.getEmployeeById);
+
+// router.put(
+//   "/:id",
+//   dynamicUpload.any(), // Accept any field names that pass the filter
+//   employeeController.updateEmployee
+// );
+
+// router.delete("/:id", employeeController.deleteEmployee);
+
+// module.exports = router;
+
+
+
+
+
 const express = require("express");
 const router = express.Router();
 const employeeController = require("../controllers/employeeController");
-const upload = require("../config/multer");
+const multer = require("multer");
+const { storage } = require("../config/multer");
+// const { hasRole } = require("../middlewares/authMiddleware");
 
+// Custom multer configuration for dynamic field names
+const dynamicUpload = multer({
+  storage: storage,
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
+  fileFilter: (req, file, cb) => {
+    // Define allowed field name patterns
+    const allowedPatterns = [
+      /^profile_picture(_file)?$/,
+      /^cnic_(front|back)(_file)?$/,
+      /^disability_document(_file)?$/,
+      /^certificates(_file)?$/,
+      /^(matric|fsc)_certificate(_file)?$/,
+      /^education_documents(_\d+)?(_file)?$/,
+      /^experience_documents(_\d+)?(_file)?$/,
+      /^other_documents(_file)?$/,
+      /^medical_fitness(_file)?$/,
+      /^domicile_certificate(_file)?$/
+    ];
+
+    const isAllowed = allowedPatterns.some(pattern => pattern.test(file.fieldname));
+    if (isAllowed) {
+      console.log(`✅ Accepted field: ${file.fieldname} (${file.originalname})`);
+      cb(null, true);
+    } else {
+      console.error(`❌ Rejected field: ${file.fieldname} (${file.originalname})`);
+      cb(new Error(`Unexpected field: ${file.fieldname}`), false);
+    }
+  }
+});
+
+// Routes
 router.post(
   "/",
-  upload.fields([
-    { name: "medical_fitness_file", maxCount: 1 },
-    { name: "profile_picture_file", maxCount: 1 },
-    { name: "cnic_front", maxCount: 1 },
-    { name: "cnic_back", maxCount: 1 },
-    { name: "cnic_documents", maxCount: 2 }, // For both front and back
-    { name: "cnic_documents_file", maxCount: 2 }, // Alternative field name
-    { name: "cnic_front_file", maxCount: 1 },
-    { name: "cnic_back_file", maxCount: 1 },
-    { name: "domicile_certificate", maxCount: 1 },
-    { name: "domicile_certificate_file", maxCount: 1 },
-    { name: "disability_document", maxCount: 1 },
-    { name: "disability_document_file", maxCount: 1 },
-    { name: "certificates", maxCount: 5 }, // Multiple certificates
-    { name: "matric_certificate", maxCount: 1 },
-    { name: "fsc_certificate", maxCount: 1 },
-    { name: "education_documents", maxCount: 10 }, // Multiple education docs
-    { name: "education_documents_file", maxCount: 10 }, // Alternative field name
-    { name: "experience_documents", maxCount: 10 }, // Multiple experience docs
-    { name: "experience_documents_file", maxCount: 10 }, // Alternative field name
-    { name: "other_documents", maxCount: 20 }, // Multiple other documents
-    { name: "other_documents_file", maxCount: 20 }, // Alternative field name
-  ]),
+  dynamicUpload.any(), // Accept any field names that pass the filter
   employeeController.createEmployee
 );
 
 router.get("/", employeeController.getAllEmployees);
+
 router.get("/:id", employeeController.getEmployeeById);
 
 router.put(
   "/:id",
-  upload.fields([
-    { name: "medical_fitness_file", maxCount: 1 },
-    { name: "profile_picture_file", maxCount: 1 },
-    { name: "cnic_front", maxCount: 1 },
-    { name: "cnic_back", maxCount: 1 },
-    { name: "cnic_documents", maxCount: 2 }, // For both front and back
-    { name: "cnic_documents_file", maxCount: 2 }, // Alternative field name
-    { name: "cnic_front_file", maxCount: 1 },
-    { name: "cnic_back_file", maxCount: 1 },
-    { name: "domicile_certificate", maxCount: 1 },
-    { name: "domicile_certificate_file", maxCount: 1 },
-    { name: "disability_document", maxCount: 1 },
-    { name: "disability_document_file", maxCount: 1 },
-    { name: "certificates", maxCount: 5 }, // Multiple certificates
-    { name: "matric_certificate", maxCount: 1 },
-    { name: "fsc_certificate", maxCount: 1 },
-    { name: "education_documents", maxCount: 10 }, // Multiple education docs
-    { name: "education_documents_file", maxCount: 10 }, // Alternative field name
-    { name: "experience_documents", maxCount: 10 }, // Multiple experience docs
-    { name: "experience_documents_file", maxCount: 10 }, // Alternative field name
-    { name: "other_documents", maxCount: 20 }, // Multiple other documents
-    { name: "other_documents_file", maxCount: 20 }, // Alternative field name
-  ]),
+  dynamicUpload.any(), // Accept any field names that pass the filter
   employeeController.updateEmployee
 );
 
-router.delete("/:id", employeeController.deleteEmployee);
+router.delete(
+  "/:id",
+ 
+  employeeController.deleteEmployee
+);
 
 module.exports = router;

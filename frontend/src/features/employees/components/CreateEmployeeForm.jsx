@@ -47,7 +47,7 @@ const CreateEmployeeForm = () => {
   const [uploadedFiles, setUploadedFiles] = useState({
     cnic_front: null,
     cnic_back: null,
-    domicile_certificate: null,
+    certificates: null,
     disability_document: null,
     experience_documents: {},
     education_documents: {},
@@ -155,11 +155,12 @@ const CreateEmployeeForm = () => {
     if (isMultiple) {
       const validation = validateMultipleFiles(files, fileType);
       if (validation.isValid) {
+        // For multiple files, ADD to existing files instead of replacing
         setUploadedFiles(prev => ({
           ...prev,
-          [fileType]: files
+          [fileType]: [...(prev[fileType] || []), ...files]
         }));
-        form.setValue(`${fileType}_files`, files);
+        // Don't set form value here - it will be handled in form submission
       } else {
         alert(validation.message);
         event.target.value = '';
@@ -173,7 +174,7 @@ const CreateEmployeeForm = () => {
             ...prev,
             [fileType]: file
           }));
-          form.setValue(`${fileType}_file`, file);
+          // Don't set form value here - it will be handled in form submission
         } else {
           alert(validation.message);
           event.target.value = '';
@@ -181,6 +182,58 @@ const CreateEmployeeForm = () => {
       }
     }
   };
+
+  // Handle file removal
+  const handleFileRemove = (fileType, fileIndex = null) => {
+    setUploadedFiles(prev => {
+      if (fileIndex !== null && Array.isArray(prev[fileType])) {
+        // Remove specific file from array
+        const newFiles = [...prev[fileType]];
+        newFiles.splice(fileIndex, 1);
+        return { ...prev, [fileType]: newFiles };
+      } else {
+        // Remove single file or entire array
+        return { ...prev, [fileType]: Array.isArray(prev[fileType]) ? [] : null };
+      }
+    });
+  };
+
+  // Render file preview
+  const renderFilePreview = (file, fileType, fileIndex = null) => {
+    if (!file) return null;
+
+    const isImage = file.type.startsWith('image/');
+    const previewUrl = URL.createObjectURL(file);
+
+    return (
+      <div key={fileIndex || 'single'} className="relative inline-block mr-2 mb-2">
+        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm" style={{ width: '120px', height: '80px' }}>
+          {isImage ? (
+            <img
+              src={previewUrl}
+              alt={file.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
+              <i className="fas fa-file-pdf text-2xl text-red-500 mb-1"></i>
+              <span className="text-xs text-gray-600 text-center px-1 truncate">{file.name}</span>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => handleFileRemove(fileType, fileIndex)}
+          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+          title="Remove file"
+        >
+          ×
+        </button>
+      </div>
+    );
+  };
+
+
 
   // Handle experience document upload
   const handleExperienceDocumentUpload = (event, experienceId) => {
@@ -323,13 +376,13 @@ const CreateEmployeeForm = () => {
     clearError();
     console.log("Form submitted with data:", data);
 
-    // Include experiences, educations, and associated documents in the data
+    // Include experiences, educations, and ALL uploaded files in the data
     const formDataWithExperiences = {
       ...data,
       past_experiences: experiences,
       educations: educations,
-      experience_documents: uploadedFiles.experience_documents,
-      education_documents: uploadedFiles.education_documents
+      // Include ALL uploaded files
+      ...uploadedFiles
     };
 
     // Log form submission
@@ -1242,17 +1295,39 @@ const CreateEmployeeForm = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       CNIC Front Copy
                     </label>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,application/pdf"
-                      onChange={(e) => handleFileUpload(e, 'cnic_documents')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,application/pdf"
+                        onChange={(e) => handleFileUpload(e, 'cnic_front')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {uploadedFiles.cnic_front && (
+                        <div className="mt-2">
+                          {renderFilePreview(uploadedFiles.cnic_front, 'cnic_front')}
+                        </div>
+                      )}
+                    </div>
                     {uploadedFiles.cnic_front && (
-                      <p className="text-sm text-green-600 mt-1">
-                        <i className="fas fa-check mr-1"></i>
-                        {uploadedFiles.cnic_front.name}
-                      </p>
+                      <div className="flex items-center justify-between mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center">
+                          <i className="fas fa-file-image mr-2 text-green-600"></i>
+                          <div>
+                            <p className="text-sm font-medium text-green-800">{uploadedFiles.cnic_front.name}</p>
+                            <p className="text-xs text-green-600">
+                              {(uploadedFiles.cnic_front.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleFileRemove('cnic_front')}
+                          className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                          title="Remove CNIC front copy"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1261,17 +1336,39 @@ const CreateEmployeeForm = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       CNIC Back Copy
                     </label>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,application/pdf"
-                      onChange={(e) => handleFileUpload(e, 'cnic_documents')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,application/pdf"
+                        onChange={(e) => handleFileUpload(e, 'cnic_back')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {uploadedFiles.cnic_back && (
+                        <div className="mt-2">
+                          {renderFilePreview(uploadedFiles.cnic_back, 'cnic_back')}
+                        </div>
+                      )}
+                    </div>
                     {uploadedFiles.cnic_back && (
-                      <p className="text-sm text-green-600 mt-1">
-                        <i className="fas fa-check mr-1"></i>
-                        {uploadedFiles.cnic_back.name}
-                      </p>
+                      <div className="flex items-center justify-between mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center">
+                          <i className="fas fa-file-image mr-2 text-green-600"></i>
+                          <div>
+                            <p className="text-sm font-medium text-green-800">{uploadedFiles.cnic_back.name}</p>
+                            <p className="text-xs text-green-600">
+                              {(uploadedFiles.cnic_back.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleFileRemove('cnic_back')}
+                          className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                          title="Remove CNIC back copy"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1280,17 +1377,39 @@ const CreateEmployeeForm = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Domicile Certificate
                     </label>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,application/pdf"
-                      onChange={(e) => handleFileUpload(e, 'certificates')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {uploadedFiles.domicile_certificate && (
-                      <p className="text-sm text-green-600 mt-1">
-                        <i className="fas fa-check mr-1"></i>
-                        {uploadedFiles.domicile_certificate.name}
-                      </p>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,application/pdf"
+                        onChange={(e) => handleFileUpload(e, 'certificates')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {uploadedFiles.certificates && (
+                        <div className="mt-2">
+                          {renderFilePreview(uploadedFiles.certificates, 'certificates')}
+                        </div>
+                      )}
+                    </div>
+                    {uploadedFiles.certificates && (
+                      <div className="flex items-center justify-between mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center">
+                          <i className="fas fa-file-alt mr-2 text-green-600"></i>
+                          <div>
+                            <p className="text-sm font-medium text-green-800">{uploadedFiles.certificates.name}</p>
+                            <p className="text-xs text-green-600">
+                              {(uploadedFiles.certificates.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleFileRemove('certificates')}
+                          className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                          title="Remove domicile certificate"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1300,20 +1419,46 @@ const CreateEmployeeForm = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Disability Supporting Document
                       </label>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,application/pdf"
-                        onChange={(e) => handleFileUpload(e, 'disability_document')}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div className="space-y-2">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,application/pdf"
+                          onChange={(e) => handleFileUpload(e, 'disability_document')}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {uploadedFiles.disability_document && (
+                          <div className="mt-2">
+                            {renderFilePreview(uploadedFiles.disability_document, 'disability_document')}
+                          </div>
+                        )}
+                      </div>
                       {uploadedFiles.disability_document && (
-                        <p className="text-sm text-green-600 mt-1">
-                          <i className="fas fa-check mr-1"></i>
-                          {uploadedFiles.disability_document.name}
-                        </p>
+                        <div className="flex items-center justify-between mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                          <div className="flex items-center">
+                            <i className="fas fa-file-medical mr-2 text-green-600"></i>
+                            <div>
+                              <p className="text-sm font-medium text-green-800">{uploadedFiles.disability_document.name}</p>
+                              <p className="text-xs text-green-600">
+                                {(uploadedFiles.disability_document.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleFileRemove('disability_document')}
+                            className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                            title="Remove disability document"
+                          >
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
                       )}
                       <p className="text-sm text-gray-500 mt-1">
                         Upload medical certificate or other supporting document for disability
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        <i className="fas fa-info-circle mr-1"></i>
+                        Only JPG, PNG, and PDF files are allowed (Max: 10MB)
                       </p>
                     </div>
                   )}
@@ -1335,20 +1480,62 @@ const CreateEmployeeForm = () => {
                                 Experience #{index + 1}: {experience.company_name || 'Unnamed Company'}
                               </h5>
                             </div>
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                              onChange={(e) => handleExperienceDocumentUpload(e, experience.id)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
+                            <div className="space-y-2">
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,application/pdf"
+                                onChange={(e) => handleExperienceDocumentUpload(e, experience.id)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              {uploadedFiles.experience_documents[experience.id] && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setUploadedFiles(prev => ({
+                                      ...prev,
+                                      experience_documents: {
+                                        ...prev.experience_documents,
+                                        [experience.id]: null
+                                      }
+                                    }));
+                                  }}
+                                  className="px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-sm"
+                                >
+                                  <i className="fas fa-times mr-1"></i>
+                                  Clear Selection
+                                </button>
+                              )}
+                            </div>
                             {uploadedFiles.experience_documents[experience.id] && (
-                              <p className="text-sm text-green-600 mt-1">
-                                <i className="fas fa-check mr-1"></i>
-                                {uploadedFiles.experience_documents[experience.id].name}
-                              </p>
+                              <div className="flex items-center justify-between mt-1 p-2 bg-green-100 rounded">
+                                <p className="text-sm text-green-600">
+                                  <i className="fas fa-check mr-1"></i>
+                                  {uploadedFiles.experience_documents[experience.id].name}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setUploadedFiles(prev => ({
+                                      ...prev,
+                                      experience_documents: {
+                                        ...prev.experience_documents,
+                                        [experience.id]: null
+                                      }
+                                    }));
+                                  }}
+                                  className="text-red-500 hover:text-red-700 ml-2"
+                                  title="Remove file"
+                                >
+                                  <i className="fas fa-times"></i>
+                                </button>
+                              </div>
                             )}
                             <p className="text-sm text-gray-500 mt-1">
                               Upload experience letter, certificate, or other supporting document
+                            </p>
+                            <p className="text-xs text-blue-600 mt-1">
+                              <i className="fas fa-info-circle mr-1"></i>
+                              Only JPG, PNG, and PDF files are allowed (Max: 15MB)
                             </p>
                           </div>
                         ))}
@@ -1371,20 +1558,62 @@ const CreateEmployeeForm = () => {
                                 Education #{index + 1}: {education.education_level || 'Unnamed Level'} - {education.institution_name || 'Unnamed Institution'}
                               </h5>
                             </div>
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                              onChange={(e) => handleEducationDocumentUpload(e, education.id)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                            />
+                            <div className="space-y-2">
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,application/pdf"
+                                onChange={(e) => handleEducationDocumentUpload(e, education.id)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                              />
+                              {uploadedFiles.education_documents[education.id] && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setUploadedFiles(prev => ({
+                                      ...prev,
+                                      education_documents: {
+                                        ...prev.education_documents,
+                                        [education.id]: null
+                                      }
+                                    }));
+                                  }}
+                                  className="px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-sm"
+                                >
+                                  <i className="fas fa-times mr-1"></i>
+                                  Clear Selection
+                                </button>
+                              )}
+                            </div>
                             {uploadedFiles.education_documents[education.id] && (
-                              <p className="text-sm text-green-600 mt-1">
-                                <i className="fas fa-check mr-1"></i>
-                                {uploadedFiles.education_documents[education.id].name}
-                              </p>
+                              <div className="flex items-center justify-between mt-1 p-2 bg-green-100 rounded">
+                                <p className="text-sm text-green-600">
+                                  <i className="fas fa-check mr-1"></i>
+                                  {uploadedFiles.education_documents[education.id].name}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setUploadedFiles(prev => ({
+                                      ...prev,
+                                      education_documents: {
+                                        ...prev.education_documents,
+                                        [education.id]: null
+                                      }
+                                    }));
+                                  }}
+                                  className="text-red-500 hover:text-red-700 ml-2"
+                                  title="Remove file"
+                                >
+                                  <i className="fas fa-times"></i>
+                                </button>
+                              </div>
                             )}
                             <p className="text-sm text-gray-500 mt-1">
                               Upload transcript, certificate, or other supporting document
+                            </p>
+                            <p className="text-xs text-blue-600 mt-1">
+                              <i className="fas fa-info-circle mr-1"></i>
+                              Only JPG, PNG, and PDF files are allowed (Max: 15MB)
                             </p>
                           </div>
                         ))}
@@ -1397,25 +1626,68 @@ const CreateEmployeeForm = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Other Documents
                     </label>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      multiple
-                      onChange={(e) => handleFileUpload(e, 'other_documents', true)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+
+                    {/* File Input */}
+                    <div className="space-y-3">
+                      <input
+                        id="other-documents-input"
+                        type="file"
+                        accept="image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        multiple
+                        onChange={(e) => {
+                          handleFileUpload(e, 'other_documents', true);
+                          // Clear the input so the same files can be selected again if needed
+                          e.target.value = '';
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+
+                      {/* Action Buttons */}
+                      {uploadedFiles.other_documents?.length > 0 && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById('other-documents-input').click()}
+                            className="px-4 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          >
+                            <i className="fas fa-plus mr-2"></i>
+                            Add More Files
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUploadedFiles(prev => ({
+                                ...prev,
+                                other_documents: []
+                              }));
+                            }}
+                            className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                          >
+                            <i className="fas fa-trash mr-2"></i>
+                            Remove All
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Uploaded Files Display with Previews */}
                     {uploadedFiles.other_documents?.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {uploadedFiles.other_documents.map((file, index) => (
-                          <p key={index} className="text-sm text-green-600">
-                            <i className="fas fa-check mr-1"></i>
-                            {file.name}
-                          </p>
-                        ))}
+                      <div className="mt-3">
+                        <p className="text-sm font-medium text-gray-700 mb-2">
+                          Uploaded Files ({uploadedFiles.other_documents.length}):
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {uploadedFiles.other_documents.map((file, index) =>
+                            renderFilePreview(file, 'other_documents', index)
+                          )}
+                        </div>
                       </div>
                     )}
+
+
                     <p className="text-sm text-gray-500 mt-2">
-                      Supported formats: PDF, DOC, DOCX, JPG, PNG. Max 5 files, 15MB each.
+                      <i className="fas fa-info-circle mr-1"></i>
+                      Supported formats: PDF, DOC, DOCX, JPG, PNG. Max 20 files, 15MB each.
                     </p>
                   </div>
                 </div>

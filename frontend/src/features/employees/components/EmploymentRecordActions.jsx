@@ -3,25 +3,19 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Pencil, Trash } from "lucide-react";
+import { Pencil, Trash, Eye } from "lucide-react";
 import EnhancedModal from "../../../components/ui/EnhancedModal";
 import TabbedEmploymentForm from "./TabbedEmploymentForm";
-import employmentService from "../services/employmentService";
-import { createEmploymentRecord } from "../../../data/normalizedData";
 
 const EmploymentRecordActions = ({
-  employeeId,
+  employmentRecords = [],
+  onEdit,
+  onDelete,
   employeeName,
-  employmentRecord,
-  onRecordUpdated,
-  onRecordDeleted,
-  showEditIcon = true,
-  showDeleteIcon = true,
+  userId,
 }) => {
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [editingRecord, setEditingRecord] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(null);
 
   const organizationOptions = [
     { value: "MBWO", label: "Model Bazaar Welfare Organization (MBWO) - 2010-2016" },
@@ -61,625 +55,547 @@ const EmploymentRecordActions = ({
     }
   };
 
-  const handleEditRecord = () => {
-    // Debug: Log the raw employment record to see what data we have
-    console.log("🔍 Raw employmentRecord data:", employmentRecord);
-
-    // Create a properly structured record for editing (creating new record)
-    // Ensure all fields have fallback values to avoid undefined issues
-    // Structure matches the expected format for TabbedEmploymentForm
-    const populatedRecord = {
-      // Remove ID to create a new record
-      id: undefined,
-      employment: {
-        organization: employmentRecord.organization || "",
-        department: employmentRecord.department || "",
-        designation: employmentRecord.designation || "",
-        scale_grade: employmentRecord.scale_grade || "",
-        employment_type: employmentRecord.employment_type || "Regular",
-        role_tag: employmentRecord.role_tag || "",
-        reporting_officer_id: employmentRecord.reporting_officer_id || "",
-        effective_from: new Date().toISOString().split('T')[0], // Set to today for new record
-        effective_till: null, // New record will be current
-        office_location: employmentRecord.office_location || "",
-        medical_fitness_report_pdf: employmentRecord.medical_fitness_report_pdf || null,
-        police_character_certificate: employmentRecord.police_character_certificate || null,
-        filer_status: employmentRecord.filer_status || "non_filer",
-        filer_active_status: employmentRecord.filer_active_status || "",
-        employment_status: employmentRecord.employment_status || "active",
-        is_current: true, // New record will be current
-        remarks: employmentRecord.remarks ?
-          `${employmentRecord.remarks}\n\n[Edited from record ID ${employmentRecord.id} on ${new Date().toLocaleDateString()}]` :
-          `[Edited from record ID ${employmentRecord.id} on ${new Date().toLocaleDateString()}]`,
-      },
-      salary: {
-        basic_salary: employmentRecord.basic_salary || employmentRecord.salary || 0,
-        medical_allowance: employmentRecord.medical_allowance || 0,
-        house_rent: employmentRecord.house_rent || 0,
-        conveyance_allowance: employmentRecord.conveyance_allowance || 0,
-        other_allowances: employmentRecord.other_allowances || 0,
-        bonus_eligible: employmentRecord.bonus_eligible || false,
-        daily_wage_rate: employmentRecord.daily_wage_rate || 0,
-        bank_account_primary: employmentRecord.bank_account_primary || "",
-        bank_name_primary: employmentRecord.bank_name_primary || "",
-        bank_account_secondary: employmentRecord.bank_account_secondary || "",
-        bank_name_secondary: employmentRecord.bank_name_secondary || "",
-        payment_mode: employmentRecord.payment_mode || "Bank Transfer",
-        salary_effective_from: employmentRecord.salary_effective_from || "",
-        salary_effective_till: employmentRecord.salary_effective_till || "",
-        payroll_status: employmentRecord.payroll_status || "Active",
-      },
-      location: {
-        district: employmentRecord.district || "",
-        city: employmentRecord.city || "",
-        bazaar_name: employmentRecord.bazaar_name || "",
-        type: employmentRecord.location_type || employmentRecord.type || "HEAD_OFFICE",
-        full_address: employmentRecord.full_address || "",
-      },
-      contract: {
-        contract_type: employmentRecord.contract_type || "",
-        contract_number: employmentRecord.contract_number || "",
-        start_date: employmentRecord.contract_start_date || "",
-        end_date: employmentRecord.contract_end_date || "",
-        renewal_count: employmentRecord.renewal_count || 0,
-        probation_start: employmentRecord.probation_start || "",
-        probation_end: employmentRecord.probation_end || "",
-        confirmation_status: employmentRecord.confirmation_status || "",
-        confirmation_date: employmentRecord.confirmation_date || "",
-        is_renewed: employmentRecord.is_renewed || false,
-        renewal_report: employmentRecord.renewal_report || null,
-      },
-    };
-
-    console.log("📝 Populated record for creating new employment record:", populatedRecord);
-    setEditingRecord(populatedRecord);
-    setShowEditModal(true);
-  };
-
-  const handleUpdateRecord = async (updatedRecord) => {
-    try {
-      console.log("🔄 handleUpdateRecord: Received updated record:", updatedRecord);
-
-      // Flatten the updated record for creating a new employment record
-      const flattenedData = {
-        ...updatedRecord.employment,
-        ...updatedRecord.salary,
-        ...updatedRecord.location,
-        ...updatedRecord.contract,
-        user_id: employeeId,
-        employee_id: employeeId, // For backward compatibility
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      console.log("📋 handleUpdateRecord: Flattened data for creation:", flattenedData);
-
-      // Create a new employment record instead of updating the existing one
-      console.log("🚀 handleUpdateRecord: Calling createEmploymentRecord...");
-      const newRecord = await createEmploymentRecord(flattenedData);
-
-      console.log("✅ New employment record created from edit:", newRecord);
-
-      // Create the new record for display
-      const newRecordForDisplay = {
-        ...flattenedData,
-        id: newRecord.id,
-        start_date: updatedRecord.employment?.effective_from || new Date().toISOString().split('T')[0],
-        end_date: updatedRecord.employment?.effective_till || null,
-        effective_from: updatedRecord.employment?.effective_from || new Date().toISOString().split('T')[0],
-        effective_till: updatedRecord.employment?.effective_till || null,
-        // Ensure both salary fields are available for display
-        salary: updatedRecord.salary?.basic_salary || 0,
-        basic_salary: updatedRecord.salary?.basic_salary || 0,
-      };
-
-      setShowEditModal(false);
-      setEditingRecord(null);
-
-      // Notify parent component that a new record was created
-      console.log("📤 handleUpdateRecord: Notifying parent with new record:", newRecordForDisplay);
-      if (onRecordUpdated) {
-        console.log("📞 handleUpdateRecord: Calling onRecordUpdated callback");
-        onRecordUpdated(newRecordForDisplay);
-      } else {
-        console.error("❌ handleUpdateRecord: No onRecordUpdated callback provided!");
-      }
-
-      console.log("✅ Employment record edited successfully! New record created.");
-
-    } catch (error) {
-      console.error("❌ Error creating new employment record:", error);
-      alert("Failed to create new employment record. Please try again.");
+  const handleEditRecord = (record) => {
+    setSelectedRecord(record);
+    // Call the parent's onEdit callback to open the edit modal
+    if (onEdit) {
+      onEdit(record);
+    } else {
+      console.error("❌ EmploymentRecordActions: onEdit callback not provided!");
     }
   };
 
-  const handleDeleteRecord = () => {
-    setShowDeleteModal(true);
+  const handleViewRecord = (record) => {
+    console.log("👁️ Viewing employment record:", record);
+    setSelectedRecord(record);
+    setShowDetailsModal(true);
   };
 
-  const confirmDeleteRecord = async () => {
-    try {
-      await employmentService.deleteEmployment(employmentRecord.id);
-      setShowDeleteModal(false);
-      if (onRecordDeleted) {
-        onRecordDeleted(employmentRecord);
-      }
-    } catch (error) {
-      console.error("Error deleting employment record:", error);
-      alert("Failed to delete employment record. Please try again.");
+  const handleDeleteRecord = (record) => {
+    // Call the parent's onDelete callback directly
+    if (onDelete) {
+      onDelete(record);
+    } else {
+      console.error("❌ EmploymentRecordActions: onDelete callback not provided!");
     }
   };
+
+
+
+
 
   const handleCloseModal = () => {
-    setShowEditModal(false);
-    setShowDeleteModal(false);
-    setEditingRecord(null);
+    setShowDetailsModal(false);
+    setSelectedRecord(null);
   };
 
-  const hasBasicInfo =
-    employmentRecord.organization && employmentRecord.designation;
-  const hasSalaryInfo =
-    employmentRecord.salary || employmentRecord.basic_salary;
-  const hasLocationInfo = employmentRecord.district && employmentRecord.city;
-  const hasContractInfo =
-    employmentRecord.contract_type || employmentRecord.contract_number;
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (error) {
+      return "Invalid Date";
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount || amount === 0) return "N/A";
+    return `PKR ${Number(amount).toLocaleString()}`;
+  };
+
+  if (employmentRecords.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <i className="fas fa-briefcase text-6xl mb-4 text-gray-300"></i>
+        <h4 className="text-xl font-semibold mb-2 text-gray-900">No Employment Records</h4>
+        <p className="text-gray-600">
+          {employeeName || "This employee"} has no employment records yet.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <>
-      {/* Employment Record Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="p-4 rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-        onClick={() => setShowDetailsModal(true)}
-      >
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <i
-              className={`lucide-${getOrganizationIcon(
-                employmentRecord.organization
-              )}`}
-              style={{
-                color: getOrganizationColor(employmentRecord.organization),
-                fontSize: "1.5rem",
-              }}
-            ></i>
-            <div>
-              <h4 className="font-semibold text-lg text-gray-900">
-                {employmentRecord.designation?.title || employmentRecord.designation}
-              </h4>
-              <p
-                style={{
-                  color: getOrganizationColor(employmentRecord.organization),
-                }}
-              >
-                {organizationOptions.find(
-                  (opt) => opt.value === employmentRecord.organization
-                )?.label || employmentRecord.organization}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="text-right">
-              <p className="font-semibold text-gray-900">
-                PKR {(
-                  parseFloat(employmentRecord.basic_salary || employmentRecord.salary  || 0)
-                ).toLocaleString() || "N/A"}
-              </p>
-              <p className="text-sm text-gray-700 font-medium">
-                {employmentRecord.start_date || employmentRecord.effective_from} -{" "}
-                {employmentRecord.end_date || employmentRecord.effective_till || "Present"}
-              </p>
-            </div>
-            <div className="flex gap-3 items-center">
-              {showEditIcon && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent card click
-                    handleEditRecord();
-                  }}
-                  className="text-orange-600 hover:text-orange-800 transition-colors"
-                  title="Create New Employment Record (Based on Current)"
-                  aria-label="Create new employment record based on current data"
-                >
-                  <div className="relative">
-                    <Pencil size={20} />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">+</span>
-                    </div>
+    <div className="space-y-4">
+      {employmentRecords.map((record) => (
+        <motion.div
+          key={record.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: getOrganizationColor(record.organization) }}
+                ></div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {record.designation?.title || record.designation || "N/A"}
+                </h3>
+                {record.is_current && (
+                  <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                    Current
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-gray-600">Organization:</span>
+                  <span className="ml-2 text-gray-900">
+                    {organizationOptions.find(opt => opt.value === record.organization)?.label || record.organization || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Department:</span>
+                  <span className="ml-2 text-gray-900">
+                    {record.department?.name || record.department || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Employment Type:</span>
+                  <span className="ml-2 text-gray-900">
+                    {record.employment_type || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Effective From:</span>
+                  <span className="ml-2 text-gray-900">
+                    {formatDate(record.effective_from)}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Effective Till:</span>
+                  <span className="ml-2 text-gray-900">
+                    {record.effective_till ? formatDate(record.effective_till) : "Present"}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Status:</span>
+                  <span className="ml-2 text-gray-900">
+                    {record.employment_status || "N/A"}
+                  </span>
+                </div>
+                {record.salary && (
+                  <div>
+                    <span className="font-medium text-gray-600">
+                      {record.organization === 'MBWO' ? 'Gross Salary:' : 'Total Salary:'}
+                    </span>
+                    <span className="ml-2 text-gray-900">
+                      {record.organization === 'MBWO' 
+                        ? formatCurrency(record.salary.gross_salary)
+                        : formatCurrency(
+                            (record.salary.basic_salary || 0) +
+                            (record.salary.medical_allowance || 0) +
+                            (record.salary.house_rent || 0) +
+                            (record.salary.conveyance_allowance || 0) +
+                            (record.salary.other_allowances || 0)
+                          )
+                      }
+                    </span>
                   </div>
-                </button>
-              )}
-              {showDeleteIcon && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent card click
-                    handleDeleteRecord();
-                  }}
-                  className="text-red-600 hover:text-red-800 transition-colors"
-                  title="Delete Employment Record"
-                  aria-label="Delete employment record"
-                >
-                  <Trash size={20} />
-                </button>
+                )}
+                {record.location && (
+                  <div>
+                    <span className="font-medium text-gray-600">Location:</span>
+                    <span className="ml-2 text-gray-900">
+                      {record.location.type === 'BAZAAR' 
+                        ? (record.location.bazaar_name || 'Bazaar')
+                        : record.location.type === 'HEAD_QUARTER' 
+                          ? 'Head Quarter'
+                          : 'Head Office'
+                      }
+                    </span>
+                  </div>
+                )}
+                {record.contract && (
+                  <div>
+                    <span className="font-medium text-gray-600">Contract Type:</span>
+                    <span className="ml-2 text-gray-900">
+                      {record.contract.contract_type || "N/A"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {record.remarks && (
+                <div className="mt-3">
+                  <span className="font-medium text-gray-600">Remarks:</span>
+                  <p className="mt-1 text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                    {record.remarks}
+                  </p>
+                </div>
               )}
             </div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <span className="font-medium text-gray-600">Department:</span>
-            <span className="ml-2 text-gray-900">
-              {employmentRecord.department?.name || employmentRecord.department || "N/A"}
-            </span>
-          </div>
-          <div>
-            <span className="font-medium text-gray-600">Type:</span>
-            <span className="ml-2 text-gray-900">
-              {employmentRecord.employment_type}
-            </span>
-          </div>
-          <div>
-            <span className="font-medium text-gray-600">Location:</span>
-            <span className="ml-2 text-gray-900">
-              {employmentRecord.office_location || "N/A"}
-            </span>
-          </div>
-        </div>
-
-        {/* Completion Status */}
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <div className="flex flex-wrap gap-2">
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                hasBasicInfo
-                  ? "bg-green-100 text-green-800"
-                  : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              <i
-                className={`lucide-${
-                  hasBasicInfo ? "check" : "clock"
-                } mr-1`}
-              ></i>
-              Employment Details
-            </span>
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                hasSalaryInfo
-                  ? "bg-green-100 text-green-800"
-                  : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              <i
-                className={`lucide-${
-                  hasSalaryInfo ? "check" : "clock"
-                } mr-1`}
-              ></i>
-              Salary Info
-            </span>
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                hasLocationInfo
-                  ? "bg-green-100 text-green-800"
-                  : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              <i
-                className={`lucide-${
-                  hasLocationInfo ? "check" : "clock"
-                } mr-1`}
-              ></i>
-              Location Info
-            </span>
-            {employmentRecord.employment_type === "Contract" && (
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  hasContractInfo
-                    ? "bg-green-100 text-green-800"
-                    : "bg-gray-100 text-gray-600"
-                }`}
+            <div className="flex items-center gap-2 ml-4">
+              <button
+                onClick={() => handleViewRecord(record)}
+                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="View Details"
               >
-                <i
-                  className={`lucide-${
-                    hasContractInfo ? "check" : "clock"
-                  } mr-1`}
-                ></i>
-                Contract Info
-              </span>
-            )}
+                <Eye size={16} />
+              </button>
+              <button
+                onClick={() => handleEditRecord(record)}
+                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                title="Edit Record"
+              >
+                <Pencil size={16} />
+              </button>
+              <button
+                onClick={() => handleDeleteRecord(record)}
+                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Delete Record"
+              >
+                <Trash size={16} />
+              </button>
+            </div>
           </div>
-        </div>
+        </motion.div>
+      ))}
 
-        {employmentRecord.remarks && (
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <span className="font-medium text-gray-600">Remarks:</span>
-            <p className="mt-1 text-gray-900">{employmentRecord.remarks}</p>
-          </div>
-        )}
-      </motion.div>
+      {/* Edit Modal is now handled by the parent component (CleanEmploymentHistory) */}
 
-      {/* Edit Employment Modal */}
-      <TabbedEmploymentForm
-        isOpen={showEditModal}
-        onClose={handleCloseModal}
-        onSubmit={handleUpdateRecord}
-        employeeName={employeeName}
-        userId={employeeId}
-        editingRecord={editingRecord}
-        isEditMode={false} // Always false because we're creating a new record
-        isCreatingFromExisting={true} // Flag to indicate this is based on existing data
-      />
-
-      {/* Delete Confirmation Modal */}
-      <EnhancedModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        title="Delete Employment Record"
-        size="md"
-      >
-        <div className="p-6">
-          <div className="text-center mb-6">
-            <i className="lucide-alert-triangle text-4xl text-red-500 mb-4"></i>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Are you sure you want to delete this employment record?
-            </h3>
-            <p className="text-gray-600">
-              This action cannot be undone. The employment record for{" "}
-              <strong>{employmentRecord.designation?.title || employmentRecord.designation}</strong> at{" "}
-              <strong>
-                {organizationOptions.find(
-                  (opt) => opt.value === employmentRecord.organization
-                )?.label || employmentRecord.organization}
-              </strong>{" "}
-              will be permanently deleted.
-            </p>
-          </div>
-
-          <div className="flex space-x-4">
-            <button
-              onClick={() => setShowDeleteModal(false)}
-              className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmDeleteRecord}
-              className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-            >
-              <Trash className="inline-block mr-2" size={20} />
-              Delete Record
-            </button>
-          </div>
-        </div>
-      </EnhancedModal>
-
-      {/* Employment Record Details Modal */}
+      {/* Details Modal */}
       <EnhancedModal
         isOpen={showDetailsModal}
-        onClose={() => setShowDetailsModal(false)}
-        title={`Employment Record Details - ${employmentRecord.designation?.title || employmentRecord.designation}`}
-        size="lg"
+        onClose={handleCloseModal}
+        title="Employment Record Details"
+        size="xl"
       >
-        <div className="p-6 space-y-6">
-          {/* Header with Organization */}
-          <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-            <i
-              className={`lucide-${getOrganizationIcon(employmentRecord.organization)}`}
-              style={{
-                color: getOrganizationColor(employmentRecord.organization),
-                fontSize: "2rem",
-              }}
-            ></i>
-            <div>
-              <h3 className="text-xl font-bold text-gray-900">
-                {employmentRecord.designation?.title || employmentRecord.designation}
-              </h3>
-              <p className="text-lg font-medium" style={{ color: getOrganizationColor(employmentRecord.organization) }}>
-                {organizationOptions.find(opt => opt.value === employmentRecord.organization)?.label || employmentRecord.organization}
-              </p>
-              <p className="text-sm text-gray-600">
-                {employmentRecord.department?.name || employmentRecord.department} • {employmentRecord.employment_type}
-              </p>
-            </div>
-          </div>
+        {selectedRecord && (
+          <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                  Employment Information
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Organization:</span>
+                    <span className="text-gray-900">
+                      {organizationOptions.find(opt => opt.value === selectedRecord.organization)?.label || selectedRecord.organization || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Department:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.department?.name || selectedRecord.department || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Designation:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.designation?.title || selectedRecord.designation || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Employment Type:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.employment_type || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Role Tag:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.role_tag || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Effective From:</span>
+                    <span className="text-gray-900">
+                      {formatDate(selectedRecord.effective_from)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Effective Till:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.effective_till ? formatDate(selectedRecord.effective_till) : "Present"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Status:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.employment_status || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Current:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.is_current ? "Yes" : "No"}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-          {/* Employment Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                <i className="fas fa-briefcase mr-2 text-blue-600"></i>
-                Employment Details
-              </h4>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Organization:</span>
-                  <span className="text-gray-900">{organizationOptions.find(opt => opt.value === employmentRecord.organization)?.label || employmentRecord.organization}</span>
+              {selectedRecord.salary && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                    Salary Information
+                  </h3>
+                  <div className="space-y-2">
+                    {selectedRecord.organization === 'MBWO' ? (
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Gross Salary:</span>
+                        <span className="text-gray-900">
+                          {formatCurrency(selectedRecord.salary.gross_salary)}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Basic Salary:</span>
+                          <span className="text-gray-900">
+                            {formatCurrency(selectedRecord.salary.basic_salary)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Medical Allowance:</span>
+                          <span className="text-gray-900">
+                            {formatCurrency(selectedRecord.salary.medical_allowance)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">House Rent:</span>
+                          <span className="text-gray-900">
+                            {formatCurrency(selectedRecord.salary.house_rent)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Conveyance:</span>
+                          <span className="text-gray-900">
+                            {formatCurrency(selectedRecord.salary.conveyance_allowance)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">Other Allowances:</span>
+                          <span className="text-gray-900">
+                            {formatCurrency(selectedRecord.salary.other_allowances)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t pt-2">
+                          <span className="font-medium text-gray-600">Total Salary:</span>
+                          <span className="text-gray-900 font-semibold">
+                            {formatCurrency(
+                              (selectedRecord.salary.basic_salary || 0) +
+                              (selectedRecord.salary.medical_allowance || 0) +
+                              (selectedRecord.salary.house_rent || 0) +
+                              (selectedRecord.salary.conveyance_allowance || 0) +
+                              (selectedRecord.salary.other_allowances || 0)
+                            )}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Payment Mode:</span>
+                      <span className="text-gray-900">
+                        {selectedRecord.salary.payment_mode || "N/A"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Department:</span>
-                  <span className="text-gray-900">{employmentRecord.department?.name || employmentRecord.department || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Designation:</span>
-                  <span className="text-gray-900">{employmentRecord.designation?.title || employmentRecord.designation || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Employment Type:</span>
-                  <span className="text-gray-900">{employmentRecord.employment_type || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Scale/Grade:</span>
-                  <span className="text-gray-900">{employmentRecord.scale_grade || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Role Tag:</span>
-                  <span className="text-gray-900">{employmentRecord.role_tag || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Period:</span>
-                  <span className="text-gray-900">
-                    {employmentRecord.start_date || employmentRecord.effective_from || "N/A"} - {employmentRecord.end_date || employmentRecord.effective_till || "Present"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Office Location:</span>
-                  <span className="text-gray-900">{employmentRecord.office_location || "N/A"}</span>
-                </div>
-              </div>
+              )}
             </div>
 
-            <div className="space-y-4">
-              <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                <i className="fas fa-money-bill-wave mr-2 text-green-600"></i>
-                Salary Information
-              </h4>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Basic Salary:</span>
-                  <span className="text-gray-900 font-semibold">PKR {parseFloat(employmentRecord.basic_salary || employmentRecord.salary || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Medical Allowance:</span>
-                  <span className="text-gray-900">PKR {parseFloat(employmentRecord.medical_allowance || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">House Rent:</span>
-                  <span className="text-gray-900">PKR {parseFloat(employmentRecord.house_rent || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Conveyance:</span>
-                  <span className="text-gray-900">PKR {parseFloat(employmentRecord.conveyance_allowance || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Other Allowances:</span>
-                  <span className="text-gray-900">PKR {parseFloat(employmentRecord.other_allowances || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Total Salary:</span>
-                  <span className="text-gray-900 font-bold text-lg">
-                    PKR {(
-                      parseFloat(employmentRecord.basic_salary || employmentRecord.salary || 0) +
-                      parseFloat(employmentRecord.medical_allowance || 0) +
-                      parseFloat(employmentRecord.house_rent || 0) +
-                      parseFloat(employmentRecord.conveyance_allowance || 0) +
-                      parseFloat(employmentRecord.other_allowances || 0)
-                    ).toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Payment Mode:</span>
-                  <span className="text-gray-900">{employmentRecord.payment_mode || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Bank Account:</span>
-                  <span className="text-gray-900">{employmentRecord.bank_account_primary || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Bank Name:</span>
-                  <span className="text-gray-900">{employmentRecord.bank_name_primary || "N/A"}</span>
+            {selectedRecord.location && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                  Location Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">District:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.location.district || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">City:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.location.city || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Location Type:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.location.type === 'BAZAAR' 
+                        ? 'Bazaar'
+                        : selectedRecord.location.type === 'HEAD_QUARTER' 
+                          ? 'Head Quarter'
+                          : 'Head Office'
+                      }
+                    </span>
+                  </div>
+                  {selectedRecord.location.type === 'BAZAAR' && (
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Bazaar Name:</span>
+                      <span className="text-gray-900">
+                        {selectedRecord.location.bazaar_name || "N/A"}
+                      </span>
+                    </div>
+                  )}
+                  {selectedRecord.location.full_address && (
+                    <div className="col-span-2">
+                      <span className="font-medium text-gray-600">Full Address:</span>
+                      <p className="mt-1 text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                        {selectedRecord.location.full_address}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Location Information */}
-          <div className="space-y-4">
-            <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
-              <i className="fas fa-map-marker-alt mr-2 text-purple-600"></i>
-              Location Information
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-600">District:</span>
-                <span className="text-gray-900">{employmentRecord.district || "N/A"}</span>
+            {selectedRecord.contract && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                  Contract Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Contract Type:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.contract.contract_type || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Contract Number:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.contract.contract_number || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Start Date:</span>
+                    <span className="text-gray-900">
+                      {formatDate(selectedRecord.contract.start_date)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">End Date:</span>
+                    <span className="text-gray-900">
+                      {formatDate(selectedRecord.contract.end_date)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Confirmation Status:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.contract.confirmation_status || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Renewed:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.contract.is_renewed ? "Yes" : "No"}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-600">City:</span>
-                <span className="text-gray-900">{employmentRecord.city || "N/A"}</span>
+            )}
+
+            {/* Documents Section */}
+            {(selectedRecord.documents && selectedRecord.documents.length > 0) && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                  Documents
+                </h3>
+                <div className="space-y-3">
+                  {selectedRecord.documents.map((doc) => {
+                    const serverBaseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+                    let documentUrl;
+                    
+                    if (doc.url) {
+                      documentUrl = doc.url.startsWith('http') ? doc.url : `${serverBaseUrl}${doc.url}`;
+                    } else if (doc.file_path) {
+                      // Handle both relative and absolute paths
+                      const filePath = doc.file_path.startsWith('uploads/') ? doc.file_path : `uploads/${doc.file_path}`;
+                      documentUrl = `${serverBaseUrl}/${filePath}`;
+                    } else {
+                      console.error('No valid document URL or file path found:', doc);
+                      documentUrl = null;
+                    }
+
+                    const isImage = doc.isImage || /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(doc.file_path || doc.document_name || '');
+                    const fileIcon = isImage ? 'fas fa-image' : 'fas fa-file-pdf';
+
+                    return (
+                      <div key={doc.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <i className={`${fileIcon} text-red-500 text-lg`}></i>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {doc.document_name || 'Document'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {doc.file_type === 'medical_fitness' ? 'Medical Fitness Report' : 
+                                 doc.file_type === 'police_character' ? 'Police Character Certificate' :
+                                 doc.file_type === 'renewal_report' ? 'Contract Renewal Report' :
+                                 'Document'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            {/* Document Preview */}
+                            {documentUrl && isImage && (
+                              <div className="relative group">
+                                <img
+                                  src={documentUrl}
+                                  alt={doc.document_name || 'Document'}
+                                  className="w-12 h-12 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => window.open(documentUrl, '_blank')}
+                                  onError={(e) => {
+                                    console.error("Document image failed to load:", documentUrl);
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all rounded flex items-center justify-center">
+                                  <i className="fas fa-search-plus text-white opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => {
+                                if (documentUrl) {
+                                  console.log('Opening document URL:', documentUrl);
+                                  window.open(documentUrl, '_blank');
+                                } else {
+                                  alert('Document not available');
+                                }
+                              }}
+                              className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 text-sm"
+                            >
+                              <i className="fas fa-eye mr-1"></i>
+                              View
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-600">Bazaar/Area:</span>
-                <span className="text-gray-900">{employmentRecord.bazaar_name || "N/A"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-600">Location Type:</span>
-                <span className="text-gray-900">{employmentRecord.location_type || "N/A"}</span>
-              </div>
-            </div>
-            {employmentRecord.full_address && (
-              <div>
-                <span className="font-medium text-gray-600">Full Address:</span>
-                <p className="text-gray-900 mt-1">{employmentRecord.full_address}</p>
+            )}
+
+            {selectedRecord.remarks && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                  Remarks
+                </h3>
+                <p className="text-gray-700 bg-gray-50 p-3 rounded">
+                  {selectedRecord.remarks}
+                </p>
               </div>
             )}
           </div>
-
-          {/* Contract Information (if applicable) */}
-          {employmentRecord.employment_type === "Contract" && (
-            <div className="space-y-4">
-              <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                <i className="fas fa-file-contract mr-2 text-orange-600"></i>
-                Contract Information
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Contract Type:</span>
-                  <span className="text-gray-900">{employmentRecord.contract_type || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Contract Number:</span>
-                  <span className="text-gray-900">{employmentRecord.contract_number || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Contract Start:</span>
-                  <span className="text-gray-900">{employmentRecord.contract_start_date || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Contract End:</span>
-                  <span className="text-gray-900">{employmentRecord.contract_end_date || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Probation Period:</span>
-                  <span className="text-gray-900">
-                    {employmentRecord.probation_start && employmentRecord.probation_end
-                      ? `${employmentRecord.probation_start} - ${employmentRecord.probation_end}`
-                      : "N/A"
-                    }
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Confirmation Status:</span>
-                  <span className="text-gray-900">{employmentRecord.confirmation_status || "N/A"}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Remarks */}
-          {employmentRecord.remarks && (
-            <div className="space-y-4">
-              <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                <i className="fas fa-comment mr-2 text-gray-600"></i>
-                Remarks
-              </h4>
-              <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">{employmentRecord.remarks}</p>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-            <button
-              onClick={() => setShowDetailsModal(false)}
-              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
+        )}
       </EnhancedModal>
-    </>
+
+
+    </div>
   );
 };
 

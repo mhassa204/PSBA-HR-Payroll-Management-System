@@ -1,4 +1,6 @@
-// src/controllers/employeeController.js
+
+
+
 const employeeService = require("../services/employeeService");
 const path = require("path");
 const { DOCUMENT_TYPES } = require("../config/multer");
@@ -6,54 +8,94 @@ const { DOCUMENT_TYPES } = require("../config/multer");
 const validateCNIC = (cnic) => /^\d{13}$/.test(cnic);
 
 // Helper function to process uploaded files
-const processUploadedFiles = (files) => {
+const processUploadedFiles = (files, req) => {
   const processedFiles = {};
   const documentRecords = [];
 
-  if (!files) return { processedFiles, documentRecords };
+  if (!files || files.length === 0) {
+    console.log('📁 No files uploaded');
+    return { processedFiles, documentRecords };
+  }
 
-  // Process each file type
-  Object.keys(files).forEach(fieldName => {
-    const fileArray = files[fieldName];
-    const documentType = DOCUMENT_TYPES[fieldName] || 'other';
+  console.log(`📁 Processing ${files.length} files`);
+  console.log(`📁 File path map:`, req.filePathMap || 'none');
 
-    fileArray.forEach(file => {
-      const relativePath = path.join("uploads", file.filename);
+  files.forEach(file => {
+    const fieldName = file.fieldname;
+    let documentType = DOCUMENT_TYPES[fieldName] || 'other';
 
-      // For profile and medical files, store in main employee record
-      if (fieldName === 'profile_picture_file') {
-        processedFiles.profile_picture_file = relativePath;
-      } else if (fieldName === 'medical_fitness_file') {
-        processedFiles.medical_fitness_file = relativePath;
-      } else {
-        // For all other files, create document records
-        documentRecords.push({
-          file_path: relativePath,
-          file_type: documentType,
-          document_name: file.originalname,
-          file_size: file.size,
-          mime_type: file.mimetype
-        });
+    if (fieldName.startsWith('education_documents_')) {
+      documentType = 'education';
+    } else if (fieldName.startsWith('experience_documents_')) {
+      documentType = 'experience';
+    }
+
+    let relativePath = req.filePathMap?.[file.filename];
+    if (!relativePath) {
+      console.warn(`⚠️ No filePathMap entry for ${file.filename}, constructing path`);
+      const fullPath = file.path.replace(/\\/g, '/');
+      const uploadsIndex = fullPath.indexOf('uploads');
+      relativePath = uploadsIndex !== -1
+        ? fullPath.substring(uploadsIndex)
+        : path.join('uploads', file.filename).replace(/\\/g, '/');
+    }
+
+    console.log(`📁 Processing file: ${file.originalname}`);
+    console.log(`  📄 Fieldname: ${fieldName}`);
+    console.log(`  📄 Document type: ${documentType}`);
+    console.log(`  🗂️ Relative path: ${relativePath}`);
+
+    if (fieldName === 'profile_picture_file') {
+      processedFiles.profile_picture_file = relativePath;
+    } else if (fieldName === 'medical_fitness_file') {
+      processedFiles.medical_fitness_file = relativePath;
+      documentRecords.push({
+        file_path: relativePath,
+        file_type: 'medical_fitness',
+        document_name: file.originalname,
+        file_size: file.size,
+        mime_type: file.mimetype,
+      });
+    } else {
+      let associatedId = null;
+      if (fieldName.includes('_') && (documentType === 'education' || documentType === 'experience')) {
+        const parts = fieldName.split('_');
+        const lastPart = parts[parts.length - 1];
+        if (!isNaN(lastPart)) {
+          associatedId = parseInt(lastPart);
+        }
       }
-    });
+
+      documentRecords.push({
+        file_path: relativePath,
+        file_type: documentType,
+        document_name: file.originalname,
+        file_size: file.size,
+        mime_type: file.mimetype,
+        associated_id: associatedId,
+      });
+    }
   });
 
+  console.log(`📄 Created ${documentRecords.length} document records`);
   return { processedFiles, documentRecords };
 };
 
 const employeeController = {
   createEmployee: async (req, res) => {
     try {
+      console.log(`📋 Starting create employee`);
+      console.log(`📋 Request body keys:`, Object.keys(req.body));
+      console.log(`📋 Files received:`, req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'none');
+
       const { full_name, cnic, password } = req.body;
 
-      console.log("Creating employee with files:", req.files);
-
-      // Basic required field validation
+      // Validate required fields
       const missingFields = [];
       if (!full_name) missingFields.push("full_name");
-      // Password is optional - will be set to null if not provided
 
       if (missingFields.length > 0) {
+        console.error(`❌ Missing fields: ${missingFields.join(", ")}`);
         return res.status(400).json({
           success: false,
           error: `Missing required fields: ${missingFields.join(", ")}`,
@@ -61,6 +103,7 @@ const employeeController = {
       }
 
       if (cnic && !validateCNIC(cnic)) {
+        console.error(`❌ Invalid CNIC format`);
         return res.status(400).json({
           success: false,
           error: "Invalid CNIC format. Must be 13 digits without dashes",
@@ -68,147 +111,161 @@ const employeeController = {
       }
 
       // Process uploaded files
-      const { processedFiles, documentRecords } = processUploadedFiles(req.files);
-      console.log("Processed files:", processedFiles);
-      console.log("Document records to create:", documentRecords);
+      console.log('📁 Processing uploaded files');
+      const { processedFiles, documentRecords } = processUploadedFiles(req.files, req);
+      console.log('📁 Processed files:', processedFiles);
+      console.log('📁 Document records:', documentRecords);
 
-      // Parse JSON fields from FormData
+      // Parse JSON fields
       const processedData = { ...req.body };
 
-      // Parse past_experiences if it's a JSON string
       if (processedData.past_experiences && typeof processedData.past_experiences === 'string') {
         try {
           processedData.past_experiences = JSON.parse(processedData.past_experiences);
         } catch (error) {
-          console.error('Error parsing past_experiences:', error);
+          console.error('❌ Error parsing past_experiences:', error.message);
           processedData.past_experiences = [];
         }
       }
 
-      // Parse educations if it's a JSON string
       if (processedData.educations && typeof processedData.educations === 'string') {
         try {
           processedData.educations = JSON.parse(processedData.educations);
         } catch (error) {
-          console.error('Error parsing educations:', error);
+          console.error('❌ Error parsing educations:', error.message);
           processedData.educations = [];
         }
       }
 
-      // Create employee with processed files and document records
+      console.log('📋 Calling employeeService.createEmployee');
+      console.log(`📋 Input data:`, {
+        processedDataKeys: Object.keys(processedData),
+        processedFilesKeys: Object.keys(processedFiles),
+        documentRecordsCount: documentRecords.length,
+      });
+
       const employee = await employeeService.createEmployee(processedData, processedFiles, documentRecords);
 
-      res.status(201).json({ success: true, employee });
+      console.log(`✅ Employee created successfully: ID ${employee?.id || 'unknown'}`);
+      return res.status(201).json({ success: true, employee });
     } catch (error) {
-      console.error("Error creating employee:", error.message);
-      res.status(400).json({ success: false, error: error.message });
+      console.error('❌ Error creating employee:', error.message);
+      console.error('❌ Stack trace:', error.stack);
+      return res.status(400).json({ success: false, error: error.message });
     }
   },
 
+  // Other controller methods (unchanged)
   updateEmployee: async (req, res) => {
     try {
-      const { cnic, full_name } = req.body;
-      console.log("Updating employee with data:", req.body);
-      console.log("Updating employee with files:", req.files);
+      console.log(`📋 Starting update for employee ID: ${req.params.id}`);
+      console.log(`📋 Request body keys:`, Object.keys(req.body));
+      console.log(`📋 Files received:`, req.files ? req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })) : 'none');
+      console.log(`📋 Documents to remove:`, req.body.documents_to_remove);
+
+      const { cnic, full_name, documents_to_remove } = req.body;
 
       const missingFields = [];
-      if (!full_name) missingFields.push("full_name");
+      if (!full_name) missingFields.push('full_name');
 
       if (missingFields.length > 0) {
+        console.error(`❌ Missing fields: ${missingFields.join(', ')}`);
         return res.status(400).json({
           success: false,
-          error: `Missing required fields: ${missingFields.join(", ")}`,
+          error: `Missing required fields: ${missingFields.join(', ')}`,
         });
       }
 
       if (cnic && !validateCNIC(cnic)) {
+        console.error('❌ Invalid CNIC format');
         return res.status(400).json({
           success: false,
-          error: "Invalid CNIC format. Must be 13 digits without dashes",
+          error: 'Invalid CNIC format. Must be 13 digits without dashes',
         });
       }
 
-      // Process uploaded files
-      const { processedFiles, documentRecords } = processUploadedFiles(req.files);
+      console.log('📁 Processing uploaded files');
+      const { processedFiles, documentRecords } = processUploadedFiles(req.files, req);
+      console.log('📁 Processed files:', processedFiles);
+      console.log('📁 Document records:', documentRecords);
 
-      // Parse JSON fields from FormData
       const processedData = { ...req.body };
 
-      // Parse past_experiences if it's a JSON string
+      if (documents_to_remove) {
+        try {
+          processedData.documents_to_remove = Array.isArray(documents_to_remove)
+            ? documents_to_remove
+            : JSON.parse(documents_to_remove);
+        } catch (error) {
+          console.warn('⚠️ Failed to parse documents_to_remove:', error.message);
+          processedData.documents_to_remove = [];
+        }
+      } else {
+        processedData.documents_to_remove = [];
+      }
+
       if (processedData.past_experiences && typeof processedData.past_experiences === 'string') {
         try {
           processedData.past_experiences = JSON.parse(processedData.past_experiences);
         } catch (error) {
-          console.error('Error parsing past_experiences:', error);
+          console.error('❌ Error parsing past_experiences:', error.message);
           processedData.past_experiences = [];
         }
       }
 
-      // Parse educations if it's a JSON string
       if (processedData.educations && typeof processedData.educations === 'string') {
         try {
           processedData.educations = JSON.parse(processedData.educations);
         } catch (error) {
-          console.error('Error parsing educations:', error);
+          console.error('❌ Error parsing educations:', error.message);
           processedData.educations = [];
         }
       }
 
-      const id = String(req.params.id);
+      console.log('📋 Calling employeeService.updateEmployee');
       const employee = await employeeService.updateEmployee(
-        id,
+        req.params.id,
         processedData,
         processedFiles,
         documentRecords
       );
 
-      res.status(200).json({ success: true, employee });
+      console.log(`✅ Employee updated successfully: ID ${req.params.id}`);
+      return res.status(200).json({ success: true, employee });
     } catch (error) {
-      console.error("Error updating employee:", error.message);
-      res.status(400).json({ success: false, error: error.message });
+      console.error('❌ Error updating employee:', error.message);
+      console.error('❌ Stack trace:', error.stack);
+      return res.status(400).json({ success: false, error: error.message });
     }
   },
-
-
- 
-
-
-getAllEmployees: async (_req, res) => {
+  getAllEmployees: async (_req, res) => {
     try {
       const employees = await employeeService.getAllEmployees();
-      res.status(200).json({ success: true, employees });
+      return res.status(200).json({ success: true, employees });
     } catch (error) {
-      res.status(400).json({ success: false, error: error.message });
+      return res.status(400).json({ success: false, error: error.message });
     }
   },
-
   getEmployeeById: async (req, res) => {
     try {
       const employee = await employeeService.getEmployeeById(req.params.id);
       if (!employee) {
-        return res
-          .status(404)
-          .json({ success: false, error: "Employee not found" });
+        return res.status(404).json({ success: false, error: "Employee not found" });
       }
-      res.status(200).json({ success: true, employee });
+      return res.status(200).json({ success: true, employee });
     } catch (error) {
-      res.status(400).json({ success: false, error: error.message });
+      return res.status(400).json({ success: false, error: error.message });
     }
   },
-
   deleteEmployee: async (req, res) => {
     try {
       const employee = await employeeService.deleteEmployee(req.params.id);
       if (!employee) {
-        return res
-          .status(404)
-          .json({ success: false, error: "Employee not found" });
+        return res.status(404).json({ success: false, error: "Employee not found" });
       }
-      res
-        .status(200)
-        .json({ success: true, message: "Employee deleted successfully" });
+      return res.status(200).json({ success: true, message: "Employee deleted successfully" });
     } catch (error) {
-      res.status(400).json({ success: false, error: error.message });
+      return res.status(400).json({ success: false, error: error.message });
     }
   },
 };

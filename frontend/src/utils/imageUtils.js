@@ -41,6 +41,18 @@ export const getImageUrl = (filePath) => {
  */
 export const getProfilePictureUrl = (employee) => {
   if (!employee?.profile_picture) return null;
+
+  // If profile_picture is already a full URL (from enhanced backend response), use it
+  if (employee.profile_picture.startsWith('http')) {
+    return employee.profile_picture;
+  }
+
+  // If it's a relative path, construct the full URL
+  if (employee.profile_picture.startsWith('/')) {
+    return `${getServerBaseUrl()}${employee.profile_picture}`;
+  }
+
+  // Otherwise, use the standard image URL function
   return getImageUrl(employee.profile_picture);
 };
 

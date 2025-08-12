@@ -95,27 +95,116 @@ class EmployeeService {
    * @param {Object} employeeData - Employee data
    * @returns {FormData} FormData object
    */
-  createFormData(employeeData) {
-    const formData = new FormData();
+  // createFormData(employeeData) {
+  //   const formData = new FormData();
 
-    // Add all text fields
-    Object.keys(employeeData).forEach(key => {
-      if (employeeData[key] !== null && employeeData[key] !== undefined) {
-        if (key === 'past_experiences' || key === 'educations') {
-          // Convert arrays to JSON strings
-          formData.append(key, JSON.stringify(employeeData[key]));
-        } else if (employeeData[key] instanceof File) {
-          // Handle file uploads
-          formData.append(key, employeeData[key]);
-        } else {
-          // Handle regular fields
-          formData.append(key, employeeData[key]);
-        }
+  //   // Add all text fields first
+  //   Object.keys(employeeData).forEach(key => {
+  //     if (employeeData[key] !== null && employeeData[key] !== undefined) {
+  //       if (key === 'past_experiences' || key === 'educations') {
+  //         // Convert arrays to JSON strings
+  //         formData.append(key, JSON.stringify(employeeData[key]));
+  //       } else if (key === 'experience_documents' || key === 'education_documents') {
+  //         // Skip these - they're handled separately below
+  //         return;
+  //       } else if (employeeData[key] instanceof File) {
+  //         // Handle direct file uploads (from form fields with _file suffix)
+  //         formData.append(key, employeeData[key]);
+  //       } else if (typeof employeeData[key] === 'object' && employeeData[key] !== null && !Array.isArray(employeeData[key])) {
+  //         // Skip complex objects that aren't files or arrays
+  //         return;
+  //       } else if (Array.isArray(employeeData[key])) {
+  //         // Handle arrays (like other_documents)
+  //         employeeData[key].forEach(item => {
+  //           if (item instanceof File) {
+  //             formData.append(key, item);
+  //           }
+  //         });
+  //       } else {
+  //         // Handle regular fields
+  //         formData.append(key, employeeData[key]);
+  //       }
+  //     }
+  //   });
+
+  //   // Files are already handled in the main loop above
+
+  //   // Handle experience documents (nested object structure)
+  //   if (employeeData.experience_documents && typeof employeeData.experience_documents === 'object') {
+  //     Object.entries(employeeData.experience_documents).forEach(([experienceId, file]) => {
+  //       if (file instanceof File) {
+  //         // Use field name with ID so backend can extract associated_id
+  //         formData.append(`experience_documents_${experienceId}`, file);
+  //       }
+  //     });
+  //   }
+
+  //   // Handle education documents (nested object structure)
+  //   if (employeeData.education_documents && typeof employeeData.education_documents === 'object') {
+  //     Object.entries(employeeData.education_documents).forEach(([educationId, file]) => {
+  //       if (file instanceof File) {
+  //         // Use field name with ID so backend can extract associated_id
+  //         formData.append(`education_documents_${educationId}`, file);
+  //       }
+  //     });
+  //   }
+
+  //   return formData;
+  // }
+createFormData(employeeData) {
+  const formData = new FormData();
+
+  Object.keys(employeeData).forEach(key => {
+    const value = employeeData[key];
+
+     if (key === 'profile_picture' && value === null) {
+      
+      formData.append(key, 'null');
+    } else    if (value !== null && value !== undefined) {
+      if (key === 'past_experiences' || key === 'educations' || key === 'documents_to_remove') {
+        // Convert array data (including documents_to_remove) to JSON
+        formData.append(key, JSON.stringify(value));
+      } else if (key === 'experience_documents' || key === 'education_documents') {
+        // Skip these - handled below
+        return;
+      } else if (value instanceof File) {
+        formData.append(key, value);
+      } else if (typeof value === 'object' && !Array.isArray(value)) {
+        // Skip complex non-file objects
+        return;
+      } else if (Array.isArray(value)) {
+        // Append each file in arrays like other_documents
+        value.forEach(item => {
+          if (item instanceof File) {
+            formData.append(key, item);
+          }
+        });
+      } else {
+        formData.append(key, value);
+      }
+    }
+  });
+
+  // Handle experience_documents
+  if (employeeData.experience_documents && typeof employeeData.experience_documents === 'object') {
+    Object.entries(employeeData.experience_documents).forEach(([experienceId, file]) => {
+      if (file instanceof File) {
+        formData.append(`experience_documents_${experienceId}`, file);
       }
     });
-
-    return formData;
   }
+
+  // Handle education_documents
+  if (employeeData.education_documents && typeof employeeData.education_documents === 'object') {
+    Object.entries(employeeData.education_documents).forEach(([educationId, file]) => {
+      if (file instanceof File) {
+        formData.append(`education_documents_${educationId}`, file);
+      }
+    });
+  }
+
+  return formData;
+}
 
   /**
    * Get all employees with pagination
@@ -194,6 +283,9 @@ class EmployeeService {
     }
   }
 
+
+
+  
   /**
    * Delete employee
    * @param {string|number} id - Employee ID

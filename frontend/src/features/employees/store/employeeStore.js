@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { employeeService } from "../services/employeeService";
+import { employmentService } from "../services/employmentService";
 import auditService from "../../../services/auditService";
 
 /**
@@ -80,8 +81,7 @@ const useEmployeeStore = create(
           throw new Error("Employee not found");
         }
 
-        console.log("🔍 EmployeeStore: Getting employee by ID:", id);
-        console.log("📋 EmployeeStore: Found employee:", employee);
+        
 
         set({
           currentEmployee: employee,
@@ -183,79 +183,76 @@ const useEmployeeStore = create(
     },
 
     // Delete employee
-    deleteEmployee: async (id) => {
-      set({ loading: true, error: null });
+  deleteEmployee: async (id) => {
+  set({ loading: true, error: null });
 
-      try {
-        // Get employee data before deletion for audit logging
-        const employeeToDelete = await employeeService.getEmployeeById(id);
-        if (!employeeToDelete) {
-          throw new Error("Employee not found");
-        }
+  try {
+    // Get employee data before deletion for audit logging
+    const employeeToDelete = await employeeService.getEmployeeById(id);
+    if (!employeeToDelete) {
+      throw new Error("Employee not found");
+    }
 
-        const success = await employeeService.deleteEmployee(id);
-        if (!success) {
-          throw new Error("Failed to delete employee");
-        }
+    const success = await employeeService.deleteEmployee(id);
+    if (!success) {
+      throw new Error("Failed to delete employee");
+    }
 
-        // Log audit trail
-        auditService.logEmployeeDeleted(employeeToDelete, {
-          metadata: {
-            deletion_method: 'manual_action',
-            had_employment_records: employeeToDelete.employmentRecords?.length > 0
-          }
-        });
-
-        // Update the employees list
-        const currentState = get();
-        const filteredEmployees = currentState.employees.filter(
-          (emp) => emp.id !== parseInt(id)
-        );
-
-        set({
-          employees: filteredEmployees,
-          loading: false,
-        });
-
-        return deletedUser;
-      } catch (error) {
-        set({
-          error: error.message || "Failed to delete employee",
-          loading: false,
-        });
-        throw error;
+    // Log audit trail
+    auditService.logEmployeeDeleted(employeeToDelete, {
+      metadata: {
+        deletion_method: 'manual_action',
+        had_employment_records: employeeToDelete.employmentRecords?.length > 0
       }
-    },
+    });
 
-    // Employment Record Methods
+    // Update the employees list
+    const currentState = get();
+    const filteredEmployees = currentState.employees.filter(
+      (emp) => emp.id !== parseInt(id)
+    );
+
+    set({
+      employees: filteredEmployees,
+      loading: false,
+    });
+
+    return true; // ✅ or return employeeToDelete if needed
+  } catch (error) {
+    set({
+      error: error.message || "Failed to delete employee",
+      loading: false,
+    });
+    throw error;
+  }
+}
+,
+    // Employment Record Methods - Using real employment service
     addEmploymentRecord: async (recordData) => {
       set({ loading: true, error: null });
 
       try {
-        await simulateApiDelay();
-
         // Validate required fields
+        if (!recordData.employee_id) {
+          throw new Error("Employee ID is required");
+        }
         if (!recordData.organization?.trim()) {
           throw new Error("Organization is required");
-        }
-        if (!recordData.designation?.trim()) {
-          throw new Error("Designation is required");
         }
         if (!recordData.effective_from) {
           throw new Error("Effective from date is required");
         }
-        if (!recordData.role_tag?.trim()) {
-          throw new Error("Role tag is required");
-        }
 
-        const newRecord = createEmploymentRecord(recordData);
+        const newRecord = await employmentService.createEmployment(recordData);
 
         // Log audit trail
         auditService.logEmploymentRecordCreated(newRecord, {
           metadata: {
             creation_method: 'tabbed_form',
             organization: recordData.organization,
-            designation: recordData.designation
+            has_salary: !!recordData.salary,
+            has_location: !!recordData.location,
+            has_contract: !!recordData.contract
           }
         });
 
@@ -275,9 +272,7 @@ const useEmployeeStore = create(
       set({ loading: true, error: null });
 
       try {
-        await simulateApiDelay();
-
-        const history = getEmploymentByUserId(employeeId);
+        const history = await employmentService.getEmploymentHistory(employeeId);
 
         set({ loading: false });
         return history;
@@ -295,12 +290,10 @@ const useEmployeeStore = create(
       set({ loading: true, error: null });
 
       try {
-        await simulateApiDelay();
-
         // Get old record for audit logging
-        const oldRecord = getEmploymentByUserId(recordId); // This might need adjustment based on actual data structure
+        const oldRecord = await employmentService.getEmploymentById(recordId);
 
-        const updatedRecord = updateEmploymentRecord(recordId, updateData);
+        const updatedRecord = await employmentService.updateEmployment(recordId, updateData);
         if (!updatedRecord) {
           throw new Error("Employment record not found");
         }
@@ -329,12 +322,10 @@ const useEmployeeStore = create(
       set({ loading: true, error: null });
 
       try {
-        await simulateApiDelay();
-
         // Get record data before deletion for audit logging
-        const recordToDelete = getEmploymentByUserId(recordId); // This might need adjustment
+        const recordToDelete = await employmentService.getEmploymentById(recordId);
 
-        const deletedRecord = deleteEmploymentRecord(recordId);
+        const deletedRecord = await employmentService.deleteEmployment(recordId);
         if (!deletedRecord) {
           throw new Error("Employment record not found");
         }
@@ -381,12 +372,12 @@ const useEmployeeStore = create(
 
     // Additional methods for compatibility with existing components
     preloadEmployees: async (queryParams = {}) => {
-      // For dummy data, we don't need preloading, but keep for compatibility
+      // For API-based data, we don't need preloading, but keep for compatibility
       return Promise.resolve();
     },
 
     clearCache: () => {
-      // For dummy data, we don't have cache, but keep for compatibility
+      // For API-based data, we don't have cache, but keep for compatibility
       set({ employees: [], currentEmployee: null });
     },
 
