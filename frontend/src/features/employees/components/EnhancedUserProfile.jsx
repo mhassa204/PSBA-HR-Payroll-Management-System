@@ -6,7 +6,9 @@ import { useErrorHandler } from "../../../hooks/useErrorHandler";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import ErrorMessage from "../../../components/ui/ErrorMessage";
 import ProfilePicture from "../../../components/ui/ProfilePicture";
-import DocumentViewer, { DocumentGrid } from "../../../components/ui/DocumentViewer";
+import DocumentViewer from "../../../components/ui/DocumentViewer";
+import OrganizedDocumentGrid from "../../../components/ui/OrganizedDocumentGrid";
+import { getImageUrl } from "../../../utils/imageUtils";
 import {
   formatDateDisplay,
   displayCNIC,
@@ -324,8 +326,26 @@ const EnhancedUserProfile = () => {
                   Current Salary
                 </p>
                 <p className="text-lg font-bold text-gray-900">
-                  {currentPosition
-                    ? `PKR ${currentPosition.salary?.toLocaleString()}`
+                  {currentPosition?.salary
+                    ? (() => {
+                        const salary = currentPosition.salary;
+                        let totalSalary = 0;
+                        
+                        // Calculate total salary based on organization
+                        if (currentPosition.organization === 'MBWO') {
+                          // MBWO uses gross_salary
+                          totalSalary = salary.gross_salary || 0;
+                        } else {
+                          // Other organizations use sum of components
+                          totalSalary = (salary.basic_salary || 0) +
+                                      (salary.medical_allowance || 0) +
+                                      (salary.house_rent || 0) +
+                                      (salary.conveyance_allowance || 0) +
+                                      (salary.other_allowances || 0);
+                        }
+                        
+                        return totalSalary > 0 ? `PKR ${totalSalary.toLocaleString()}` : "N/A";
+                      })()
                     : "N/A"}
                 </p>
               </div>
@@ -575,7 +595,27 @@ const EnhancedUserProfile = () => {
                                     Salary:
                                   </span>
                                   <p className="font-semibold text-gray-900">
-                                    PKR {record.salary?.toLocaleString()}
+                                    {record.salary
+                                      ? (() => {
+                                          const salary = record.salary;
+                                          let totalSalary = 0;
+                                          
+                                          // Calculate total salary based on organization
+                                          if (record.organization === 'MBWO') {
+                                            // MBWO uses gross_salary
+                                            totalSalary = salary.gross_salary || 0;
+                                          } else {
+                                            // Other organizations use sum of components
+                                            totalSalary = (salary.basic_salary || 0) +
+                                                        (salary.medical_allowance || 0) +
+                                                        (salary.house_rent || 0) +
+                                                        (salary.conveyance_allowance || 0) +
+                                                        (salary.other_allowances || 0);
+                                          }
+                                          
+                                          return totalSalary > 0 ? `PKR ${totalSalary.toLocaleString()}` : "N/A";
+                                        })()
+                                      : "N/A"}
                                   </p>
                                 </div>
                                 <div>
@@ -1107,40 +1147,16 @@ const EnhancedUserProfile = () => {
                   </h3>
                 </div>
 
-                {/* Profile Picture Section */}
-                {employee.profile_picture && (
-                  <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                      <i className="fas fa-user-circle mr-2 text-blue-600"></i>
-                      Profile Picture
-                    </h4>
-                    <div className="flex items-center space-x-4">
-                      <ProfilePicture
-                        employee={employee}
-                        size="xl"
-                        className="border-2 border-gray-200"
-                        showFallback={true}
-                      />
-                      <div>
-                        <p className="text-sm text-gray-600">
-                          Profile picture uploaded successfully
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Click to view full size
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Documents Grid */}
-                <DocumentGrid
+                {/* Organized Documents Grid */}
+                <OrganizedDocumentGrid
                   documents={employee.documents || []}
-                  title="Employee Documents"
-                  emptyMessage="No documents have been uploaded for this employee"
+                  profilePicture={employee.profile_picture_url ? 
+                    `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${employee.profile_picture_url}` : 
+                    employee.profile_picture ? 
+                    getImageUrl(employee.profile_picture) : null
+                  }
                   className="mb-6"
                 />
-
 
               </motion.div>
             )}

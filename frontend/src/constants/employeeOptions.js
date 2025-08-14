@@ -168,62 +168,62 @@ export const getCitiesForDistrict = (districtValue) => {
   return district ? district.cities : [];
 };
 
-// File upload configurations - Only JPG, PNG, and PDF allowed
+// File upload configurations - Updated with new restrictions
 export const FILE_UPLOAD_CONFIG = {
   profile_picture: {
     accept: "image/jpeg,image/png",
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 50 * 1024 * 1024, // 50MB
     types: ["image/jpeg", "image/png"],
   },
   profile_picture_file: {
     accept: "image/jpeg,image/png",
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 50 * 1024 * 1024, // 50MB
     types: ["image/jpeg", "image/png"],
   },
   cnic_documents: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 10 * 1024 * 1024, // 10MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "image/jpeg,image/png",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["image/jpeg", "image/png"],
   },
   cnic_front: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 10 * 1024 * 1024, // 10MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "image/jpeg,image/png",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["image/jpeg", "image/png"],
   },
   cnic_back: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 10 * 1024 * 1024, // 10MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "image/jpeg,image/png",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["image/jpeg", "image/png"],
   },
   domicile_certificate: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 10 * 1024 * 1024, // 10MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "application/pdf",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["application/pdf"],
   },
   disability_document: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 10 * 1024 * 1024, // 10MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "application/pdf",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["application/pdf"],
   },
   certificates: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 10 * 1024 * 1024, // 10MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "application/pdf",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["application/pdf"],
   },
   education_document: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 15 * 1024 * 1024, // 15MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "application/pdf",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["application/pdf"],
   },
   experience_document: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 15 * 1024 * 1024, // 15MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "application/pdf",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["application/pdf"],
   },
   other_documents: {
-    accept: "image/jpeg,image/png,application/pdf",
-    maxSize: 15 * 1024 * 1024, // 15MB
-    types: ["image/jpeg", "image/png", "application/pdf"],
+    accept: "application/pdf",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["application/pdf"],
   },
 };
 

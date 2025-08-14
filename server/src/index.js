@@ -7,6 +7,7 @@ const employeeRoutes = require("./routes/employeeRoutes");
 const employmentRoutes = require("./routes/employmentRoutes");
 const departmentRoutes = require("./routes/departmentRoutes");
 const designationRoutes = require("./routes/designationRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 const multer = require("multer");
 
 const app = express(); 
@@ -39,6 +40,7 @@ app.use("/api/employees", employeeRoutes);
 app.use("/api/employment", employmentRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/designations", designationRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

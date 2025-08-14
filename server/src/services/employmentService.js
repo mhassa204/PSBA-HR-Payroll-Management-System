@@ -8,7 +8,8 @@ const employmentService = {
       // Query the employmentdocument table for renewal report documents
       const allDocuments = await prisma.employmentdocument.findMany({
         where: {
-          employment_id: parseInt(employmentId)
+          employment_id: parseInt(employmentId),
+          is_deleted: false
         },
         select: {
           id: true,
@@ -307,23 +308,32 @@ createEmployment: async (data) => {
   const actualEmployeeId = employee_id || user_id;
 
   // Validate employee exists
-  const employee = await prisma.employee.findUnique({
-    where: { id: parseInt(actualEmployeeId) }
+  const employee = await prisma.employee.findFirst({
+    where: { 
+      id: parseInt(actualEmployeeId),
+      is_deleted: false
+    }
   });
   if (!employee) throw new Error("Invalid employee_id");
 
   // Validate department if provided
   if (department_id) {
-    const department = await prisma.department.findUnique({
-      where: { id: parseInt(department_id) }
+    const department = await prisma.department.findFirst({
+      where: { 
+        id: parseInt(department_id),
+        is_deleted: false
+      }
     });
     if (!department) throw new Error("Invalid department_id");
   }
 
   // Validate designation if provided
   if (designation_id) {
-    const designation = await prisma.designation.findUnique({
-      where: { id: parseInt(designation_id) }
+    const designation = await prisma.designation.findFirst({
+      where: { 
+        id: parseInt(designation_id),
+        is_deleted: false
+      }
     });
     if (!designation) throw new Error("Invalid designation_id");
   }
@@ -438,8 +448,11 @@ createEmployment: async (data) => {
       }
     }
 
-    return tx.employment.findUnique({
-      where: { id: employment.id },
+    return tx.employment.findFirst({
+      where: { 
+        id: employment.id,
+        is_deleted: false
+      },
       include: {
         employee: true,
         department: true,
@@ -458,7 +471,7 @@ createEmployment: async (data) => {
   // Get all employment records with pagination
   getAllEmployments: async (page = 1, limit = 10, filters = {}) => {
     const skip = (page - 1) * limit;
-    const where = {};
+    const where = { is_deleted: false };
 
     // Apply filters
     if (filters.employee_id) {
@@ -507,8 +520,11 @@ createEmployment: async (data) => {
 
   // Get employment record by ID
   getEmploymentById: async (id) => {
-    const employment = await prisma.employment.findUnique({
-      where: { id: parseInt(id) },
+    const employment = await prisma.employment.findFirst({
+      where: { 
+        id: parseInt(id),
+        is_deleted: false
+      },
       include: {
         employee: true,
         department: true,
@@ -544,7 +560,10 @@ createEmployment: async (data) => {
   // Get employment records by employee ID
   getEmploymentsByEmployeeId: async (employeeId) => {
     const employments = await prisma.employment.findMany({
-      where: { employee_id: parseInt(employeeId) },
+      where: { 
+        employee_id: parseInt(employeeId),
+        is_deleted: false
+      },
       include: {
         department: true,
         designation: true,
@@ -808,21 +827,30 @@ updateEmployment: async (id, data) => {
   // const actualPoliceCertificate = police_character_certificate;
 
   if (department_id) {
-    const department = await prisma.department.findUnique({
-      where: { id: parseInt(department_id) }
+    const department = await prisma.department.findFirst({
+      where: { 
+        id: parseInt(department_id),
+        is_deleted: false
+      }
     });
     if (!department) throw new Error("Invalid department_id");
   }
 
   if (designation_id) {
-    const designation = await prisma.designation.findUnique({
-      where: { id: parseInt(designation_id) }
+    const designation = await prisma.designation.findFirst({
+      where: { 
+        id: parseInt(designation_id),
+        is_deleted: false
+      }
     });
     if (!designation) throw new Error("Invalid designation_id");
   }
 
-  const currentEmployment = await prisma.employment.findUnique({
-    where: { id: parseInt(id) }
+  const currentEmployment = await prisma.employment.findFirst({
+    where: { 
+      id: parseInt(id),
+      is_deleted: false
+    }
   });
   if (!currentEmployment) throw new Error("Employment record not found");
 
@@ -988,8 +1016,11 @@ updateEmployment: async (id, data) => {
       }
     }
 
-    return tx.employment.findUnique({
-      where: { id: employment.id },
+    return tx.employment.findFirst({
+      where: { 
+        id: employment.id,
+        is_deleted: false
+      },
       include: {
         employee: true,
         department: true,
@@ -1006,15 +1037,97 @@ updateEmployment: async (id, data) => {
 
   // Delete employment record
   deleteEmployment: async (id) => {
-    return prisma.employment.delete({
-      where: { id: parseInt(id) }
+    return await prisma.$transaction(async (tx) => {
+      // Soft delete the employment record and all related records
+      
+      // 1. Soft delete employment documents
+      await tx.employmentDocument.updateMany({
+        where: { employment_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 2. Soft delete employment contract
+      await tx.employmentContract.updateMany({
+        where: { employment_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 3. Soft delete employment location
+      await tx.employmentLocation.updateMany({
+        where: { employment_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 4. Soft delete employment salary
+      await tx.employmentSalary.updateMany({
+        where: { employment_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 5. Finally soft delete the employment record
+      const deletedEmployment = await tx.employment.update({
+        where: { id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      return {
+        success: true,
+        message: `Employment record ${deletedEmployment.id} and all related records soft deleted successfully`,
+        deletedEmployment
+      };
+    });
+  },
+
+  // Restore a soft-deleted employment record
+  restoreEmployment: async (id) => {
+    return await prisma.$transaction(async (tx) => {
+      // Restore the employment record and all related records
+      
+      // 1. Restore the employment record
+      const restoredEmployment = await tx.employment.update({
+        where: { id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      // 2. Restore employment salary
+      await tx.employmentSalary.updateMany({
+        where: { employment_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      // 3. Restore employment location
+      await tx.employmentLocation.updateMany({
+        where: { employment_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      // 4. Restore employment contract
+      await tx.employmentContract.updateMany({
+        where: { employment_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      // 5. Restore employment documents
+      await tx.employmentDocument.updateMany({
+        where: { employment_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      return {
+        success: true,
+        message: `Employment record ${restoredEmployment.id} and all related records restored successfully`,
+        restoredEmployment
+      };
     });
   },
 
   // Create salary record
   createSalary: async (employmentId, salaryData) => {
-    const employment = await prisma.employment.findUnique({
-      where: { id: parseInt(employmentId) }
+    const employment = await prisma.employment.findFirst({
+      where: { 
+        id: parseInt(employmentId),
+        is_deleted: false
+      }
     });
     if (!employment) throw new Error("Employment record not found");
 
@@ -1040,8 +1153,11 @@ updateEmployment: async (id, data) => {
 
   // Update salary record
   updateSalary: async (employmentId, salaryData) => {
-    const employment = await prisma.employment.findUnique({
-      where: { id: parseInt(employmentId) }
+    const employment = await prisma.employment.findFirst({
+      where: { 
+        id: parseInt(employmentId),
+        is_deleted: false
+      }
     });
     if (!employment) throw new Error("Employment record not found");
 
@@ -1067,15 +1183,39 @@ updateEmployment: async (id, data) => {
 
   // Delete salary record
   deleteSalary: async (employmentId) => {
-    return prisma.employmentSalary.delete({
-      where: { employment_id: parseInt(employmentId) }
+    const deletedSalary = await prisma.employmentSalary.update({
+      where: { employment_id: parseInt(employmentId) },
+      data: { is_deleted: true }
     });
+
+    return {
+      success: true,
+      message: `Salary record for employment ${employmentId} soft deleted successfully`,
+      deletedSalary
+    };
+  },
+
+  // Restore a soft-deleted salary record
+  restoreSalary: async (employmentId) => {
+    const restoredSalary = await prisma.employmentSalary.update({
+      where: { employment_id: parseInt(employmentId) },
+      data: { is_deleted: false }
+    });
+
+    return {
+      success: true,
+      message: `Salary record for employment ${employmentId} restored successfully`,
+      restoredSalary
+    };
   },
 
   // Create location record
   createLocation: async (employmentId, locationData) => {
-    const employment = await prisma.employment.findUnique({
-      where: { id: parseInt(employmentId) }
+    const employment = await prisma.employment.findFirst({
+      where: { 
+        id: parseInt(employmentId),
+        is_deleted: false
+      }
     });
     if (!employment) throw new Error("Employment record not found");
 
@@ -1093,8 +1233,11 @@ updateEmployment: async (id, data) => {
 
   // Update location record
   updateLocation: async (employmentId, locationData) => {
-    const employment = await prisma.employment.findUnique({
-      where: { id: parseInt(employmentId) }
+    const employment = await prisma.employment.findFirst({
+      where: { 
+        id: parseInt(employmentId),
+        is_deleted: false
+      }
     });
     if (!employment) throw new Error("Employment record not found");
 
@@ -1112,15 +1255,39 @@ updateEmployment: async (id, data) => {
 
   // Delete location record
   deleteLocation: async (employmentId) => {
-    return prisma.employmentLocation.delete({
-      where: { employment_id: parseInt(employmentId) }
+    const deletedLocation = await prisma.employmentLocation.update({
+      where: { employment_id: parseInt(employmentId) },
+      data: { is_deleted: true }
     });
+
+    return {
+      success: true,
+      message: `Location record for employment ${employmentId} soft deleted successfully`,
+      deletedLocation
+    };
+  },
+
+  // Restore a soft-deleted location record
+  restoreLocation: async (employmentId) => {
+    const restoredLocation = await prisma.employmentLocation.update({
+      where: { employment_id: parseInt(employmentId) },
+      data: { is_deleted: false }
+    });
+
+    return {
+      success: true,
+      message: `Location record for employment ${employmentId} restored successfully`,
+      restoredLocation
+    };
   },
 
   // Create contract record
   createContract: async (employmentId, contractData) => {
-    const employment = await prisma.employment.findUnique({
-      where: { id: parseInt(employmentId) }
+    const employment = await prisma.employment.findFirst({
+      where: { 
+        id: parseInt(employmentId),
+        is_deleted: false
+      }
     });
     if (!employment) throw new Error("Employment record not found");
 
@@ -1154,8 +1321,11 @@ updateEmployment: async (id, data) => {
 
   // Update contract record
   updateContract: async (employmentId, contractData) => {
-    const employment = await prisma.employment.findUnique({
-      where: { id: parseInt(employmentId) }
+    const employment = await prisma.employment.findFirst({
+      where: { 
+        id: parseInt(employmentId),
+        is_deleted: false
+      }
     });
     if (!employment) throw new Error("Employment record not found");
 
@@ -1189,9 +1359,30 @@ updateEmployment: async (id, data) => {
 
   // Delete contract record
   deleteContract: async (employmentId) => {
-    return prisma.employmentContract.delete({
-      where: { employment_id: parseInt(employmentId) }
+    const deletedContract = await prisma.employmentContract.update({
+      where: { employment_id: parseInt(employmentId) },
+      data: { is_deleted: true }
     });
+
+    return {
+      success: true,
+      message: `Contract record for employment ${employmentId} soft deleted successfully`,
+      deletedContract
+    };
+  },
+
+  // Restore a soft-deleted contract record
+  restoreContract: async (employmentId) => {
+    const restoredContract = await prisma.employmentContract.update({
+      where: { employment_id: parseInt(employmentId) },
+      data: { is_deleted: false }
+    });
+
+    return {
+      success: true,
+      message: `Contract record for employment ${employmentId} restored successfully`,
+      restoredContract
+    };
   },
 
   // Get employment statistics
@@ -1202,16 +1393,20 @@ updateEmployment: async (id, data) => {
       byOrganization,
       byDepartment
     ] = await Promise.all([
-      prisma.employment.count(),
-      prisma.employment.count({ where: { is_current: true } }),
+      prisma.employment.count({ where: { is_deleted: false } }),
+      prisma.employment.count({ where: { is_current: true, is_deleted: false } }),
       prisma.employment.groupBy({
         by: ['organization'],
-        _count: { id: true }
+        _count: { id: true },
+        where: { is_deleted: false }
       }),
       prisma.employment.groupBy({
         by: ['department_id'],
         _count: { id: true },
-        where: { department_id: { not: null } }
+        where: { 
+          department_id: { not: null },
+          is_deleted: false
+        }
       })
     ]);
 

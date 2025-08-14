@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronDownIcon,
@@ -51,6 +51,8 @@ const Header = () => {
   const { employees, dashboard, reports, settings, profile } =
     useAppNavigation();
   const { currentTheme } = useColorTheme();
+  
+  const userDropdownRef = useRef(null);
 
   const handleEmployeesClick = (e) => {
     e.preventDefault();
@@ -77,6 +79,20 @@ const Header = () => {
     profile.toProfile();
     setIsDropdownOpen(false);
   };
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   return (
     <>
@@ -202,7 +218,7 @@ const Header = () => {
               </button>
 
               {/* User Profile Dropdown */}
-              <div className="relative">
+              <div className="relative" ref={userDropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                   className="flex items-center space-x-2 focus:outline-none transition-colors"

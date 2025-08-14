@@ -17,6 +17,11 @@ import CleanEmploymentHistory from "./features/employees/components/CleanEmploym
 import AuditLogsDashboard from "./features/audit/components/AuditLogsDashboard";
 import ConfirmationProvider from "./components/ui/ConfirmationProvider";
 import ToastProvider from "./components/ui/ToastContainer";
+import { 
+  SettingsDashboard, 
+  DepartmentManagement, 
+  DesignationManagement 
+} from "./features/settings";
 function App() {
   // Emergency scroll restore keyboard shortcut (Ctrl+Shift+S)
   useEffect(() => {
@@ -75,6 +80,32 @@ function App() {
               element={<CleanEmploymentHistory />}
             />
             <Route path="/audit-logs" element={<AuditLogsDashboard />} />
+            
+            {/* Settings Routes */}
+            <Route
+              path="/settings"
+              element={
+                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                  <SettingsDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings/departments"
+              element={
+                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                  <DepartmentManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings/designations"
+              element={
+                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                  <DesignationManagement />
+                </PrivateRoute>
+              }
+            />
           </Routes>
           <Footer />
         </ConfirmationProvider>

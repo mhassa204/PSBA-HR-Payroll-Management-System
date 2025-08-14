@@ -81,6 +81,27 @@ const employeeService = {
         throw employeeError;
       }
 
+      // Create profile picture document record if profile picture is uploaded
+      if (processedFiles?.profile_picture_file) {
+        console.log("Profile picture uploaded during creation, creating document record");
+        try {
+          const profilePictureDoc = await tx.employeeDocument.create({
+            data: {
+              employee_id: employee.id,
+              file_type: 'profile_picture',
+              document_name: processedFiles.profile_picture_file.name || 'Profile Picture',
+              file_path: processedFiles.profile_picture_file,
+              file_size: processedFiles.profile_picture_file.size,
+              mime_type: processedFiles.profile_picture_file.type,
+              is_deleted: false
+            }
+          });
+          console.log(`✅ Created profile picture document ${profilePictureDoc.id} for new employee`);
+        } catch (error) {
+          console.error("❌ Error creating profile picture document:", error.message);
+        }
+      }
+
       // Create past experiences if provided and map temporary IDs to actual IDs
       const experienceIdMapping = {};
       if (past_experiences && Array.isArray(past_experiences)) {
@@ -145,7 +166,10 @@ const employeeService = {
           });
           console.log("Document records created successfully:", result);
           const createdDocs = await tx.employeeDocument.findMany({
-            where: { employee_id: employee.id }
+            where: { 
+              employee_id: employee.id,
+              is_deleted: false
+            }
           });
           console.log(`Verified: ${createdDocs.length} documents created for employee ${employee.id}`);
         } catch (docError) {
@@ -157,8 +181,11 @@ const employeeService = {
       }
 
       // Return employee with all related data
-      return tx.employee.findUnique({
-        where: { id: employee.id },
+      return tx.employee.findFirst({
+        where: { 
+          id: employee.id,
+          is_deleted: false
+        },
         include: {
           pastExperiences: true,
           educationQualifications: true,
@@ -237,9 +264,24 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
     employeeUpdateData.password = encrypt(data.password);
   }
 
+  // Debug logging for profile picture handling
+  console.log("🔍 Profile picture debug info:");
+  console.log("  - data.profile_picture:", data.profile_picture);
+  console.log("  - data.profile_picture type:", typeof data.profile_picture);
+  console.log("  - processedFiles?.profile_picture_file:", processedFiles?.profile_picture_file);
+  
   if (processedFiles?.profile_picture_file) {
     console.log("Found profile picture file, updating employee:", processedFiles.profile_picture_file);
     employeeUpdateData.profile_picture = processedFiles.profile_picture_file;
+  } else if (data.profile_picture === null || data.profile_picture === 'null' || data.profile_picture === '' || data.profile_picture === undefined) {
+    console.log("Profile picture is being removed, setting to null");
+    employeeUpdateData.profile_picture = null;
+  }
+
+  // Double-check: ensure profile_picture is explicitly set when removing
+  if (data.profile_picture === null || data.profile_picture === 'null' || data.profile_picture === '' || data.profile_picture === undefined) {
+    console.log("🔄 Double-check: Explicitly setting profile_picture to null in employeeUpdateData");
+    employeeUpdateData.profile_picture = null;
   }
 
   // Update employee with related data in a transaction
@@ -250,6 +292,97 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
       data: employeeUpdateData,
     });
 
+    console.log("🔍 Employee update verification:");
+    console.log("  - Updated employee ID:", employee.id);
+    console.log("  - Updated employee profile_picture:", employee.profile_picture);
+    console.log("  - Expected profile_picture value:", employeeUpdateData.profile_picture);
+    console.log("  - Profile picture update successful:", employee.profile_picture === employeeUpdateData.profile_picture);
+
+    // Handle profile picture changes - update corresponding document record
+    console.log("🔍 Profile picture document handling debug:");
+    console.log("  - data.profile_picture:", data.profile_picture);
+    console.log("  - data.profile_picture type:", typeof data.profile_picture);
+    console.log("  - employeeUpdateData.profile_picture:", employeeUpdateData.profile_picture);
+    
+    // More robust check for profile picture removal
+    const isProfilePictureRemoved = data.profile_picture === null || 
+                                   data.profile_picture === 'null' || 
+                                   data.profile_picture === '' || 
+                                   data.profile_picture === undefined ||
+                                   employeeUpdateData.profile_picture === null;
+    
+    console.log("🔍 Profile picture removal check:");
+    console.log("  - isProfilePictureRemoved:", isProfilePictureRemoved);
+    console.log("  - data.profile_picture === null:", data.profile_picture === null);
+    console.log("  - data.profile_picture === 'null':", data.profile_picture === 'null');
+    console.log("  - data.profile_picture === '':", data.profile_picture === '');
+    console.log("  - data.profile_picture === undefined:", data.profile_picture === undefined);
+    console.log("  - employeeUpdateData.profile_picture === null:", employeeUpdateData.profile_picture === null);
+    
+    if (isProfilePictureRemoved) {
+      console.log("Profile picture removed, updating corresponding document record");
+      try {
+        // Find and soft delete the profile picture document
+        const profilePictureDoc = await tx.employeeDocument.findFirst({
+          where: {
+            employee_id: employee.id,
+            file_type: 'profile_picture',
+            is_deleted: false
+          }
+        });
+        
+        console.log("  - Found profile picture document:", profilePictureDoc);
+        
+        if (profilePictureDoc) {
+          await tx.employeeDocument.update({
+            where: { id: profilePictureDoc.id },
+            data: { is_deleted: true }
+          });
+          console.log(`✅ Soft deleted profile picture document ${profilePictureDoc.id}`);
+        } else {
+          console.log("No profile picture document found to soft delete");
+        }
+      } catch (error) {
+        console.error("❌ Error soft deleting profile picture document:", error.message);
+      }
+    } else if (processedFiles?.profile_picture_file) {
+      console.log("New profile picture uploaded, updating corresponding document record");
+      try {
+        // Soft delete any existing profile picture document
+        const existingProfilePictureDoc = await tx.employeeDocument.findFirst({
+          where: {
+            employee_id: employee.id,
+            file_type: 'profile_picture',
+            is_deleted: false
+          }
+        });
+        
+        if (existingProfilePictureDoc) {
+          await tx.employeeDocument.update({
+            where: { id: existingProfilePictureDoc.id },
+            data: { is_deleted: true }
+          });
+          console.log(`✅ Soft deleted existing profile picture document ${existingProfilePictureDoc.id}`);
+        }
+        
+        // Create new profile picture document record
+        const newProfilePictureDoc = await tx.employeeDocument.create({
+          data: {
+            employee_id: employee.id,
+            file_type: 'profile_picture',
+            document_name: processedFiles.profile_picture_file.name || 'Profile Picture',
+            file_path: processedFiles.profile_picture_file,
+            file_size: processedFiles.profile_picture_file.size,
+            mime_type: processedFiles.profile_picture_file.type,
+            is_deleted: false
+          }
+        });
+        console.log(`✅ Created new profile picture document ${newProfilePictureDoc.id}`);
+      } catch (error) {
+        console.error("❌ Error updating profile picture document:", error.message);
+      }
+    }
+
     // Initialize ID mappings for new records
     const experienceIdMapping = {};
     const educationIdMapping = {};
@@ -258,7 +391,10 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
     if (past_experiences && Array.isArray(past_experiences)) {
       console.log("Received past_experiences:", JSON.stringify(past_experiences, null, 2));
       const existingExperiences = await tx.pastExperience.findMany({
-        where: { employee_id: employee.id }
+        where: { 
+          employee_id: employee.id,
+          is_deleted: false
+        }
       });
       console.log("Existing experiences:", JSON.stringify(existingExperiences, null, 2));
 
@@ -362,7 +498,10 @@ for (const exp of experiencesToDelete) {
     if (educations && Array.isArray(educations)) {
       console.log("Received educations:", JSON.stringify(educations, null, 2));
       const existingEducations = await tx.educationQualification.findMany({
-        where: { employee_id: employee.id }
+        where: { 
+          employee_id: employee.id,
+          is_deleted: false
+        }
       });
       console.log("Existing educations:", JSON.stringify(existingEducations, null, 2));
 
@@ -525,8 +664,11 @@ if (!employeeUpdateData.has_disability) {
     }
 
     // Return employee with all related data
-    return tx.employee.findUnique({
-      where: { id: employee.id },
+    const finalEmployee = await tx.employee.findFirst({
+      where: { 
+        id: employee.id,
+        is_deleted: false
+      },
       include: {
         pastExperiences: true,
         educationQualifications: true,
@@ -541,21 +683,59 @@ if (!employeeUpdateData.has_disability) {
         }
       }
     });
+
+    // Final verification for profile picture removal
+    if (isProfilePictureRemoved) {
+      console.log("🔍 Final verification - checking if profile picture was actually removed:");
+      console.log("  - Employee profile_picture field:", finalEmployee.profile_picture);
+      console.log("  - Profile picture documents:", finalEmployee.documents.filter(d => d.file_type === 'profile_picture' && !d.is_deleted));
+      
+      if (finalEmployee.profile_picture === null) {
+        console.log("✅ Profile picture successfully removed from employee record");
+      } else {
+        console.log("❌ Profile picture still exists in employee record:", finalEmployee.profile_picture);
+      }
+      
+      const activeProfilePictureDocs = finalEmployee.documents.filter(d => d.file_type === 'profile_picture' && !d.is_deleted);
+      if (activeProfilePictureDocs.length === 0) {
+        console.log("✅ All profile picture documents successfully soft-deleted");
+      } else {
+        console.log("❌ Profile picture documents still exist:", activeProfilePictureDocs.map(d => d.id));
+      }
+    }
+
+    return finalEmployee;
   });
 },
-  getAllEmployees: async () => {
+  getAllEmployees: async (includeDeleted = false) => {
     try {
       const employees = await prisma.employee.findMany({
+        where: includeDeleted ? {} : { is_deleted: false },
         include: {
-          pastExperiences: true,
-          educationQualifications: true,
-          documents: true,
+          pastExperiences: {
+            where: includeDeleted ? {} : { is_deleted: false }
+          },
+          educationQualifications: {
+            where: includeDeleted ? {} : { is_deleted: false }
+          },
+          documents: {
+            where: includeDeleted ? {} : { is_deleted: false }
+          },
           employmentRecords: {
+            where: includeDeleted ? {} : { is_deleted: false },
             include: {
-              department: true,
-              designation: true,
-              salary: true,
-              location: true
+              department: {
+                where: includeDeleted ? {} : { is_deleted: false }
+              },
+              designation: {
+                where: includeDeleted ? {} : { is_deleted: false }
+              },
+              salary: {
+                where: includeDeleted ? {} : { is_deleted: false }
+              },
+              location: {
+                where: includeDeleted ? {} : { is_deleted: false }
+              }
             }
           }
         },
@@ -567,19 +747,37 @@ if (!employeeUpdateData.has_disability) {
     }
   },
 
-  getEmployeeById: async (id) => {
+  getEmployeeById: async (id, includeDeleted = false) => {
     const emp = await prisma.employee.findUnique({
-      where: { id: parseInt(id) },
+      where: { 
+        id: parseInt(id),
+        ...(includeDeleted ? {} : { is_deleted: false })
+      },
       include: {
-        pastExperiences: true,
-        educationQualifications: true,
-        documents: true,
+        pastExperiences: {
+          where: includeDeleted ? {} : { is_deleted: false }
+        },
+        educationQualifications: {
+          where: includeDeleted ? {} : { is_deleted: false }
+        },
+        documents: {
+          where: includeDeleted ? {} : { is_deleted: false }
+        },
         employmentRecords: {
+          where: includeDeleted ? {} : { is_deleted: false },
           include: {
-            department: true,
-            designation: true,
-            salary: true,
-            location: true
+            department: {
+              where: includeDeleted ? {} : { is_deleted: false }
+            },
+            designation: {
+              where: includeDeleted ? {} : { is_deleted: false }
+            },
+            salary: {
+              where: includeDeleted ? {} : { is_deleted: false }
+            },
+            location: {
+              where: includeDeleted ? {} : { is_deleted: false }
+            }
           }
         }
       },
@@ -624,8 +822,167 @@ if (!employeeUpdateData.has_disability) {
   },
 
   deleteEmployee: async (id) => {
-    return prisma.employee.delete({
-      where: { id: parseInt(id) },
+    return await prisma.$transaction(async (tx) => {
+      // Soft delete the employee and all related records
+      
+      // 1. Soft delete employment documents
+      await tx.employmentDocument.updateMany({
+        where: {
+          employment: {
+            employee_id: parseInt(id)
+          }
+        },
+        data: { is_deleted: true }
+      });
+
+      // 2. Soft delete employment contracts
+      await tx.employmentContract.updateMany({
+        where: {
+          employment: {
+            employee_id: parseInt(id)
+          }
+        },
+        data: { is_deleted: true }
+      });
+
+      // 3. Soft delete employment locations
+      await tx.employmentLocation.updateMany({
+        where: {
+          employment: {
+            employee_id: parseInt(id)
+          }
+        },
+        data: { is_deleted: true }
+      });
+
+      // 4. Soft delete employment salaries
+      await tx.employmentSalary.updateMany({
+        where: {
+          employment: {
+            employee_id: parseInt(id)
+          }
+        },
+        data: { is_deleted: true }
+      });
+
+      // 5. Soft delete employment records
+      await tx.employment.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 6. Soft delete employee documents
+      await tx.employeeDocument.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 7. Soft delete education qualifications
+      await tx.educationQualification.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 8. Soft delete past experiences
+      await tx.pastExperience.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 9. Finally soft delete the employee
+      const deletedEmployee = await tx.employee.update({
+        where: { id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      return {
+        success: true,
+        message: `Employee ${deletedEmployee.full_name} and all related records soft deleted successfully`,
+        deletedEmployee
+      };
+    });
+  },
+
+  // Restore a soft-deleted employee
+  restoreEmployee: async (id) => {
+    return await prisma.$transaction(async (tx) => {
+      // Restore the employee and all related records
+      
+      // 1. Restore the employee
+      const restoredEmployee = await tx.employee.update({
+        where: { id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      // 2. Restore employment records
+      await tx.employment.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      // 3. Restore employment salaries
+      await tx.employmentSalary.updateMany({
+        where: {
+          employment: {
+            employee_id: parseInt(id)
+          }
+        },
+        data: { is_deleted: false }
+      });
+
+      // 4. Restore employment locations
+      await tx.employmentLocation.updateMany({
+        where: {
+          employment: {
+            employee_id: parseInt(id)
+          }
+        },
+        data: { is_deleted: false }
+      });
+
+      // 5. Restore employment contracts
+      await tx.employmentContract.updateMany({
+        where: {
+          employment: {
+            employee_id: parseInt(id)
+          }
+        },
+        data: { is_deleted: false }
+      });
+
+      // 6. Restore employment documents
+      await tx.employmentDocument.updateMany({
+        where: {
+          employment: {
+            employee_id: parseInt(id)
+          }
+        },
+        data: { is_deleted: false }
+      });
+
+      // 7. Restore employee documents
+      await tx.employeeDocument.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      // 8. Restore education qualifications
+      await tx.educationQualification.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      // 9. Restore past experiences
+      await tx.pastExperience.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      return {
+        success: true,
+        message: `Employee ${restoredEmployee.full_name} and all related records restored successfully`,
+        restoredEmployee
+      };
     });
   },
 };

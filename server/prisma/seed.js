@@ -1,23 +1,35 @@
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
+const HardDeleteUtil = require("../src/utils/hardDeleteUtil");
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Starting database seeding...');
 
-  // Clear existing data in reverse dependency order
-  console.log('🧹 Cleaning existing data...');
-  await prisma.employmentDocument.deleteMany();
-  await prisma.employmentContract.deleteMany();
-  await prisma.employmentLocation.deleteMany();
-  await prisma.employmentSalary.deleteMany();
-  await prisma.employment.deleteMany();
-  await prisma.employeeDocument.deleteMany();
-  await prisma.educationQualification.deleteMany();
-  await prisma.pastExperience.deleteMany();
-  await prisma.designation.deleteMany();
-  await prisma.department.deleteMany();
-  await prisma.employee.deleteMany();
+  // Clear existing data using hard delete utility
+  console.log('🧹 Cleaning existing data using hard delete...');
+  
+  // Get all existing records to hard delete them
+  const existingEmployees = await prisma.employee.findMany({
+    select: { id: true, full_name: true }
+  });
+  
+  console.log(`Found ${existingEmployees.length} existing employees to clean up...`);
+  
+  for (const employee of existingEmployees) {
+    console.log(`🗑️ Hard deleting employee: ${employee.full_name} (ID: ${employee.id})`);
+    await HardDeleteUtil.hardDeleteEmployee(employee.id);
+  }
+  
+  // Hard delete any remaining departments and designations
+  const existingDepartments = await prisma.department.findMany({
+    select: { id: true, name: true }
+  });
+  
+  for (const dept of existingDepartments) {
+    console.log(`🗑️ Hard deleting department: ${dept.name} (ID: ${dept.id})`);
+    await HardDeleteUtil.hardDeleteDepartment(dept.id);
+  }
 
   // Seed departments
   const departments = [
@@ -33,7 +45,12 @@ async function main() {
   console.log('📁 Seeding departments...');
   const createdDepartments = [];
   for (const dept of departments) {
-    const department = await prisma.department.create({ data: dept });
+    const department = await prisma.department.create({ 
+      data: { 
+        ...dept,
+        is_deleted: false 
+      } 
+    });
     console.log(`✅ Created Department: ${department.name}`);
     createdDepartments.push(department);
   }
@@ -89,7 +106,8 @@ async function main() {
         data: {
           title: des.title,
           department_id: department.id,
-          level: des.level
+          level: des.level,
+          is_deleted: false
         }
       });
       console.log(`✅ Created Designation: ${designation.title} (${department.name})`);
@@ -123,7 +141,8 @@ async function main() {
       district: "Lahore",
       city: "Lahore",
       password: await bcrypt.hash("password123", 10),
-      status: "Active"
+      status: "Active",
+      is_deleted: false
     },
     {
       employee_id: "EMP2024002",
@@ -152,7 +171,8 @@ async function main() {
       disability_type: "Visual",
       disability_description: "Partial vision impairment",
       password: await bcrypt.hash("password123", 10),
-      status: "Active"
+      status: "Active",
+      is_deleted: false
     },
     {
       employee_id: "EMP2024003",
@@ -173,7 +193,8 @@ async function main() {
       district: "Lahore",
       city: "Lahore",
       password: await bcrypt.hash("password123", 10),
-      status: "Active"
+      status: "Active",
+      is_deleted: false
     }
   ];
 
@@ -193,7 +214,8 @@ async function main() {
       position: "Junior Engineer",
       start_date: "2008-01-15",
       end_date: "2010-12-31",
-      description: "Junior Engineer in Public Works Department"
+      description: "Junior Engineer in Public Works Department",
+      is_deleted: false
     },
     {
       employee_id: createdEmployees[1].id,
@@ -201,7 +223,8 @@ async function main() {
       position: "Software Developer",
       start_date: "2012-06-01",
       end_date: "2015-08-30",
-      description: "Software Developer specializing in web applications"
+      description: "Software Developer specializing in web applications",
+      is_deleted: false
     }
   ];
 
@@ -218,21 +241,24 @@ async function main() {
       education_level: "Bachelor's Degree",
       institution_name: "University of Engineering and Technology, Lahore",
       year_of_completion: "2007",
-      marks_gpa: "3.2"
+      marks_gpa: "3.2",
+      is_deleted: false
     },
     {
       employee_id: createdEmployees[1].id,
       education_level: "Master's Degree",
       institution_name: "Karachi University",
       year_of_completion: "2012",
-      marks_gpa: "3.8"
+      marks_gpa: "3.8",
+      is_deleted: false
     },
     {
       employee_id: createdEmployees[2].id,
       education_level: "Bachelor's Degree",
       institution_name: "Punjab University",
       year_of_completion: "2010",
-      marks_gpa: "3.5"
+      marks_gpa: "3.5",
+      is_deleted: false
     }
   ];
 
@@ -250,7 +276,8 @@ async function main() {
       file_type: "profile_picture",
       document_name: "ahmed_profile.jpg",
       file_size: 245760,
-      mime_type: "image/jpeg"
+      mime_type: "image/jpeg",
+      is_deleted: false
     },
     {
       employee_id: createdEmployees[0].id,
@@ -258,7 +285,8 @@ async function main() {
       file_type: "cnic_front",
       document_name: "ahmed_cnic_front.jpg",
       file_size: 189440,
-      mime_type: "image/jpeg"
+      mime_type: "image/jpeg",
+      is_deleted: false
     }
   ];
 
@@ -284,7 +312,8 @@ async function main() {
       employment_status: "active",
       is_current: true,
       filer_status: "filer",
-      filer_active_status: "active"
+      filer_active_status: "active",
+      is_deleted: false
     },
     {
       employee_id: createdEmployees[1].id,
@@ -301,7 +330,8 @@ async function main() {
       scale_grade: "Grade-A",
       employment_status: "active",
       is_current: true,
-      filer_status: "non_filer"
+      filer_status: "non_filer",
+      is_deleted: false
     },
     {
       employee_id: createdEmployees[2].id,
@@ -319,7 +349,8 @@ async function main() {
       employment_status: "active",
       is_current: true,
       filer_status: "filer",
-      filer_active_status: "active"
+      filer_active_status: "active",
+      is_deleted: false
     }
   ];
 
@@ -345,7 +376,8 @@ async function main() {
       bank_branch_code: "1234",
       payment_mode: "Bank Transfer",
       salary_effective_from: new Date("2020-01-15"),
-      payroll_status: "Active"
+      payroll_status: "Active",
+      is_deleted: false
     },
     {
       employment_id: createdEmployments[1].id,
@@ -360,7 +392,8 @@ async function main() {
       payment_mode: "Bank Transfer",
       salary_effective_from: new Date("2021-03-01"),
       salary_effective_till: new Date("2024-02-29"),
-      payroll_status: "Active"
+      payroll_status: "Active",
+      is_deleted: false
     },
     {
       employment_id: createdEmployments[2].id,
@@ -375,7 +408,8 @@ async function main() {
       bank_branch_code: "9012",
       payment_mode: "Bank Transfer",
       salary_effective_from: new Date("2022-06-01"),
-      payroll_status: "Active"
+      payroll_status: "Active",
+      is_deleted: false
     }
   ];
 
@@ -392,7 +426,8 @@ async function main() {
       district: "Lahore",
       city: "Lahore",
       type: "HEAD_OFFICE",
-      full_address: "Main Office Building, Gulberg III, Lahore"
+      full_address: "Main Office Building, Gulberg III, Lahore",
+      is_deleted: false
     },
     {
       employment_id: createdEmployments[1].id,
@@ -400,14 +435,16 @@ async function main() {
       city: "Karachi",
       bazaar_name: "Saddar Bazaar",
       type: "BAZAAR",
-      full_address: "Saddar Bazaar Complex, Karachi"
+      full_address: "Saddar Bazaar Complex, Karachi",
+      is_deleted: false
     },
     {
       employment_id: createdEmployments[2].id,
       district: "Lahore",
       city: "Lahore",
       type: "HEAD_OFFICE",
-      full_address: "Regional Office, Model Town, Lahore"
+      full_address: "Regional Office, Model Town, Lahore",
+      is_deleted: false
     }
   ];
 
@@ -425,7 +462,8 @@ async function main() {
       contract_number: "MBWO-EMP2024001-2020",
       start_date: new Date("2020-01-15"),
       confirmation_status: "Confirmed",
-      confirmation_date: new Date("2020-07-15")
+      confirmation_date: new Date("2020-07-15"),
+      is_deleted: false
     },
     {
       employment_id: createdEmployments[1].id,
@@ -434,7 +472,8 @@ async function main() {
       start_date: new Date("2021-03-01"),
       end_date: new Date("2024-02-29"),
       confirmation_status: "Confirmed",
-      confirmation_date: new Date("2021-09-01")
+      confirmation_date: new Date("2021-09-01"),
+      is_deleted: false
     },
     {
       employment_id: createdEmployments[2].id,
@@ -442,7 +481,8 @@ async function main() {
       contract_number: "PSBA-EMP2024003-2022",
       start_date: new Date("2022-06-01"),
       probation_start: new Date("2022-06-01"),
-      probation_end: new Date("2024-06-01")
+      probation_end: new Date("2024-06-01"),
+      is_deleted: false
     }
   ];
 
@@ -460,7 +500,8 @@ async function main() {
       file_type: "medical_fitness",
       document_name: "ahmed_medical_fitness.pdf",
       file_size: 3145728,
-      mime_type: "application/pdf"
+      mime_type: "application/pdf",
+      is_deleted: false
     },
     {
       employment_id: createdEmployments[0].id,
@@ -468,7 +509,8 @@ async function main() {
       file_type: "police_character",
       document_name: "ahmed_police_certificate.pdf",
       file_size: 2097152,
-      mime_type: "application/pdf"
+      mime_type: "application/pdf",
+      is_deleted: false
     },
     {
       employment_id: createdEmployments[1].id,
@@ -477,7 +519,8 @@ async function main() {
       document_name: "fatima_contract.pdf",
       file_size: 4194304,
       mime_type: "application/pdf",
-      associated_id: createdEmployments[1].id
+      associated_id: createdEmployments[1].id,
+      is_deleted: false
     }
   ];
 

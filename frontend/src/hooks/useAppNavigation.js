@@ -118,6 +118,14 @@ const useAppNavigation = () => {
     toSettings: useCallback(() => {
       navigateWithStatePreservation("/settings");
     }, [navigateWithStatePreservation]),
+    
+    toDepartments: useCallback(() => {
+      navigateWithStatePreservation("/settings/departments");
+    }, [navigateWithStatePreservation]),
+    
+    toDesignations: useCallback(() => {
+      navigateWithStatePreservation("/settings/designations");
+    }, [navigateWithStatePreservation]),
   };
 
   // Profile navigation

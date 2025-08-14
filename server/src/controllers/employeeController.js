@@ -189,7 +189,22 @@ const employeeController = {
       console.log('📁 Processed files:', processedFiles);
       console.log('📁 Document records:', documentRecords);
 
+      console.log('📋 Raw request body:', req.body);
+      console.log('📋 Profile picture in request body:', req.body.profile_picture);
+      console.log('📋 Profile picture type:', typeof req.body.profile_picture);
+
       const processedData = { ...req.body };
+      
+      // Handle profile picture removal - convert 'null' string to actual null
+      if (processedData.profile_picture === 'null' || processedData.profile_picture === '') {
+        console.log('🔄 Converting profile_picture from string to null:', processedData.profile_picture);
+        processedData.profile_picture = null;
+      }
+      
+      console.log('📋 Processed data profile_picture:', processedData.profile_picture);
+      console.log('📋 Processed data profile_picture type:', typeof processedData.profile_picture);
+      console.log('📋 Processed data profile_picture === null:', processedData.profile_picture === null);
+      console.log('📋 Processed data profile_picture === "null":', processedData.profile_picture === 'null');
 
       if (documents_to_remove) {
         try {
@@ -231,6 +246,10 @@ const employeeController = {
       );
 
       console.log(`✅ Employee updated successfully: ID ${req.params.id}`);
+      console.log('📋 Backend service returned employee:', employee);
+      console.log('📋 Employee profile_picture field:', employee?.profile_picture);
+      console.log('📋 Employee documents:', employee?.documents?.filter(d => d.file_type === 'profile_picture'));
+      
       return res.status(200).json({ success: true, employee });
     } catch (error) {
       console.error('❌ Error updating employee:', error.message);

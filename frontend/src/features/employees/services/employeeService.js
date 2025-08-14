@@ -158,9 +158,14 @@ createFormData(employeeData) {
     const value = employeeData[key];
 
      if (key === 'profile_picture' && value === null) {
-      
+      console.log('🔄 Frontend: Profile picture is null, appending "null" to form data');
       formData.append(key, 'null');
-    } else    if (value !== null && value !== undefined) {
+      return; // Skip to next iteration
+    } else if (key === 'profile_picture' && (value === 'null' || value === '')) {
+      console.log('🔄 Frontend: Profile picture is string "null" or empty, appending "null" to form data');
+      formData.append(key, 'null');
+      return; // Skip to next iteration
+    } else if (value !== null && value !== undefined) {
       if (key === 'past_experiences' || key === 'educations' || key === 'documents_to_remove') {
         // Convert array data (including documents_to_remove) to JSON
         formData.append(key, JSON.stringify(value));
@@ -203,6 +208,12 @@ createFormData(employeeData) {
     });
   }
 
+  // Debug logging for form data
+  console.log('🔄 Frontend: Form data contents:');
+  for (let [key, value] of formData.entries()) {
+    console.log(`  - ${key}:`, value);
+  }
+  
   return formData;
 }
 

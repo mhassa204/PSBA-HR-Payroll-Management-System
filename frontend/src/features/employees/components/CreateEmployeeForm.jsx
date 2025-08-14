@@ -1298,7 +1298,7 @@ const CreateEmployeeForm = () => {
                     <div className="space-y-2">
                       <input
                         type="file"
-                        accept="image/jpeg,image/png,application/pdf"
+                        accept="image/jpeg,image/png"
                         onChange={(e) => handleFileUpload(e, 'cnic_front')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -1329,6 +1329,13 @@ const CreateEmployeeForm = () => {
                         </button>
                       </div>
                     )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      Upload CNIC front copy (PNG or JPG only)
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      <i className="fas fa-info-circle mr-1"></i>
+                      Only PNG and JPG files are allowed (Max: 50MB)
+                    </p>
                   </div>
 
                   {/* CNIC Back */}
@@ -1339,7 +1346,7 @@ const CreateEmployeeForm = () => {
                     <div className="space-y-2">
                       <input
                         type="file"
-                        accept="image/jpeg,image/png,application/pdf"
+                        accept="image/jpeg,image/png"
                         onChange={(e) => handleFileUpload(e, 'cnic_back')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -1370,6 +1377,13 @@ const CreateEmployeeForm = () => {
                         </button>
                       </div>
                     )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      Upload CNIC back copy (PNG or JPG only)
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      <i className="fas fa-info-circle mr-1"></i>
+                      Only PNG and JPG files are allowed (Max: 50MB)
+                    </p>
                   </div>
 
                   {/* Domicile Certificate */}
@@ -1380,7 +1394,7 @@ const CreateEmployeeForm = () => {
                     <div className="space-y-2">
                       <input
                         type="file"
-                        accept="image/jpeg,image/png,application/pdf"
+                        accept="application/pdf"
                         onChange={(e) => handleFileUpload(e, 'certificates')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -1393,7 +1407,7 @@ const CreateEmployeeForm = () => {
                     {uploadedFiles.certificates && (
                       <div className="flex items-center justify-between mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
                         <div className="flex items-center">
-                          <i className="fas fa-file-alt mr-2 text-green-600"></i>
+                          <i className="fas fa-file-pdf mr-2 text-green-600"></i>
                           <div>
                             <p className="text-sm font-medium text-green-800">{uploadedFiles.certificates.name}</p>
                             <p className="text-xs text-green-600">
@@ -1411,6 +1425,13 @@ const CreateEmployeeForm = () => {
                         </button>
                       </div>
                     )}
+                    <p className="text-sm text-gray-500 mt-1">
+                      Upload domicile certificate (PDF only)
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      <i className="fas fa-info-circle mr-1"></i>
+                      Only PDF files are allowed (Max: 50MB)
+                    </p>
                   </div>
 
                   {/* Conditional Disability Document */}
@@ -1422,7 +1443,7 @@ const CreateEmployeeForm = () => {
                       <div className="space-y-2">
                         <input
                           type="file"
-                          accept="image/jpeg,image/png,application/pdf"
+                          accept="application/pdf"
                           onChange={(e) => handleFileUpload(e, 'disability_document')}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1435,7 +1456,7 @@ const CreateEmployeeForm = () => {
                       {uploadedFiles.disability_document && (
                         <div className="flex items-center justify-between mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
                           <div className="flex items-center">
-                            <i className="fas fa-file-medical mr-2 text-green-600"></i>
+                            <i className="fas fa-file-pdf mr-2 text-green-600"></i>
                             <div>
                               <p className="text-sm font-medium text-green-800">{uploadedFiles.disability_document.name}</p>
                               <p className="text-xs text-green-600">
@@ -1454,11 +1475,11 @@ const CreateEmployeeForm = () => {
                         </div>
                       )}
                       <p className="text-sm text-gray-500 mt-1">
-                        Upload medical certificate or other supporting document for disability
+                        Upload medical certificate or other supporting document for disability (PDF only)
                       </p>
                       <p className="text-xs text-blue-600 mt-1">
                         <i className="fas fa-info-circle mr-1"></i>
-                        Only JPG, PNG, and PDF files are allowed (Max: 10MB)
+                        Only PDF files are allowed (Max: 50MB)
                       </p>
                     </div>
                   )}
@@ -1483,7 +1504,7 @@ const CreateEmployeeForm = () => {
                             <div className="space-y-2">
                               <input
                                 type="file"
-                                accept="image/jpeg,image/png,application/pdf"
+                                accept="application/pdf"
                                 onChange={(e) => handleExperienceDocumentUpload(e, experience.id)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
@@ -1531,11 +1552,11 @@ const CreateEmployeeForm = () => {
                               </div>
                             )}
                             <p className="text-sm text-gray-500 mt-1">
-                              Upload experience letter, certificate, or other supporting document
+                              Upload experience letter, certificate, or other supporting document (PDF only)
                             </p>
                             <p className="text-xs text-blue-600 mt-1">
                               <i className="fas fa-info-circle mr-1"></i>
-                              Only JPG, PNG, and PDF files are allowed (Max: 15MB)
+                              Only PDF files are allowed (Max: 50MB)
                             </p>
                           </div>
                         ))}
@@ -1561,7 +1582,7 @@ const CreateEmployeeForm = () => {
                             <div className="space-y-2">
                               <input
                                 type="file"
-                                accept="image/jpeg,image/png,application/pdf"
+                                accept="application/pdf"
                                 onChange={(e) => handleEducationDocumentUpload(e, education.id)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                               />
@@ -1609,11 +1630,11 @@ const CreateEmployeeForm = () => {
                               </div>
                             )}
                             <p className="text-sm text-gray-500 mt-1">
-                              Upload transcript, certificate, or other supporting document
+                              Upload transcript, certificate, or other supporting document (PDF only)
                             </p>
                             <p className="text-xs text-blue-600 mt-1">
                               <i className="fas fa-info-circle mr-1"></i>
-                              Only JPG, PNG, and PDF files are allowed (Max: 15MB)
+                              Only PDF files are allowed (Max: 50MB)
                             </p>
                           </div>
                         ))}
@@ -1632,7 +1653,7 @@ const CreateEmployeeForm = () => {
                       <input
                         id="other-documents-input"
                         type="file"
-                        accept="image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        accept="application/pdf"
                         multiple
                         onChange={(e) => {
                           handleFileUpload(e, 'other_documents', true);
@@ -1687,7 +1708,7 @@ const CreateEmployeeForm = () => {
 
                     <p className="text-sm text-gray-500 mt-2">
                       <i className="fas fa-info-circle mr-1"></i>
-                      Supported formats: PDF, DOC, DOCX, JPG, PNG. Max 20 files, 15MB each.
+                      Only PDF files are allowed. Max 20 files, 50MB each.
                     </p>
                   </div>
                 </div>

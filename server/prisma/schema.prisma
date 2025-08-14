@@ -50,6 +50,7 @@ model Employee {
   status                String?   @default("Active")
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+  is_deleted            Boolean   @default(false)
 
   // Relations to normalized tables
   pastExperiences       PastExperience[]
@@ -65,6 +66,7 @@ model Department {
   description String?   // Department description from frontend
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  is_deleted  Boolean   @default(false)
 
   // Relations - departments are referenced by employment records
   designations      Designation[] // Added opposite relation field
@@ -78,6 +80,7 @@ model Designation {
   level         Int?      // Hierarchy level from frontend
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  is_deleted    Boolean   @default(false)
 
   // Relations
   department        Department? @relation(fields: [department_id], references: [id])
@@ -99,6 +102,7 @@ model PastExperience {
   description  String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  is_deleted   Boolean  @default(false)
 }
 
 // Normalized table for education qualifications
@@ -112,6 +116,7 @@ model EducationQualification {
   marks_gpa          String?  // Stored as string to match frontend
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  is_deleted         Boolean  @default(false)
 }
 
 // Normalized table for employee documents
@@ -127,11 +132,10 @@ model EmployeeDocument {
   associated_id Int?      // Links to specific education or experience record ID
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  is_deleted    Boolean   @default(false)
 
   @@index([associated_id])
 }
-
-
 
 // Employment Details Tab - Core employment information only
 model Employment {
@@ -158,15 +162,13 @@ model Employment {
   filer_status        String      @default("non_filer") // filer, non_filer
   filer_active_status String?     // active, not_active (only for filers)
 
-
- 
-
   // Probation fields
   is_on_probation     Boolean     @default(false)
   probation_end_date  DateTime?
 
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
+  is_deleted          Boolean     @default(false)
 
   // Relations to salary and location
   salary              EmploymentSalary?
@@ -198,6 +200,7 @@ model EmploymentSalary {
   payroll_status        String     @default("Active")
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
+  is_deleted            Boolean    @default(false)
 }
 
 // Employment Location Tab - All location-related information
@@ -212,6 +215,7 @@ model EmploymentLocation {
   full_address  String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+  is_deleted    Boolean    @default(false)
 }
 
 // Employment Contract Tab - All contract-related information
@@ -232,6 +236,7 @@ model EmploymentContract {
   
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
+  is_deleted            Boolean    @default(false)
 }
 
 // Normalized table for employment documents
@@ -247,6 +252,7 @@ model EmploymentDocument {
   associated_id Int?      // Links to specific contract or other record ID
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  is_deleted    Boolean   @default(false)
 
   @@index([associated_id])
 }

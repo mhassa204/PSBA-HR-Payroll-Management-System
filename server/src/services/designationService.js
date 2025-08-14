@@ -8,8 +8,11 @@ const designationService = {
 
     // Validate department exists if provided
     if (department_id) {
-      const department = await prisma.department.findUnique({
-        where: { id: parseInt(department_id) }
+      const department = await prisma.department.findFirst({
+        where: { 
+          id: parseInt(department_id),
+          is_deleted: false
+        }
       });
       if (!department) {
         throw new Error("Invalid department_id");
@@ -20,7 +23,8 @@ const designationService = {
     const existingDesignation = await prisma.designation.findFirst({
       where: {
         title,
-        department_id: department_id ? parseInt(department_id) : null
+        department_id: department_id ? parseInt(department_id) : null,
+        is_deleted: false
       }
     });
 
@@ -47,7 +51,7 @@ const designationService = {
 
   // Get all designations
   getAllDesignations: async (departmentId = null) => {
-    const where = {};
+    const where = { is_deleted: false };
     if (departmentId) {
       where.department_id = parseInt(departmentId);
     }
@@ -72,8 +76,11 @@ const designationService = {
 
   // Get designation by ID
   getDesignationById: async (id) => {
-    return prisma.designation.findUnique({
-      where: { id: parseInt(id) },
+    return prisma.designation.findFirst({
+      where: { 
+        id: parseInt(id),
+        is_deleted: false
+      },
       include: {
         department: true,
         _count: {
@@ -88,7 +95,10 @@ const designationService = {
   // Get designations by department
   getDesignationsByDepartment: async (departmentId) => {
     return prisma.designation.findMany({
-      where: { department_id: parseInt(departmentId) },
+      where: { 
+        department_id: parseInt(departmentId),
+        is_deleted: false
+      },
       include: {
         department: true,
         _count: {
@@ -110,8 +120,11 @@ const designationService = {
 
     // Validate department exists if provided
     if (department_id) {
-      const department = await prisma.department.findUnique({
-        where: { id: parseInt(department_id) }
+      const department = await prisma.department.findFirst({
+        where: { 
+          id: parseInt(department_id),
+          is_deleted: false
+        }
       });
       if (!department) {
         throw new Error("Invalid department_id");
@@ -120,8 +133,11 @@ const designationService = {
 
     // Check if another designation with same title exists in the department
     if (title || department_id) {
-      const currentDesignation = await prisma.designation.findUnique({
-        where: { id: parseInt(id) }
+      const currentDesignation = await prisma.designation.findFirst({
+        where: { 
+          id: parseInt(id),
+          is_deleted: false
+        }
       });
 
       const checkTitle = title || currentDesignation.title;
@@ -134,7 +150,8 @@ const designationService = {
           AND: [
             { id: { not: parseInt(id) } },
             { title: checkTitle },
-            { department_id: checkDepartmentId }
+            { department_id: checkDepartmentId },
+            { is_deleted: false }
           ]
         }
       });
@@ -165,23 +182,58 @@ const designationService = {
 
   // Delete designation
   deleteDesignation: async (id) => {
-    // Check if designation has any employment records
-    const employmentCount = await prisma.employment.count({
-      where: { designation_id: parseInt(id) }
+    return await prisma.$transaction(async (tx) => {
+      // Soft delete the designation and all related records
+      
+      // 1. Soft delete employment records with this designation
+      await tx.employment.updateMany({
+        where: { designation_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 2. Finally soft delete the designation
+      const deletedDesignation = await tx.designation.update({
+        where: { id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      return {
+        success: true,
+        message: `Designation ${deletedDesignation.title} and all related records soft deleted successfully`,
+        deletedDesignation
+      };
     });
+  },
 
-    if (employmentCount > 0) {
-      throw new Error("Cannot delete designation with existing employment records");
-    }
+  // Restore a soft-deleted designation
+  restoreDesignation: async (id) => {
+    return await prisma.$transaction(async (tx) => {
+      // Restore the designation and all related records
+      
+      // 1. Restore the designation
+      const restoredDesignation = await tx.designation.update({
+        where: { id: parseInt(id) },
+        data: { is_deleted: false }
+      });
 
-    return prisma.designation.delete({
-      where: { id: parseInt(id) }
+      // 2. Restore employment records with this designation
+      await tx.employment.updateMany({
+        where: { designation_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
+
+      return {
+        success: true,
+        message: `Designation ${restoredDesignation.title} and all related records restored successfully`,
+        restoredDesignation
+      };
     });
   },
 
   // Get designation statistics
   getDesignationStatistics: async () => {
     const designations = await prisma.designation.findMany({
+      where: { is_deleted: false },
       include: {
         department: true,
         _count: {

@@ -31,6 +31,7 @@ import CNICInput from "../../../components/ui/CNICInput";
 import { formatDatabaseDateForInput } from "../../../utils/formatters";
 import DocumentManager from "../../../components/ui/DocumentManager";
 import { useDocumentManager } from "../hooks/useDocumentManager";
+import { employeeService } from "../services/employeeService";
 
 const EditUserForm = ({ user }) => {
   console.log("EditUserForm received user data:", user);
@@ -51,7 +52,7 @@ const EditUserForm = ({ user }) => {
     }
     return null;
   });
-  const [removeProfilePicture, setRemoveProfilePicture] = useState(false);
+  const [removeProfilePicture, setRemoveProfilePicture] = useState(!user?.profile_picture);
 
   // Initialize document manager with existing documents
   const documentManager = useDocumentManager(user?.documents || []);
@@ -141,6 +142,20 @@ const EditUserForm = ({ user }) => {
       }
     }
   }, [user?.district, user?.city, setValue]);
+
+  // Initialize removeProfilePicture state based on user's profile picture
+  useEffect(() => {
+    if (user?.profile_picture) {
+      setRemoveProfilePicture(false);
+      setProfilePicturePreview(user.profile_picture_url ? 
+        `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${user.profile_picture_url}` : 
+        getImageUrl(user.profile_picture)
+      );
+    } else {
+      setRemoveProfilePicture(true);
+      setProfilePicturePreview(null);
+    }
+  }, [user?.profile_picture, user?.profile_picture_url]);
 
   // Helper functions for dynamic sections
   const addEducation = () => {
@@ -316,7 +331,25 @@ const EditUserForm = ({ user }) => {
         profile_picture: removeProfilePicture ? null : (data.profile_picture_file || user?.profile_picture),
       };
 
+      // Ensure profile_picture is null when removeProfilePicture is true
+      if (removeProfilePicture) {
+        completeData.profile_picture = null;
+        console.log("🔄 Frontend: Force setting profile_picture to null due to removeProfilePicture flag");
+      }
+
+      console.log("🔍 Frontend debug info:");
+      console.log("  - removeProfilePicture:", removeProfilePicture);
+      console.log("  - data.profile_picture_file:", data.profile_picture_file);
+      console.log("  - user?.profile_picture:", user?.profile_picture);
+      console.log("  - completeData.profile_picture:", completeData.profile_picture);
       console.log("Complete data being sent to backend:", JSON.stringify(completeData, null, 2));
+
+      // Additional debugging for profile picture
+      console.log("🔍 Profile picture final check:");
+      console.log("  - removeProfilePicture flag:", removeProfilePicture);
+      console.log("  - completeData.profile_picture value:", completeData.profile_picture);
+      console.log("  - completeData.profile_picture type:", typeof completeData.profile_picture);
+      console.log("  - completeData.profile_picture === null:", completeData.profile_picture === null);
 
       await withErrorHandling(
         () => updateEmployee(user.id, completeData),
@@ -325,6 +358,18 @@ const EditUserForm = ({ user }) => {
           customMessage: "User information updated successfully!",
         }
       );
+
+      // Debug: Check the response
+      console.log("🔍 Update completed, checking response...");
+      try {
+        const updatedEmployee = await employeeService.getEmployeeById(user.id);
+        console.log("🔍 Updated employee data:", updatedEmployee);
+        console.log("🔍 Updated employee profile_picture:", updatedEmployee.profile_picture);
+        console.log("🔍 Updated employee profile_picture_url:", updatedEmployee.profile_picture_url);
+        console.log("🔍 Updated employee documents:", updatedEmployee.documents?.filter(d => d.file_type === 'profile_picture'));
+      } catch (error) {
+        console.error("❌ Error fetching updated employee:", error);
+      }
 
       navigate(`/employees/view/${user.id}`);
     } catch (error) {
@@ -1126,8 +1171,8 @@ const EditUserForm = ({ user }) => {
                       documents={documentManager.documents}
                       documentType="cnic_front"
                       title="CNIC Front"
-                      accept="image/jpeg,image/png,application/pdf"
-                      maxSize={10 * 1024 * 1024}
+                      accept="image/jpeg,image/png"
+                      maxSize={50 * 1024 * 1024}
                       onDocumentAdd={documentManager.addDocument}
                       onDocumentRemove={documentManager.removeDocument}
                     />
@@ -1135,8 +1180,8 @@ const EditUserForm = ({ user }) => {
                       documents={documentManager.documents}
                       documentType="cnic_back"
                       title="CNIC Back"
-                      accept="image/jpeg,image/png,application/pdf"
-                      maxSize={10 * 1024 * 1024}
+                      accept="image/jpeg,image/png"
+                      maxSize={50 * 1024 * 1024}
                       onDocumentAdd={documentManager.addDocument}
                       onDocumentRemove={documentManager.removeDocument}
                     />
@@ -1145,8 +1190,8 @@ const EditUserForm = ({ user }) => {
                     documents={documentManager.documents}
                     documentType="domicile"
                     title="Domicile Certificate"
-                    accept="image/jpeg,image/png,application/pdf"
-                    maxSize={10 * 1024 * 1024}
+                    accept="application/pdf"
+                    maxSize={50 * 1024 * 1024}
                     onDocumentAdd={documentManager.addDocument}
                     onDocumentRemove={documentManager.removeDocument}
                   />
@@ -1164,8 +1209,8 @@ const EditUserForm = ({ user }) => {
                           title="Experience Document"
                           associatedId={experience.id}
                           associatedLabel={`${experience.company_name || 'Experience'} ${index + 1}`}
-                          accept="image/jpeg,image/png,application/pdf"
-                          maxSize={15 * 1024 * 1024}
+                          accept="application/pdf"
+                          maxSize={50 * 1024 * 1024}
                           multiple={false}
                           onDocumentAdd={documentManager.addDocument}
                           onDocumentRemove={documentManager.removeDocument}
@@ -1187,8 +1232,8 @@ const EditUserForm = ({ user }) => {
                           title="Education Document"
                           associatedId={education.id}
                           associatedLabel={`${education.education_level || 'Education'} ${index + 1} - ${education.institution_name || 'Institution'}`}
-                          accept="image/jpeg,image/png,application/pdf"
-                          maxSize={15 * 1024 * 1024}
+                          accept="application/pdf"
+                          maxSize={50 * 1024 * 1024}
                           multiple={false}
                           onDocumentAdd={documentManager.addDocument}
                           onDocumentRemove={documentManager.removeDocument}
@@ -1201,8 +1246,8 @@ const EditUserForm = ({ user }) => {
                       documents={documentManager.documents}
                       documentType="disability"
                       title="Disability Supporting Document"
-                      accept="image/jpeg,image/png,application/pdf"
-                      maxSize={10 * 1024 * 1024}
+                      accept="application/pdf"
+                      maxSize={50 * 1024 * 1024}
                       onDocumentAdd={documentManager.addDocument}
                       onDocumentRemove={documentManager.removeDocument}
                     />
@@ -1211,8 +1256,8 @@ const EditUserForm = ({ user }) => {
                     documents={documentManager.documents}
                     documentType="other"
                     title="Other Documents"
-                    accept="image/jpeg,image/png,application/pdf"
-                    maxSize={15 * 1024 * 1024}
+                    accept="application/pdf"
+                    maxSize={50 * 1024 * 1024}
                     multiple={true}
                     onDocumentAdd={documentManager.addDocument}
                     onDocumentRemove={documentManager.removeDocument}

@@ -90,10 +90,10 @@ const EmployeeTable = () => {
       accessor: "department",
       render: (row) => {
         // Get current employment record to show department
-        const currentEmployment = row.employment_records?.find(emp => emp.is_current === true) ||
-                                 row.employment_records?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                 row.employment_records?.[0];
-        return currentEmployment?.department || "N/A";
+        const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
+                                 row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
+                                 row.employmentRecords?.[0];
+        return currentEmployment?.department?.name || currentEmployment?.department || "N/A";
       }
     },
     {
@@ -101,10 +101,10 @@ const EmployeeTable = () => {
       accessor: "designation",
       render: (row) => {
         // Get current employment record to show designation
-        const currentEmployment = row.employment_records?.find(emp => emp.is_current === true) ||
-                                 row.employment_records?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                 row.employment_records?.[0];
-        return currentEmployment?.designation || "N/A";
+        const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
+                                 row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
+                                 row.employmentRecords?.[0];
+        return currentEmployment?.designation?.title || currentEmployment?.designation || "N/A";
       }
     },
     {
@@ -166,7 +166,14 @@ const EmployeeTable = () => {
                 <strong>CNIC:</strong> {row.cnic}
               </p>
               <p>
-                <strong>Department:</strong> {row.department?.name || "N/A"}
+                <strong>Department:</strong> {
+                  (() => {
+                    const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
+                                             row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
+                                             row.employmentRecords?.[0];
+                    return currentEmployment?.department?.name || currentEmployment?.department || "N/A";
+                  })()
+                }
               </p>
               <p className="text-red-600 font-medium">
                 This action cannot be undone.

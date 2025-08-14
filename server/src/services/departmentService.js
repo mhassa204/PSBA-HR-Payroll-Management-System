@@ -12,7 +12,8 @@ const departmentService = {
         OR: [
           { name },
           { code: code || undefined }
-        ]
+        ],
+        is_deleted: false
       }
     });
 
@@ -41,6 +42,7 @@ const departmentService = {
   // Get all departments
   getAllDepartments: async () => {
     return prisma.department.findMany({
+      where: { is_deleted: false },
       include: {
         designations: {
           orderBy: { level: 'asc' }
@@ -58,8 +60,11 @@ const departmentService = {
 
   // Get department by ID
   getDepartmentById: async (id) => {
-    return prisma.department.findUnique({
-      where: { id: parseInt(id) },
+    return prisma.department.findFirst({
+      where: { 
+        id: parseInt(id),
+        is_deleted: false
+      },
       include: {
         designations: {
           orderBy: { level: 'asc' }
@@ -89,7 +94,8 @@ const departmentService = {
                 { name },
                 { code: code || undefined }
               ]
-            }
+            },
+            { is_deleted: false }
           ]
         }
       });
@@ -123,32 +129,70 @@ const departmentService = {
 
   // Delete department
   deleteDepartment: async (id) => {
-    // Check if department has any employment records
-    const employmentCount = await prisma.employment.count({
-      where: { department_id: parseInt(id) }
+    return await prisma.$transaction(async (tx) => {
+      // Soft delete the department and all related records
+      
+      // 1. Soft delete designations in this department
+      await tx.designation.updateMany({
+        where: { department_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 2. Soft delete employment records in this department
+      await tx.employment.updateMany({
+        where: { department_id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      // 3. Finally soft delete the department
+      const deletedDepartment = await tx.department.update({
+        where: { id: parseInt(id) },
+        data: { is_deleted: true }
+      });
+
+      return {
+        success: true,
+        message: `Department ${deletedDepartment.name} and all related records soft deleted successfully`,
+        deletedDepartment
+      };
     });
+  },
 
-    if (employmentCount > 0) {
-      throw new Error("Cannot delete department with existing employment records");
-    }
+  // Restore a soft-deleted department
+  restoreDepartment: async (id) => {
+    return await prisma.$transaction(async (tx) => {
+      // Restore the department and all related records
+      
+      // 1. Restore the department
+      const restoredDepartment = await tx.department.update({
+        where: { id: parseInt(id) },
+        data: { is_deleted: false }
+      });
 
-    // Check if department has designations
-    const designationCount = await prisma.designation.count({
-      where: { department_id: parseInt(id) }
-    });
+      // 2. Restore designations in this department
+      await tx.designation.updateMany({
+        where: { department_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
 
-    if (designationCount > 0) {
-      throw new Error("Cannot delete department with existing designations. Delete designations first.");
-    }
+      // 3. Restore employment records in this department
+      await tx.employment.updateMany({
+        where: { department_id: parseInt(id) },
+        data: { is_deleted: false }
+      });
 
-    return prisma.department.delete({
-      where: { id: parseInt(id) }
+      return {
+        success: true,
+        message: `Department ${restoredDepartment.name} and all related records restored successfully`,
+        restoredDepartment
+      };
     });
   },
 
   // Get department statistics
   getDepartmentStatistics: async () => {
     const departments = await prisma.department.findMany({
+      where: { is_deleted: false },
       include: {
         _count: {
           select: {

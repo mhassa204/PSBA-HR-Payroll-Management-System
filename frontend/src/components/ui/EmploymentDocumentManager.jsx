@@ -19,8 +19,8 @@ const EmploymentDocumentManager = ({
   documents = [],
   documentType,
   title,
-  accept = "image/jpeg,image/png,application/pdf",
-  maxSize = 15 * 1024 * 1024, // 15MB
+  accept = "application/pdf",
+  maxSize = 50 * 1024 * 1024, // 50MB
   onDocumentAdd,
   onDocumentRemove,
   isEditMode = false,

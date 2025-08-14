@@ -130,7 +130,12 @@ const DocumentManager = ({
     });
 
     if (!isValidType) {
-      alert('Only JPG, PNG, and PDF files are allowed');
+              const allowedTypes = accept.includes('image/') && accept.includes('application/pdf') 
+          ? 'JPG, PNG, and PDF'
+          : accept.includes('image/') 
+            ? 'JPG and PNG'
+            : 'PDF';
+        alert(`Only ${allowedTypes} files are allowed`);
       return false;
     }
 
@@ -315,7 +320,12 @@ const DocumentManager = ({
             </label>
           </div>
           <p className="text-xs text-gray-500">
-            Only JPG, PNG, and PDF files are allowed (Max: {formatFileSize(maxSize)})
+            {accept.includes('image/') && accept.includes('application/pdf') 
+              ? 'Only JPG, PNG, and PDF files are allowed'
+              : accept.includes('image/') 
+                ? 'Only JPG and PNG files are allowed'
+                : 'Only PDF files are allowed'
+            } (Max: {formatFileSize(maxSize)})
           </p>
         </div>
       </div>
