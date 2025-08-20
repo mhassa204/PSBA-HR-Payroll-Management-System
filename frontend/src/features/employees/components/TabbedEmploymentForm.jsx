@@ -705,14 +705,17 @@ const TabbedEmploymentForm = forwardRef(({
         return;
       }
 
-      if (isFieldVisible('location', 'bazaar_name') && !data.bazaar_name?.trim()) {
-        alert("Please enter a bazaar/area name");
-        return;
-      }
-
       if (isFieldVisible('location', 'type') && !data.type?.trim()) {
         alert("Please select a location type");
         return;
+      }
+
+      // Conditional validation for bazaar name based on location type
+      if (data.type === 'BAZAAR' || data.type === 'SAHULAT_BAZAAR') {
+        if (!data.bazaar_name?.trim()) {
+          alert("Bazaar name is required when Bazaar or Sahulat Bazaar is selected");
+          return;
+        }
       }
 
       console.log("✅ TabbedEmploymentForm: Location tab completed");
@@ -1375,13 +1378,21 @@ const TabbedEmploymentForm = forwardRef(({
 
   // Monitor form state changes in edit mode - removed to prevent infinite loops
 
-
-
-
-
-
-
-
+  // Real-time validation updates for location type changes
+  useEffect(() => {
+    const locationType = locationForm.watch("type");
+    const bazaarName = locationForm.watch("bazaar_name");
+    
+    // Clear bazaar name validation errors when switching to non-bazaar types
+    if ((locationType === 'HEAD_OFFICE' || locationType === 'HEAD_QUARTER') && bazaarName) {
+      locationForm.clearErrors("bazaar_name");
+    }
+    
+    // Trigger validation when location type changes
+    if (locationType) {
+      locationForm.trigger("bazaar_name");
+    }
+  }, [locationForm.watch("type"), locationForm]);
 
   if (!formOptions) {
     return (
@@ -2319,10 +2330,10 @@ const TabbedEmploymentForm = forwardRef(({
                         <SearchableSelect
                           options={currentOrganization === 'PSBA' ? [
                             { value: "HEAD_QUARTER", label: "Head Quarter" },
-                            { value: "SAHULAT_BAZAAR", label: "Sahulat Bazaar" }
+                            { value: "SAHULAT_BAZAAR", label: "Sahulat Bazaar (requires bazaar name)" }
                           ] : [
                             { value: "HEAD_OFFICE", label: "Head Office" },
-                            { value: "BAZAAR", label: "Bazaar" }
+                            { value: "BAZAAR", label: "Bazaar (requires bazaar name)" }
                           ]}
                           value={locationForm.watch("type")}
                           onChange={(value) => locationForm.setValue("type", value)}
@@ -2337,18 +2348,58 @@ const TabbedEmploymentForm = forwardRef(({
                             {locationErrors.type.message}
                           </p>
                         )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          <i className="fas fa-info-circle mr-1"></i>
+                          {currentOrganization === 'PSBA' 
+                            ? "Head Quarter: No bazaar name required. Sahulat Bazaar: Bazaar name is mandatory."
+                            : "Head Office: No bazaar name required. Bazaar: Bazaar name is mandatory."
+                          }
+                        </p>
                       </div>
 
                       <div className={getFieldClasses('location', 'bazaar_name')}>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Bazaar Name
+                          {(locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR') && (
+                            <span className="text-red-500"> *</span>
+                          )}
                         </label>
                         <input
                           type="text"
-                          {...registerLocation("bazaar_name")}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900"
+                          {...registerLocation("bazaar_name", {
+                            required: (locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR') 
+                              ? "Bazaar name is required when Bazaar or Sahulat Bazaar is selected" 
+                              : false
+                          })}
+                          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900 ${
+                            (locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR')
+                              ? (locationForm.watch("bazaar_name")?.trim() ? 'border-green-300 focus:border-green-500' : 'border-red-300 focus:border-red-500')
+                              : 'border-gray-300'
+                          }`}
                           placeholder="Enter bazaar name (if applicable)"
                         />
+                        {locationErrors.bazaar_name && (
+                          <p className="text-red-600 text-sm mt-1">
+                            {locationErrors.bazaar_name.message}
+                          </p>
+                        )}
+                        <p className={`text-xs mt-1 ${
+                          (locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR')
+                            ? (locationForm.watch("bazaar_name")?.trim() ? 'text-green-600 font-medium' : 'text-red-600 font-medium')
+                            : 'text-gray-500'
+                        }`}>
+                          <i className={`fas mr-1 ${
+                            (locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR')
+                              ? (locationForm.watch("bazaar_name")?.trim() ? 'fa-check-circle text-green-500' : 'fa-exclamation-triangle text-red-500')
+                              : 'fa-info-circle text-gray-400'
+                          }`}></i>
+                          {locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR' 
+                            ? (locationForm.watch("bazaar_name")?.trim() 
+                                ? "Bazaar name is properly filled ✓" 
+                                : "Bazaar name is required for this location type")
+                            : "Bazaar name is optional for Head Office/Head Quarter"
+                          }
+                        </p>
                       </div>
                     </div>
 
