@@ -31,6 +31,25 @@ async function main() {
     await HardDeleteUtil.hardDeleteDepartment(dept.id);
   }
 
+  // Hard delete any remaining role tags and scale grades
+  const existingRoleTags = await prisma.roleTag.findMany({
+    select: { id: true, name: true }
+  });
+  
+  for (const tag of existingRoleTags) {
+    console.log(`🗑️ Hard deleting role tag: ${tag.name} (ID: ${tag.id})`);
+    await prisma.roleTag.delete({ where: { id: tag.id } });
+  }
+
+  const existingScaleGrades = await prisma.scaleGrade.findMany({
+    select: { id: true, name: true }
+  });
+  
+  for (const grade of existingScaleGrades) {
+    console.log(`🗑️ Hard deleting scale grade: ${grade.name} (ID: ${grade.id})`);
+    await prisma.scaleGrade.delete({ where: { id: grade.id } });
+  }
+
   // Seed departments
   const departments = [
     { name: "Engineering", code: "ENG", description: "Engineering and Technical Services" },
@@ -113,6 +132,60 @@ async function main() {
       console.log(`✅ Created Designation: ${designation.title} (${department.name})`);
       createdDesignations.push(designation);
     }
+  }
+
+  // Seed role tags
+  const roleTags = [
+    { name: "Software Engineer", description: "Software development and programming", category: "Technical" },
+    { name: "Project Manager", description: "Project planning and management", category: "Management" },
+    { name: "Business Analyst", description: "Business requirements analysis", category: "Administrative" },
+    { name: "Data Scientist", description: "Data analysis and machine learning", category: "Technical" },
+    { name: "UI/UX Designer", description: "User interface and experience design", category: "Technical" },
+    { name: "DevOps Engineer", description: "Development operations and infrastructure", category: "Technical" },
+    { name: "Quality Assurance", description: "Software testing and quality control", category: "Technical" },
+    { name: "System Administrator", description: "System maintenance and administration", category: "Technical" },
+    { name: "Network Engineer", description: "Network infrastructure and security", category: "Technical" },
+    { name: "Database Administrator", description: "Database management and optimization", category: "Technical" }
+  ];
+
+  console.log('🏷️ Seeding role tags...');
+  const createdRoleTags = [];
+  for (const tag of roleTags) {
+    const roleTag = await prisma.roleTag.create({
+      data: {
+        ...tag,
+        is_deleted: false
+      }
+    });
+    console.log(`✅ Created Role Tag: ${roleTag.name} (${roleTag.category})`);
+    createdRoleTags.push(roleTag);
+  }
+
+  // Seed scale grades
+  const scaleGrades = [
+    { name: "BPS-17", description: "Basic Pay Scale 17", level: 17, category: "BPS" },
+    { name: "BPS-18", description: "Basic Pay Scale 18", level: 18, category: "BPS" },
+    { name: "BPS-19", description: "Basic Pay Scale 19", level: 19, category: "BPS" },
+    { name: "BPS-20", description: "Basic Pay Scale 20", level: 20, category: "BPS" },
+    { name: "Grade-A", description: "Grade A level", level: 1, category: "Grade" },
+    { name: "Grade-B", description: "Grade B level", level: 2, category: "Grade" },
+    { name: "Grade-C", description: "Grade C level", level: 3, category: "Grade" },
+    { name: "Level-1", description: "Entry level position", level: 1, category: "Level" },
+    { name: "Level-2", description: "Intermediate level position", level: 2, category: "Level" },
+    { name: "Level-3", description: "Senior level position", level: 3, category: "Level" }
+  ];
+
+  console.log('📊 Seeding scale grades...');
+  const createdScaleGrades = [];
+  for (const grade of scaleGrades) {
+    const scaleGrade = await prisma.scaleGrade.create({
+      data: {
+        ...grade,
+        is_deleted: false
+      }
+    });
+    console.log(`✅ Created Scale Grade: ${scaleGrade.name} (${scaleGrade.category})`);
+    createdScaleGrades.push(scaleGrade);
   }
 
   // Seed employees
@@ -305,10 +378,10 @@ async function main() {
       designation_id: createdDesignations.find(d => d.title === "Senior Engineer").id,
       employment_type: "Regular",
       effective_from: new Date("2020-01-15"),
-      role_tag: "Technical Lead",
+      role_tag_id: createdRoleTags.find(rt => rt.name === "Software Engineer").id,
       office_location: "Lahore Head Office",
       remarks: "Promoted to Senior Engineer after excellent performance",
-      scale_grade: "BPS-17",
+      scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-17").id,
       employment_status: "active",
       is_current: true,
       filer_status: "filer",
@@ -323,11 +396,11 @@ async function main() {
       employment_type: "Contract",
       effective_from: new Date("2021-03-01"),
       effective_till: new Date("2024-02-29"),
-      role_tag: "Full Stack Developer",
+      role_tag_id: createdRoleTags.find(rt => rt.name === "Software Engineer").id,
       office_location: "Karachi Regional Office",
       is_on_probation: false,
       remarks: "Contract employee with excellent technical skills",
-      scale_grade: "Grade-A",
+      scale_grade_id: createdScaleGrades.find(sg => sg.name === "Grade-A").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -340,12 +413,12 @@ async function main() {
       designation_id: createdDesignations.find(d => d.title === "Operations Manager").id,
       employment_type: "Regular",
       effective_from: new Date("2022-06-01"),
-      role_tag: "Regional Manager",
+      role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
       office_location: "Lahore Regional Office",
       is_on_probation: true,
       probation_end_date: new Date("2024-06-01"),
       remarks: "Currently on probation period",
-      scale_grade: "BPS-18",
+      scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-18").id,
       employment_status: "active",
       is_current: true,
       filer_status: "filer",
@@ -534,6 +607,8 @@ async function main() {
   console.log(`📊 Summary:`);
   console.log(`   - Departments: ${createdDepartments.length}`);
   console.log(`   - Designations: ${createdDesignations.length}`);
+  console.log(`   - Role Tags: ${createdRoleTags.length}`);
+  console.log(`   - Scale Grades: ${createdScaleGrades.length}`);
   console.log(`   - Employees: ${createdEmployees.length}`);
   console.log(`   - Employment Records: ${createdEmployments.length}`);
   console.log(`   - Past Experiences: ${pastExperiences.length}`);

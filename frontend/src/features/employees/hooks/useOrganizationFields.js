@@ -103,7 +103,7 @@ export const useOrganizationFields = (selectedOrganization, formData, setFormDat
 
   // Get validation rules that should be applied based on visible fields
   const getValidationRules = useMemo(() => {
-    return (section, fieldName, defaultRules = {}) => {
+    return (section, fieldName, defaultRules = {}, formData = {}) => {
       const isVisible = checkFieldVisibility(section, fieldName);
       
       if (!isVisible) {
@@ -152,11 +152,27 @@ export const useOrganizationFields = (selectedOrganization, formData, setFormDat
             reporting_officer_id: {}, // No validation for hidden field
             office_location: {}, // No validation for hidden field
             employment_status: {} // No validation for hidden field
+          },
+          location: {
+            bazaar_name: { 
+              required: (formData) => {
+                const locationType = formData?.location?.type || formData?.type;
+                return (locationType === "BAZAAR" || locationType === "SAHULAT_BAZAAR") ? "Bazaar name is required when location type is Bazaar" : false;
+              }
+            }
           }
         },
         PSBA: {
           employment: {
             office_location: {} // No validation for hidden field
+          },
+          location: {
+            bazaar_name: { 
+              required: (formData) => {
+                const locationType = formData?.location?.type || formData?.type;
+                return (locationType === "BAZAAR" || locationType === "SAHULAT_BAZAAR") ? "Bazaar name is required when location type is Bazaar" : false;
+              }
+            }
           }
         }
       };
@@ -165,8 +181,14 @@ export const useOrganizationFields = (selectedOrganization, formData, setFormDat
       const orgRules = organizationRules[selectedOrganization]?.[section]?.[fieldName];
       
       if (orgRules) {
+        // Handle dynamic validation rules
+        const processedRules = { ...orgRules };
+        if (typeof processedRules.required === 'function') {
+          processedRules.required = processedRules.required(formData);
+        }
+        
         // Use organization-specific rules
-        return { ...defaultRules, ...orgRules };
+        return { ...defaultRules, ...processedRules };
       }
       
       return defaultRules;

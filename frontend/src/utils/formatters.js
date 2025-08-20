@@ -248,3 +248,74 @@ export const formatDateRange = (startDate, endDate = null) => {
   const end = endDate ? formatDateDisplay(endDate) : "Present";
   return `${start} - ${end}`;
 };
+
+/**
+ * Format city name from snake_case to proper title case
+ * @param {string} cityValue - City value in snake_case format (e.g., "lahore_city")
+ * @returns {string} - Formatted city name (e.g., "Lahore City")
+ */
+export const formatCityName = (cityValue) => {
+  if (!cityValue) return "N/A";
+  
+  // Handle common city name patterns
+  const cityMappings = {
+    'lahore_city': 'Lahore City',
+    'karachi_central': 'Karachi Central',
+    'karachi_east': 'Karachi East',
+    'karachi_west': 'Karachi West',
+    'karachi_south': 'Karachi South',
+    'islamabad_city': 'Islamabad City',
+    'faisalabad_city': 'Faisalabad City',
+    'toba_tek_singh': 'Toba Tek Singh',
+    'nankana_sahib': 'Nankana Sahib',
+    'rawalpindi': 'Rawalpindi',
+    'attock': 'Attock',
+    'jhang': 'Jhang',
+    'kasur': 'Kasur',
+    'sheikhupura': 'Sheikhupura',
+    'malir': 'Malir',
+    'korangi': 'Korangi'
+  };
+  
+  // Check if we have a direct mapping
+  if (cityMappings[cityValue]) {
+    return cityMappings[cityValue];
+  }
+  
+  // Fallback: convert snake_case to title case
+  return cityValue
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+/**
+ * Format district name to proper title case
+ * @param {string} districtValue - District value in lowercase format (e.g., "lahore")
+ * @returns {string} - Formatted district name (e.g., "Lahore")
+ */
+export const formatDistrictName = (districtValue) => {
+  if (!districtValue) return "N/A";
+  
+  // Handle common district name patterns
+  const districtMappings = {
+    'lahore': 'Lahore',
+    'karachi': 'Karachi',
+    'islamabad': 'Islamabad',
+    'faisalabad': 'Faisalabad',
+    'multan': 'Multan',
+    'peshawar': 'Peshawar',
+    'quetta': 'Quetta',
+    'gujranwala': 'Gujranwala',
+    'hyderabad': 'Hyderabad',
+    'bahawalpur': 'Bahawalpur'
+  };
+  
+  // Check if we have a direct mapping
+  if (districtMappings[districtValue]) {
+    return districtMappings[districtValue];
+  }
+  
+  // Fallback: capitalize first letter
+  return districtValue.charAt(0).toUpperCase() + districtValue.slice(1).toLowerCase();
+};

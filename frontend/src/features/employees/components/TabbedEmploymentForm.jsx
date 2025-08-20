@@ -87,7 +87,9 @@ const TabbedEmploymentForm = forwardRef(({
       employee_id: editingRecord.employee_id,
       employee: editingRecord.employee,
       employeeIdFromEmployee: editingRecord.employee?.id,
-      allKeys: Object.keys(editingRecord)
+      allKeys: Object.keys(editingRecord),
+      designation: editingRecord.designation,
+      designationFromEmployment: editingRecord.employment?.designation
     });
 
     // Check if editingRecord is already in nested format (from EmploymentRecordActions)
@@ -121,6 +123,7 @@ const TabbedEmploymentForm = forwardRef(({
           effective_till: editingRecord.effective_till || "",
           reporting_officer_id: editingRecord.reporting_officer_id || "",
           remarks: editingRecord.remarks || "",
+          is_current: editingRecord.is_current !== undefined ? editingRecord.is_current : false,
           // Probation fields
           is_on_probation: editingRecord.is_on_probation || false,
           probation_end_date: editingRecord.probation_end_date || "",
@@ -135,6 +138,38 @@ const TabbedEmploymentForm = forwardRef(({
         contract: {},
       };
     }
+
+    // Ensure designation field is available at top level for backend validation
+    // Check both the original editingRecord and the transformed employment object
+    if (transformed && !transformed.designation) {
+      transformed.designation = editingRecord.designation || transformed.employment?.designation || "";
+    }
+
+    // Also ensure other required fields are at top level
+    if (transformed && !transformed.department) {
+      transformed.department = editingRecord.department || transformed.employment?.department || "";
+    }
+    if (transformed && !transformed.role_tag) {
+      transformed.role_tag = editingRecord.role_tag || transformed.employment?.role_tag || "";
+    }
+    if (transformed && !transformed.scale_grade) {
+      transformed.scale_grade = editingRecord.scale_grade || transformed.employment?.scale_grade || "";
+    }
+    if (transformed && !transformed.reporting_officer_id) {
+      transformed.reporting_officer_id = editingRecord.reporting_officer_id || transformed.employment?.reporting_officer_id || "";
+    }
+    if (transformed && !transformed.is_current) {
+      transformed.is_current = editingRecord.is_current !== undefined ? editingRecord.is_current : (transformed.employment?.is_current !== undefined ? transformed.employment.is_current : false);
+    }
+
+    console.log("🔍 TabbedEmploymentForm: Transformed initial data:", {
+      designation: transformed?.designation,
+      department: transformed?.department,
+      role_tag: transformed?.role_tag,
+      scale_grade: transformed?.scale_grade,
+      reporting_officer_id: transformed?.reporting_officer_id,
+      is_current: transformed?.is_current
+    });
 
     return transformed;
   }, [editingRecord?.id, isEditMode, isCreatingFromExisting]);
@@ -566,10 +601,28 @@ const TabbedEmploymentForm = forwardRef(({
 
 
 
-  // Handle employment form submission - progress to next tab
+  // Handle employment form submission
   const onEmploymentSubmit = async (data) => {
     try {
-      console.log("📝 TabbedEmploymentForm: Employment form submitted with data:", data);
+      console.log("🔍 TabbedEmploymentForm: Employment form submitted with data:", data);
+      console.log("🔍 TabbedEmploymentForm: Designation field value:", data.designation);
+      console.log("🔍 TabbedEmploymentForm: Available designations count:", availableDesignations?.length || 0);
+      console.log("🔍 TabbedEmploymentForm: Current organization:", currentOrganization);
+      console.log("🔍 TabbedEmploymentForm: Form field values:", {
+        designation: employmentForm.watch("designation"),
+        organization: employmentForm.watch("organization"),
+        department: employmentForm.watch("department")
+      });
+
+      // Validate required fields for current organization
+      const validationRules = getValidationRules('employment', 'designation', { required: "Designation is required" });
+      console.log("🔍 TabbedEmploymentForm: Validation rules for designation:", validationRules);
+      
+      if (validationRules.required && !data.designation) {
+        console.error("❌ TabbedEmploymentForm: Designation is required but not provided");
+        alert("Please select a designation before proceeding.");
+        return;
+      }
 
       // Get document data
       const filesToUpload = documentManager.getFilesToUpload();
@@ -771,6 +824,72 @@ const TabbedEmploymentForm = forwardRef(({
       console.log("🔍 TabbedEmploymentForm: Gross salary value:", salaryData.gross_salary);
       console.log("🔍 TabbedEmploymentForm: Basic salary value:", salaryData.basic_salary);
 
+      // Debug: Check if designation field is properly set in the form
+      console.log("🔍 TabbedEmploymentForm: Form field values check:", {
+        designation: employmentForm.watch("designation"),
+        designationFromGetValues: employmentData.designation,
+        hasDesignation: !!employmentData.designation,
+        designationType: typeof employmentData.designation,
+        designationLength: employmentData.designation ? employmentData.designation.length : 0,
+        availableDesignationsCount: availableDesignations?.length || 0,
+        currentOrganization: currentOrganization,
+        isMBWO: currentOrganization === 'MBWO',
+        isEditMode,
+        editingRecordId: editingRecord?.id,
+        savedEmploymentId
+      });
+
+      // Validate that designation is selected for MBWO organization
+      if (currentOrganization === 'MBWO' && !employmentData.designation) {
+        console.error("❌ TabbedEmploymentForm: Designation is required for MBWO organization but not selected");
+        alert("Please select a designation before proceeding. Designation is required for MBWO organization.");
+        return;
+      }
+
+      // Validate that department and role_tag are selected for PSBA organization
+      if (currentOrganization === 'PSBA') {
+        if (!employmentData.department) {
+          console.error("❌ TabbedEmploymentForm: Department is required for PSBA organization but not selected");
+          alert("Please select a department before proceeding. Department is required for PSBA organization.");
+          return;
+        }
+        if (!employmentData.role_tag) {
+          console.error("❌ TabbedEmploymentForm: Role tag is required for PSBA organization but not selected");
+          alert("Please select a role tag before proceeding. Role tag is required for PSBA organization.");
+          return;
+        }
+        
+        // Additional validation for PSBA: ensure employment_type is selected
+        if (!employmentData.employment_type) {
+          console.error("❌ TabbedEmploymentForm: Employment type is required for PSBA organization but not selected");
+          alert("Please select an employment type before proceeding. Employment type is required for PSBA organization.");
+          return;
+        }
+        
+        console.log("✅ TabbedEmploymentForm: PSBA validation passed - all required fields are selected");
+      }
+
+      // Debug: Check all form fields to see what's missing
+      console.log("🔍 TabbedEmploymentForm: All employment form fields:", {
+        organization: employmentForm.watch("organization"),
+        department: employmentForm.watch("department"),
+        designation: employmentForm.watch("designation"),
+        employment_type: employmentForm.watch("employment_type"),
+        effective_from: employmentForm.watch("effective_from"),
+        effective_till: employmentForm.watch("effective_till"),
+        role_tag: employmentForm.watch("role_tag"),
+        reporting_officer_id: employmentForm.watch("reporting_officer_id"),
+        office_location: employmentForm.watch("office_location"),
+        remarks: employmentForm.watch("remarks"),
+        scale_grade: employmentForm.watch("scale_grade"),
+        employment_status: employmentForm.watch("employment_status"),
+        is_current: employmentForm.watch("is_current"),
+        filer_status: employmentForm.watch("filer_status"),
+        filer_active_status: employmentForm.watch("filer_active_status"),
+        is_on_probation: employmentForm.watch("is_on_probation"),
+        probation_end_date: employmentForm.watch("probation_end_date")
+      });
+
       // Create comprehensive employment record with all data
       const completeData = {
         id: savedEmploymentId || Date.now(),
@@ -795,7 +914,7 @@ const TabbedEmploymentForm = forwardRef(({
         district: locationData.district || "",
         city: locationData.city || "",
         bazaar_name: locationData.bazaar_name || "",
-        location_type: locationData.type || "",
+        location_type: locationData.type || "HEAD_OFFICE",
         full_address: locationData.full_address || "",
         // Contract data (if applicable)
         contract_type: contractData.contract_type || "",
@@ -811,6 +930,11 @@ const TabbedEmploymentForm = forwardRef(({
       };
 
       console.log("📤 TabbedEmploymentForm: Showing preview modal with data:", completeData);
+      console.log("🔍 TabbedEmploymentForm: Complete data designation check:", {
+        designation: completeData.designation,
+        hasDesignation: !!completeData.designation,
+        designationType: typeof completeData.designation
+      });
 
       // Show preview modal for confirmation
       setPreviewData(completeData);
@@ -833,6 +957,12 @@ const TabbedEmploymentForm = forwardRef(({
       // Set submission state to prevent data reloading
       setIsSubmitting(true);
       console.log("📤 TabbedEmploymentForm: Final submission with data:", previewData);
+      console.log("🔍 TabbedEmploymentForm: Preview data designation check:", {
+        designation: previewData.designation,
+        hasDesignation: !!previewData.designation,
+        designationType: typeof previewData.designation,
+        designationValue: previewData.designation || "EMPTY"
+      });
 
       // Get document data first
       const filesToUpload = documentManager.getFilesToUpload();
@@ -862,11 +992,18 @@ const TabbedEmploymentForm = forwardRef(({
       });
 
       // Add userId and document data for validation
+      // Ensure all required fields are at top level for backend validation
       const dataWithUserIdAndDocuments = {
         ...previewData,
         ...documentData, // Include both new and existing documents in validation
         user_id: userId || editingRecord?.employee_id || editingRecord?.employee?.id || transformedInitialData?.employee_id,
-        employee_id: userId || editingRecord?.employee_id || editingRecord?.employee?.id || transformedInitialData?.employee_id
+        employee_id: userId || editingRecord?.employee_id || editingRecord?.employee?.id || transformedInitialData?.employee_id,
+        // Ensure designation field is at top level for backend validation
+        designation: previewData.designation || "",
+        department: previewData.department || "",
+        role_tag: previewData.role_tag || "",
+        scale_grade: previewData.scale_grade || null,
+        reporting_officer_id: previewData.reporting_officer_id || ""
       };
 
       console.log("🔍 TabbedEmploymentForm: Employee ID debug:", {
@@ -876,6 +1013,16 @@ const TabbedEmploymentForm = forwardRef(({
         finalEmployeeId: dataWithUserIdAndDocuments.employee_id,
         isEditMode,
         editingRecordId: editingRecord?.id
+      });
+
+      console.log("🔍 TabbedEmploymentForm: Designation field debug in handleFinalSubmit:", {
+        previewDataDesignation: previewData.designation,
+        hasPreviewDataDesignation: !!previewData.designation,
+        previewDataType: typeof previewData.designation,
+        isEditMode,
+        editingRecordId: editingRecord?.id,
+        savedEmploymentId,
+        currentOrganization
       });
 
       // Ensure we have employee_id before validation
@@ -910,21 +1057,29 @@ const TabbedEmploymentForm = forwardRef(({
         medical_fitness_report_pdf: filesToUpload.medical_fitness_report_pdf || existingDocuments.find(doc => doc.file_type === 'medical_fitness') || null,
         police_character_certificate: filesToUpload.police_character_certificate || existingDocuments.find(doc => doc.file_type === 'police_character') || null,
         renewal_report: filesToUpload.renewal_report || previewData.renewal_report || null,
+        // Include required fields at top level for backend validation
+        organization: previewData.organization || "",
+        designation: previewData.designation || "",
+        department: previewData.department || "",
+        role_tag: previewData.role_tag || "",
+        scale_grade: previewData.scale_grade || null,
+        reporting_officer_id: previewData.reporting_officer_id || "",
+        effective_from: previewData.effective_from || "",
         employment: {
           id: previewData.id, // Include the employment record ID for updates
           organization: previewData.organization || "",
-          department: previewData.department || "",
-          designation: previewData.designation || "",
-          scale_grade: previewData.scale_grade || "",
+          department_id: previewData.department || "", // Use department_id to match schema
+          designation_id: previewData.designation || "", // Use designation_id to match schema
+          scale_grade_id: previewData.scale_grade || null, // Use scale_grade_id to match schema
           employment_type: previewData.employment_type || "Regular",
-          role_tag: previewData.role_tag || "",
+          role_tag_id: previewData.role_tag || "", // Use role_tag_id to match schema
           reporting_officer_id: previewData.reporting_officer_id || "",
           effective_from: previewData.effective_from || "",
           effective_till: previewData.effective_till || null,
           filer_status: previewData.filer_status || "non_filer",
           filer_active_status: previewData.filer_active_status || "",
           employment_status: previewData.employment_status || "active",
-          is_current: previewData.is_current || true,
+          is_current: previewData.is_current !== undefined ? previewData.is_current : (previewData.organization === 'MBWO' ? false : true),
           remarks: previewData.remarks || "",
           // Probation fields
           is_on_probation: previewData.is_on_probation || false,
@@ -977,6 +1132,15 @@ const TabbedEmploymentForm = forwardRef(({
         type: typeof structuredData.employment.documents_to_remove,
         isArray: Array.isArray(structuredData.employment.documents_to_remove)
       });
+      console.log("🔍 TabbedEmploymentForm: Structured data top-level fields check:", {
+        designation: structuredData.designation,
+        department: structuredData.department,
+        role_tag: structuredData.role_tag,
+        scale_grade: structuredData.scale_grade,
+        reporting_officer_id: structuredData.reporting_officer_id,
+        organization: structuredData.organization,
+        effective_from: structuredData.effective_from
+      });
 
       // Close preview modal
       setShowPreviewModal(false);
@@ -1016,6 +1180,13 @@ const TabbedEmploymentForm = forwardRef(({
         default: return value;
       }
     }
+  };
+
+  // Helper function to get label from ID for form options
+  const getLabelFromId = (id, options, field = 'label') => {
+    if (!id || !options || !Array.isArray(options)) return 'N/A';
+    const option = options.find(opt => opt.value == id);
+    return option ? option[field] : 'N/A';
   };
 
   // Helper function to display field values with N/A fallback
@@ -1100,12 +1271,12 @@ const TabbedEmploymentForm = forwardRef(({
                 department: employmentData.department_id || "",
                 designation: employmentData.designation_id || "",
                 employment_type: employmentData.employment_type || "Regular",
-                role_tag: employmentData.role_tag || "",
+                role_tag: employmentData.role_tag_id || "", // Use role_tag_id from schema
                 effective_from: employmentData.effective_from ? employmentData.effective_from.split('T')[0] : "",
                 effective_till: employmentData.effective_till ? employmentData.effective_till.split('T')[0] : "",
                 reporting_officer_id: employmentData.reporting_officer_id || "",
                 remarks: employmentData.remarks || "",
-                scale_grade: employmentData.scale_grade || "",
+                scale_grade: employmentData.scale_grade_id || "", // Use scale_grade_id from schema
                 medical_fitness_report_pdf: employmentData.medical_fitness_report_pdf || null,
                 police_character_certificate: employmentData.police_character_certificate || null,
                 filer_status: employmentData.filer_status || "non_filer",
@@ -1237,6 +1408,26 @@ const TabbedEmploymentForm = forwardRef(({
 
   // Monitor form state changes in edit mode - removed to prevent infinite loops
 
+  // Monitor availableDesignations changes for debugging
+  useEffect(() => {
+    console.log("🔍 TabbedEmploymentForm: availableDesignations changed:", {
+      count: availableDesignations?.length || 0,
+      designations: availableDesignations,
+      currentOrganization,
+      isMBWO: currentOrganization === 'MBWO'
+    });
+  }, [availableDesignations, currentOrganization]);
+
+  // Monitor formOptions changes for debugging
+  useEffect(() => {
+    console.log("🔍 TabbedEmploymentForm: formOptions changed:", {
+      hasFormOptions: !!formOptions,
+      formOptionsKeys: formOptions ? Object.keys(formOptions) : [],
+      departmentsCount: formOptions?.departments?.length || 0,
+      designationsCount: formOptions?.designations?.length || 0
+    });
+  }, [formOptions]);
+
   if (!formOptions) {
     return (
       <EnhancedModal
@@ -1340,6 +1531,37 @@ const TabbedEmploymentForm = forwardRef(({
                     Employment Information
                   </h3>
 
+                  {/* Organization-specific guidance */}
+                  {currentOrganization === 'PSBA' && (
+                    <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <i className="fas fa-info-circle mr-2"></i>
+                        <strong>PSBA Organization:</strong> Department, Designation, Employment Type, Role Tag, and Effective From are required fields.
+                      </p>
+                      {/* Debug information for PSBA */}
+                      <div className="mt-2 text-xs text-blue-700">
+                        <p>Available options: Departments: {formOptions?.departments?.length || 0}, Role Tags: {formOptions?.roleTags?.length || 0}</p>
+                        <p>Form loading: {formLoading ? 'Yes' : 'No'}</p>
+                      </div>
+                    </div>
+                  )}
+                  {currentOrganization === 'MBWO' && (
+                    <div className="mb-4 p-3 bg-green-100 border border-green-300 rounded-lg">
+                      <p className="text-sm text-green-800">
+                        <i className="fas fa-info-circle mr-2"></i>
+                        <strong>MBWO Organization:</strong> Only Designation and Effective From are required fields.
+                      </p>
+                    </div>
+                  )}
+                  {currentOrganization === 'PMBMC' && (
+                    <div className="mb-4 p-3 bg-purple-100 border border-purple-300 rounded-lg">
+                      <p className="text-sm text-purple-800">
+                        <i className="fas fa-info-circle mr-2"></i>
+                        <strong>PMBMC Organization:</strong> Department, Designation, Employment Type, Role Tag, Effective From, and Medical Fitness Report are required fields.
+                      </p>
+                    </div>
+                  )}
+
                   <form onSubmit={handleEmploymentSubmit(onEmploymentSubmit)}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
@@ -1410,21 +1632,37 @@ const TabbedEmploymentForm = forwardRef(({
                             <span className="text-sm text-gray-600">Loading designations...</span>
                           </div>
                         ) : (
-                          <SearchableSelect
-                            options={availableDesignations || []}
-                            value={employmentForm.watch("designation")}
-                            onChange={(value) => employmentForm.setValue("designation", value)}
-                            placeholder={availableDesignations?.length > 0 ? "Select Designation" : "No designations available"}
-                            register={registerEmployment}
-                            name="designation"
-                            required={getValidationRules('employment', 'designation', { required: "Designation is required" }).required}
-                            error={employmentErrors.designation?.message}
-                            disabled={isEditMode ? false : (!availableDesignations || availableDesignations.length === 0)}
-                          />
+                          <>
+                            {console.log("🔍 TabbedEmploymentForm: Rendering designation field:", {
+                              availableDesignationsCount: availableDesignations?.length || 0,
+                              currentOrganization,
+                              isMBWO: currentOrganization === 'MBWO',
+                              designationValue: employmentForm.watch("designation"),
+                              hasFormOptions: !!formOptions,
+                              formOptionsKeys: formOptions ? Object.keys(formOptions) : []
+                            })}
+                            <SearchableSelect
+                              options={availableDesignations || []}
+                              value={employmentForm.watch("designation")}
+                              onChange={(value) => {
+                                console.log("🔍 TabbedEmploymentForm: Designation changed to:", value);
+                                employmentForm.setValue("designation", value);
+                              }}
+                              placeholder={availableDesignations?.length > 0 ? "Select Designation" : "No designations available"}
+                              register={registerEmployment}
+                              name="designation"
+                              required={getValidationRules('employment', 'designation', { required: "Designation is required" }).required}
+                              error={employmentErrors.designation?.message}
+                              disabled={isEditMode ? false : (!availableDesignations || availableDesignations.length === 0)}
+                            />
+                          </>
                         )}
                         {!formLoading && (!availableDesignations || availableDesignations.length === 0) && (
                           <p className="text-yellow-600 text-sm mt-1">
-                            ⚠️ No designations available. Please select a department first or check your connection.
+                            {currentOrganization === 'MBWO' 
+                              ? "⚠️ No designations available. Please check your connection or contact support."
+                              : "⚠️ No designations available. Please select a department first or check your connection."
+                            }
                           </p>
                         )}
                         {employmentErrors.designation && (
@@ -1576,16 +1814,32 @@ const TabbedEmploymentForm = forwardRef(({
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Reporting Officer
                         </label>
-                        <SearchableSelect
-                          options={formOptions?.users || []}
-                          value={employmentForm.watch("reporting_officer_id")}
-                          onChange={(value) => employmentForm.setValue("reporting_officer_id", value)}
-                          placeholder="Select Reporting Officer"
-                          register={registerEmployment}
-                          name="reporting_officer_id"
-                          required={false}
-                          error={employmentErrors.reporting_officer_id?.message}
-                        />
+                        {formLoading ? (
+                          <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border">
+                            <LoadingSpinner size="sm" />
+                            <span className="text-sm text-gray-600">Loading users...</span>
+                          </div>
+                        ) : (
+                          <SearchableSelect
+                            options={formOptions?.users || []}
+                            value={employmentForm.watch("reporting_officer_id")}
+                            onChange={(value) => {
+                              console.log("🔍 TabbedEmploymentForm: Reporting officer changed to:", value);
+                              employmentForm.setValue("reporting_officer_id", value);
+                            }}
+                            placeholder={formOptions?.users?.length > 0 ? "Select Reporting Officer" : "No users available"}
+                            register={registerEmployment}
+                            name="reporting_officer_id"
+                            required={false}
+                            error={employmentErrors.reporting_officer_id?.message}
+                            disabled={!formOptions?.users || formOptions.users.length === 0}
+                          />
+                        )}
+                        {!formLoading && (!formOptions?.users || formOptions.users.length === 0) && (
+                          <p className="text-yellow-600 text-sm mt-1">
+                            ⚠️ No users available for reporting officer selection. Please check your connection or contact support.
+                          </p>
+                        )}
                       </div>
 
 
@@ -1595,13 +1849,16 @@ const TabbedEmploymentForm = forwardRef(({
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Scale/Grade
                         </label>
-                        <input
-                          type="text"
-                          {...registerEmployment("scale_grade")}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                          placeholder="Enter scale or grade (e.g., BPS-17, Grade-A)"
+                        <SearchableSelect
+                          options={formOptions?.scaleGrades || []}
+                          value={employmentForm.watch("scale_grade")}
+                          onChange={(value) => employmentForm.setValue("scale_grade", value)}
+                          placeholder="Select Scale/Grade"
+                          register={registerEmployment}
+                          name="scale_grade"
+                          required={false}
+                          error={employmentErrors.scale_grade?.message}
                         />
-
                       </div>
 
                       {/* Document Uploads Section */}
@@ -2490,11 +2747,11 @@ const TabbedEmploymentForm = forwardRef(({
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Department:</span>
-                    <span className="text-gray-900">{displayValue(previewData.department)}</span>
+                    <span className="text-gray-900">{getLabelFromId(previewData.department, formOptions?.departments)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Designation:</span>
-                    <span className="text-gray-900">{displayValue(previewData.designation)}</span>
+                    <span className="text-gray-900">{getLabelFromId(previewData.designation, formOptions?.designations)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Employment Type:</span>
@@ -2502,7 +2759,7 @@ const TabbedEmploymentForm = forwardRef(({
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Role Tag:</span>
-                    <span className="text-gray-900">{displayValue(previewData.role_tag)}</span>
+                    <span className="text-gray-900">{getLabelFromId(previewData.role_tag, formOptions?.roleTags)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Effective From:</span>
@@ -2515,7 +2772,7 @@ const TabbedEmploymentForm = forwardRef(({
 
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Scale/Grade:</span>
-                    <span className="text-gray-900">{displayValue(previewData.scale_grade)}</span>
+                    <span className="text-gray-900">{getLabelFromId(previewData.scale_grade, formOptions?.scaleGrades)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Medical Fitness Report:</span>
@@ -2737,7 +2994,7 @@ const TabbedEmploymentForm = forwardRef(({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-600">Contract Type:</span>
-                      <span className="text-gray-900">{displayValue(previewData.contract_type)}</span>
+                      <span className="text-gray-900">{getLabelFromId(previewData.contract_type, formOptions?.contractTypes)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-600">Contract Number:</span>

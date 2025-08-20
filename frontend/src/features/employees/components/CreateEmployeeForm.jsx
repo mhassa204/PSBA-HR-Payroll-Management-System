@@ -53,6 +53,9 @@ const CreateEmployeeForm = () => {
     education_documents: {},
     other_documents: []
   });
+  
+  // Add a state to force re-render of file inputs
+  const [fileInputKeys, setFileInputKeys] = useState({});
 
   const form = useForm({
     defaultValues: {
@@ -185,39 +188,118 @@ const CreateEmployeeForm = () => {
 
   // Handle file removal
   const handleFileRemove = (fileType, fileIndex = null) => {
+    console.log('🗑️ handleFileRemove called:', { fileType, fileIndex });
+    
+    // Special handling for profile picture
+    if (fileType === 'profile_picture_file') {
+      setProfilePicturePreview(null);
+      form.setValue("profile_picture_file", null);
+      
+      // Clear the file input
+      setTimeout(() => {
+        const fileInputs = document.querySelectorAll('input[type="file"]');
+        fileInputs.forEach(input => {
+          if (input.getAttribute('data-file-type') === fileType) {
+            input.value = '';
+            console.log('🗑️ Cleared profile picture input:', { fileType, input });
+          }
+        });
+      }, 0);
+      return;
+    }
+    
     setUploadedFiles(prev => {
-      if (fileIndex !== null && Array.isArray(prev[fileType])) {
-        // Remove specific file from array
-        const newFiles = [...prev[fileType]];
-        newFiles.splice(fileIndex, 1);
-        return { ...prev, [fileType]: newFiles };
+      console.log('🗑️ Previous uploadedFiles state:', prev);
+      
+      if (fileType === 'experience_documents' || fileType === 'education_documents') {
+        // Handle education and experience documents (stored as objects with IDs)
+        if (fileIndex !== null) {
+          const newFiles = { ...prev[fileType] };
+          delete newFiles[fileIndex];
+          console.log('🗑️ Updated files after removal:', newFiles);
+          
+          // Force a re-render by updating the state
+          const updatedState = { ...prev, [fileType]: newFiles };
+          console.log('🗑️ Final updated state:', updatedState);
+          return updatedState;
+        }
+        return prev;
+      } else if (fileType === 'other_documents' && Array.isArray(prev[fileType])) {
+        // Handle other_documents (stored as array)
+        if (fileIndex !== null) {
+          const newFiles = [...prev[fileType]];
+          newFiles.splice(fileIndex, 1);
+          return { ...prev, [fileType]: newFiles };
+        } else {
+          // Remove all other documents
+          return { ...prev, [fileType]: [] };
+        }
       } else {
-        // Remove single file or entire array
-        return { ...prev, [fileType]: Array.isArray(prev[fileType]) ? [] : null };
+        // Handle single file types (cnic_front, cnic_back, certificates, disability_document)
+        // These are stored as single files, not arrays
+        console.log('🗑️ Removing single file:', fileType);
+        return { ...prev, [fileType]: null };
       }
     });
+    
+    // Force re-render of file inputs by updating keys
+    if (fileType === 'experience_documents' || fileType === 'education_documents') {
+      setFileInputKeys(prev => ({
+        ...prev,
+        [`${fileType}_${fileIndex}`]: Date.now()
+      }));
+      
+      // Also clear the file input value by finding and resetting the input element
+      setTimeout(() => {
+        const fileInputs = document.querySelectorAll('input[type="file"]');
+        fileInputs.forEach(input => {
+          if (input.getAttribute('data-file-type') === fileType && 
+              input.getAttribute('data-file-id') === fileIndex?.toString()) {
+            input.value = '';
+            console.log('🗑️ Cleared file input:', { fileType, fileIndex, input });
+          }
+        });
+      }, 0);
+    } else {
+      // For single file types, clear the file input directly
+      setTimeout(() => {
+        const fileInputs = document.querySelectorAll('input[type="file"]');
+        fileInputs.forEach(input => {
+          // Check if this input matches the file type we're removing
+          if (input.name === fileType || input.id === fileType || 
+              (input.getAttribute('data-file-type') === fileType)) {
+            input.value = '';
+            console.log('🗑️ Cleared single file input:', { fileType, input });
+          }
+        });
+      }, 0);
+    }
   };
 
   // Render file preview
   const renderFilePreview = (file, fileType, fileIndex = null) => {
     if (!file) return null;
 
-    const isImage = file.type.startsWith('image/');
-    const previewUrl = URL.createObjectURL(file);
+    // Handle both File objects and objects with file properties
+    const fileObj = file instanceof File ? file : file.file || file;
+    if (!fileObj || !fileObj.name) return null;
+
+    const isImage = fileObj.type && fileObj.type.startsWith('image/');
+    const previewUrl = fileObj instanceof File ? URL.createObjectURL(fileObj) : null;
 
     return (
       <div key={fileIndex || 'single'} className="relative inline-block mr-2 mb-2">
         <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm" style={{ width: '120px', height: '80px' }}>
-          {isImage ? (
+          {isImage && previewUrl ? (
             <img
               src={previewUrl}
-              alt={file.name}
+              alt={fileObj.name}
               className="w-full h-full object-cover"
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
               <i className="fas fa-file-pdf text-2xl text-red-500 mb-1"></i>
-              <span className="text-xs text-gray-600 text-center px-1 truncate">{file.name}</span>
+              <span className="text-xs text-gray-600 text-center px-1 truncate">{fileObj.name}</span>
             </div>
           )}
         </div>
@@ -239,15 +321,27 @@ const CreateEmployeeForm = () => {
   const handleExperienceDocumentUpload = (event, experienceId) => {
     const file = event.target.files[0];
     if (file) {
+      console.log('📁 Experience document upload:', { file, experienceId });
       const validation = validateFileUpload(file, 'experience_document');
       if (validation.isValid) {
-        setUploadedFiles(prev => ({
-          ...prev,
-          experience_documents: {
-            ...prev.experience_documents,
-            [experienceId]: file
-          }
-        }));
+        setUploadedFiles(prev => {
+          const updated = {
+            ...prev,
+            experience_documents: {
+              ...prev.experience_documents,
+              [experienceId]: file
+            }
+          };
+          console.log('📁 Updated uploadedFiles after experience upload:', updated.experience_documents);
+          
+          // Also update the file input key to ensure proper re-rendering
+          setFileInputKeys(prev => ({
+            ...prev,
+            [`experience_documents_${experienceId}`]: Date.now()
+          }));
+          
+          return updated;
+        });
       } else {
         alert(validation.message);
         event.target.value = '';
@@ -259,15 +353,27 @@ const CreateEmployeeForm = () => {
   const handleEducationDocumentUpload = (event, educationId) => {
     const file = event.target.files[0];
     if (file) {
+      console.log('📁 Education document upload:', { file, educationId });
       const validation = validateFileUpload(file, 'education_document');
       if (validation.isValid) {
-        setUploadedFiles(prev => ({
-          ...prev,
-          education_documents: {
-            ...prev.education_documents,
-            [educationId]: file
-          }
-        }));
+        setUploadedFiles(prev => {
+          const updated = {
+            ...prev,
+            education_documents: {
+              ...prev.education_documents,
+              [educationId]: file
+            }
+          };
+          console.log('📁 Updated uploadedFiles after education upload:', updated.education_documents);
+          
+          // Also update the file input key to ensure proper re-rendering
+          setFileInputKeys(prev => ({
+            ...prev,
+            [`education_documents_${educationId}`]: Date.now()
+          }));
+          
+          return updated;
+        });
       } else {
         alert(validation.message);
         event.target.value = '';
@@ -291,6 +397,23 @@ const CreateEmployeeForm = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
+  
+  // Clean up file input keys when experiences or educations change
+  useEffect(() => {
+    const currentKeys = {};
+    
+    // Add keys for current experiences
+    experiences.forEach(exp => {
+      currentKeys[`experience_documents_${exp.id}`] = fileInputKeys[`experience_documents_${exp.id}`] || 'initial';
+    });
+    
+    // Add keys for current educations
+    educations.forEach(edu => {
+      currentKeys[`education_documents_${edu.id}`] = fileInputKeys[`education_documents_${edu.id}`] || 'initial';
+    });
+    
+    setFileInputKeys(currentKeys);
+  }, [experiences, educations]);
 
   // Handle adding new experience
   const addExperience = () => {
@@ -375,6 +498,7 @@ const CreateEmployeeForm = () => {
   const onSubmit = (data) => {
     clearError();
     console.log("Form submitted with data:", data);
+    console.log("Current uploadedFiles state:", uploadedFiles);
 
     // Include experiences, educations, and ALL uploaded files in the data
     const formDataWithExperiences = {
@@ -384,6 +508,8 @@ const CreateEmployeeForm = () => {
       // Include ALL uploaded files
       ...uploadedFiles
     };
+
+    console.log("Final form data with experiences:", formDataWithExperiences);
 
     // Log form submission
     logFormSubmission('CreateEmployeeForm', formDataWithExperiences, true, {
@@ -533,10 +659,7 @@ const CreateEmployeeForm = () => {
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setProfilePicturePreview(null);
-                          form.setValue("profile_picture_file", null);
-                        }}
+                        onClick={() => handleFileRemove('profile_picture_file')}
                         className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
                       >
                         ×
@@ -551,6 +674,7 @@ const CreateEmployeeForm = () => {
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/gif"
+                      data-file-type="profile_picture_file"
                       onChange={handleProfilePictureUpload}
                       className="hidden"
                       id="profile-picture-upload"
@@ -1299,6 +1423,7 @@ const CreateEmployeeForm = () => {
                       <input
                         type="file"
                         accept="image/jpeg,image/png"
+                        data-file-type="cnic_front"
                         onChange={(e) => handleFileUpload(e, 'cnic_front')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -1347,6 +1472,7 @@ const CreateEmployeeForm = () => {
                       <input
                         type="file"
                         accept="image/jpeg,image/png"
+                        data-file-type="cnic_back"
                         onChange={(e) => handleFileUpload(e, 'cnic_back')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -1395,6 +1521,7 @@ const CreateEmployeeForm = () => {
                       <input
                         type="file"
                         accept="application/pdf"
+                        data-file-type="certificates"
                         onChange={(e) => handleFileUpload(e, 'certificates')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -1444,6 +1571,7 @@ const CreateEmployeeForm = () => {
                         <input
                           type="file"
                           accept="application/pdf"
+                          data-file-type="disability_document"
                           onChange={(e) => handleFileUpload(e, 'disability_document')}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1503,23 +1631,18 @@ const CreateEmployeeForm = () => {
                             </div>
                             <div className="space-y-2">
                               <input
+                                key={`experience-${experience.id}-${fileInputKeys[`experience_documents_${experience.id}`] || 'initial'}`}
                                 type="file"
                                 accept="application/pdf"
+                                data-file-type="experience_documents"
+                                data-file-id={experience.id}
                                 onChange={(e) => handleExperienceDocumentUpload(e, experience.id)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                               {uploadedFiles.experience_documents[experience.id] && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setUploadedFiles(prev => ({
-                                      ...prev,
-                                      experience_documents: {
-                                        ...prev.experience_documents,
-                                        [experience.id]: null
-                                      }
-                                    }));
-                                  }}
+                                  onClick={() => handleFileRemove('experience_documents', experience.id)}
                                   className="px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-sm"
                                 >
                                   <i className="fas fa-times mr-1"></i>
@@ -1528,27 +1651,8 @@ const CreateEmployeeForm = () => {
                               )}
                             </div>
                             {uploadedFiles.experience_documents[experience.id] && (
-                              <div className="flex items-center justify-between mt-1 p-2 bg-green-100 rounded">
-                                <p className="text-sm text-green-600">
-                                  <i className="fas fa-check mr-1"></i>
-                                  {uploadedFiles.experience_documents[experience.id].name}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setUploadedFiles(prev => ({
-                                      ...prev,
-                                      experience_documents: {
-                                        ...prev.experience_documents,
-                                        [experience.id]: null
-                                      }
-                                    }));
-                                  }}
-                                  className="text-red-500 hover:text-red-700 ml-2"
-                                  title="Remove file"
-                                >
-                                  <i className="fas fa-times"></i>
-                                </button>
+                              <div className="mt-2">
+                                {renderFilePreview(uploadedFiles.experience_documents[experience.id], 'experience_documents', experience.id)}
                               </div>
                             )}
                             <p className="text-sm text-gray-500 mt-1">
@@ -1581,23 +1685,18 @@ const CreateEmployeeForm = () => {
                             </div>
                             <div className="space-y-2">
                               <input
+                                key={`education-${education.id}-${fileInputKeys[`education_documents_${education.id}`] || 'initial'}`}
                                 type="file"
                                 accept="application/pdf"
+                                data-file-type="education_documents"
+                                data-file-id={education.id}
                                 onChange={(e) => handleEducationDocumentUpload(e, education.id)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                               />
                               {uploadedFiles.education_documents[education.id] && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setUploadedFiles(prev => ({
-                                      ...prev,
-                                      education_documents: {
-                                        ...prev.education_documents,
-                                        [education.id]: null
-                                      }
-                                    }));
-                                  }}
+                                  onClick={() => handleFileRemove('education_documents', education.id)}
                                   className="px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-sm"
                                 >
                                   <i className="fas fa-times mr-1"></i>
@@ -1606,27 +1705,8 @@ const CreateEmployeeForm = () => {
                               )}
                             </div>
                             {uploadedFiles.education_documents[education.id] && (
-                              <div className="flex items-center justify-between mt-1 p-2 bg-green-100 rounded">
-                                <p className="text-sm text-green-600">
-                                  <i className="fas fa-check mr-1"></i>
-                                  {uploadedFiles.education_documents[education.id].name}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setUploadedFiles(prev => ({
-                                      ...prev,
-                                      education_documents: {
-                                        ...prev.education_documents,
-                                        [education.id]: null
-                                      }
-                                    }));
-                                  }}
-                                  className="text-red-500 hover:text-red-700 ml-2"
-                                  title="Remove file"
-                                >
-                                  <i className="fas fa-times"></i>
-                                </button>
+                              <div className="mt-2">
+                                {renderFilePreview(uploadedFiles.education_documents[education.id], 'education_documents', education.id)}
                               </div>
                             )}
                             <p className="text-sm text-gray-500 mt-1">
@@ -1959,10 +2039,10 @@ const CreateEmployeeForm = () => {
                           {uploadedFiles.education_documents[edu.id] && (
                             <div className="mt-3 pt-3 border-t border-green-300">
                               <span className="font-medium text-gray-600">Supporting Document:</span>
-                              <p className="text-gray-900 mt-1">
-                                <i className="fas fa-file mr-2 text-green-600"></i>
-                                {uploadedFiles.education_documents[edu.id].name}
-                              </p>
+                              <div className="mt-2">
+                                {console.log('Rendering education document preview:', uploadedFiles.education_documents[edu.id])}
+                                {renderFilePreview(uploadedFiles.education_documents[edu.id], 'education_documents', edu.id)}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -2008,10 +2088,10 @@ const CreateEmployeeForm = () => {
                           {uploadedFiles.experience_documents[exp.id] && (
                             <div className="mt-3 pt-3 border-t border-gray-300">
                               <span className="font-medium text-gray-600">Supporting Document:</span>
-                              <p className="text-gray-900 mt-1">
-                                <i className="fas fa-file mr-2 text-blue-600"></i>
-                                {uploadedFiles.experience_documents[exp.id].name}
-                              </p>
+                              <div className="mt-2">
+                                {console.log('Rendering experience document preview:', uploadedFiles.experience_documents[exp.id])}
+                                {renderFilePreview(uploadedFiles.experience_documents[exp.id], 'experience_documents', exp.id)}
+                              </div>
                             </div>
                           )}
                         </div>

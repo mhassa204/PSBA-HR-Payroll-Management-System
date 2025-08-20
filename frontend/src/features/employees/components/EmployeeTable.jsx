@@ -116,7 +116,7 @@ const EmployeeTable = () => {
         const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
                                  row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
                                  row.employmentRecords?.[0];
-        return currentEmployment?.scale_grade || "N/A";
+        return currentEmployment?.scale_grade?.name || currentEmployment?.scale_grade_id || "N/A";
       }
     },
   ];
@@ -171,7 +171,7 @@ const EmployeeTable = () => {
                     const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
                                              row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
                                              row.employmentRecords?.[0];
-                    return currentEmployment?.department?.name || currentEmployment?.department || "N/A";
+                    return currentEmployment?.department?.name || currentEmployment?.department_id || "N/A";
                   })()
                 }
               </p>

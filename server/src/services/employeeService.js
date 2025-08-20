@@ -730,6 +730,12 @@ if (!employeeUpdateData.has_disability) {
               designation: {
                 where: includeDeleted ? {} : { is_deleted: false }
               },
+              role_tag: {
+                where: includeDeleted ? {} : { is_deleted: false }
+              },
+              scale_grade: {
+                where: includeDeleted ? {} : { is_deleted: false }
+              },
               salary: {
                 where: includeDeleted ? {} : { is_deleted: false }
               },
@@ -770,6 +776,12 @@ if (!employeeUpdateData.has_disability) {
               where: includeDeleted ? {} : { is_deleted: false }
             },
             designation: {
+              where: includeDeleted ? {} : { is_deleted: false }
+            },
+            role_tag: {
+              where: includeDeleted ? {} : { is_deleted: false }
+            },
+            scale_grade: {
               where: includeDeleted ? {} : { is_deleted: false }
             },
             salary: {
@@ -990,22 +1002,36 @@ if (!employeeUpdateData.has_disability) {
 const processDocumentChanges = async (tx, employeeId, data, documentRecords) => {
   console.log("Processing document changes for employee:", employeeId);
   console.log("Documents to remove:", data.documents_to_remove);
+  console.log("Documents to remove type:", typeof data.documents_to_remove);
+  console.log("Documents to remove isArray:", Array.isArray(data.documents_to_remove));
   console.log("Document records to add:", documentRecords);
 
   // Step 1: Delete document records specified in documents_to_remove
-  if (data.documents_to_remove && data.documents_to_remove.length > 0) {
+  if (data.documents_to_remove && Array.isArray(data.documents_to_remove) && data.documents_to_remove.length > 0) {
     try {
-      await tx.employeeDocument.deleteMany({
-        where: {
-          id: { in: data.documents_to_remove.map(id => parseInt(id)) },
-          employee_id: parseInt(employeeId),
-        },
-      });
-      console.log(`Deleted ${data.documents_to_remove.length} document records from employeeDocument table`);
+      // Ensure documents_to_remove is an array and filter out invalid values
+      const validDocumentIds = data.documents_to_remove
+        .filter(id => id != null && id !== '')
+        .map(id => parseInt(id))
+        .filter(id => !isNaN(id) && id > 0);
+      
+      console.log("Valid document IDs to remove:", validDocumentIds);
+      
+      if (validDocumentIds.length > 0) {
+        await tx.employeeDocument.deleteMany({
+          where: {
+            id: { in: validDocumentIds },
+            employee_id: parseInt(employeeId),
+          },
+        });
+        console.log(`Deleted ${validDocumentIds.length} document records from employeeDocument table`);
+      }
     } catch (error) {
       console.error("Error deleting document records:", error);
       throw error;
     }
+  } else {
+    console.log("No documents to remove or invalid format");
   }
 
   // Step 2: Handle new document records (already handled in updateEmployee for creation)

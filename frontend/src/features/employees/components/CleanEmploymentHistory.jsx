@@ -92,13 +92,58 @@ const CleanEmploymentHistory = () => {
 
       console.log("📋 CleanEmploymentHistory: Extracted employment data:", employmentData);
 
+      // Check if designation is at the top level (from TabbedEmploymentForm)
+      const designationValue = data.designation || employmentData.designation;
+      const designationIdValue = data.designation_id || employmentData.designation_id || designationValue;
 
+      // Check if department and role_tag are at the top level or nested
+      const departmentValue = data.department || employmentData.department;
+      const departmentIdValue = data.department_id || employmentData.department_id || departmentValue;
+      const roleTagValue = data.role_tag || employmentData.role_tag;
+      const roleTagIdValue = data.role_tag_id || employmentData.role_tag_id || roleTagValue;
+      const scaleGradeValue = data.scale_grade || employmentData.scale_grade;
+      const scaleGradeIdValue = data.scale_grade_id || employmentData.scale_grade_id || scaleGradeValue;
+
+      console.log("🔍 CleanEmploymentHistory: Field extraction:", {
+        topLevelDesignation: data.designation,
+        nestedDesignation: employmentData.designation,
+        topLevelDesignationId: data.designation_id,
+        nestedDesignationId: employmentData.designation_id,
+        finalDesignationValue: designationValue,
+        finalDesignationIdValue: designationIdValue,
+        topLevelDepartment: data.department,
+        nestedDepartment: employmentData.department,
+        topLevelDepartmentId: data.department_id,
+        nestedDepartmentId: employmentData.department_id,
+        finalDepartmentValue: departmentValue,
+        finalDepartmentIdValue: departmentIdValue,
+        topLevelRoleTag: data.role_tag,
+        nestedRoleTag: employmentData.role_tag,
+        topLevelRoleTagId: data.role_tag_id,
+        nestedRoleTagId: employmentData.role_tag_id,
+        finalRoleTagValue: roleTagValue,
+        finalRoleTagIdValue: roleTagIdValue,
+        topLevelScaleGrade: data.scale_grade,
+        nestedScaleGrade: employmentData.scale_grade,
+        topLevelScaleGradeId: data.scale_grade_id,
+        nestedScaleGradeId: employmentData.scale_grade_id,
+        finalScaleGradeValue: scaleGradeValue,
+        finalScaleGradeIdValue: scaleGradeIdValue
+      });
 
       console.log("📝 CleanEmploymentHistory: Creating employment record with data:", data);
 
       // Add employee_id to the data for validation
       const dataWithEmployeeId = {
         ...employmentData,
+        designation: designationValue, // Ensure designation field is present for validation
+        designation_id: designationIdValue, // Also include designation_id
+        department: departmentValue, // Ensure department field is present for validation
+        department_id: departmentIdValue, // Also include department_id
+        role_tag: roleTagValue, // Ensure role_tag field is present for validation
+        role_tag_id: roleTagIdValue, // Also include role_tag_id
+        scale_grade: scaleGradeValue, // Ensure scale_grade field is present for validation
+        scale_grade_id: scaleGradeIdValue, // Also include scale_grade_id
         employee_id: employee.id,
         user_id: employee.id
       };
@@ -124,19 +169,19 @@ const CleanEmploymentHistory = () => {
         employee_cnic: employee.cnic,
         // Employment data
         organization: employmentData.organization,
-        department_id: employmentData.department,
-        designation: employmentData.designation, // Keep original designation field
-        designation_id: employmentData.designation, // Also map to designation_id for backend
+        department_id: departmentIdValue,
+        designation: designationValue, // Use properly extracted designation value
+        designation_id: designationIdValue, // Use properly extracted designation ID value
         employment_type: employmentData.employment_type || "Regular",
-        role_tag: employmentData.role_tag,
+        role_tag_id: roleTagIdValue,
+        scale_grade_id: scaleGradeIdValue,
         effective_from: employmentData.effective_from,
         effective_till: employmentData.effective_till || null,
         reporting_officer_id: employmentData.reporting_officer_id || null,
         office_location: employmentData.office_location || null,
         remarks: employmentData.remarks || null,
-        scale_grade: employmentData.scale_grade || null,
         employment_status: employmentData.employment_status || "active",
-        is_current: employmentData.is_current !== undefined ? employmentData.is_current : true,
+        is_current: employmentData.is_current !== undefined ? employmentData.is_current : (employmentData.organization === 'MBWO' ? false : true),
         filer_status: employmentData.filer_status || "non_filer",
         filer_active_status: employmentData.filer_active_status || null,
         is_on_probation: employmentData.is_on_probation || false,
@@ -191,9 +236,54 @@ const CleanEmploymentHistory = () => {
       const locationData = updatedRecord.location || {};
       const contractData = updatedRecord.contract || {};
 
+      // Check if designation is at the top level (from TabbedEmploymentForm)
+      const designationValue = updatedRecord.designation || employmentData.designation;
+      const designationIdValue = updatedRecord.designation_id || employmentData.designation_id || designationValue;
+
+      // Check if department, role_tag, and scale_grade are at the top level or nested
+      const departmentValue = updatedRecord.department || employmentData.department;
+      const departmentIdValue = updatedRecord.department_id || employmentData.department_id || departmentValue;
+      const roleTagValue = updatedRecord.role_tag || employmentData.role_tag;
+      const roleTagIdValue = updatedRecord.role_tag_id || employmentData.role_tag_id || roleTagValue;
+      const scaleGradeValue = updatedRecord.scale_grade || employmentData.scale_grade;
+      const scaleGradeIdValue = updatedRecord.scale_grade_id || employmentData.scale_grade_id || scaleGradeValue;
+      const reportingOfficerValue = updatedRecord.reporting_officer_id || employmentData.reporting_officer_id;
+
+      console.log("🔍 CleanEmploymentHistory: Field extraction for update:", {
+        topLevelDesignation: updatedRecord.designation,
+        employmentDesignation: employmentData.designation,
+        finalDesignationValue: designationValue,
+        finalDesignationIdValue: designationIdValue,
+        hasDesignation: !!designationValue,
+        topLevelDepartment: updatedRecord.department,
+        nestedDepartment: employmentData.department,
+        finalDepartmentValue: departmentValue,
+        finalDepartmentIdValue: departmentIdValue,
+        topLevelRoleTag: updatedRecord.role_tag,
+        nestedRoleTag: employmentData.role_tag,
+        finalRoleTagValue: roleTagValue,
+        finalRoleTagIdValue: roleTagIdValue,
+        topLevelScaleGrade: updatedRecord.scale_grade,
+        nestedScaleGrade: employmentData.scale_grade,
+        finalScaleGradeValue: scaleGradeValue,
+        finalScaleGradeIdValue: scaleGradeIdValue,
+        topLevelReportingOfficer: updatedRecord.reporting_officer_id,
+        nestedReportingOfficer: employmentData.reporting_officer_id,
+        finalReportingOfficerValue: reportingOfficerValue
+      });
+
       // Add employee_id and document fields to the data for validation
       const dataWithEmployeeId = {
         ...employmentData,
+        designation: designationValue, // Ensure designation field is present for validation
+        designation_id: designationIdValue, // Also include designation_id
+        department: departmentValue, // Ensure department field is present for validation
+        department_id: departmentIdValue, // Also include department_id
+        role_tag: roleTagValue, // Ensure role_tag field is present for validation
+        role_tag_id: roleTagIdValue, // Also include role_tag_id
+        scale_grade: scaleGradeValue, // Ensure scale_grade field is present for validation
+        scale_grade_id: scaleGradeIdValue, // Also include scale_grade_id
+        reporting_officer_id: reportingOfficerValue, // Ensure reporting_officer_id field is present for validation
         // Include document fields for validation
         medical_fitness_report_pdf: updatedRecord.medical_fitness_report_pdf || employmentData.medical_fitness_report_pdf || null,
         police_character_certificate: updatedRecord.police_character_certificate || employmentData.police_character_certificate || null,
@@ -227,19 +317,20 @@ const CleanEmploymentHistory = () => {
         user_id: employee.id,
         // Employment data
         organization: employmentData.organization,
-        department_id: employmentData.department,
-        designation: employmentData.designation, // Keep original designation field
-        designation_id: employmentData.designation, // Also map to designation_id for backend
+        department_id: departmentIdValue,
+        designation: designationValue, // Keep original designation field
+        designation_id: designationIdValue, // Also map to designation_id for backend
         employment_type: employmentData.employment_type || "Regular",
-        role_tag: employmentData.role_tag,
+        role_tag_id: roleTagIdValue,
+        scale_grade_id: scaleGradeIdValue,
         effective_from: employmentData.effective_from,
         effective_till: employmentData.effective_till || null,
-        reporting_officer_id: employmentData.reporting_officer_id || null,
+        reporting_officer_id: reportingOfficerValue,
         office_location: employmentData.office_location || null,
         remarks: employmentData.remarks || null,
         scale_grade: employmentData.scale_grade || null,
         employment_status: employmentData.employment_status || "active",
-        is_current: employmentData.is_current !== undefined ? employmentData.is_current : true,
+        is_current: employmentData.is_current !== undefined ? employmentData.is_current : (employmentData.organization === 'MBWO' ? false : true),
         filer_status: employmentData.filer_status || "non_filer",
         filer_active_status: employmentData.filer_active_status || null,
         is_on_probation: employmentData.is_on_probation || false,

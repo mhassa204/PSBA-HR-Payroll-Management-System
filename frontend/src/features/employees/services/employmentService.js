@@ -103,11 +103,23 @@ class EmploymentService {
           { value: "Daily Wager", label: "Daily Wager", description: "Daily wage employment" }
         ],
         roleTags: [
-          { value: "admin", label: "Administrator" },
-          { value: "manager", label: "Manager" },
-          { value: "supervisor", label: "Supervisor" },
-          { value: "staff", label: "Staff" },
-          { value: "worker", label: "Worker" }
+          { value: 1, label: "admin", description: "Administrator", category: "Management" },
+          { value: 2, label: "manager", description: "Manager", category: "Management" },
+          { value: 3, label: "supervisor", description: "Supervisor", category: "Supervision" },
+          { value: 4, label: "staff", description: "Staff", category: "Operations" },
+          { value: 5, label: "worker", description: "Worker", category: "Operations" }
+        ],
+        scaleGrades: [
+          { value: 1, label: "BPS-17", description: "Basic Pay Scale 17", level: 17, category: "Government" },
+          { value: 2, label: "BPS-18", description: "Basic Pay Scale 18", level: 18, category: "Government" },
+          { value: 3, label: "BPS-19", description: "Basic Pay Scale 19", level: 19, category: "Government" },
+          { value: 4, label: "Grade-A", description: "Grade A", level: 1, category: "Private" },
+          { value: 5, label: "Grade-B", description: "Grade B", level: 2, category: "Private" }
+        ],
+        users: [
+          { value: 1, label: "John Doe - EMP001", employee_id: "EMP001", cnic: "12345-1234567-1" },
+          { value: 2, label: "Jane Smith - EMP002", employee_id: "EMP002", cnic: "12345-1234567-2" },
+          { value: 3, label: "Bob Johnson - EMP003", employee_id: "EMP003", cnic: "12345-1234567-3" }
         ],
         contractTypes: [
           { value: "Contractual", label: "Contractual", description: "Fixed-term contract" },
@@ -116,6 +128,31 @@ class EmploymentService {
           { value: "Temporary", label: "Temporary", description: "Temporary contract" }
         ]
       };
+    }
+  }
+
+  /**
+   * Get employees for reporting officer selection
+   * @returns {Promise<Array>} Array of employees formatted for dropdown
+   */
+  async getEmployeesForReportingOfficer() {
+    try {
+      const response = await this.apiClient.get("/employment/employees-for-reporting-officer");
+      
+      if (response.data.success && response.data.employees) {
+        return response.data.employees;
+      } else {
+        throw new Error("Invalid response format from API");
+      }
+    } catch (error) {
+      console.error("❌ Error fetching employees for reporting officer:", error);
+      
+      // Return fallback data
+      return [
+        { value: 1, label: "John Doe - 12345-1234567-1", employee_id: "EMP001", cnic: "12345-1234567-1" },
+        { value: 2, label: "Jane Smith - 23456-2345678-2", employee_id: "EMP002", cnic: "23456-2345678-2" },
+        { value: 3, label: "Bob Johnson - 34567-3456789-3", employee_id: "EMP003", cnic: "34567-3456789-3" }
+      ];
     }
   }
 

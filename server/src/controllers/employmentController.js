@@ -214,18 +214,18 @@ const employmentController = {
     const rules = {
       MBWO: {
         required: ['employee_id', 'organization', 'designation', 'effective_from'],
-        optional: ['effective_till', 'remarks', 'basic_salary'],
+        optional: ['effective_till', 'remarks', 'gross_salary'],
         hidden: ['department', 'employment_type', 'role_tag', 'reporting_officer_id', 'office_location', 'scale_grade', 'medical_fitness_report_pdf', 'filer_status', 'filer_active_status', 'employment_status', 'is_current', 'is_on_probation', 'probation_end_date']
       },
       PMBMC: {
         required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
-        optional: ['effective_till', 'remarks', 'filer_active_status', 'basic_salary', 'medical_allowance', 'house_rent', 'conveyance_allowance', 'other_allowances'],
-        hidden: ['scale_grade', 'reporting_officer_id', 'office_location', 'employment_status']
+        optional: ['effective_till', 'remarks', 'filer_active_status', 'basic_salary', 'medical_allowance', 'house_rent', 'conveyance_allowance', 'other_allowances', 'scale_grade', 'reporting_officer_id', 'office_location', 'employment_status'],
+        hidden: []
       },
       PSBA: {
         required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
-        optional: ['effective_till', 'remarks', 'filer_active_status', 'scale_grade', 'employment_status', 'is_on_probation', 'probation_end_date', 'reporting_officer_id'],
-        hidden: ['office_location']
+        optional: ['effective_till', 'remarks', 'filer_active_status', 'scale_grade', 'employment_status', 'is_on_probation', 'probation_end_date', 'reporting_officer_id', 'office_location'],
+        hidden: []
       }
     };
     
@@ -378,7 +378,16 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
   const { organization, user_id, employee_id, ...employmentData } = data;
   const rules = employmentController.getOrganizationValidationRules(organization);
   
-
+  console.log("🔍 Backend validation - Received data:", {
+    organization,
+    employee_id,
+    user_id,
+    employmentDataKeys: Object.keys(employmentData),
+    designation: employmentData.designation,
+    designation_id: employmentData.designation_id,
+    designation_name: employmentData.designation_name,
+    allData: data
+  });
   
   const errors = [];
   
@@ -388,14 +397,32 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
   }
   
   const requiredFields = rules.required.filter(field => field !== 'employee_id' && field !== 'organization');
+  console.log("🔍 Backend validation - Required fields for", organization, ":", requiredFields);
+  
   requiredFields.forEach(field => {
     let fieldValue;
     if (field === 'designation') {
-      fieldValue = employmentData.designation || employmentData.designation_id;
-
+      fieldValue = employmentData.designation || employmentData.designation_id || employmentData.designation_name;
+      console.log("🔍 Backend validating designation field:", {
+        designation: employmentData.designation,
+        designation_id: employmentData.designation_id,
+        designation_name: employmentData.designation_name,
+        finalValue: fieldValue
+      });
     } else if (field === 'department') {
-      fieldValue = employmentData.department || employmentData.department_id;
-
+      fieldValue = employmentData.department || employmentData.department_id || employmentData.department_name;
+      console.log("🔍 Backend validating department field:", {
+        department: employmentData.department,
+        department_id: employmentData.department_id,
+        department_name: employmentData.department_name,
+        finalValue: fieldValue
+      });
+    } else if (field === 'role_tag') {
+      fieldValue = employmentData.role_tag || employmentData.role_tag_id || employmentData.role_tag_name;
+    } else if (field === 'scale_grade') {
+      fieldValue = employmentData.scale_grade || employmentData.scale_grade_id || employmentData.scale_grade_name;
+    } else if (field === 'reporting_officer_id') {
+      fieldValue = employmentData.reporting_officer_id || employmentData.reporting_officer || employmentData.reporting_officer_name;
     } else if (field === 'medical_fitness_report_pdf') {
       // Check for new file upload OR existing document in database
       const uploadedFile = uploadedFiles.find(f => 
@@ -497,12 +524,23 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       
       fieldValue = uploadedFile || hasExistingDocument;
 
+    } else if (field === 'role_tag') {
+      // Handle role_tag field - check both role_tag and role_tag_id
+      fieldValue = employmentData.role_tag || employmentData.role_tag_id;
+      
+    } else if (field === 'scale_grade') {
+      // Handle scale_grade field - check both scale_grade and scale_grade_id
+      fieldValue = employmentData.scale_grade || employmentData.scale_grade_id;
+      
     } else {
       fieldValue = employmentData[field];
     }
     
     if (!fieldValue) {
+      console.log("❌ Backend validation failed for field:", field, "in organization:", organization);
       errors.push(`${field} is required for ${organization} organization`);
+    } else {
+      console.log("✅ Backend validation passed for field:", field, "value:", fieldValue);
     }
   });
   
@@ -754,9 +792,12 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       const employmentData = {
         ...req.body,
         employee_id: actualEmployeeId, // Ensure employee_id is set
-        // Map field names for consistency
-        department: req.body.department || req.body.department_id,
-        designation: req.body.designation || req.body.designation_id,
+        // Map field names for consistency - handle both ID and text fields
+        department_id: req.body.department || req.body.department_id || req.body.department_name,
+        designation_id: req.body.designation || req.body.designation_id || req.body.designation_name,
+        role_tag_id: req.body.role_tag || req.body.role_tag_id || req.body.role_tag_name,
+        scale_grade_id: req.body.scale_grade || req.body.scale_grade_id || req.body.scale_grade_name,
+        reporting_officer_id: req.body.reporting_officer_id || req.body.reporting_officer || req.body.reporting_officer_name,
         ...processedFiles,
         documentRecords,
         salary: Object.keys(salary).length > 0 ? salary : null,
@@ -1094,15 +1135,41 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
 
       let departments = [];
       let designations = [];
+      let roleTags = [];
+      let scaleGrades = [];
+      let users = [];
 
       try {
-        [departments, designations] = await Promise.all([
+        [departments, designations, roleTags, scaleGrades, users] = await Promise.all([
           prisma.department.findMany({
+            where: { is_deleted: false },
             orderBy: { name: 'asc' }
           }),
           prisma.designation.findMany({
+            where: { is_deleted: false },
             include: { department: true },
             orderBy: { title: 'asc' }
+          }),
+          prisma.roleTag.findMany({
+            where: { is_deleted: false, is_active: true },
+            orderBy: [{ category: 'asc' }, { name: 'asc' }]
+          }),
+          prisma.scaleGrade.findMany({
+            where: { is_deleted: false, is_active: true },
+            orderBy: [{ category: 'asc' }, { level: 'asc' }, { name: 'asc' }]
+          }),
+          prisma.employee.findMany({
+            where: { 
+              is_deleted: false,
+              status: "Active"
+            },
+            select: {
+              id: true,
+              full_name: true,
+              cnic: true,
+              employee_id: true
+            },
+            orderBy: { full_name: 'asc' }
           })
         ]);
   
@@ -1143,6 +1210,28 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
           { id: 21, title: "Senior Operations Officer", department_id: 7, level: 2 },
           { id: 22, title: "Operations Manager", department_id: 7, level: 3 }
         ];
+
+        roleTags = [
+          { id: 1, name: "admin", description: "Administrator", category: "Management" },
+          { id: 2, name: "manager", description: "Manager", category: "Management" },
+          { id: 3, name: "supervisor", description: "Supervisor", category: "Supervision" },
+          { id: 4, name: "staff", description: "Staff", category: "Operations" },
+          { id: 5, name: "worker", description: "Worker", category: "Operations" }
+        ];
+
+        scaleGrades = [
+          { id: 1, name: "BPS-17", description: "Basic Pay Scale 17", level: 17, category: "Government" },
+          { id: 2, name: "BPS-18", description: "Basic Pay Scale 18", level: 18, category: "Government" },
+          { id: 3, name: "BPS-19", description: "Basic Pay Scale 19", level: 19, category: "Government" },
+          { id: 4, name: "Grade-A", description: "Grade A", level: 1, category: "Private" },
+          { id: 5, name: "Grade-B", description: "Grade B", level: 2, category: "Private" }
+        ];
+
+        users = [
+          { id: 1, full_name: "John Doe", cnic: "12345-1234567-1", employee_id: "EMP001" },
+          { id: 2, full_name: "Jane Smith", cnic: "12345-1234567-2", employee_id: "EMP002" },
+          { id: 3, full_name: "Bob Johnson", cnic: "12345-1234567-3", employee_id: "EMP003" }
+        ];
       }
 
       const organizations = [
@@ -1157,14 +1246,6 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
         { id: 3, type: "Probation", description: "Probationary period" },
         { id: 4, type: "Internship", description: "Training position" },
         { id: 5, type: "Daily Wager", description: "Daily wage employment" }
-      ];
-
-      const roleTags = [
-        { value: "admin", label: "Administrator" },
-        { value: "manager", label: "Manager" },
-        { value: "supervisor", label: "Supervisor" },
-        { value: "staff", label: "Staff" },
-        { value: "worker", label: "Worker" }
       ];
 
       const contractTypes = [
@@ -1197,16 +1278,69 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
             label: type.type,
             description: type.description
           })),
-          roleTags: roleTags,
+          roleTags: roleTags.map(tag => ({
+            value: tag.id,
+            label: tag.name,
+            description: tag.description,
+            category: tag.category
+          })),
+          scaleGrades: scaleGrades.map(grade => ({
+            value: grade.id,
+            label: grade.name,
+            description: grade.description,
+            level: grade.level,
+            category: grade.category
+          })),
+          users: users.map(user => ({
+            value: user.id,
+            label: `${user.full_name} - ${user.cnic || user.employee_id}`,
+            employee_id: user.employee_id,
+            cnic: user.cnic
+          })),
           contractTypes: contractTypes
         }
       };
 
-
-
       res.status(200).json(response);
     } catch (error) {
       console.error("❌ Error fetching form options:", error.message);
+      res.status(400).json({ success: false, error: error.message });
+    }
+  },
+
+  // Get employees for reporting officer selection
+  getEmployeesForReportingOfficer: async (req, res) => {
+    try {
+      const { PrismaClient } = require("@prisma/client");
+      const prisma = new PrismaClient();
+
+      const employees = await prisma.employee.findMany({
+        where: { 
+          is_deleted: false,
+          status: "Active"
+        },
+        select: {
+          id: true,
+          full_name: true,
+          cnic: true,
+          employee_id: true
+        },
+        orderBy: { full_name: 'asc' }
+      });
+
+      const formattedEmployees = employees.map(emp => ({
+        value: emp.id,
+        label: `${emp.full_name} - ${emp.cnic || emp.employee_id}`,
+        employee_id: emp.employee_id,
+        cnic: emp.cnic
+      }));
+
+      res.status(200).json({
+        success: true,
+        employees: formattedEmployees
+      });
+    } catch (error) {
+      console.error("❌ Error fetching employees for reporting officer:", error.message);
       res.status(400).json({ success: false, error: error.message });
     }
   },

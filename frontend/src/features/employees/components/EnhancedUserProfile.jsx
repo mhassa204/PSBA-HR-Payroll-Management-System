@@ -14,6 +14,8 @@ import {
   displayCNIC,
   displayPhoneNumber,
   calculateAge,
+  formatCityName,
+  formatDistrictName,
 } from "../../../utils/formatters";
 
 // Helper functions for experience calculations
@@ -99,6 +101,13 @@ const EnhancedUserProfile = () => {
       console.log("🔍 EnhancedUserProfile: Loaded employee data:", employeeData);
       console.log("📋 EnhancedUserProfile: Employment records count:", employeeData?.employmentRecords?.length || 0);
       console.log("📋 EnhancedUserProfile: Employment records:", employeeData?.employmentRecords);
+      
+      if (employeeData?.employmentRecords?.length > 0) {
+        const currentPos = getCurrentPosition(employeeData.employmentRecords);
+        console.log("🔍 EnhancedUserProfile: Current position:", currentPos);
+        console.log("💰 EnhancedUserProfile: Current salary data:", currentPos?.salary);
+      }
+      console.log("📋 EnhancedUserProfile: Employment records:", employeeData?.employmentRecords);
 
       setEmployee(employeeData);
     } catch (error) {
@@ -139,7 +148,23 @@ const EnhancedUserProfile = () => {
 
   const getCurrentPosition = (employmentRecords) => {
     if (!employmentRecords || employmentRecords.length === 0) return null;
-    return employmentRecords.find((record) => record.effective_till === null);
+    
+    // First try to find by is_current flag
+    let currentRecord = employmentRecords.find((record) => record.is_current === true);
+    
+    // Fallback: if no is_current flag, look for records without end date
+    if (!currentRecord) {
+      currentRecord = employmentRecords.find((record) => record.effective_till === null);
+    }
+    
+    // If still no current record, get the most recent one
+    if (!currentRecord && employmentRecords.length > 0) {
+      currentRecord = employmentRecords.sort((a, b) => 
+        new Date(b.effective_from) - new Date(a.effective_from)
+      )[0];
+    }
+    
+    return currentRecord;
   };
 
   if (isLoading) {
@@ -198,6 +223,14 @@ const EnhancedUserProfile = () => {
 
   const currentPosition = getCurrentPosition(employee.employmentRecords);
   const totalExperience = calculateExperience(employee.employmentRecords);
+  
+  // Debug logging for current position and salary
+  console.log("🔍 EnhancedUserProfile: Current position:", currentPosition);
+  console.log("💰 EnhancedUserProfile: Current salary:", currentPosition?.salary);
+  console.log("🏢 EnhancedUserProfile: Current organization:", currentPosition?.organization);
+  console.log("📍 EnhancedUserProfile: Current location:", currentPosition?.location);
+  console.log("📅 EnhancedUserProfile: Current effective_from:", currentPosition?.effective_from);
+  console.log("🏢 EnhancedUserProfile: Current office_location:", currentPosition?.office_location);
 
   const tabs = [
     { id: "overview", label: "Overview", icon: "fas fa-user" },
@@ -440,7 +473,7 @@ const EnhancedUserProfile = () => {
                           Start Date
                         </p>
                         <p className="font-semibold text-gray-900">
-                          {formatDate(currentPosition.start_date)}
+                          {formatDate(currentPosition.effective_from)}
                         </p>
                       </div>
                       <div>
@@ -456,7 +489,9 @@ const EnhancedUserProfile = () => {
                           Office Location
                         </p>
                         <p className="font-semibold text-gray-900">
-                          {currentPosition.office_location || "N/A"}
+                          {currentPosition.location?.city ? formatCityName(currentPosition.location.city) : 
+                           currentPosition.location?.district ? currentPosition.location.district : 
+                           currentPosition.office_location || "N/A"}
                         </p>
                       </div>
                     </div>
@@ -527,7 +562,7 @@ const EnhancedUserProfile = () => {
                       <div className="flex justify-between">
                         <span className="text-gray-700 font-medium">City:</span>
                         <span className="font-semibold text-gray-900">
-                          {employee.city || "N/A"}
+                          {formatCityName(employee.city)}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -535,7 +570,7 @@ const EnhancedUserProfile = () => {
                           District:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {employee.district || "N/A"}
+                          {formatDistrictName(employee.district)}
                         </span>
                       </div>
                     </div>
@@ -631,7 +666,15 @@ const EnhancedUserProfile = () => {
                                     Scale/Grade:
                                   </span>
                                   <p className="font-semibold text-gray-900">
-                                    {record.scale_grade || "N/A"}
+                                    {record.scale_grade?.name || record.scale_grade_id || "N/A"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-700 font-medium">
+                                    Role Tag:
+                                  </span>
+                                  <p className="font-semibold text-gray-900">
+                                    {record.role_tag?.name || record.role_tag_id || "N/A"}
                                   </p>
                                 </div>
                                 <div>
@@ -639,7 +682,9 @@ const EnhancedUserProfile = () => {
                                     Location:
                                   </span>
                                   <p className="font-semibold text-gray-900">
-                                    {record.office_location || "N/A"}
+                                    {record.location?.city ? formatCityName(record.location.city) : 
+                                     record.location?.district ? record.location.district : 
+                                     record.office_location || "N/A"}
                                   </p>
                                 </div>
                               </div>
@@ -855,7 +900,7 @@ const EnhancedUserProfile = () => {
                           Domicile District:
                         </span>
                         <span className="font-medium">
-                          {employee.domicile_district || "N/A"}
+                          {formatDistrictName(employee.domicile_district)}
                         </span>
                       </div>
                     </div>
@@ -958,13 +1003,13 @@ const EnhancedUserProfile = () => {
                     <div className="flex justify-between py-2 border-b border-gray-100">
                       <span className="text-gray-600">City:</span>
                       <span className="font-medium">
-                        {employee.city || "N/A"}
+                        {formatCityName(employee.city)}
                       </span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-gray-100">
                       <span className="text-gray-600">District:</span>
                       <span className="font-medium">
-                        {employee.district || "N/A"}
+                        {formatDistrictName(employee.district)}
                       </span>
                     </div>
                   </div>

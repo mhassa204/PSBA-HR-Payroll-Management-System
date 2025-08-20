@@ -206,7 +206,7 @@ const SearchableSelect = ({
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-hidden min-w-[300px] transform -translate-x-0">
           {/* Search input */}
           <div className="p-3 border-b border-gray-200">
             <div className="relative">
@@ -227,14 +227,14 @@ const SearchableSelect = ({
           </div>
 
           {/* Options list */}
-          <div className="max-h-48 overflow-y-auto" role="listbox">
+          <div className="max-h-64 overflow-y-auto dropdown-scroll" role="listbox">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option, index) => (
                 <div
                   key={option.value}
                   ref={el => optionsRef.current[index] = el}
                   className={`
-                    px-4 py-3 cursor-pointer transition-colors
+                    px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0
                     ${highlightedIndex === index ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50'}
                     ${value === option.value ? 'bg-blue-100 text-blue-900 font-medium' : 'text-gray-900'}
                   `}
@@ -242,7 +242,7 @@ const SearchableSelect = ({
                   role="option"
                   aria-selected={value === option.value}
                 >
-                  {option.label}
+                  <div className="text-sm leading-relaxed whitespace-normal break-words pr-2">{option.label}</div>
                 </div>
               ))
             ) : (

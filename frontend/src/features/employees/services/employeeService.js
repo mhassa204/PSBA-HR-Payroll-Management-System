@@ -337,6 +337,41 @@ createFormData(employeeData) {
   async getEmployeesPaginated(page = 1, limit = 10, searchTerm = '') {
     return this.getAllEmployees(page, limit, searchTerm);
   }
+
+  /**
+   * Get all employees for dropdown/select options (formatted for reporting officer)
+   * @returns {Promise<Array>} Array of employees formatted for dropdown
+   */
+  async getAllEmployeesForDropdown() {
+    try {
+      // Get all employees without pagination for dropdown
+      const result = await this.apiClient.get('/employees?limit=1000');
+      const employees = result.employees || result.data || [];
+      
+      console.log("🔍 getAllEmployeesForDropdown: Raw result:", result);
+      console.log("🔍 getAllEmployeesForDropdown: Employees count:", employees.length);
+      
+      if (employees.length > 0) {
+        console.log("🔍 getAllEmployeesForDropdown: Sample employee:", employees[0]);
+      }
+      
+      // Format employees for dropdown: "Employee Name_CNIC"
+      const formattedEmployees = employees.map(employee => ({
+        value: employee.id.toString(),
+        label: `${employee.full_name || 'Unknown'}_${employee.cnic || 'N/A'}`
+      }));
+      
+      console.log("🔍 getAllEmployeesForDropdown: Formatted employees count:", formattedEmployees.length);
+      if (formattedEmployees.length > 0) {
+        console.log("🔍 getAllEmployeesForDropdown: Sample formatted employee:", formattedEmployees[0]);
+      }
+      
+      return formattedEmployees;
+    } catch (error) {
+      console.error("Error fetching employees for dropdown:", error);
+      throw new Error("Failed to fetch employees for dropdown");
+    }
+  }
 }
 
 // Export singleton instance

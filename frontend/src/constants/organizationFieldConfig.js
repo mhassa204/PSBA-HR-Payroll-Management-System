@@ -49,7 +49,7 @@ export const ORGANIZATION_FIELD_CONFIG = {
         "remarks"
       ],
       salary: [
-        "basic_salary"
+        "gross_salary"
       ],
       location: "all",
       contract: [] // All contract fields visible for MBWO
@@ -59,12 +59,7 @@ export const ORGANIZATION_FIELD_CONFIG = {
   PMBMC: {
     name: "PMBMC", 
     hiddenFields: {
-      employment: [
-        "scale_grade",
-        "reporting_officer_id",
-        "office_location",
-        "employment_status"
-      ],
+      employment: [],
       salary: [], // No salary fields hidden for PMBMC
       location: [], // No location fields hidden for PMBMC
       contract: [] // No contract fields hidden for PMBMC
@@ -82,6 +77,10 @@ export const ORGANIZATION_FIELD_CONFIG = {
         "filer_status",
         "filer_active_status",
         "is_current",
+        "scale_grade",
+        "reporting_officer_id",
+        "office_location",
+        "employment_status",
         "remarks"
       ],
       salary: [
@@ -99,7 +98,7 @@ export const ORGANIZATION_FIELD_CONFIG = {
   PSBA: {
     name: "PSBA",
     hiddenFields: {
-      employment: ["office_location"], // Hide office location for all organizations
+      employment: [], // No employment fields hidden for PSBA
       salary: [], // No salary fields hidden for PSBA
       location: [], // No location fields hidden for PSBA
       contract: [] // No contract fields hidden for PSBA
@@ -220,9 +219,9 @@ export const getHiddenFieldDefaults = (organizationName) => {
  */
 export const ORGANIZATION_OPTIONS = [
   { value: "", label: "Select Organization" },
-  { value: "MBWO", label: "MBWO" },
-  { value: "PMBMC", label: "PMBMC" },
-  { value: "PSBA", label: "PSBA" }
+  { value: "MBWO", label: "Model Bazaar Welfare Organization (MBWO) - 2010-2016" },
+  { value: "PMBMC", label: "Punjab Model Bazaars Management Company (PMBMC) - 2016-2024" },
+  { value: "PSBA", label: "Punjab Sahulat Bazaars Authority (PSBA) - 2025-Present" }
 ];
 
 /**
@@ -245,8 +244,8 @@ export const ORGANIZATION_VALIDATION_RULES = {
   
   PMBMC: {
     required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
-    optional: ['effective_till', 'remarks', 'filer_active_status', 'basic_salary', 'medical_allowance', 'house_rent', 'conveyance_allowance', 'other_allowances'],
-    hidden: ['scale_grade', 'reporting_officer_id', 'office_location', 'employment_status'],
+    optional: ['effective_till', 'remarks', 'filer_active_status', 'basic_salary', 'medical_allowance', 'house_rent', 'conveyance_allowance', 'other_allowances', 'scale_grade', 'reporting_officer_id', 'office_location', 'employment_status'],
+    hidden: [],
     fieldLabels: {
       department: 'Department',
       designation: 'Designation',
@@ -258,14 +257,18 @@ export const ORGANIZATION_VALIDATION_RULES = {
       filer_status: 'Filer Status',
       filer_active_status: 'Filer Active Status',
       is_current: 'Current Employment',
+      scale_grade: 'Scale/Grade',
+      reporting_officer_id: 'Reporting Officer',
+      office_location: 'Office Location',
+      employment_status: 'Employment Status',
       remarks: 'Remarks'
     }
   },
   
   PSBA: {
-    required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
-    optional: ['effective_till', 'remarks', 'filer_active_status', 'scale_grade', 'employment_status', 'is_on_probation', 'probation_end_date', 'reporting_officer_id'],
-    hidden: ['office_location'],
+    required: ['employee_id', 'organization', 'designation', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
+    optional: ['department', 'employment_type', 'role_tag', 'effective_till', 'remarks', 'filer_active_status', 'scale_grade', 'employment_status', 'is_on_probation', 'probation_end_date', 'reporting_officer_id', 'office_location'],
+    hidden: [],
     fieldLabels: {
       department: 'Department',
       designation: 'Designation',
@@ -282,6 +285,7 @@ export const ORGANIZATION_VALIDATION_RULES = {
       is_on_probation: 'On Probation',
       probation_end_date: 'Probation End Date',
       reporting_officer_id: 'Reporting Officer',
+      office_location: 'Office Location',
       remarks: 'Remarks'
     }
   }
@@ -330,16 +334,29 @@ export const validateEmploymentData = (data) => {
   // Check required fields (excluding employee_id and organization as they're handled above)
   const requiredFields = rules.required.filter(field => field !== 'employee_id' && field !== 'organization');
   requiredFields.forEach(field => {
-    // Handle designation field name variations
+    // Handle field name variations
     let fieldValue;
     if (field === 'designation') {
-      fieldValue = employmentData.designation || employmentData.designation_id;
-
+      fieldValue = employmentData.designation || employmentData.designation_id || employmentData.designation_name;
+    } else if (field === 'department') {
+      fieldValue = employmentData.department || employmentData.department_id || employmentData.department_name;
+    } else if (field === 'role_tag') {
+      fieldValue = employmentData.role_tag || employmentData.role_tag_id || employmentData.role_tag_name;
+    } else if (field === 'scale_grade') {
+      fieldValue = employmentData.scale_grade || employmentData.scale_grade_id || employmentData.scale_grade_name;
+    } else if (field === 'reporting_officer_id') {
+      fieldValue = employmentData.reporting_officer_id || employmentData.reporting_officer || employmentData.reporting_officer_name;
     } else {
       fieldValue = employmentData[field];
     }
     
-    if (!fieldValue || (typeof fieldValue === 'string' && !fieldValue.trim())) {
+    // Special handling for boolean fields - they should exist but can be false
+    if (typeof fieldValue === 'boolean') {
+      if (fieldValue === undefined || fieldValue === null) {
+        const fieldLabel = rules.fieldLabels[field] || field;
+        errors.push(`${fieldLabel} is required for ${organization} organization`);
+      }
+    } else if (!fieldValue || (typeof fieldValue === 'string' && !fieldValue.trim())) {
       const fieldLabel = rules.fieldLabels[field] || field;
       errors.push(`${fieldLabel} is required for ${organization} organization`);
     }

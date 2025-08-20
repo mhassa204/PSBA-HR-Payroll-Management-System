@@ -236,14 +236,9 @@ export const employmentTypes = [
     description: "Fixed-term contract",
     benefits: "Limited benefits",
   },
+
   {
     id: 3,
-    type: "Probation",
-    description: "Probationary period",
-    benefits: "Basic benefits",
-  },
-  {
-    id: 4,
     type: "Internship",
     description: "Training position",
     benefits: "Stipend only",

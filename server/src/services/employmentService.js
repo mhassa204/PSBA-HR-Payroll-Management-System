@@ -38,8 +38,8 @@ const employmentService = {
     
     const hiddenFieldsByOrg = {
       MBWO: ['department', 'employment_type', 'role_tag', 'reporting_officer_id', 'office_location', 'scale_grade', 'medical_fitness_report_pdf', 'filer_status', 'filer_active_status', 'employment_status', 'is_current', 'is_on_probation', 'probation_end_date'],
-      PMBMC: ['scale_grade', 'reporting_officer_id', 'office_location', 'employment_status'],
-      PSBA: ['office_location']
+      PMBMC: [],
+      PSBA: []
     };
     
     const hiddenFields = hiddenFieldsByOrg[organization] || [];
@@ -274,7 +274,7 @@ const employmentService = {
 createEmployment: async (data) => {
   const filteredData = employmentService.filterDataByOrganization(data);
   
-  const { 
+  let { 
     user_id,
     employee_id,
     organization,
@@ -283,13 +283,13 @@ createEmployment: async (data) => {
     employment_type = "Regular",
     effective_from,
     effective_till,
-    role_tag,
+    role_tag_id,
     reporting_officer_id,
     office_location,
     remarks,
-    scale_grade,
+    scale_grade_id,
     employment_status = "active",
-    is_current = true,
+    is_current,
     filer_status = "non_filer",
     filer_active_status,
     is_on_probation = false,
@@ -299,6 +299,11 @@ createEmployment: async (data) => {
     contract,
     documentRecords = []
   } = filteredData;
+
+  // Set organization-specific default for is_current
+  if (is_current === undefined) {
+    is_current = organization === 'MBWO' ? false : true;
+  }
 
   // Remove direct references to document fields
   // const actualMedicalFitness = medical_fitness_report_pdf;
@@ -363,11 +368,11 @@ createEmployment: async (data) => {
         employment_type,
         effective_from: effective_from ? new Date(effective_from) : null,
         effective_till: effective_till ? new Date(effective_till) : null,
-        role_tag: cleanValue(role_tag),
+        role_tag_id: role_tag_id ? parseInt(role_tag_id) : null,
+        scale_grade_id: scale_grade_id ? parseInt(scale_grade_id) : null,
         reporting_officer_id: cleanValue(reporting_officer_id),
         office_location: cleanValue(office_location),
         remarks: cleanValue(remarks),
-        scale_grade: cleanValue(scale_grade),
         employment_status,
         is_current: toBoolean(is_current),
         filer_status,
@@ -525,15 +530,17 @@ createEmployment: async (data) => {
         id: parseInt(id),
         is_deleted: false
       },
-      include: {
-        employee: true,
-        department: true,
-        designation: true,
-        salary: true,
-        location: true,
-        contract: true,
-        documents: true
-      }
+              include: {
+          employee: true,
+          department: true,
+          designation: true,
+          role_tag: true,
+          scale_grade: true,
+          salary: true,
+          location: true,
+          contract: true,
+          documents: true
+        }
     });
 
     if (!employment) return null;
@@ -567,6 +574,8 @@ createEmployment: async (data) => {
       include: {
         department: true,
         designation: true,
+        role_tag: true,
+        scale_grade: true,
         salary: true,
         location: true,
         contract: true,
@@ -798,18 +807,18 @@ createEmployment: async (data) => {
 updateEmployment: async (id, data) => {
   const filteredData = employmentService.filterDataByOrganization(data);
   
-  const {
+  let {
     organization,
     department_id,
     designation_id,
     employment_type,
     effective_from,
     effective_till,
-    role_tag,
+    role_tag_id,
     reporting_officer_id,
     office_location,
     remarks,
-    scale_grade,
+    scale_grade_id,
     employment_status,
     is_current,
     filer_status,
@@ -821,6 +830,11 @@ updateEmployment: async (id, data) => {
     contract,
     documentRecords = []
   } = filteredData;
+
+  // Set organization-specific default for is_current if not provided
+  if (is_current === undefined) {
+    is_current = organization === 'MBWO' ? false : true;
+  }
 
   // Remove direct references to document fields
   // const actualMedicalFitness = medical_fitness_report_pdf;
@@ -874,11 +888,11 @@ updateEmployment: async (id, data) => {
     if (employment_type !== undefined) employmentUpdateData.employment_type = employment_type;
     if (effective_from !== undefined) employmentUpdateData.effective_from = effective_from ? new Date(effective_from) : null;
     if (effective_till !== undefined) employmentUpdateData.effective_till = effective_till ? new Date(effective_till) : null;
-    if (role_tag !== undefined) employmentUpdateData.role_tag = cleanValue(role_tag);
+    if (role_tag_id !== undefined) employmentUpdateData.role_tag_id = role_tag_id ? parseInt(role_tag_id) : null;
+    if (scale_grade_id !== undefined) employmentUpdateData.scale_grade_id = scale_grade_id ? parseInt(scale_grade_id) : null;
     if (reporting_officer_id !== undefined) employmentUpdateData.reporting_officer_id = cleanValue(reporting_officer_id);
     if (office_location !== undefined) employmentUpdateData.office_location = cleanValue(office_location);
     if (remarks !== undefined) employmentUpdateData.remarks = cleanValue(remarks);
-    if (scale_grade !== undefined) employmentUpdateData.scale_grade = cleanValue(scale_grade);
     if (employment_status !== undefined) employmentUpdateData.employment_status = employment_status;
     if (is_current !== undefined) employmentUpdateData.is_current = toBoolean(is_current);
     if (filer_status !== undefined) employmentUpdateData.filer_status = filer_status;
@@ -1314,7 +1328,6 @@ updateEmployment: async (id, data) => {
       // Document records are already created by createEmployment/updateEmployment
       // No need to create them again here to avoid duplicates
 
-
       return contract;
     });
   },
@@ -1351,7 +1364,6 @@ updateEmployment: async (id, data) => {
 
       // Document records are already created by createEmployment/updateEmployment
       // No need to create them again here to avoid duplicates
-
 
       return contract;
     });

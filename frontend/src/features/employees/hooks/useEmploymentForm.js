@@ -121,8 +121,24 @@ export const useEmploymentForm = ({
     const loadFormOptions = async () => {
       try {
         setIsLoading(true);
+        console.log("🔍 useEmploymentForm: Loading form options...");
+        
         const options = await employmentService.getFormOptions();
+        
+        console.log("🔍 useEmploymentForm: Received form options:", {
+          hasOptions: !!options,
+          optionsKeys: options ? Object.keys(options) : [],
+          departmentsCount: options?.departments?.length || 0,
+          designationsCount: options?.designations?.length || 0,
+          roleTagsCount: options?.roleTags?.length || 0,
+          scaleGradesCount: options?.scaleGrades?.length || 0,
+          organizationsCount: options?.organizations?.length || 0,
+          employmentTypesCount: options?.employmentTypes?.length || 0,
+          usersCount: options?.users?.length || 0
+        });
+        
         setFormOptions(options);
+        console.log("✅ useEmploymentForm: Form options loaded successfully");
       } catch (error) {
         console.error("❌ Error loading form options:", error);
         if (onError) onError(error);
@@ -138,23 +154,52 @@ export const useEmploymentForm = ({
   useEffect(() => {
     const loadDesignations = async () => {
       try {
+        // Check if we're dealing with MBWO organization (which hides department field)
+        const currentOrg = employmentForm.watch("organization");
+        const isMBWO = currentOrg === "MBWO";
+        
+        console.log("🔍 useEmploymentForm: Loading designations for organization:", currentOrg, "isMBWO:", isMBWO);
+        console.log("🔍 useEmploymentForm: Form options available:", {
+          hasFormOptions: !!formOptions,
+          hasDesignations: !!formOptions?.designations,
+          designationsCount: formOptions?.designations?.length || 0,
+          hasDepartments: !!formOptions?.departments,
+          departmentsCount: formOptions?.departments?.length || 0
+        });
+        
         if (formOptions?.designations && formOptions.designations.length > 0) {
           // Use designations directly from form options instead of loading by department
+          console.log("✅ useEmploymentForm: Using designations from form options:", formOptions.designations.length);
           setAvailableDesignations(formOptions.designations);
+        } else if (isMBWO && formOptions?.departments && formOptions.departments.length > 0) {
+          // For MBWO, load all designations from all departments since department field is hidden
+          console.log("🔍 useEmploymentForm: MBWO detected - loading all designations from all departments");
+          const allDesignations = [];
+          for (const dept of formOptions.departments) {
+            try {
+              console.log("🔍 useEmploymentForm: Loading designations for department:", dept.label, "ID:", dept.value);
+              const designations = await employmentService.getDesignationsByDepartment(dept.value);
+              console.log("✅ useEmploymentForm: Loaded designations for department", dept.label, ":", designations.length);
+              allDesignations.push(...designations);
+            } catch (error) {
+              console.error(`❌ Error loading designations for department ${dept.label}:`, error);
+            }
+          }
+          console.log("✅ useEmploymentForm: Loaded all designations for MBWO:", allDesignations.length);
+          setAvailableDesignations(allDesignations);
         } else if (formOptions?.departments && formOptions.departments.length > 0) {
-          // Fallback: load designations by department
+          // Fallback: load designations by department (for non-MBWO organizations)
+          console.log("🔍 useEmploymentForm: Loading designations by department for non-MBWO organization");
           const allDesignations = [];
           for (const dept of formOptions.departments) {
             try {
               const designations = await employmentService.getDesignationsByDepartment(dept.value);
               allDesignations.push(...designations);
-
             } catch (error) {
               console.error(`❌ Error loading designations for department ${dept.label}:`, error);
             }
           }
           setAvailableDesignations(allDesignations);
-
         } else {
           console.warn("⚠️ No departments or designations available in form options");
           setAvailableDesignations([]);
@@ -166,7 +211,7 @@ export const useEmploymentForm = ({
     };
 
     loadDesignations();
-  }, [formOptions]);
+  }, [formOptions, employmentForm]);
 
   // Watch employment type to determine if contractual
   useEffect(() => {
@@ -175,6 +220,27 @@ export const useEmploymentForm = ({
         const isContractualType = value.employment_type === "Contract" || value.employment_type === "Daily Wager";
         setIsContractual(isContractualType);
         // Employment type changed - logging removed to prevent infinite loops
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [employmentForm]);
+
+  // Watch organization changes to reload designations when needed
+  useEffect(() => {
+    const subscription = employmentForm.watch((value, { name }) => {
+      if (name === "organization") {
+        console.log("🔍 useEmploymentForm: Organization changed to:", value);
+        // When organization changes, we need to reload designations
+        // This will trigger the loadDesignations function above
+        if (value === "MBWO") {
+          console.log("🔍 useEmploymentForm: MBWO organization detected - will reload all designations");
+          // For MBWO, set is_current to false by default
+          employmentForm.setValue("is_current", false);
+        } else if (value && value !== "MBWO") {
+          // For other organizations, set is_current to true by default
+          employmentForm.setValue("is_current", true);
+        }
       }
     });
 
@@ -347,30 +413,37 @@ export const useEmploymentForm = ({
   const loadDataIntoForms = useCallback((data) => {
     if (!data) return;
     
-    // Loading data into forms
+    console.log("🔍 useEmploymentForm: Loading data into forms:", {
+      hasEmployment: !!data.employment,
+      hasSalary: !!data.salary,
+      hasLocation: !!data.location,
+      hasContract: !!data.contract,
+      allData: data
+    });
     
-    // Use setValue to set individual fields instead of reset
+    // Set values for each form using the structured data
     if (data.employment) {
       Object.entries(data.employment).forEach(([key, value]) => {
-        employmentForm.setValue(key, value);
+        // Ensure that undefined values are handled correctly
+        employmentForm.setValue(key, value !== undefined ? value : null);
       });
     }
     
     if (data.salary) {
       Object.entries(data.salary).forEach(([key, value]) => {
-        salaryForm.setValue(key, value);
+        salaryForm.setValue(key, value !== undefined ? value : null);
       });
     }
     
     if (data.location) {
       Object.entries(data.location).forEach(([key, value]) => {
-        locationForm.setValue(key, value);
+        locationForm.setValue(key, value !== undefined ? value : null);
       });
     }
     
     if (data.contract) {
       Object.entries(data.contract).forEach(([key, value]) => {
-        contractForm.setValue(key, value);
+        contractForm.setValue(key, value !== undefined ? value : null);
       });
     }
     
@@ -393,15 +466,15 @@ export const useEmploymentForm = ({
       setIsContractual(data.employment.employment_type === 'Contract');
     }
     
-    // Data loaded into forms successfully
-  }, [setSavedEmploymentId, setCompletedTabs, setIsContractual]);
+    console.log("✅ useEmploymentForm: Data loaded into forms successfully");
+  }, [employmentForm, salaryForm, locationForm, contractForm, setSavedEmploymentId, setCompletedTabs, setIsContractual]);
 
-  // Load initial data when it changes - only for create mode
+  // Load initial data when it changes - for both create and edit modes
   useEffect(() => {
-    if (initialData && !isEditMode) {
+    if (initialData) {
       loadDataIntoForms(initialData);
     }
-  }, [initialData, isEditMode, loadDataIntoForms]);
+  }, [initialData, loadDataIntoForms]);
 
   return {
     // Form instances

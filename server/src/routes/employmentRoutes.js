@@ -36,6 +36,7 @@ router.post("/", employmentUpload.any(), employmentController.createEmployment);
 router.get("/", employmentController.getAllEmployments);
 router.get("/statistics", employmentController.getEmploymentStatistics);
 router.get("/form-options", employmentController.getFormOptions);
+router.get("/employees-for-reporting-officer", employmentController.getEmployeesForReportingOfficer);
 router.get("/designations/:departmentId", employmentController.getDesignationsByDepartment);
 router.get("/employee/:employeeId", employmentController.getEmploymentsByEmployeeId);
 router.get("/:id", employmentController.getEmploymentById);

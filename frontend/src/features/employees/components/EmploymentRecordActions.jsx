@@ -301,7 +301,13 @@ const EmploymentRecordActions = ({
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Role Tag:</span>
                     <span className="text-gray-900">
-                      {selectedRecord.role_tag || "N/A"}
+                      {selectedRecord.role_tag?.name || selectedRecord.role_tag || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Scale Grade:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.scale_grade?.name || selectedRecord.scale_grade || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -326,6 +332,12 @@ const EmploymentRecordActions = ({
                     <span className="font-medium text-gray-600">Current:</span>
                     <span className="text-gray-900">
                       {selectedRecord.is_current ? "Yes" : "No"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Reporting Officer ID:</span>
+                    <span className="text-gray-900">
+                      {selectedRecord.reporting_officer_id || "N/A"}
                     </span>
                   </div>
                 </div>

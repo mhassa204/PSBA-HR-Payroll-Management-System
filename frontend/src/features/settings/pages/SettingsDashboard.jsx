@@ -31,6 +31,20 @@ const SettingsDashboard = () => {
           path: '/settings/designations',
           icon: Users,
           color: 'green'
+        },
+        {
+          name: 'Role Tags',
+          description: 'Manage employment role tags and categories',
+          path: '/settings/role-tags',
+          icon: Users,
+          color: 'indigo'
+        },
+        {
+          name: 'Scale Grades',
+          description: 'Manage employment scales and grades',
+          path: '/settings/scale-grades',
+          icon: Users,
+          color: 'purple'
         }
       ]
     },
