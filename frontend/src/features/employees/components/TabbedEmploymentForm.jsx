@@ -1487,19 +1487,7 @@ const TabbedEmploymentForm = forwardRef(({
                   </h3>
 
                   {/* Organization-specific guidance */}
-                  {currentOrganization === 'PSBA' && (
-                    <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
-                      <p className="text-sm text-blue-800">
-                        <i className="fas fa-info-circle mr-2"></i>
-                        <strong>PSBA Organization:</strong> Department, Designation, Employment Type, Role Tag, and Effective From are required fields.
-                      </p>
-                      {/* Debug information for PSBA */}
-                      <div className="mt-2 text-xs text-blue-700">
-                        <p>Available options: Departments: {formOptions?.departments?.length || 0}, Role Tags: {formOptions?.roleTags?.length || 0}</p>
-                        <p>Form loading: {formLoading ? 'Yes' : 'No'}</p>
-                      </div>
-                    </div>
-                  )}
+                
                   {currentOrganization === 'MBWO' && (
                     <div className="mb-4 p-3 bg-green-100 border border-green-300 rounded-lg">
                       <p className="text-sm text-green-800">
