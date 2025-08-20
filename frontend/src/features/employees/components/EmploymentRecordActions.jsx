@@ -21,11 +21,11 @@ const EmploymentRecordActions = ({
     { value: "MBWO", label: "Model Bazaar Welfare Organization (MBWO) - 2010-2016" },
     {
       value: "PMBMC",
-      label: "Punjab Municipal Board Management Company (PMBMC) - 2016-2024",
+      label: "Punjab Model Bazaars Management Company (PMBMC) - 2016-2024",
     },
     {
       value: "PSBA",
-      label: "Punjab Safe Cities Authority (PSBA) - 2025-Present",
+      label: "Punjab Sahulat Bazaars Authority (PSBA) - 2025-Present",
     },
   ];
 
