@@ -121,24 +121,10 @@ export const useEmploymentForm = ({
     const loadFormOptions = async () => {
       try {
         setIsLoading(true);
-        console.log("🔍 useEmploymentForm: Loading form options...");
         
         const options = await employmentService.getFormOptions();
         
-        console.log("🔍 useEmploymentForm: Received form options:", {
-          hasOptions: !!options,
-          optionsKeys: options ? Object.keys(options) : [],
-          departmentsCount: options?.departments?.length || 0,
-          designationsCount: options?.designations?.length || 0,
-          roleTagsCount: options?.roleTags?.length || 0,
-          scaleGradesCount: options?.scaleGrades?.length || 0,
-          organizationsCount: options?.organizations?.length || 0,
-          employmentTypesCount: options?.employmentTypes?.length || 0,
-          usersCount: options?.users?.length || 0
-        });
-        
         setFormOptions(options);
-        console.log("✅ useEmploymentForm: Form options loaded successfully");
       } catch (error) {
         console.error("❌ Error loading form options:", error);
         if (onError) onError(error);
@@ -158,7 +144,7 @@ export const useEmploymentForm = ({
         const currentOrg = employmentForm.watch("organization");
         const isMBWO = currentOrg === "MBWO";
         
-        console.log("🔍 useEmploymentForm: Loading designations for organization:", currentOrg, "isMBWO:", isMBWO);
+
         console.log("🔍 useEmploymentForm: Form options available:", {
           hasFormOptions: !!formOptions,
           hasDesignations: !!formOptions?.designations,
@@ -423,9 +409,12 @@ export const useEmploymentForm = ({
     
     // Set values for each form using the structured data
     if (data.employment) {
+      console.log("🔍 useEmploymentForm: Setting employment form values:", data.employment);
       Object.entries(data.employment).forEach(([key, value]) => {
         // Ensure that undefined values are handled correctly
-        employmentForm.setValue(key, value !== undefined ? value : null);
+        const finalValue = value !== undefined ? value : null;
+        console.log(`🔍 useEmploymentForm: Setting ${key} = ${finalValue}`);
+        employmentForm.setValue(key, finalValue);
       });
     }
     
@@ -471,6 +460,15 @@ export const useEmploymentForm = ({
 
   // Load initial data when it changes - for both create and edit modes
   useEffect(() => {
+    console.log("🔍 useEmploymentForm: initialData changed:", {
+      hasInitialData: !!initialData,
+      initialDataType: typeof initialData,
+      initialDataKeys: initialData ? Object.keys(initialData) : [],
+      initialDataEmployment: initialData?.employment,
+      initialDataEmploymentKeys: initialData?.employment ? Object.keys(initialData.employment) : [],
+      reportingOfficerId: initialData?.employment?.reporting_officer_id
+    });
+    
     if (initialData) {
       loadDataIntoForms(initialData);
     }

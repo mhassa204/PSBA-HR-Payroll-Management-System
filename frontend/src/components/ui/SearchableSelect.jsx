@@ -44,7 +44,7 @@ const SearchableSelect = ({
   );
 
   // Find selected option for display
-  const selectedOption = options.find(option => option.value === value);
+  const selectedOption = options.find(option => option.value == value);
 
   // Close dropdown when clicking outside
   useEffect(() => {

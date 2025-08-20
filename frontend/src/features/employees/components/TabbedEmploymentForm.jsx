@@ -79,6 +79,14 @@ const TabbedEmploymentForm = forwardRef(({
 
   // Transform editingRecord to the expected structure for the hook
   const transformedInitialData = useMemo(() => {
+    console.log("🔍 TabbedEmploymentForm: Creating transformedInitialData:", {
+      hasEditingRecord: !!editingRecord,
+      isEditMode,
+      isCreatingFromExisting,
+      editingRecordKeys: editingRecord ? Object.keys(editingRecord) : [],
+      editingRecordReportingOfficer: editingRecord?.reporting_officer_id
+    });
+    
     if (!editingRecord || (!isEditMode && !isCreatingFromExisting)) return null;
 
     // Processing editingRecord
@@ -127,6 +135,12 @@ const TabbedEmploymentForm = forwardRef(({
           // Probation fields
           is_on_probation: editingRecord.is_on_probation || false,
           probation_end_date: editingRecord.probation_end_date || "",
+          // Additional fields that should be in employment object
+          scale_grade: editingRecord.scale_grade || "",
+          filer_status: editingRecord.filer_status || "non_filer",
+          filer_active_status: editingRecord.filer_active_status || "",
+          employment_status: editingRecord.employment_status || "active",
+          office_location: editingRecord.office_location || "",
         },
         // Include salary data if available
         salary: editingRecord.salary ? {
@@ -162,14 +176,7 @@ const TabbedEmploymentForm = forwardRef(({
       transformed.is_current = editingRecord.is_current !== undefined ? editingRecord.is_current : (transformed.employment?.is_current !== undefined ? transformed.employment.is_current : false);
     }
 
-    console.log("🔍 TabbedEmploymentForm: Transformed initial data:", {
-      designation: transformed?.designation,
-      department: transformed?.department,
-      role_tag: transformed?.role_tag,
-      scale_grade: transformed?.scale_grade,
-      reporting_officer_id: transformed?.reporting_officer_id,
-      is_current: transformed?.is_current
-    });
+
 
     return transformed;
   }, [editingRecord?.id, isEditMode, isCreatingFromExisting]);
@@ -214,6 +221,8 @@ const TabbedEmploymentForm = forwardRef(({
     }, []),
   });
 
+
+
   // Combined loading state
   const isLoading = externalLoading || formLoading;
 
@@ -234,33 +243,16 @@ const TabbedEmploymentForm = forwardRef(({
 
 
 
-  // Debug: Log organization changes and field visibility
-  useEffect(() => {
-    if (currentOrganization) {
-      console.log(`🏢 TabbedEmploymentForm: Organization changed to ${currentOrganization}`);
-      console.log(`📋 TabbedEmploymentForm: Location section visible: ${isSectionVisible('location')}`);
-      console.log(`💰 TabbedEmploymentForm: Salary allowances visible: ${isFieldVisible('salary', 'medical_allowance')}`);
-      console.log(`👔 TabbedEmploymentForm: Department field visible: ${isFieldVisible('employment', 'department')}`);
-      console.log(`🎯 TabbedEmploymentForm: Designation field visible: ${isFieldVisible('employment', 'designation')}`);
-      console.log(`📝 TabbedEmploymentForm: Available designations count: ${availableDesignations?.length || 0}`);
-    }
-  }, [currentOrganization, isSectionVisible, isFieldVisible, availableDesignations]);
+
 
   // Handle form close with proper cleanup
   const handleClose = useCallback(() => {
-    console.log("🔄 TabbedEmploymentForm: Closing form and resetting state");
-    console.log("🔄 TabbedEmploymentForm: isOpen prop:", isOpen);
-    console.log("🔄 TabbedEmploymentForm: isEditMode:", isEditMode);
-    console.log("🔄 TabbedEmploymentForm: isSubmitting:", isSubmitting);
-    
     // Don't close if we're in the middle of submission
     if (isSubmitting) {
-      console.log("🔄 TabbedEmploymentForm: Skipping close during submission");
       return;
     }
     
     // Call the original onClose - let the parent handle the actual closing
-    console.log("🔄 TabbedEmploymentForm: Calling onClose");
     onClose();
   }, [onClose, isSubmitting, isEditMode]);
 
@@ -271,23 +263,14 @@ const TabbedEmploymentForm = forwardRef(({
 
   // Handle organization change - reset all forms when organization changes (except during initial load)
   const handleOrganizationChange = useCallback((newOrganization) => {
-    console.log("🏢 TabbedEmploymentForm: Organization change detected:", {
-      previousOrganization,
-      newOrganization,
-      isInitialLoad,
-      isEditMode
-    });
-
     // Don't reset during initial load in edit mode
     if (isInitialLoad && isEditMode) {
-      console.log("🏢 TabbedEmploymentForm: Skipping reset during initial load in edit mode");
       setPreviousOrganization(newOrganization);
       return;
     }
 
     // Don't reset if this is the first time setting organization (create mode)
     if (isInitialLoad && !isEditMode) {
-      console.log("🏢 TabbedEmploymentForm: First organization selection in create mode");
       setPreviousOrganization(newOrganization);
       setIsInitialLoad(false);
       return;
@@ -295,15 +278,12 @@ const TabbedEmploymentForm = forwardRef(({
 
     // Don't reset during submission
     if (isSubmitting) {
-      console.log("🏢 TabbedEmploymentForm: Skipping reset during submission");
       setPreviousOrganization(newOrganization);
       return;
     }
 
     // Reset all forms when organization changes (user-initiated change)
     if (previousOrganization && previousOrganization !== newOrganization) {
-      console.log("🏢 TabbedEmploymentForm: Resetting forms due to organization change");
-      
       // Reset all forms
       resetForms();
       
@@ -335,20 +315,7 @@ const TabbedEmploymentForm = forwardRef(({
 
 
   // Debug: Log form options
-  useEffect(() => {
-    console.log("🔍 TabbedEmploymentForm: Form options debug:", {
-      formOptions: formOptions ? {
-        departments: formOptions.departments?.length || 0,
-        designations: formOptions.designations?.length || 0,
-        organizations: formOptions.organizations?.length || 0,
-        employmentTypes: formOptions.employmentTypes?.length || 0,
-        roleTags: formOptions.roleTags?.length || 0,
-        contractTypes: formOptions.contractTypes?.length || 0
-      } : 'null',
-      availableDesignations: availableDesignations?.length || 0,
-      isLoading: formLoading
-    });
-  }, [formOptions, availableDesignations, formLoading]);
+
 
   // Restore scroll position after form updates
   useEffect(() => {
@@ -1408,25 +1375,13 @@ const TabbedEmploymentForm = forwardRef(({
 
   // Monitor form state changes in edit mode - removed to prevent infinite loops
 
-  // Monitor availableDesignations changes for debugging
-  useEffect(() => {
-    console.log("🔍 TabbedEmploymentForm: availableDesignations changed:", {
-      count: availableDesignations?.length || 0,
-      designations: availableDesignations,
-      currentOrganization,
-      isMBWO: currentOrganization === 'MBWO'
-    });
-  }, [availableDesignations, currentOrganization]);
 
-  // Monitor formOptions changes for debugging
-  useEffect(() => {
-    console.log("🔍 TabbedEmploymentForm: formOptions changed:", {
-      hasFormOptions: !!formOptions,
-      formOptionsKeys: formOptions ? Object.keys(formOptions) : [],
-      departmentsCount: formOptions?.departments?.length || 0,
-      designationsCount: formOptions?.designations?.length || 0
-    });
-  }, [formOptions]);
+
+
+
+
+
+
 
   if (!formOptions) {
     return (
@@ -1633,19 +1588,11 @@ const TabbedEmploymentForm = forwardRef(({
                           </div>
                         ) : (
                           <>
-                            {console.log("🔍 TabbedEmploymentForm: Rendering designation field:", {
-                              availableDesignationsCount: availableDesignations?.length || 0,
-                              currentOrganization,
-                              isMBWO: currentOrganization === 'MBWO',
-                              designationValue: employmentForm.watch("designation"),
-                              hasFormOptions: !!formOptions,
-                              formOptionsKeys: formOptions ? Object.keys(formOptions) : []
-                            })}
+
                             <SearchableSelect
                               options={availableDesignations || []}
                               value={employmentForm.watch("designation")}
                               onChange={(value) => {
-                                console.log("🔍 TabbedEmploymentForm: Designation changed to:", value);
                                 employmentForm.setValue("designation", value);
                               }}
                               placeholder={availableDesignations?.length > 0 ? "Select Designation" : "No designations available"}
@@ -1820,20 +1767,23 @@ const TabbedEmploymentForm = forwardRef(({
                             <span className="text-sm text-gray-600">Loading users...</span>
                           </div>
                         ) : (
-                          <SearchableSelect
-                            options={formOptions?.users || []}
-                            value={employmentForm.watch("reporting_officer_id")}
-                            onChange={(value) => {
-                              console.log("🔍 TabbedEmploymentForm: Reporting officer changed to:", value);
-                              employmentForm.setValue("reporting_officer_id", value);
-                            }}
-                            placeholder={formOptions?.users?.length > 0 ? "Select Reporting Officer" : "No users available"}
-                            register={registerEmployment}
-                            name="reporting_officer_id"
-                            required={false}
-                            error={employmentErrors.reporting_officer_id?.message}
-                            disabled={!formOptions?.users || formOptions.users.length === 0}
-                          />
+                          <>
+
+                            <SearchableSelect
+                              options={formOptions?.users || []}
+                              value={employmentForm.watch("reporting_officer_id")}
+                              onChange={(value) => {
+                                employmentForm.setValue("reporting_officer_id", value);
+                              }}
+                              placeholder={formOptions?.users?.length > 0 ? "Select Reporting Officer" : "No users available"}
+                              register={registerEmployment}
+                              name="reporting_officer_id"
+                              required={false}
+                              error={employmentErrors.reporting_officer_id?.message}
+                              disabled={!formOptions?.users || formOptions.users.length === 0}
+                            />
+
+                          </>
                         )}
                         {!formLoading && (!formOptions?.users || formOptions.users.length === 0) && (
                           <p className="text-yellow-600 text-sm mt-1">
