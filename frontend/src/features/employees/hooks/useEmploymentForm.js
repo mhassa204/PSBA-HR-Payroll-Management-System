@@ -68,7 +68,7 @@ export const useEmploymentForm = ({
       // Probation fields
       is_on_probation: false,
       probation_end_date: "",
-    },
+    }, 
   });
 
   const salaryForm = useForm({

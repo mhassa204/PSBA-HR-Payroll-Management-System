@@ -1262,7 +1262,7 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
             value: dept.id,
             label: dept.name,
             code: dept.code
-          })),
+          })), 
           designations: designations.map(des => ({
             value: des.id,
             label: des.title,
