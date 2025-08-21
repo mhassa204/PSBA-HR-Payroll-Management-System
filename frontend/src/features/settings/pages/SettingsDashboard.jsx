@@ -45,6 +45,13 @@ const SettingsDashboard = () => {
           path: '/settings/scale-grades',
           icon: Users,
           color: 'purple'
+        },
+        {
+          name: 'Roles',
+          description: 'Manage system roles and permissions',
+          path: '/settings/roles',
+          icon: Shield,
+          color: 'orange'
         }
       ]
     },

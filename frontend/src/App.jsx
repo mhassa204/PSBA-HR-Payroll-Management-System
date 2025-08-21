@@ -22,8 +22,10 @@ import {
   DepartmentManagement, 
   DesignationManagement,
   RoleTagManagement,
-  ScaleGradeManagement
+  ScaleGradeManagement,
+  RoleManagement
 } from "./features/settings";
+import { UserManagement } from "./features/users";
 function App() {
   // Emergency scroll restore keyboard shortcut (Ctrl+Shift+S)
   useEffect(() => {
@@ -206,6 +208,38 @@ function App() {
                 <PrivateRoute roles={["super_admin", "hr_admin"]}>
                   <LeftSidebarLayout>
                     <ScaleGradeManagement />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings/roles"
+              element={
+                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                  <LeftSidebarLayout>
+                    <RoleManagement />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            
+            {/* Users Routes */}
+            <Route
+              path="/users"
+              element={
+                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                  <LeftSidebarLayout>
+                    <UserManagement />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/users/create"
+              element={
+                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                  <LeftSidebarLayout>
+                    <UserManagement />
                   </LeftSidebarLayout>
                 </PrivateRoute>
               }

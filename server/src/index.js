@@ -9,6 +9,8 @@ const departmentRoutes = require("./routes/departmentRoutes");
 const designationRoutes = require("./routes/designationRoutes");
 const roleTagRoutes = require("./routes/roleTagRoutes");
 const scaleGradeRoutes = require("./routes/scaleGradeRoutes");
+const roleRoutes = require("./routes/roleRoutes");
+const userRoutes = require("./routes/userRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const multer = require("multer");
 
@@ -44,6 +46,8 @@ app.use("/api/departments", departmentRoutes);
 app.use("/api/designations", designationRoutes);
 app.use("/api/role-tags", roleTagRoutes);
 app.use("/api/scale-grades", scaleGradeRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 
 // Error handling middleware

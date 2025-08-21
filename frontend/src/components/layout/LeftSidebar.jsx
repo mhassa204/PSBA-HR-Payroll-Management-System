@@ -84,6 +84,17 @@ const navigation = [
     ]
   },
   { 
+    name: 'Users', 
+    href: '/users', 
+    icon: UserIcon,
+    description: 'System Access',
+    color: 'bg-purple-600',
+    children: [
+      { name: 'All Users', href: '/users', icon: ViewColumnsIcon },
+      { name: 'Add User', href: '/users/create', icon: PlusIcon }
+    ]
+  },
+  { 
     name: 'Reports', 
     href: '/reports', 
     icon: ChartBarIcon,

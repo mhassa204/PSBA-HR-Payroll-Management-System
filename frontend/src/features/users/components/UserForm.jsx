@@ -1,0 +1,357 @@
+import React, { useState, useEffect } from 'react';
+import { Mail, Save, User, Shield, Lock, Eye, EyeOff } from 'lucide-react';
+import { useErrorHandler } from '../../../hooks/useErrorHandler';
+import { userService } from '../services/userService';
+import { roleService } from '../../settings/services/roleService';
+import SearchableSelect from '../../../components/ui/SearchableSelect';
+
+const UserForm = ({ user, onSubmit, onCancel }) => {
+  const { error, clearError, withErrorHandling } = useErrorHandler();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    role_id: '',
+    employee_id: ''
+  });
+
+  const [roles, setRoles] = useState([]);
+  const [availableEmployees, setAvailableEmployees] = useState([]);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    loadFormData();
+  }, []);
+
+  const loadFormData = async () => {
+    try {
+      setIsLoadingData(true);
+      
+      // Load roles
+      const rolesResponse = await roleService.getAllRoles();
+      console.log('Roles response:', rolesResponse);
+      setRoles(rolesResponse.roles || []);
+      
+      // Load available employees
+      const employeesResponse = await userService.getAvailableEmployees();
+      console.log('Available employees response:', employeesResponse);
+      setAvailableEmployees(employeesResponse.employees || []);
+      
+      // If editing, add current user's employee to the list
+      if (user?.employee) {
+        setAvailableEmployees(prev => {
+          const exists = prev.find(emp => emp.id === user.employee.id);
+          if (!exists) {
+            return [...prev, user.employee];
+          }
+          return prev;
+        });
+      }
+      
+      // Set form data if editing
+      if (user) {
+        setFormData({
+          email: user.email || '',
+          password: '', // Don't show existing password
+          role_id: user.role?.id?.toString() || '',
+          employee_id: user.employee?.id?.toString() || ''
+        });
+        
+        // If user is Super Admin, show a warning
+        if (user.role?.name === 'Super Admin') {
+          console.log('Warning: Editing Super Admin user');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading form data:', error);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    clearError();
+
+    if (!formData.email.trim() || !formData.role_id) {
+      return;
+    }
+
+    // Password is required for new users
+    if (!user && !formData.password.trim()) {
+      return;
+    }
+
+    // Prevent modification of Super Admin users
+    if (user?.role?.name === 'Super Admin') {
+      clearError();
+      setError('Super Admin users cannot be modified for security reasons');
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const submitData = {
+        email: formData.email.trim(),
+        role_id: formData.role_id,
+        employee_id: formData.employee_id && formData.employee_id.toString().trim() !== '' ? formData.employee_id : null
+      };
+
+      // Only include password if provided (for new users or when updating)
+      if (formData.password.trim()) {
+        submitData.password = formData.password;
+      }
+
+      console.log('Submitting user data:', { ...submitData, password: '[HIDDEN]' });
+      console.log('Form data before submission:', formData);
+
+      if (user) {
+        await userService.updateUser(user.id, submitData);
+      } else {
+        await userService.createUser(submitData);
+      }
+      onSubmit();
+    } catch (error) {
+      console.error('Error saving user:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getRoleOptions = () => {
+    // Filter out Super Admin role from the dropdown
+    const filteredRoles = roles.filter(role => role.name !== 'Super Admin');
+    console.log('Role options:', filteredRoles);
+    
+    return filteredRoles.map(role => ({
+      value: role.id.toString(),
+      label: role.name,
+      description: `${role.type} role with ${role.allowed_actions?.length || 0} permissions`
+    }));
+  };
+
+  const getEmployeeOptions = () => {
+    return availableEmployees.map(employee => ({
+      value: employee.id.toString(),
+      label: `${employee.full_name} - ${employee.cnic || employee.employee_id}`,
+      description: `Employee ID: ${employee.employee_id}${employee.email ? ` | ${employee.email}` : ''}`
+    }));
+  };
+
+  if (isLoadingData) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-sm text-gray-600 font-medium">Loading form data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      <form onSubmit={handleSubmit} className="p-6 space-y-8">
+        {/* Error Display */}
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800 text-sm font-medium">{error}</p>
+          </div>
+        )}
+
+        {/* Basic Information */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Mail className="w-6 h-6 text-blue-600" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900">User Information</h3>
+          </div>
+          
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900 placeholder-gray-500"
+                placeholder="Enter email address (e.g., user@company.com)"
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Password {!user && '*'}
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={formData.password}
+                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900 placeholder-gray-500"
+                  placeholder={user ? 'Leave blank to keep current password' : 'Enter secure password'}
+                  required={!user}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1 rounded-md hover:bg-gray-100"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {user && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Leave blank to keep the current password unchanged
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Role Assignment */}
+        <div className="space-y-6 mb-12">
+          <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Shield className="w-6 h-6 text-green-600" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900">Role Assignment</h3>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Role *
+              </label>
+                                                           <SearchableSelect
+                  options={getRoleOptions()}
+                  value={formData.role_id}
+                  onChange={(value) => handleInputChange('role_id', value)}
+                  placeholder="Select a role for this user"
+                  required
+                  disabled={user?.role?.name === 'Super Admin'}
+                  data-dropdown-type="role"
+                />
+                             <p className="text-xs text-gray-500 mt-2">
+                 The role determines what actions and data this user can access
+               </p>
+               <p className="text-xs text-blue-600 mt-1">
+                 <strong>Note:</strong> Super Admin role is restricted and cannot be assigned to new users
+               </p>
+               {user?.role?.name === 'Super Admin' && (
+                 <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                   <p className="text-xs text-yellow-800">
+                     <strong>⚠️ Super Admin User:</strong> This user has Super Admin privileges. 
+                     The role cannot be changed for security reasons.
+                   </p>
+                 </div>
+               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Visual Separator */}
+        <div className="border-t border-gray-200 my-8"></div>
+        
+        {/* Employee Assignment */}
+        <div className="space-y-6 mb-8">
+          <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <User className="w-6 h-6 text-purple-600" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900">Employee Assignment</h3>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Assign to Employee (Optional)
+              </label>
+                             {availableEmployees.length === 0 ? (
+                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                   <p className="text-sm text-yellow-800">
+                     <strong>No available employees found.</strong> All employees are already assigned to user accounts.
+                   </p>
+                   <p className="text-xs text-yellow-700 mt-2">
+                     This is normal if all employees in the system already have user accounts. 
+                     You can still create a user without assigning an employee.
+                   </p>
+                   <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                     <p className="text-xs text-blue-800">
+                       <strong>Debug Info:</strong> Found {availableEmployees.length} available employees
+                     </p>
+                   </div>
+                 </div>
+               ) : (
+                <>
+                  <SearchableSelect
+                    options={getEmployeeOptions()}
+                    value={formData.employee_id}
+                    onChange={(value) => handleInputChange('employee_id', value)}
+                    placeholder="Select an employee to link with this user account"
+                    allowClear
+                    data-dropdown-type="employee"
+                  />
+                                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mt-3">
+                     <p className="text-sm text-blue-800">
+                       <strong>Note:</strong> Assigning an employee creates a 1:1 relationship. 
+                       Each employee can only be assigned to one user account. This is optional 
+                       and can be set later.
+                     </p>
+                     <p className="text-xs text-blue-600 mt-2">
+                       Available employees: {availableEmployees.length}
+                     </p>
+                     {availableEmployees.length > 0 && (
+                       <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
+                         <p className="text-xs text-green-800">
+                           <strong>Available:</strong> {availableEmployees.map(emp => 
+                             `${emp.full_name} (${emp.cnic || emp.employee_id})`
+                           ).join(', ')}
+                         </p>
+                       </div>
+                     )}
+                   </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Form Actions */}
+        <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+                     <button
+             type="submit"
+             disabled={isSubmitting || !formData.email.trim() || !formData.role_id || user?.role?.name === 'Super Admin'}
+             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
+           >
+            <Save className="w-4 h-4" />
+            {isSubmitting ? 'Saving...' : (user ? 'Update User' : 'Create User')}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default UserForm;

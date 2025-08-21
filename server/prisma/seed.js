@@ -50,6 +50,27 @@ async function main() {
     await prisma.scaleGrade.delete({ where: { id: grade.id } });
   }
 
+  // Hard delete any existing users and roles
+  console.log('🗑️ Cleaning existing users and roles...');
+  
+  const existingUsers = await prisma.user.findMany({
+    select: { id: true, email: true }
+  });
+  
+  for (const user of existingUsers) {
+    console.log(`🗑️ Hard deleting user: ${user.email} (ID: ${user.id})`);
+    await prisma.user.delete({ where: { id: user.id } });
+  }
+
+  const existingRoles = await prisma.role.findMany({
+    select: { id: true, name: true }
+  });
+  
+  for (const role of existingRoles) {
+    console.log(`🗑️ Hard deleting role: ${role.name} (ID: ${role.id})`);
+    await prisma.role.delete({ where: { id: role.id } });
+  }
+
   // Seed departments
   const departments = [
     { name: "Engineering", code: "ENG", description: "Engineering and Technical Services" },
@@ -161,6 +182,58 @@ async function main() {
     createdRoleTags.push(roleTag);
   }
 
+  // Seed roles
+  const roles = [
+    { 
+      name: "Super Admin", 
+      type: "system", 
+      allowed_actions: ["*"], 
+      enabled: true, 
+      fields: ["*"] 
+    },
+    { 
+      name: "HR Admin", 
+      type: "system", 
+      allowed_actions: ["manage_employees", "manage_employment", "view_reports", "manage_departments", "manage_designations"], 
+      enabled: true, 
+      fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] 
+    },
+    { 
+      name: "HR Officer", 
+      type: "custom", 
+      allowed_actions: ["view_employees", "create_employee", "edit_employee", "view_reports"], 
+      enabled: true, 
+      fields: ["employee_personal", "employee_employment"] 
+    },
+    { 
+      name: "Manager", 
+      type: "custom", 
+      allowed_actions: ["view_employees", "view_reports", "approve_requests"], 
+      enabled: true, 
+      fields: ["employee_basic", "employee_employment"] 
+    },
+    { 
+      name: "Employee", 
+      type: "custom", 
+      allowed_actions: ["view_own_profile", "edit_own_profile"], 
+      enabled: true, 
+      fields: ["own_personal", "own_employment"] 
+    }
+  ];
+
+  console.log('🛡️ Seeding roles...');
+  const createdRoles = [];
+  for (const role of roles) {
+    const createdRole = await prisma.role.create({
+      data: {
+        ...role,
+        is_deleted: false
+      }
+    });
+    console.log(`✅ Created Role: ${createdRole.name} (${createdRole.type})`);
+    createdRoles.push(createdRole);
+  }
+
   // Seed scale grades
   const scaleGrades = [
     { name: "BPS-17", description: "Basic Pay Scale 17", level: 17, category: "BPS" },
@@ -213,7 +286,6 @@ async function main() {
       permanent_address: "Village Chak 45, Tehsil Kasur, District Kasur",
       district: "Lahore",
       city: "Lahore",
-      password: await bcrypt.hash("password123", 10),
       status: "Active",
       is_deleted: false
     },
@@ -243,7 +315,6 @@ async function main() {
       has_disability: true,
       disability_type: "Visual",
       disability_description: "Partial vision impairment",
-      password: await bcrypt.hash("password123", 10),
       status: "Active",
       is_deleted: false
     },
@@ -265,7 +336,51 @@ async function main() {
       same_address: true,
       district: "Lahore",
       city: "Lahore",
-      password: await bcrypt.hash("password123", 10),
+      status: "Active",
+      is_deleted: false
+    },
+    {
+      employee_id: "EMP2024004",
+      full_name: "Ayesha Malik",
+      father_husband_name: "Malik Ahmed",
+      relationship_type: "father",
+      cnic: "35202-4567890-4",
+      date_of_birth: new Date("1992-04-25"),
+      gender: "Female",
+      marital_status: "Single",
+      nationality: "Pakistani",
+      religion: "Islam",
+      blood_group: "O+",
+      domicile_district: "Islamabad",
+      mobile_number: "+92-303-4567890",
+      email: "ayesha.malik@example.com",
+      present_address: "Apartment 12, Blue Area, Islamabad",
+      permanent_address: "House 34, Sector F-7, Islamabad",
+      district: "Islamabad",
+      city: "Islamabad",
+      status: "Active",
+      is_deleted: false
+    },
+    {
+      employee_id: "EMP2024005",
+      full_name: "Usman Khan",
+      father_husband_name: "Khan Saeed",
+      relationship_type: "father",
+      cnic: "35202-5678901-5",
+      date_of_birth: new Date("1987-09-18"),
+      gender: "Male",
+      marital_status: "Married",
+      nationality: "Pakistani",
+      religion: "Islam",
+      blood_group: "AB+",
+      domicile_district: "Peshawar",
+      mobile_number: "+92-304-5678901",
+      email: "usman.khan@example.com",
+      present_address: "House 56, University Town, Peshawar",
+      permanent_address: "House 56, University Town, Peshawar",
+      same_address: true,
+      district: "Peshawar",
+      city: "Peshawar",
       status: "Active",
       is_deleted: false
     }
@@ -277,6 +392,39 @@ async function main() {
     const employee = await prisma.employee.create({ data: emp });
     console.log(`✅ Created Employee: ${employee.full_name} (${employee.employee_id})`);
     createdEmployees.push(employee);
+  }
+
+  // Seed users
+  const users = [
+    {
+      email: "admin@psba.com",
+      password: await bcrypt.hash("admin123", 10),
+      role_id: createdRoles[0].id, // Super Admin
+      employee_id: createdEmployees[0].id, // Ahmed Ali Khan
+      is_deleted: false
+    },
+    {
+      email: "hr@psba.com",
+      password: await bcrypt.hash("hr123", 10),
+      role_id: createdRoles[1].id, // HR Admin
+      employee_id: createdEmployees[1].id, // Fatima Sheikh
+      is_deleted: false
+    },
+    {
+      email: "officer@psba.com",
+      password: await bcrypt.hash("officer123", 10),
+      role_id: createdRoles[2].id, // HR Officer
+      employee_id: createdEmployees[2].id, // Muhammad Hassan
+      is_deleted: false
+    }
+  ];
+
+  console.log('👤 Seeding users...');
+  const createdUsers = [];
+  for (const user of users) {
+    const createdUser = await prisma.user.create({ data: user });
+    console.log(`✅ Created User: ${createdUser.email}`);
+    createdUsers.push(createdUser);
   }
 
   // Seed past experiences
@@ -608,8 +756,10 @@ async function main() {
   console.log(`   - Departments: ${createdDepartments.length}`);
   console.log(`   - Designations: ${createdDesignations.length}`);
   console.log(`   - Role Tags: ${createdRoleTags.length}`);
+  console.log(`   - Roles: ${createdRoles.length}`);
   console.log(`   - Scale Grades: ${createdScaleGrades.length}`);
   console.log(`   - Employees: ${createdEmployees.length}`);
+  console.log(`   - Users: ${createdUsers.length}`);
   console.log(`   - Employment Records: ${createdEmployments.length}`);
   console.log(`   - Past Experiences: ${pastExperiences.length}`);
   console.log(`   - Education Qualifications: ${educationQualifications.length}`);
