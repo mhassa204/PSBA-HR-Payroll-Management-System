@@ -864,8 +864,9 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
   // Update employment record
   updateEmployment: async (req, res) => {
     try {
+      console.log("🔍 Backend updateEmployment - Received data:")
 
-      
+      console.log("Hello Salary Effective Till:",req.body.salary_salary_effective_till==="")
       // Parse documents_to_remove if it's a JSON string
       let documentsToRemove = req.body.documents_to_remove;
       if (typeof documentsToRemove === 'string') {

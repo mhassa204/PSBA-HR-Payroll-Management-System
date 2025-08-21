@@ -329,7 +329,10 @@ class EmploymentService {
             const value = obj[key];
             const newKey = prefix ? `${prefix}_${key}` : key;
             
-            if (value !== null && value !== undefined) {
+            if ( value !== undefined) {
+              if (value === null) {
+                formData.append(newKey, "null"); // Send "null" as string
+              } else
               if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof File)) {
                 // Recursively flatten nested objects
                 flattenObject(value, newKey);
@@ -341,6 +344,7 @@ class EmploymentService {
                 formData.append(newKey, value);
               }
             }
+
           }
         }
       };

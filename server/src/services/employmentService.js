@@ -142,7 +142,7 @@ createEmployment: async (data) => {
   };
 
   const cleanValue = (value) => {
-    return value === undefined || value === 'undefined' ? null : value;
+    return value === undefined || value === 'undefined'||value === 'null' ? null : value;
   };
 
   return prisma.$transaction(async (tx) => {
@@ -479,8 +479,8 @@ updateEmployment: async (id, data) => {
     if (department_id !== undefined) employmentUpdateData.department_id = department_id ? parseInt(department_id) : null;
     if (designation_id !== undefined) employmentUpdateData.designation_id = designation_id ? parseInt(designation_id) : null;
     if (employment_type !== undefined) employmentUpdateData.employment_type = employment_type;
-    if (effective_from !== undefined) employmentUpdateData.effective_from = effective_from ? new Date(effective_from) : null;
-    if (effective_till !== undefined) employmentUpdateData.effective_till = effective_till ? new Date(effective_till) : null;
+    if (effective_from !== undefined) employmentUpdateData.effective_from = effective_from !=='null'? new Date(effective_from) : null;
+    if (effective_till !== undefined) employmentUpdateData.effective_till = effective_till!=='null' ? new Date(effective_till) : null;
     if (role_tag_id !== undefined) employmentUpdateData.role_tag_id = role_tag_id ? parseInt(role_tag_id) : null;
     if (scale_grade_id !== undefined) employmentUpdateData.scale_grade_id = scale_grade_id ? parseInt(scale_grade_id) : null;
     if (reporting_officer_id !== undefined) employmentUpdateData.reporting_officer_id = cleanValue(reporting_officer_id);
@@ -491,7 +491,7 @@ updateEmployment: async (id, data) => {
     if (filer_status !== undefined) employmentUpdateData.filer_status = filer_status;
     if (filer_active_status !== undefined) employmentUpdateData.filer_active_status = cleanValue(filer_active_status);
     if (is_on_probation !== undefined) employmentUpdateData.is_on_probation = toBoolean(is_on_probation);
-    if (probation_end_date !== undefined) employmentUpdateData.probation_end_date = probation_end_date ? new Date(probation_end_date) : null;
+    if (probation_end_date !== undefined) employmentUpdateData.probation_end_date = probation_end_date !=='null'? new Date(probation_end_date) : null;
 
     const employment = await tx.employment.update({
       where: { id: parseInt(id) },
