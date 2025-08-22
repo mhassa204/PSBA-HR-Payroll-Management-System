@@ -1,6 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcryptjs");
+
 const HardDeleteUtil = require("../src/utils/hardDeleteUtil");
+const { encrypt } = require("../src/utils/cryptoUtil");
 const prisma = new PrismaClient();
 
 async function main() {
@@ -398,21 +399,21 @@ async function main() {
   const users = [
     {
       email: "admin@psba.com",
-      password: await bcrypt.hash("admin123", 10),
+      password: encrypt("admin123"),
       role_id: createdRoles[0].id, // Super Admin
       employee_id: createdEmployees[0].id, // Ahmed Ali Khan
       is_deleted: false
     },
     {
       email: "hr@psba.com",
-      password: await bcrypt.hash("hr123", 10),
+      password: encrypt("hr123"),
       role_id: createdRoles[1].id, // HR Admin
       employee_id: createdEmployees[1].id, // Fatima Sheikh
       is_deleted: false
     },
     {
       email: "officer@psba.com",
-      password: await bcrypt.hash("officer123", 10),
+      password: encrypt("officer123"),
       role_id: createdRoles[2].id, // HR Officer
       employee_id: createdEmployees[2].id, // Muhammad Hassan
       is_deleted: false

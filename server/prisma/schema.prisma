@@ -275,3 +275,11 @@ model User {
   role         Role     @relation(fields: [role_id], references: [id])
   employee     Employee? @relation(fields: [employee_id], references: [id])
 }
+
+model Session {
+  sid    String   @id @db.VarChar(255)
+  sess   Json
+  expire DateTime @db.Timestamp(6)
+
+  @@map("session")
+}

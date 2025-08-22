@@ -2,6 +2,7 @@ import EditEmployee from "./features/employees/pages/EditEmployee";
 import { Routes, Route } from "react-router-dom";
 import "./styles/globals.css";
 import { useEffect } from "react";
+import { useAuthStore } from "./features/auth/authStore";
 import { emergencyScrollRestore } from "./utils/scrollUtils";
 import PrivateRoute from "./features/auth/PrivateRoute";
 import Login from "./features/auth/Login";
@@ -27,8 +28,10 @@ import {
 } from "./features/settings";
 import { UserManagement } from "./features/users";
 function App() {
+  const fetchSession = useAuthStore((s) => s.fetchSession);
   // Emergency scroll restore keyboard shortcut (Ctrl+Shift+S)
   useEffect(() => {
+    fetchSession();
     const handleKeyDown = (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'S') {
         e.preventDefault();
@@ -36,10 +39,9 @@ function App() {
         emergencyScrollRestore();
       }
     };
-
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [fetchSession]);
 
   return (
     <ColorThemeProvider defaultTheme="default">

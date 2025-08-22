@@ -1,6 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   HomeIcon, 
   UsersIcon, 
@@ -8,8 +8,10 @@ import {
   DocumentTextIcon,
   ChartBarIcon,
   CogIcon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
+import { useAuthStore } from '../../features/auth/authStore';
 
 /**
  * Modern Sidebar Navigation
@@ -73,6 +75,13 @@ const navigation = [
 
 const Sidebar = ({ isOpen, onClose, currentPath }) => {
   const location = useLocation();
+  const logout = useAuthStore((s) => s.logout);
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   const isActive = (href) => {
     if (href === '/dashboard') {
@@ -160,6 +169,16 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
                   ))}
                 </ul>
               </li>
+              {/* Logout button at bottom */}
+              <li className="mt-auto">
+                <button
+                  onClick={handleLogout}
+                  className="group flex gap-x-3 rounded-md p-3 text-sm leading-6 font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50 w-full items-center"
+                >
+                  <ArrowRightOnRectangleIcon className="h-5 w-5 text-gray-400 group-hover:text-red-600" />
+                  <span>Logout</span>
+                </button>
+              </li>
             </ul>
           </nav>
         </div>
@@ -229,6 +248,16 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
                         </li>
                       ))}
                     </ul>
+                  </li>
+                  {/* Logout button at bottom */}
+                  <li className="mt-auto">
+                    <button
+                      onClick={handleLogout}
+                      className="group flex gap-x-3 rounded-md p-3 text-sm leading-6 font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50 w-full items-center"
+                    >
+                      <ArrowRightOnRectangleIcon className="h-5 w-5 text-gray-400 group-hover:text-red-600" />
+                      <span>Logout</span>
+                    </button>
                   </li>
                 </ul>
               </nav>

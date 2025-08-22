@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "../features/auth/authStore"; // Adjust path
 import LoginImage from "../assets/login image.jpg"; // or use import.meta.url if using Vite
+import { useNavigate } from "react-router-dom";
 
 export function LoginForm({ className, ...props }) {
   const login = useAuthStore((s) => s.login);
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -20,8 +22,7 @@ export function LoginForm({ className, ...props }) {
     setLoading(true);
     try {
       await login({ email, password });
-      // You can redirect here (e.g., to dashboard)
-      // navigate("/dashboard") or use Next.js router.push("/dashboard")
+      navigate("/dashboard");
     } catch (err) {
       setError("Invalid email or password");
     } finally {
@@ -37,14 +38,14 @@ export function LoginForm({ className, ...props }) {
           <form onSubmit={handleSubmit} className="p-6 md:p-8">
             <div className="flex flex-col gap-6">
               <div className="flex flex-col items-center text-center">
-                <h1 className="text-2xl font-bold">Welcome back</h1>
-                <p className="text-muted-foreground text-balance">
-                  Login to your Acme Inc account
+                <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
+                <p className="text-lg text-gray-700 text-balance">
+                  Login to your PSBA HR account
                 </p>
               </div>
 
               <div className="grid gap-3">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-gray-900 font-semibold">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -52,17 +53,19 @@ export function LoginForm({ className, ...props }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="bg-white text-gray-900 border border-gray-300 focus:border-blue-500 focus:ring-blue-500 placeholder-gray-400"
                 />
               </div>
 
               <div className="grid gap-3">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-gray-900 font-semibold">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="bg-white text-gray-900 border border-gray-300 focus:border-blue-500 focus:ring-blue-500 placeholder-gray-400"
                 />
               </div>
 

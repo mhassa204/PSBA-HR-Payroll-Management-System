@@ -4,19 +4,15 @@ import { useAuthStore } from "./authStore";
 
 const PrivateRoute = ({ roles = [], children }) => {
   const user = useAuthStore((s) => s.user);
-  console.log("User in PrivateRoute:", user);
-console.log("Roles allowed:", roles);
+  const isChecking = useAuthStore((s) => s.isChecking);
 
+  if (isChecking || user === undefined) {
+    return null; // or a loader component
+  }
 
   if (!user) {
     return <Navigate to="/login" />;
   }
-
-  // If user role is not in allowed roles
-  if (!roles.includes(user.role)) {
-    return <Navigate to="/unauthorized" />;
-  }
-
   return children;
 };
 

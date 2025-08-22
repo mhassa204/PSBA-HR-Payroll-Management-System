@@ -1,4 +1,5 @@
-const prisma = require("../prismaClient"); // adjust to your setup
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
 const { decrypt } = require("../utils/cryptoUtil");
 
 const authController = {

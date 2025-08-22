@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../features/auth/authStore';
 import '../../styles/sidebar.css';
 
 // Simple SVG Icon Components
@@ -120,6 +121,7 @@ const navigation = [
 const LeftSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const logout = useAuthStore((s) => s.logout);
   const [expandedItems, setExpandedItems] = useState(new Set());
 
   const isActive = (href) => {
@@ -147,6 +149,11 @@ const LeftSidebar = () => {
 
   const handleNavigation = (href) => {
     navigate(href);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
   };
 
   return (
@@ -254,7 +261,7 @@ const LeftSidebar = () => {
 
                  {/* Bottom Section */}
          <div className="p-4 border-t border-slate-600">
-           <div className="bg-slate-700 rounded-lg p-4">
+           <div className="bg-slate-700 rounded-lg p-4 mb-4">
              <div className="flex items-center space-x-3">
                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
                  <UserIcon className="w-5 h-5 text-white" />
@@ -265,6 +272,15 @@ const LeftSidebar = () => {
                </div>
              </div>
            </div>
+           <button
+             onClick={handleLogout}
+             className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
+           >
+             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
+             </svg>
+             <span>Logout</span>
+           </button>
          </div>
       </div>
     </div>
