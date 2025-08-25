@@ -5,21 +5,18 @@ class RoleService {
   async getAllRoles() {
     try {
       const roles = await prisma.role.findMany({
-        where: {
-          is_deleted: false
-        },
+        where: { is_deleted: false },
         include: {
-          _count: {
-            select: {
-              users: true
-            }
-          }
+          _count: { select: { users: true } },
+          rolePermissions: { include: { permission: true } },
         },
-        orderBy: {
-          createdAt: 'desc'
-        }
+        orderBy: { createdAt: 'desc' },
       });
-      return { roles };
+      const data = roles.map((r) => ({
+        ...r,
+        allowed_actions: r.rolePermissions?.map((rp) => rp.permission.key) || [],
+      }));
+      return { roles: data };
     } catch (error) {
       throw new Error(`Failed to fetch roles: ${error.message}`);
     }
@@ -28,17 +25,12 @@ class RoleService {
   async getRoleById(id) {
     try {
       const role = await prisma.role.findFirst({
-        where: {
-          id: parseInt(id),
-          is_deleted: false
-        }
+        where: { id: parseInt(id), is_deleted: false },
+        include: { rolePermissions: { include: { permission: true } } },
       });
-      
-      if (!role) {
-        throw new Error('Role not found');
-      }
-      
-      return { role };
+      if (!role) throw new Error('Role not found');
+      const data = { ...role, allowed_actions: role.rolePermissions?.map((rp) => rp.permission.key) || [] };
+      return { role: data };
     } catch (error) {
       throw new Error(`Failed to fetch role: ${error.message}`);
     }
@@ -46,21 +38,33 @@ class RoleService {
 
   async createRole(roleData) {
     try {
+      const { name, type = 'custom', enabled = true, fields = [], allowed_actions = [] } = roleData;
+
+      const ensurePerm = async (key) =>
+        prisma.permission.upsert({
+          where: { key },
+          update: {},
+          create: { key, resource: key.split('.')[0] || 'custom', action: key.split('.')[1] || 'custom' },
+        });
+
+      const uniqueKeys = Array.from(new Set(allowed_actions));
+      const perms = await prisma.$transaction(uniqueKeys.map(ensurePerm));
+
       const role = await prisma.role.create({
         data: {
-          name: roleData.name,
-          type: roleData.type || 'custom',
-          allowed_actions: roleData.allowed_actions || [],
-          enabled: roleData.enabled !== undefined ? roleData.enabled : true,
-          fields: roleData.fields || []
-        }
+          name,
+          type,
+          enabled,
+          fields,
+          rolePermissions: { create: perms.map((p) => ({ permission_id: p.id })) },
+        },
+        include: { rolePermissions: { include: { permission: true } } },
       });
-      
-      return { role };
+
+      const data = { ...role, allowed_actions: role.rolePermissions?.map((rp) => rp.permission.key) || [] };
+      return { role: data };
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new Error('Role name already exists');
-      }
+      if (error.code === 'P2002') throw new Error('Role name already exists');
       throw new Error(`Failed to create role: ${error.message}`);
     }
   }
@@ -68,32 +72,40 @@ class RoleService {
   async updateRole(id, roleData) {
     try {
       const existingRole = await prisma.role.findFirst({
-        where: {
-          id: parseInt(id),
-          is_deleted: false
-        }
+        where: { id: parseInt(id), is_deleted: false },
+        include: { rolePermissions: true },
       });
+      if (!existingRole) throw new Error('Role not found');
 
-      if (!existingRole) {
-        throw new Error('Role not found');
-      }
+      const { name, type, enabled, fields, allowed_actions = [] } = roleData;
 
-      const role = await prisma.role.update({
-        where: { id: parseInt(id) },
+      const uniqueKeys = Array.from(new Set(allowed_actions));
+      const perms = await prisma.$transaction(
+        uniqueKeys.map((key) =>
+          prisma.permission.upsert({
+            where: { key },
+            update: {},
+            create: { key, resource: key.split('.')[0] || 'custom', action: key.split('.')[1] || 'custom' },
+          })
+        )
+      );
+
+      const updated = await prisma.role.update({
+        where: { id: existingRole.id },
         data: {
-          name: roleData.name,
-          type: roleData.type,
-          allowed_actions: roleData.allowed_actions,
-          enabled: roleData.enabled,
-          fields: roleData.fields
-        }
+          name,
+          type,
+          enabled,
+          fields,
+          rolePermissions: { deleteMany: {}, create: perms.map((p) => ({ permission_id: p.id })) },
+        },
+        include: { rolePermissions: { include: { permission: true } } },
       });
-      
-      return { role };
+
+      const data = { ...updated, allowed_actions: updated.rolePermissions?.map((rp) => rp.permission.key) || [] };
+      return { role: data };
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new Error('Role name already exists');
-      }
+      if (error.code === 'P2002') throw new Error('Role name already exists');
       throw new Error(`Failed to update role: ${error.message}`);
     }
   }
@@ -101,32 +113,14 @@ class RoleService {
   async deleteRole(id) {
     try {
       const existingRole = await prisma.role.findFirst({
-        where: {
-          id: parseInt(id),
-          is_deleted: false
-        },
-        include: {
-          _count: {
-            select: {
-              users: true
-            }
-          }
-        }
+        where: { id: parseInt(id), is_deleted: false },
+        include: { _count: { select: { users: true } } },
       });
-
-      if (!existingRole) {
-        throw new Error('Role not found');
-      }
-
+      if (!existingRole) throw new Error('Role not found');
       if (existingRole._count.users > 0) {
         throw new Error(`Cannot delete role. It is assigned to ${existingRole._count.users} users.`);
       }
-
-      await prisma.role.update({
-        where: { id: parseInt(id) },
-        data: { is_deleted: true }
-      });
-      
+      await prisma.role.update({ where: { id: parseInt(id) }, data: { is_deleted: true } });
       return { message: 'Role deleted successfully' };
     } catch (error) {
       throw new Error(`Failed to delete role: ${error.message}`);

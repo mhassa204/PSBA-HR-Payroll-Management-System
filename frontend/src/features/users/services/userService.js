@@ -58,5 +58,14 @@ export const userService = {
       console.error('Error fetching available employees:', error);
       throw new Error(error.response?.data?.error || 'Failed to fetch available employees');
     }
+  },
+
+  async getFormOptions() {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/form-options`);
+      return response.data; // { roles, employees }
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to load form options');
+    }
   }
 };

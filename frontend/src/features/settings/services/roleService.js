@@ -26,6 +26,7 @@ export const roleService = {
 
   async createRole(roleData) {
     try {
+      // roleData.allowed_actions should be canonical permission keys
       const response = await axios.post(API_BASE_URL, roleData);
       return response.data;
     } catch (error) {
@@ -49,5 +50,16 @@ export const roleService = {
     } catch (error) {
       throw new Error(error.response?.data?.error || 'Failed to delete role');
     }
+  }
+};
+
+export const permissionsService = {
+  async listAll() {
+    const res = await axios.get('/permissions');
+    return res.data.permissions || res.data;
+  },
+  async upsertMany(keys) {
+    const res = await axios.post('/permissions/upsert-many', { keys });
+    return res.data.permissions || res.data;
   }
 };

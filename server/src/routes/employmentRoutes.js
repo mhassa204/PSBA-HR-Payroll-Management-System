@@ -4,6 +4,7 @@ const router = express.Router();
 const employmentController = require("../controllers/employmentController");
 const multer = require("multer");
 const { employmentStorage } = require("../config/multer");
+const { isAuthenticated, authorize } = require('../middleware/auth');
 
 // Custom multer configuration for employment document uploads
 const employmentUpload = multer({
@@ -32,30 +33,30 @@ const employmentUpload = multer({
 });
 
 // Employment CRUD routes with file upload support
-router.post("/", employmentUpload.any(), employmentController.createEmployment);
-router.get("/", employmentController.getAllEmployments);
-router.get("/statistics", employmentController.getEmploymentStatistics);
-router.get("/form-options", employmentController.getFormOptions);
-router.get("/employees-for-reporting-officer", employmentController.getEmployeesForReportingOfficer);
-router.get("/designations/:departmentId", employmentController.getDesignationsByDepartment);
-router.get("/employee/:employeeId", employmentController.getEmploymentsByEmployeeId);
-router.get("/:id", employmentController.getEmploymentById);
-router.put("/:id", employmentUpload.any(), employmentController.updateEmployment);
-router.delete("/:id", employmentController.deleteEmployment);
+router.post("/", isAuthenticated, authorize('employment.create'), employmentUpload.any(), employmentController.createEmployment);
+router.get("/", isAuthenticated, authorize('employment.read'), employmentController.getAllEmployments);
+router.get("/statistics", isAuthenticated, authorize('employment.read'), employmentController.getEmploymentStatistics);
+router.get("/form-options", isAuthenticated, authorize('employment.read'), employmentController.getFormOptions);
+router.get("/employees-for-reporting-officer", isAuthenticated, authorize('employment.read'), employmentController.getEmployeesForReportingOfficer);
+router.get("/designations/:departmentId", isAuthenticated, authorize('employment.read'), employmentController.getDesignationsByDepartment);
+router.get("/employee/:employeeId", isAuthenticated, authorize('employment.read'), employmentController.getEmploymentsByEmployeeId);
+router.get("/:id", isAuthenticated, authorize('employment.read'), employmentController.getEmploymentById);
+router.put("/:id", isAuthenticated, authorize('employment.update'), employmentUpload.any(), employmentController.updateEmployment);
+router.delete("/:id", isAuthenticated, authorize('employment.delete'), employmentController.deleteEmployment);
 
 // Salary management routes
-router.post("/:employmentId/salary", employmentController.createSalary);
-router.put("/:employmentId/salary", employmentController.updateSalary);
-router.delete("/:employmentId/salary", employmentController.deleteSalary);
+router.post("/:employmentId/salary", isAuthenticated, authorize('employment.salary.create'), employmentController.createSalary);
+router.put("/:employmentId/salary", isAuthenticated, authorize('employment.salary.update'), employmentController.updateSalary);
+router.delete("/:employmentId/salary", isAuthenticated, authorize('employment.salary.delete'), employmentController.deleteSalary);
 
 // Location management routes
-router.post("/:employmentId/location", employmentController.createLocation);
-router.put("/:employmentId/location", employmentController.updateLocation);
-router.delete("/:employmentId/location", employmentController.deleteLocation);
+router.post("/:employmentId/location", isAuthenticated, authorize('employment.location.create'), employmentController.createLocation);
+router.put("/:employmentId/location", isAuthenticated, authorize('employment.location.update'), employmentController.updateLocation);
+router.delete("/:employmentId/location", isAuthenticated, authorize('employment.location.delete'), employmentController.deleteLocation);
 
 // Contract management routes
-router.post("/:employmentId/contract", employmentUpload.any(), employmentController.createContract);
-router.put("/:employmentId/contract", employmentUpload.any(), employmentController.updateContract);
-router.delete("/:employmentId/contract", employmentController.deleteContract);
+router.post("/:employmentId/contract", isAuthenticated, authorize('employment.contract.create'), employmentUpload.any(), employmentController.createContract);
+router.put("/:employmentId/contract", isAuthenticated, authorize('employment.contract.update'), employmentUpload.any(), employmentController.updateContract);
+router.delete("/:employmentId/contract", isAuthenticated, authorize('employment.contract.delete'), employmentController.deleteContract);
 
 module.exports = router;

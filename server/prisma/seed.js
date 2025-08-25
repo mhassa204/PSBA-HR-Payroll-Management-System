@@ -63,6 +63,11 @@ async function main() {
     await prisma.user.delete({ where: { id: user.id } });
   }
 
+  // NEW: clear role-permissions and permissions before deleting roles
+  console.log('🧹 Clearing role-permissions and permissions...');
+  await prisma.rolePermission.deleteMany({});
+  await prisma.permission.deleteMany({});
+
   const existingRoles = await prisma.role.findMany({
     select: { id: true, name: true }
   });
@@ -195,28 +200,41 @@ async function main() {
     { 
       name: "HR Admin", 
       type: "system", 
-      allowed_actions: ["manage_employees", "manage_employment", "view_reports", "manage_departments", "manage_designations"], 
+      allowed_actions: [
+        "employees.read","employees.create","employees.update","employees.delete",
+        "employment.read","employment.create","employment.update","employment.delete",
+        "employment.salary.read","employment.salary.create","employment.salary.update","employment.salary.delete",
+        "employment.location.read","employment.location.create","employment.location.update","employment.location.delete",
+        "employment.contract.read","employment.contract.create","employment.contract.update","employment.contract.delete",
+        "departments.read","departments.create","departments.update","departments.delete",
+        "designations.read","designations.create","designations.update","designations.delete",
+        "role-tags.read","role-tags.create","role-tags.update","role-tags.delete",
+        "scale-grades.read","scale-grades.create","scale-grades.update","scale-grades.delete",
+        "reports.read",
+        "users.read","users.manage",
+        "audit.read"
+      ], 
       enabled: true, 
       fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] 
     },
     { 
       name: "HR Officer", 
       type: "custom", 
-      allowed_actions: ["view_employees", "create_employee", "edit_employee", "view_reports"], 
+      allowed_actions: ["employees.read","employees.create","employees.update","reports.read"], 
       enabled: true, 
       fields: ["employee_personal", "employee_employment"] 
     },
     { 
       name: "Manager", 
       type: "custom", 
-      allowed_actions: ["view_employees", "view_reports", "approve_requests"], 
+      allowed_actions: ["employees.read","reports.read","requests.approve"], 
       enabled: true, 
       fields: ["employee_basic", "employee_employment"] 
     },
     { 
       name: "Employee", 
       type: "custom", 
-      allowed_actions: ["view_own_profile", "edit_own_profile"], 
+      allowed_actions: ["profile.read","profile.update"], 
       enabled: true, 
       fields: ["own_personal", "own_employment"] 
     }
@@ -227,7 +245,10 @@ async function main() {
   for (const role of roles) {
     const createdRole = await prisma.role.create({
       data: {
-        ...role,
+        name: role.name,
+        type: role.type,
+        enabled: role.enabled,
+        fields: role.fields || [],
         is_deleted: false
       }
     });
@@ -751,6 +772,60 @@ async function main() {
     const employmentDocument = await prisma.employmentDocument.create({ data: doc });
     console.log(`✅ Created Employment Document: ${employmentDocument.file_type} for employment ${employmentDocument.employment_id}`);
   }
+
+  // After roles and users: Seed normalized permissions and attach to roles
+  console.log('🔑 Seeding permissions and role-permissions...');
+  // collect unique keys from roles (excluding '*') + system settings keys
+  const systemKeys = [
+    'system.database.read',
+    'system.security.read','system.security.update',
+    'system.themes.read','system.themes.update'
+  ];
+  const keys = Array.from(new Set([
+    ...roles.flatMap(r => r.allowed_actions).filter(k => k !== '*'),
+    ...systemKeys
+  ]));
+  const permissionRecords = await prisma.$transaction(keys.map((key) =>
+    prisma.permission.upsert({
+      where: { key },
+      update: {},
+      create: { key, resource: key.split('.')[0] || 'custom', action: key.split('.')[1] || 'custom' }
+    })
+  ));
+
+  // build a quick lookup of permission key -> id
+  const permIdByKey = Object.fromEntries(permissionRecords.map(p => [p.key, p.id]));
+
+  // Attach permissions per role (skip Super Admin)
+  for (const r of createdRoles) {
+    const roleSeed = roles.find(rr => rr.name === r.name);
+    if (!roleSeed) continue;
+    if (roleSeed.allowed_actions.includes('*')) continue; // Super Admin
+    const roleKeys = roleSeed.allowed_actions.filter(k => k !== '*');
+    const data = roleKeys
+      .filter(k => permIdByKey[k])
+      .map(k => ({ role_id: r.id, permission_id: permIdByKey[k] }));
+    if (data.length > 0) {
+      await prisma.rolePermission.createMany({ data, skipDuplicates: true });
+    }
+  }
+
+  // Seed default system settings (security/ui)
+  await prisma.systemSetting.upsert({
+    where: { key: 'security' },
+    update: {},
+    create: {
+      key: 'security',
+      category: 'security',
+      value: {
+        passwordPolicy: { minLength: 8, requireNumber: true, requireUppercase: true, requireSymbol: false },
+        sessionMaxAgeMinutes: 60,
+        lockoutThreshold: 5,
+        twoFactorEnabled: false
+      }
+    }
+  });
+
 
   console.log('🎉 Database seeding completed successfully!');
   console.log(`📊 Summary:`);

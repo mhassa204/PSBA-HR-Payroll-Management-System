@@ -11,7 +11,15 @@ const authController = {
         .json({ success: false, error: "Email and password required" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    // Only allow non-deleted users whose roles are enabled and not deleted
+    const user = await prisma.user.findFirst({
+      where: {
+        email,
+        is_deleted: false,
+        role: { is: { is_deleted: false, enabled: true } },
+      },
+      include: { role: true },
+    });
 
     if (!user || decrypt(user.password) !== password) {
       return res
@@ -19,11 +27,24 @@ const authController = {
         .json({ success: false, error: "Invalid credentials" });
     }
 
+    // Load permissions for the user's role (normalized RBAC)
+    let permissions = [];
+    if (user.role?.name === "Super Admin") {
+      permissions = ["*"];
+    } else {
+      const rolePerms = await prisma.rolePermission.findMany({
+        where: { role_id: user.role_id },
+        include: { permission: true },
+      });
+      permissions = rolePerms.map((rp) => rp.permission.key);
+    }
+
     // Set session values
     req.session.user = {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: { id: user.role.id, name: user.role.name, type: user.role.type },
+      permissions,
     };
 
     res.json({ success: true, message: "Logged in", user: req.session.user });
@@ -38,13 +59,56 @@ const authController = {
     });
   },
 
-  me: (req, res) => {
+  me: async (req, res) => {
     if (!req.session.user) {
       return res
         .status(401)
         .json({ success: false, error: "Not authenticated" });
     }
-    res.json({ success: true, user: req.session.user });
+
+    // Validate user still active and role still enabled; also ensure permissions present
+    try {
+      const dbUser = await prisma.user.findFirst({
+        where: {
+          id: req.session.user.id,
+          is_deleted: false,
+          role: { is: { is_deleted: false, enabled: true } },
+        },
+        include: { role: true },
+      });
+
+      if (!dbUser) {
+        // Invalidate session if user/role is no longer valid
+        req.session.destroy(() => {});
+        res.clearCookie("connect.sid");
+        return res.status(401).json({ success: false, error: "Not authenticated" });
+      }
+
+      let permissions = req.session.user.permissions || [];
+      if (!permissions || permissions.length === 0) {
+        if (dbUser.role?.name === "Super Admin") {
+          permissions = ["*"];
+        } else {
+          const rolePerms = await prisma.rolePermission.findMany({
+            where: { role_id: dbUser.role_id },
+            include: { permission: true },
+          });
+          permissions = rolePerms.map((rp) => rp.permission.key);
+        }
+      }
+
+      req.session.user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        role: { id: dbUser.role.id, name: dbUser.role.name, type: dbUser.role.type },
+        permissions,
+      };
+      return res.json({ success: true, user: req.session.user });
+    } catch (e) {
+      return res
+        .status(500)
+        .json({ success: false, error: "Failed to load permissions" });
+    }
   },
 };
 

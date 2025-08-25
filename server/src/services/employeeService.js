@@ -62,7 +62,7 @@ const employeeService = {
       has_disability: processedData.has_disability === "true" || processedData.has_disability === true,
       disability_type: processedData.disability_type,
       disability_description: processedData.disability_description,
-      password: data.password ? encrypt(data.password) : null,
+     
       status: processedData.status || "Active",
       profile_picture: processedFiles?.profile_picture_file || null,
       missing_note: processedData.missing_note || null
@@ -260,9 +260,7 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
     }
   }
 
-  if (data.password) {
-    employeeUpdateData.password = encrypt(data.password);
-  }
+
 
   // Debug logging for profile picture handling
   console.log("🔍 Profile picture debug info:");

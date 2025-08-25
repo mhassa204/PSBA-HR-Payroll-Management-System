@@ -17,6 +17,8 @@ const session = require("express-session");
 const PgSession = require("connect-pg-simple")(session);
 const { Pool } = require("pg");
 const authRoutes = require("./routes/authRoutes");
+const permissionRoutes = require("./routes/permissionRoutes");
+const systemSettingsRoutes = require("./routes/systemSettingsRoutes");
 
 const app = express(); 
 const PORT = process.env.PORT || 3000;
@@ -62,6 +64,8 @@ app.use(session({
 app.use("/api", authRoutes);
 
 // Routes
+app.use("/api/permissions", permissionRoutes);
+app.use("/api/settings", systemSettingsRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/employment", employmentRoutes);
 app.use("/api/departments", departmentRoutes);

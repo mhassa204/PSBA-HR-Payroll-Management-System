@@ -65,64 +65,72 @@ const UserIcon = () => (
  * - Modern iconography
  */
 
-const navigation = [
-  { 
-    name: 'Dashboard', 
-    href: '/dashboard', 
-    icon: HomeIcon,
-    description: 'Overview & Analytics',
-    color: 'bg-blue-600'
-  },
-  { 
-    name: 'Employees', 
-    href: '/employees', 
-    icon: UsersIcon,
-    description: 'Manage Team',
-    color: 'bg-emerald-600',
-    children: [
-      { name: 'All Employees', href: '/employees', icon: ViewColumnsIcon },
-      { name: 'Add Employee', href: '/employees/create', icon: PlusIcon }
-    ]
-  },
-  { 
-    name: 'Users', 
-    href: '/users', 
-    icon: UserIcon,
-    description: 'System Access',
-    color: 'bg-purple-600',
-    children: [
-      { name: 'All Users', href: '/users', icon: ViewColumnsIcon },
-      { name: 'Add User', href: '/users/create', icon: PlusIcon }
-    ]
-  },
-  { 
-    name: 'Reports', 
-    href: '/reports', 
-    icon: ChartBarIcon,
-    description: 'Analytics',
-    color: 'bg-indigo-600'
-  },
-  { 
-    name: 'Audit Logs', 
-    href: '/audit-logs', 
-    icon: ShieldCheckIcon,
-    description: 'Security',
-    color: 'bg-yellow-600'
-  },
-  { 
-    name: 'Settings', 
-    href: '/settings', 
-    icon: CogIcon,
-    description: 'Configuration',
-    color: 'bg-gray-600'
-  }
-];
-
 const LeftSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
+  const can = useAuthStore((s) => s.can);
+  const user = useAuthStore((s) => s.user);
   const [expandedItems, setExpandedItems] = useState(new Set());
+
+  const navigation = [
+    { 
+      name: 'Dashboard', 
+      href: '/dashboard', 
+      icon: HomeIcon,
+      description: 'Overview & Analytics',
+      color: 'bg-blue-600',
+      show: () => can('employees.read') || can('reports.read')
+    },
+    { 
+      name: 'Employees', 
+      href: '/employees', 
+      icon: UsersIcon,
+      description: 'Manage Team',
+      color: 'bg-emerald-600',
+      show: () => can('employees.read'),
+      children: [
+        { name: 'All Employees', href: '/employees', icon: ViewColumnsIcon, show: () => can('employees.read') },
+        { name: 'Add Employee', href: '/employees/create', icon: PlusIcon, show: () => can('employees.create') }
+      ]
+    },
+    { 
+      name: 'Users', 
+      href: '/users', 
+      icon: UserIcon,
+      description: 'System Access',
+      color: 'bg-purple-600',
+      show: () => can('users.read'),
+      children: [
+        { name: 'All Users', href: '/users', icon: ViewColumnsIcon, show: () => can('users.read') },
+        { name: 'Add User', href: '/users/create', icon: PlusIcon, show: () => can('users.manage') }
+      ]
+    },
+    { 
+      name: 'Reports', 
+      href: '/reports', 
+      icon: ChartBarIcon,
+      description: 'Analytics',
+      color: 'bg-indigo-600',
+      show: () => can('reports.read')
+    },
+    { 
+      name: 'Audit Logs', 
+      href: '/audit-logs', 
+      icon: ShieldCheckIcon,
+      description: 'Security',
+      color: 'bg-yellow-600',
+      show: () => can('audit.read')
+    },
+    { 
+      name: 'Settings', 
+      href: '/settings', 
+      icon: CogIcon,
+      description: 'Configuration',
+      color: 'bg-gray-600',
+      show: () => can('departments.read') || can('designations.read') || can('role-tags.read') || can('scale-grades.read')
+    }
+  ];
 
   const isActive = (href) => {
     if (href === '/dashboard') {
@@ -159,56 +167,51 @@ const LeftSidebar = () => {
   return (
     <div className="fixed left-0 top-0 h-full w-72 bg-slate-800 border-r border-slate-600 shadow-xl z-50">
       <div className="h-full flex flex-col">
-                 {/* Logo Section */}
-         <div className="p-6 border-b border-slate-600">
-           <div className="flex items-center space-x-3">
-             <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
-               <span className="text-white font-bold text-lg">HR</span>
-             </div>
-             <div>
-               <h1 className="text-xl font-bold text-white">
-                 PSBA Portal
-               </h1>
-               <p className="text-sm text-slate-300">Human Resources</p>
-             </div>
-           </div>
-         </div>
+        {/* Logo Section */}
+        <div className="p-6 border-b border-slate-600">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
+              <span className="text-white font-bold text-lg">HR</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">
+                PSBA Portal
+              </h1>
+              <p className="text-sm text-slate-300">Human Resources</p>
+            </div>
+          </div>
+        </div>
 
-                 {/* Navigation */}
-         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          {navigation.map((item) => {
+        {/* Navigation */}
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+          {navigation.filter(item => item.show()).map((item) => {
             const isItemActive = isActive(item.href) || isChildActive(item.children);
             const isExpanded = expandedItems.has(item.name);
+            const visibleChildren = (item.children || []).filter(ch => (ch.show ? ch.show() : true));
             
             return (
               <div key={item.name} className="space-y-1">
                 {/* Main Navigation Item */}
-                                 <button
-                   onClick={() => {
-                     if (item.children) {
-                       toggleExpanded(item.name);
-                     } else {
-                       handleNavigation(item.href);
-                     }
-                   }}
-                   className={`
-                     group w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200
-                     ${isItemActive 
-                       ? item.color + ' text-white shadow-md' 
-                       : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-                     }
-                   `}
-                 >
+                <button
+                  onClick={() => { visibleChildren.length ? toggleExpanded(item.name) : handleNavigation(item.href); }}
+                  className={`
+                    group w-full flex items-center justify-between p-3 rounded-lg transition-all duration-200
+                    ${isItemActive 
+                      ? item.color + ' text-white shadow-md' 
+                      : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    }
+                  `}
+                >
                   <div className="flex items-center space-x-3">
-                                         <div className={`
-                       p-2 rounded-md transition-all duration-200
-                       ${isItemActive 
-                         ? 'bg-white/20 text-white' 
-                         : 'text-slate-400 group-hover:text-white'
-                       }
-                     `}>
-                       <item.icon className="w-5 h-5" />
-                     </div>
+                    <div className={`
+                      p-2 rounded-md transition-all duration-200
+                      ${isItemActive 
+                        ? 'bg-white/20 text-white' 
+                        : 'text-slate-400 group-hover:text-white'
+                      }
+                    `}>
+                      <item.icon className="w-5 h-5" />
+                    </div>
                     <div className="text-left">
                       <div className="font-medium">{item.name}</div>
                       <div className={`text-xs ${isItemActive ? 'text-white/80' : 'text-slate-400'}`}>
@@ -217,7 +220,7 @@ const LeftSidebar = () => {
                     </div>
                   </div>
                   
-                  {item.children && (
+                  {visibleChildren.length > 0 && (
                     <div className={`
                       transition-transform duration-300
                       ${isExpanded ? 'rotate-90' : 'rotate-0'}
@@ -230,23 +233,23 @@ const LeftSidebar = () => {
                 </button>
 
                 {/* Sub-navigation */}
-                {item.children && isExpanded && (
+                {visibleChildren.length > 0 && isExpanded && (
                   <div className="ml-8 space-y-1">
-                    {item.children.map((child) => {
+                    {visibleChildren.map((child) => {
                       const isChildActive = location.pathname === child.href;
                       
                       return (
-                                                 <button
-                           key={child.name}
-                           onClick={() => handleNavigation(child.href)}
-                           className={`
-                             w-full flex items-center space-x-3 p-2 rounded-md transition-all duration-200 text-left
-                             ${isChildActive 
-                               ? 'bg-slate-700 text-white' 
-                               : 'text-slate-400 hover:text-white hover:bg-slate-700'
-                             }
-                           `}
-                         >
+                        <button
+                          key={child.name}
+                          onClick={() => handleNavigation(child.href)}
+                          className={`
+                            w-full flex items-center space-x-3 p-2 rounded-md transition-all duration-200 text-left
+                            ${isChildActive 
+                              ? 'bg-slate-700 text-white' 
+                              : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                            }
+                          `}
+                        >
                           <child.icon className="w-4 h-4" />
                           <span className="text-sm font-medium">{child.name}</span>
                         </button>
@@ -259,29 +262,29 @@ const LeftSidebar = () => {
           })}
         </nav>
 
-                 {/* Bottom Section */}
-         <div className="p-4 border-t border-slate-600">
-           <div className="bg-slate-700 rounded-lg p-4 mb-4">
-             <div className="flex items-center space-x-3">
-               <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
-                 <UserIcon className="w-5 h-5 text-white" />
-               </div>
-               <div>
-                 <p className="text-sm font-medium text-white">Admin User</p>
-                 <p className="text-xs text-slate-300">HR Admin</p>
-               </div>
-             </div>
-           </div>
-           <button
-             onClick={handleLogout}
-             className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
-           >
-             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
-             </svg>
-             <span>Logout</span>
-           </button>
-         </div>
+        {/* Bottom Section */}
+        <div className="p-4 border-t border-slate-600">
+          <div className="bg-slate-700 rounded-lg p-4 mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
+                <UserIcon className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-white">{user?.email || 'User'}</p>
+                <p className="text-xs text-slate-300">{user?.role?.name || ''}</p>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
+            </svg>
+            <span>Logout</span>
+          </button>
+        </div>
       </div>
     </div>
   );

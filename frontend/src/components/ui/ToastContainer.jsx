@@ -1,6 +1,7 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useEffect } from "react";
 import Toast from "./Toast";
 import useToast from "../../hooks/useToast";
+import { toastBus } from "../../utils/toastBus";
 
 const ToastContext = createContext();
 
@@ -14,6 +15,17 @@ export const useToastContext = () => {
 
 const ToastProvider = ({ children }) => {
   const toast = useToast();
+
+  useEffect(() => {
+    const off = toastBus.on(({ type = 'info', message }) => {
+      if (!message) return;
+      if (type === 'error') toast.showError(message);
+      else if (type === 'success') toast.showSuccess(message);
+      else if (type === 'warning') toast.showWarning(message);
+      else toast.showInfo(message);
+    });
+    return () => off();
+  }, [toast]);
 
   return (
     <ToastContext.Provider value={toast}>

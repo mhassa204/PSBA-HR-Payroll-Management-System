@@ -254,26 +254,28 @@ model Role {
   id              Int      @id @default(autoincrement())
   name            String   @unique
   type            String   @default("custom")
-  allowed_actions String[] @default([])
   is_deleted      Boolean  @default(false)
   enabled         Boolean  @default(true)
   fields          String[] @default([])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   users           User[]
+  rolePermissions RolePermission[]
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
   password     String
   role_id      Int
-  employee_id  Int?     @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  is_deleted   Boolean  @default(false)
-  role         Role     @relation(fields: [role_id], references: [id])
+  employee_id  Int?      @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  is_deleted   Boolean   @default(false)
+  role         Role      @relation(fields: [role_id], references: [id])
   employee     Employee? @relation(fields: [employee_id], references: [id])
+  // back relation for settings updates
+  updatedSettings SystemSetting[] @relation("UserUpdatedSettings")
 }
 
 model Session {
@@ -282,4 +284,39 @@ model Session {
   expire DateTime @db.Timestamp(6)
 
   @@map("session")
+}
+
+model Permission {
+  id              Int               @id @default(autoincrement())
+  key             String            @unique
+  resource        String
+  action          String
+  description     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  role_id       Int
+  permission_id Int
+  constraints   Json?
+
+  role        Role       @relation(fields: [role_id], references: [id])
+  permission  Permission @relation(fields: [permission_id], references: [id])
+
+  @@id([role_id, permission_id])
+}
+
+model SystemSetting {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique
+  category   String
+  value      Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  updatedBy  Int?
+  updatedByUser User? @relation(name: "UserUpdatedSettings", fields: [updatedBy], references: [id])
+
+  @@index([category])
 }

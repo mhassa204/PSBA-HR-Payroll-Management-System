@@ -3,12 +3,15 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const HardDeleteUtil = require('../utils/hardDeleteUtil');
 const { manualCleanup } = require('../jobs/cleanupJob');
-const { isAuthenticated: auth } = require('../middleware/auth');
+const { isAuthenticated: auth, authorize } = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 
+// Require admin tools permission for all admin routes
+router.use(auth, authorize('admin.tools'));
+
 // Get all soft-deleted records summary
-router.get('/deleted-records', auth, async (req, res) => {
+router.get('/deleted-records', async (req, res) => {
   try {
     const [
       deletedEmployees,
@@ -41,7 +44,7 @@ router.get('/deleted-records', auth, async (req, res) => {
 });
 
 // Get soft-deleted employees with pagination
-router.get('/deleted-employees', auth, async (req, res) => {
+router.get('/deleted-employees', async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '' } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -95,7 +98,7 @@ router.get('/deleted-employees', auth, async (req, res) => {
 });
 
 // Restore a soft-deleted employee
-router.post('/restore-employee/:id', auth, async (req, res) => {
+router.post('/restore-employee/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -124,7 +127,7 @@ router.post('/restore-employee/:id', auth, async (req, res) => {
 });
 
 // Get soft-deleted departments
-router.get('/deleted-departments', auth, async (req, res) => {
+router.get('/deleted-departments', async (req, res) => {
   try {
     const departments = await prisma.department.findMany({
       where: { is_deleted: true },
@@ -137,10 +140,7 @@ router.get('/deleted-departments', auth, async (req, res) => {
       }
     });
 
-    res.json({
-      success: true,
-      data: departments
-    });
+    res.json({ success: true, data: departments });
   } catch (error) {
     console.error('Error fetching deleted departments:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch deleted departments' });
@@ -148,11 +148,10 @@ router.get('/deleted-departments', auth, async (req, res) => {
 });
 
 // Restore a soft-deleted department
-router.post('/restore-department/:id', auth, async (req, res) => {
+router.post('/restore-department/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Check if department exists and is soft-deleted
     const department = await prisma.department.findFirst({
       where: { id: parseInt(id), is_deleted: true }
     });
@@ -161,15 +160,10 @@ router.post('/restore-department/:id', auth, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Soft-deleted department not found' });
     }
 
-    // Restore the department using the service
     const departmentService = require('../services/departmentService');
     const result = await departmentService.restoreDepartment(id);
 
-    res.json({
-      success: true,
-      message: result.message,
-      data: result.restoredDepartment
-    });
+    res.json({ success: true, message: result.message, data: result.restoredDepartment });
   } catch (error) {
     console.error('Error restoring department:', error);
     res.status(500).json({ success: false, error: 'Failed to restore department' });
@@ -177,22 +171,15 @@ router.post('/restore-department/:id', auth, async (req, res) => {
 });
 
 // Get soft-deleted designations
-router.get('/deleted-designations', auth, async (req, res) => {
+router.get('/deleted-designations', async (req, res) => {
   try {
     const designations = await prisma.designation.findMany({
       where: { is_deleted: true },
       orderBy: { updatedAt: 'desc' },
-      include: {
-        department: {
-          select: { name: true }
-        }
-      }
+      include: { department: { select: { name: true } } }
     });
 
-    res.json({
-      success: true,
-      data: designations
-    });
+    res.json({ success: true, data: designations });
   } catch (error) {
     console.error('Error fetching deleted designations:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch deleted designations' });
@@ -200,11 +187,10 @@ router.get('/deleted-designations', auth, async (req, res) => {
 });
 
 // Restore a soft-deleted designation
-router.post('/restore-designation/:id', auth, async (req, res) => {
+router.post('/restore-designation/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Check if designation exists and is soft-deleted
     const designation = await prisma.designation.findFirst({
       where: { id: parseInt(id), is_deleted: true }
     });
@@ -213,15 +199,10 @@ router.post('/restore-designation/:id', auth, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Soft-deleted designation not found' });
     }
 
-    // Restore the designation using the service
     const designationService = require('../services/designationService');
     const result = await designationService.restoreDesignation(id);
 
-    res.json({
-      success: true,
-      message: result.message,
-      data: result.restoredDesignation
-    });
+    res.json({ success: true, message: result.message, data: result.restoredDesignation });
   } catch (error) {
     console.error('Error restoring designation:', error);
     res.status(500).json({ success: false, error: 'Failed to restore designation' });
@@ -229,25 +210,17 @@ router.post('/restore-designation/:id', auth, async (req, res) => {
 });
 
 // Manual cleanup of soft-deleted records
-router.post('/cleanup', auth, async (req, res) => {
+router.post('/cleanup', async (req, res) => {
   try {
     const { daysOld = 90 } = req.body;
     
-    // Validate daysOld parameter
     if (daysOld < 1 || daysOld > 365) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'daysOld must be between 1 and 365' 
-      });
+      return res.status(400).json({ success: false, error: 'daysOld must be between 1 and 365' });
     }
 
     const result = await manualCleanup(daysOld);
 
-    res.json({
-      success: true,
-      message: result.message,
-      data: result.results
-    });
+    res.json({ success: true, message: result.message, data: result.results });
   } catch (error) {
     console.error('Error during manual cleanup:', error);
     res.status(500).json({ success: false, error: 'Failed to perform cleanup' });
@@ -255,34 +228,22 @@ router.post('/cleanup', auth, async (req, res) => {
 });
 
 // Hard delete a specific record (irreversible)
-router.delete('/hard-delete/:model/:id', auth, async (req, res) => {
+router.delete('/hard-delete/:model/:id', async (req, res) => {
   try {
     const { model, id } = req.params;
     
-    // Validate model parameter
     const validModels = ['employee', 'employment', 'department', 'designation'];
     if (!validModels.includes(model)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid model specified' 
-      });
+      return res.status(400).json({ success: false, error: 'Invalid model specified' });
     }
 
-    // Check if record exists and is soft-deleted
-    const record = await prisma[model].findFirst({
-      where: { id: parseInt(id), is_deleted: true }
-    });
+    const record = await prisma[model].findFirst({ where: { id: parseInt(id), is_deleted: true } });
 
     if (!record) {
-      return res.status(404).json({ 
-        success: false, 
-        error: `Soft-deleted ${model} not found` 
-      });
+      return res.status(404).json({ success: false, error: `Soft-deleted ${model} not found` });
     }
 
     let result;
-    
-    // Use appropriate hard delete method based on model
     switch (model) {
       case 'employee':
         result = await HardDeleteUtil.hardDeleteEmployee(parseInt(id));
@@ -301,16 +262,9 @@ router.delete('/hard-delete/:model/:id', auth, async (req, res) => {
     }
 
     if (result.success) {
-      res.json({
-        success: true,
-        message: result.message,
-        data: result.deletedRecord || result
-      });
+      res.json({ success: true, message: result.message, data: result.deletedRecord || result });
     } else {
-      res.status(500).json({
-        success: false,
-        error: result.message
-      });
+      res.status(500).json({ success: false, error: result.message });
     }
   } catch (error) {
     console.error('Error during hard delete:', error);

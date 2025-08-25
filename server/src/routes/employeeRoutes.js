@@ -66,7 +66,7 @@ const router = express.Router();
 const employeeController = require("../controllers/employeeController");
 const multer = require("multer");
 const { storage } = require("../config/multer");
-// const { hasRole } = require("../middlewares/authMiddleware");
+const { isAuthenticated, authorize } = require('../middleware/auth');
 
 // Custom multer configuration for dynamic field names
 const dynamicUpload = multer({
@@ -101,23 +101,28 @@ const dynamicUpload = multer({
 // Routes
 router.post(
   "/",
+  isAuthenticated,
+  authorize('employees.create'),
   dynamicUpload.any(), // Accept any field names that pass the filter
   employeeController.createEmployee
 );
 
-router.get("/", employeeController.getAllEmployees);
+router.get("/", isAuthenticated, authorize('employees.read'), employeeController.getAllEmployees);
 
-router.get("/:id", employeeController.getEmployeeById);
+router.get("/:id", isAuthenticated, authorize('employees.read'), employeeController.getEmployeeById);
 
 router.put(
   "/:id",
+  isAuthenticated,
+  authorize('employees.update'),
   dynamicUpload.any(), // Accept any field names that pass the filter
   employeeController.updateEmployee
 );
 
 router.delete(
   "/:id",
- 
+  isAuthenticated,
+  authorize('employees.delete'),
   employeeController.deleteEmployee
 );
 

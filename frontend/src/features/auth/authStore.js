@@ -21,6 +21,16 @@ export const useAuthStore = create(
 
       setUser: (user) => set({ user }),
 
+      // permission checker
+      can: (perm) => {
+        const u = get().user;
+        if (!u) return false;
+        if (u.role?.name === "Super Admin") return true;
+        const list = u.permissions || [];
+        if (list.includes("*")) return true;
+        return list.includes(perm);
+      },
+
       fetchSession: async () => {
         set({ isChecking: true });
         try {

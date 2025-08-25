@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useToastContext } from '../../../components/ui/ToastContainer';
 import PropTypes from 'prop-types';
 
 const RoleTagForm = ({ roleTag, onSubmit, onCancel, isSubmitting }) => {
+  const { showError } = useToastContext();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -33,12 +35,12 @@ const RoleTagForm = ({ roleTag, onSubmit, onCancel, isSubmitting }) => {
     
     // Basic validation
     if (!formData.name.trim()) {
-      alert('Role tag name is required');
+      showError('Role tag name is required');
       return;
     }
     
     if (formData.name.trim().length < 2) {
-      alert('Role tag name must be at least 2 characters long');
+      showError('Role tag name must be at least 2 characters long');
       return;
     }
     

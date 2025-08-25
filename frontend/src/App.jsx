@@ -11,7 +11,6 @@ import LeftSidebarLayout from "./components/layout/LeftSidebarLayout";
 // import EmployeeList from "./features/employees/components/EmployeeList";
 import EnhancedUserProfile from "./features/employees/components/EnhancedUserProfile";
 // import PaginationTest from "./components/PaginationTest";
-import { ColorThemeProvider } from "./components/ColorThemeProvider";
 // import ColorSystemDemo from "./components/ColorSystemDemo";
 import CreateEmployeeForm from "./features/employees/components/CreateEmployeeForm";
 import CleanEmploymentHistory from "./features/employees/components/CleanEmploymentHistory";
@@ -27,6 +26,9 @@ import {
   RoleManagement
 } from "./features/settings";
 import { UserManagement } from "./features/users";
+import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
+import SecuritySettings from "./features/settings/pages/SecuritySettings";
+
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
   // Emergency scroll restore keyboard shortcut (Ctrl+Shift+S)
@@ -44,10 +46,9 @@ function App() {
   }, [fetchSession]);
 
   return (
-    <ColorThemeProvider defaultTheme="default">
-      <ToastProvider>
-        <ConfirmationProvider>
-          <Routes>
+    <ToastProvider>
+      <ConfirmationProvider>
+        <Routes>
             <Route path="/login" element={<Login />} />
             <Route
               path="/unauthorized"
@@ -58,7 +59,7 @@ function App() {
             <Route
               path="/"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.read","departments.read","designations.read"]}>
                   <LeftSidebarLayout>
                     <div className="text-center py-20">
                       <h1 className="text-4xl font-bold text-slate-800 mb-4">Welcome to PSBA HR Portal</h1>
@@ -72,7 +73,7 @@ function App() {
             <Route
               path="/dashboard"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.read","reports.read"]}>
                   <LeftSidebarLayout>
                     <div className="text-center py-20">
                       <h1 className="text-4xl font-bold text-slate-800 mb-4">Dashboard</h1>
@@ -86,7 +87,7 @@ function App() {
             <Route
               path="/employees"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.read"]}>
                   <LeftSidebarLayout>
                     <EmployeeTable />
                   </LeftSidebarLayout>
@@ -96,7 +97,7 @@ function App() {
             <Route
               path="employees/view/:id"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.read"]}>
                   <LeftSidebarLayout>
                     <EnhancedUserProfile />
                   </LeftSidebarLayout>
@@ -106,7 +107,7 @@ function App() {
             <Route
               path="employees/:id/edit"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.update"]}>
                   <LeftSidebarLayout>
                     <EditEmployee />
                   </LeftSidebarLayout>
@@ -117,7 +118,7 @@ function App() {
             <Route 
               path="/employees/create" 
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.create"]}>
                   <LeftSidebarLayout>
                     <CreateEmployeeForm />
                   </LeftSidebarLayout>
@@ -127,7 +128,7 @@ function App() {
             <Route
               path="/employees/:employeeId/employment"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employment.read"]}>
                   <LeftSidebarLayout>
                     <CleanEmploymentHistory />
                   </LeftSidebarLayout>
@@ -141,7 +142,7 @@ function App() {
             <Route
               path="/reports"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["reports.read"]}>
                   <LeftSidebarLayout>
                     <div className="text-center py-20">
                       <h1 className="text-4xl font-bold text-slate-800 mb-4">Reports & Analytics</h1>
@@ -155,7 +156,7 @@ function App() {
             <Route 
               path="/audit-logs" 
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["audit.read"]}>
                   <LeftSidebarLayout>
                     <AuditLogsDashboard />
                   </LeftSidebarLayout>
@@ -167,7 +168,7 @@ function App() {
             <Route
               path="/settings"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["departments.read","designations.read","role-tags.read","scale-grades.read"]}>
                   <LeftSidebarLayout>
                     <SettingsDashboard />
                   </LeftSidebarLayout>
@@ -177,7 +178,7 @@ function App() {
             <Route
               path="/settings/departments"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["departments.read"]}>
                   <LeftSidebarLayout>
                     <DepartmentManagement />
                   </LeftSidebarLayout>
@@ -187,7 +188,7 @@ function App() {
             <Route
               path="/settings/designations"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["designations.read"]}>
                   <LeftSidebarLayout>
                     <DesignationManagement />
                   </LeftSidebarLayout>
@@ -197,7 +198,7 @@ function App() {
             <Route
               path="/settings/role-tags"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["role-tags.read"]}>
                   <LeftSidebarLayout>
                     <RoleTagManagement />
                   </LeftSidebarLayout>
@@ -207,7 +208,7 @@ function App() {
             <Route
               path="/settings/scale-grades"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["scale-grades.read"]}>
                   <LeftSidebarLayout>
                     <ScaleGradeManagement />
                   </LeftSidebarLayout>
@@ -217,9 +218,29 @@ function App() {
             <Route
               path="/settings/roles"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["roles.read"]}>
                   <LeftSidebarLayout>
                     <RoleManagement />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings/database"
+              element={
+                <PrivateRoute permissions={["system.database.read"]}>
+                  <LeftSidebarLayout>
+                    <DatabaseSettings />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings/security"
+              element={
+                <PrivateRoute permissions={["system.security.read"]}>
+                  <LeftSidebarLayout>
+                    <SecuritySettings />
                   </LeftSidebarLayout>
                 </PrivateRoute>
               }
@@ -229,7 +250,7 @@ function App() {
             <Route
               path="/users"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["users.read"]}>
                   <LeftSidebarLayout>
                     <UserManagement />
                   </LeftSidebarLayout>
@@ -239,7 +260,7 @@ function App() {
             <Route
               path="/users/create"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["users.manage"]}>
                   <LeftSidebarLayout>
                     <UserManagement />
                   </LeftSidebarLayout>
@@ -249,7 +270,6 @@ function App() {
           </Routes>
         </ConfirmationProvider>
       </ToastProvider>
-    </ColorThemeProvider>
   );
 }
 

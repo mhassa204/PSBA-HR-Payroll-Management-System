@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useAuthStore } from "../features/auth/authStore"; // Adjust path
 import LoginImage from "../assets/login image.jpg"; // or use import.meta.url if using Vite
 import { useNavigate } from "react-router-dom";
+import { toastBus } from "../utils/toastBus";
 
 export function LoginForm({ className, ...props }) {
   const login = useAuthStore((s) => s.login);
@@ -25,6 +26,7 @@ export function LoginForm({ className, ...props }) {
       navigate("/dashboard");
     } catch (err) {
       setError("Invalid email or password");
+      toastBus.emit({ type: 'error', message: 'Invalid email or password' });
     } finally {
       setLoading(false);
     }

@@ -5,14 +5,42 @@ import {
   Users, 
   Settings as SettingsIcon,
   Database,
-  Shield,
-  Palette
+  Shield
 } from 'lucide-react';
+import { toastBus } from '../../../utils/toastBus';
+import { useAuthStore } from '../../auth/authStore';
 
 const SettingsDashboard = () => {
   const navigate = useNavigate();
+  const can = useAuthStore((s) => s.can);
+  const user = useAuthStore((s) => s.user);
+  const isSuperAdmin = user?.role?.name === 'Super Admin';
 
   const settingsCategories = [
+    {
+      title: 'System Configuration',
+      description: 'System-wide settings and configurations',
+      icon: SettingsIcon,
+      superOnly: true,
+      items: [
+        {
+          name: 'Database Settings',
+          description: 'Database configuration and maintenance',
+          path: '/settings/database',
+          icon: Database,
+          color: 'purple',
+          required: ['system.database.read']
+        },
+        {
+          name: 'Security Settings',
+          description: 'Security and access control settings',
+          path: '/settings/security',
+          icon: Shield,
+          color: 'red',
+          required: ['system.security.read']
+        }
+      ]
+    },
     {
       title: 'Organization Structure',
       description: 'Manage departments, designations, and organizational hierarchy',
@@ -23,63 +51,41 @@ const SettingsDashboard = () => {
           description: 'Create and manage company departments',
           path: '/settings/departments',
           icon: Building2,
-          color: 'blue'
+          color: 'blue',
+          required: ['departments.read']
         },
         {
           name: 'Designations',
           description: 'Manage job titles and positions',
           path: '/settings/designations',
           icon: Users,
-          color: 'green'
+          color: 'green',
+          required: ['designations.read']
         },
         {
           name: 'Role Tags',
           description: 'Manage employment role tags and categories',
           path: '/settings/role-tags',
           icon: Users,
-          color: 'indigo'
+          color: 'indigo',
+          required: ['role-tags.read']
         },
         {
           name: 'Scale Grades',
           description: 'Manage employment scales and grades',
           path: '/settings/scale-grades',
           icon: Users,
-          color: 'purple'
+          color: 'purple',
+          required: ['scale-grades.read']
         },
         {
           name: 'Roles',
           description: 'Manage system roles and permissions',
           path: '/settings/roles',
           icon: Shield,
-          color: 'orange'
-        }
-      ]
-    },
-    {
-      title: 'System Configuration',
-      description: 'System-wide settings and configurations',
-      icon: SettingsIcon,
-      items: [
-        {
-          name: 'Database Settings',
-          description: 'Database configuration and maintenance',
-          path: '/settings/database',
-          icon: Database,
-          color: 'purple'
-        },
-        {
-          name: 'Security Settings',
-          description: 'Security and access control settings',
-          path: '/settings/security',
-          icon: Shield,
-          color: 'red'
-        },
-        {
-          name: 'Theme Settings',
-          description: 'Customize application appearance',
-          path: '/settings/themes',
-          icon: Palette,
-          color: 'indigo'
+          color: 'orange',
+          required: ['roles.read'],
+          superOnly: true
         }
       ]
     }
@@ -94,6 +100,34 @@ const SettingsDashboard = () => {
       indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100'
     };
     return colorMap[color] || 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100';
+  };
+
+  const canSeeItem = (item) => {
+    if (item.superOnly && !isSuperAdmin) return false;
+    if (item.required && item.required.length > 0) {
+      return item.required.some((p) => can(p));
+    }
+    return true;
+  };
+
+  const filteredCategories = settingsCategories
+    .filter((cat) => (cat.superOnly ? isSuperAdmin : true))
+    .map((cat) => ({
+      ...cat,
+      items: cat.items.filter(canSeeItem)
+    }))
+    .filter((cat) => cat.items.length > 0);
+
+  const handleItemClick = (item) => {
+    if (!canSeeItem(item)) {
+      toastBus.emit({ type: 'error', message: 'Forbidden. You do not have permission.' });
+      return;
+    }
+    if (item.path) {
+      navigate(item.path);
+    } else {
+      toastBus.emit({ type: 'info', message: 'This setting is coming soon.' });
+    }
   };
 
   return (
@@ -118,7 +152,7 @@ const SettingsDashboard = () => {
 
         {/* Settings Categories */}
         <div className="space-y-8">
-          {settingsCategories.map((category, categoryIndex) => (
+          {filteredCategories.map((category, categoryIndex) => (
             <div key={categoryIndex} className="card">
               <div className="card-header">
                 <div className="flex items-center gap-3">
@@ -138,7 +172,7 @@ const SettingsDashboard = () => {
                     <div
                       key={itemIndex}
                       className={`p-6 rounded-lg border-2 cursor-pointer transition-all duration-200 transform hover:scale-105 ${getColorClasses(item.color)}`}
-                      onClick={() => navigate(item.path)}
+                      onClick={() => handleItemClick(item)}
                     >
                       <div className="flex items-center gap-3 mb-3">
                         <item.icon className="w-6 h-6" />

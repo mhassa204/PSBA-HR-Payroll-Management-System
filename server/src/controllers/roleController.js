@@ -4,7 +4,9 @@ class RoleController {
   async getAllRoles(req, res) {
     try {
       const result = await roleService.getAllRoles();
-      res.json(result);
+      const isSuper = req.session?.user?.role?.name === 'Super Admin';
+      const roles = isSuper ? result.roles : (result.roles || []).filter(r => r.name !== 'Super Admin');
+      res.json({ roles });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -14,6 +16,10 @@ class RoleController {
     try {
       const { id } = req.params;
       const result = await roleService.getRoleById(id);
+      const isSuper = req.session?.user?.role?.name === 'Super Admin';
+      if (!isSuper && result.role?.name === 'Super Admin') {
+        return res.status(404).json({ error: 'Role not found' });
+      }
       res.json(result);
     } catch (error) {
       if (error.message === 'Role not found') {

@@ -47,7 +47,6 @@ class UserService {
               id: true,
               name: true,
               type: true,
-              allowed_actions: true,
               enabled: true,
               fields: true
             }
