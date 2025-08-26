@@ -79,6 +79,14 @@ const SettingsDashboard = () => {
           required: ['scale-grades.read']
         },
         {
+          name: 'Locations',
+          description: 'Manage Head Office and Bazaar locations',
+          path: '/settings/locations',
+          icon: Building2,
+          color: 'blue',
+          required: ['locations.read']
+        },
+        {
           name: 'Roles',
           description: 'Manage system roles and permissions',
           path: '/settings/roles',

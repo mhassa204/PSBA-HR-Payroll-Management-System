@@ -77,6 +77,13 @@ async function main() {
     await prisma.role.delete({ where: { id: role.id } });
   }
 
+  // Hard delete any existing master locations
+  const existingLocations = await prisma.location.findMany({ select: { id: true, name: true } });
+  for (const loc of existingLocations) {
+    console.log(`🗑️ Hard deleting location: ${loc.name} (ID: ${loc.id})`);
+    await prisma.location.delete({ where: { id: loc.id } });
+  }
+
   // Seed departments
   const departments = [
     { name: "Engineering", code: "ENG", description: "Engineering and Technical Services" },
@@ -210,6 +217,7 @@ async function main() {
         "designations.read","designations.create","designations.update","designations.delete",
         "role-tags.read","role-tags.create","role-tags.update","role-tags.delete",
         "scale-grades.read","scale-grades.create","scale-grades.update","scale-grades.delete",
+        "locations.read","locations.create","locations.update","locations.delete",
         "reports.read",
         "users.read","users.manage",
         "audit.read"
@@ -447,6 +455,62 @@ async function main() {
     const createdUser = await prisma.user.create({ data: user });
     console.log(`✅ Created User: ${createdUser.email}`);
     createdUsers.push(createdUser);
+  }
+
+  // New: Seed master locations (Location table)
+  console.log('📍 Seeding master locations...');
+  const masterLocations = [
+    {
+      name: 'Lahore Head Office',
+      type: 'HEAD_OFFICE',
+      district: 'Lahore',
+      city: 'Lahore',
+      full_address: 'Main Office Building, Gulberg III, Lahore',
+      is_active: true,
+      manager_user_id: createdUsers[0]?.id || null
+    },
+    {
+      name: 'Karachi Regional Office',
+      type: 'HEAD_OFFICE',
+      district: 'Karachi',
+      city: 'Karachi',
+      full_address: 'Regional Office, Shahrah-e-Faisal, Karachi',
+      is_active: true,
+      manager_user_id: createdUsers[1]?.id || null
+    },
+    {
+      name: 'Liberty Market Bazaar',
+      type: 'BAZAAR',
+      district: 'Lahore',
+      city: 'Lahore',
+      full_address: 'Liberty Market, Gulberg III, Lahore',
+      is_active: true,
+      manager_user_id: null
+    },
+    {
+      name: 'Anarkali Bazaar',
+      type: 'BAZAAR',
+      district: 'Lahore',
+      city: 'Lahore',
+      full_address: 'Anarkali Bazar, Near Mall Road, Lahore',
+      is_active: true,
+      manager_user_id: null
+    },
+    {
+      name: 'Saddar Bazaar Karachi',
+      type: 'BAZAAR',
+      district: 'Karachi',
+      city: 'Karachi',
+      full_address: 'Saddar Bazaar, M. A. Jinnah Road, Karachi',
+      is_active: true,
+      manager_user_id: null
+    }
+  ];
+  const createdLocations = [];
+  for (const loc of masterLocations) {
+    const created = await prisma.location.create({ data: loc });
+    console.log(`✅ Created Location: ${created.name} (${created.type})`);
+    createdLocations.push(created);
   }
 
   // Seed past experiences
@@ -778,12 +842,15 @@ async function main() {
   // collect unique keys from roles (excluding '*') + system settings keys
   const systemKeys = [
     'system.database.read',
-    'system.security.read','system.security.update',
-    'system.themes.read','system.themes.update'
+    'system.security.read','system.security.update'
+  ];
+  const moduleKeys = [
+    'locations.read','locations.create','locations.update','locations.delete'
   ];
   const keys = Array.from(new Set([
     ...roles.flatMap(r => r.allowed_actions).filter(k => k !== '*'),
-    ...systemKeys
+    ...systemKeys,
+    ...moduleKeys
   ]));
   const permissionRecords = await prisma.$transaction(keys.map((key) =>
     prisma.permission.upsert({
@@ -836,6 +903,7 @@ async function main() {
   console.log(`   - Scale Grades: ${createdScaleGrades.length}`);
   console.log(`   - Employees: ${createdEmployees.length}`);
   console.log(`   - Users: ${createdUsers.length}`);
+  console.log(`   - Master Locations: ${createdLocations.length}`);
   console.log(`   - Employment Records: ${createdEmployments.length}`);
   console.log(`   - Past Experiences: ${pastExperiences.length}`);
   console.log(`   - Education Qualifications: ${educationQualifications.length}`);

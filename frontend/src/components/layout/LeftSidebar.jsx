@@ -128,7 +128,7 @@ const LeftSidebar = () => {
       icon: CogIcon,
       description: 'Configuration',
       color: 'bg-gray-600',
-      show: () => can('departments.read') || can('designations.read') || can('role-tags.read') || can('scale-grades.read')
+      show: () => can('departments.read') || can('designations.read') || can('role-tags.read') || can('scale-grades.read') || can('locations.read')
     }
   ];
 

@@ -276,6 +276,8 @@ model User {
   employee     Employee? @relation(fields: [employee_id], references: [id])
   // back relation for settings updates
   updatedSettings SystemSetting[] @relation("UserUpdatedSettings")
+  // back relation for managed locations
+  managedLocations Location[] @relation(name: "UserManagedLocations")
 }
 
 model Session {
@@ -319,4 +321,20 @@ model SystemSetting {
   updatedByUser User? @relation(name: "UserUpdatedSettings", fields: [updatedBy], references: [id])
 
   @@index([category])
+}
+
+// New: Master Locations (Head Office and Bazaars)
+model Location {
+  id              Int       @id @default(autoincrement())
+  name            String
+  type            String    @default("BAZAAR") // BAZAAR | HEAD_OFFICE
+  district        String?
+  city            String?
+  full_address    String?
+  is_active       Boolean   @default(true)
+  manager_user_id Int?
+  manager         User?     @relation(name: "UserManagedLocations", fields: [manager_user_id], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  is_deleted      Boolean   @default(false)
 }

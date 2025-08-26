@@ -23,7 +23,8 @@ import {
   DesignationManagement,
   RoleTagManagement,
   ScaleGradeManagement,
-  RoleManagement
+  RoleManagement,
+  LocationManagement
 } from "./features/settings";
 import { UserManagement } from "./features/users";
 import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
@@ -217,6 +218,16 @@ function App() {
                 <PrivateRoute permissions={["scale-grades.read"]}>
                   <LeftSidebarLayout>
                     <ScaleGradeManagement />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings/locations"
+              element={
+                <PrivateRoute permissions={["locations.read"]}>
+                  <LeftSidebarLayout>
+                    <LocationManagement />
                   </LeftSidebarLayout>
                 </PrivateRoute>
               }
