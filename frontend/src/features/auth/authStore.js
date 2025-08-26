@@ -42,6 +42,7 @@ export const useAuthStore = create(
           if (status === 401) {
             set({ user: null, isChecking: false });
           } else {
+            // For non-401 errors, preserve the current user state but stop checking
             set({ isChecking: false });
           }
         }

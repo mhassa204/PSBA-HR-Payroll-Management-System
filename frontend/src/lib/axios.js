@@ -15,8 +15,13 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error?.response?.status;
+    const currentPath = window.location.pathname;
+    
     if (status === 401) {
-      toastBus.emit({ type: 'error', message: 'Unauthorized. Please log in.' });
+      // Don't show unauthorized toast if user is already on login page
+      if (currentPath !== '/login') {
+        toastBus.emit({ type: 'error', message: 'Unauthorized. Please log in.' });
+      }
     } else if (status === 403) {
       toastBus.emit({ type: 'error', message: 'Forbidden. You do not have permission.' });
     } else if (status >= 500) {

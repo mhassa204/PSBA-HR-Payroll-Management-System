@@ -1,5 +1,5 @@
 import EditEmployee from "./features/employees/pages/EditEmployee";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import "./styles/globals.css";
 import { useEffect } from "react";
 import { useAuthStore } from "./features/auth/authStore";
@@ -31,9 +31,15 @@ import SecuritySettings from "./features/settings/pages/SecuritySettings";
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
+  const location = useLocation();
+  
   // Emergency scroll restore keyboard shortcut (Ctrl+Shift+S)
   useEffect(() => {
-    fetchSession();
+    // Only fetch session if we're not on the login page
+    if (location.pathname !== '/login') {
+      fetchSession();
+    }
+    
     const handleKeyDown = (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'S') {
         e.preventDefault();
@@ -43,7 +49,7 @@ function App() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [fetchSession]);
+  }, [fetchSession, location.pathname]);
 
   return (
     <ToastProvider>

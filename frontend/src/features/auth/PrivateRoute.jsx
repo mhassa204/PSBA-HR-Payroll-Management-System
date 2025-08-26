@@ -8,6 +8,14 @@ const PrivateRoute = ({ roles = [], permissions = [], children }) => {
   const user = useAuthStore((s) => s.user);
   const isChecking = useAuthStore((s) => s.isChecking);
   const can = useAuthStore((s) => s.can);
+  const fetchSession = useAuthStore((s) => s.fetchSession);
+
+  // If user is undefined (not checked yet), trigger session fetch
+  useEffect(() => {
+    if (user === undefined && !isChecking) {
+      fetchSession();
+    }
+  }, [user, isChecking, fetchSession]);
 
   // Compute violation deterministically each render; do not return early before hooks
   const violation = useMemo(() => {
