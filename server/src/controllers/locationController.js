@@ -62,6 +62,16 @@ const locationController = {
       console.error('Error fetching location statistics:', error.message);
       res.status(400).json({ success: false, error: error.message });
     }
+  },
+
+  getBazaars: async (req, res) => {
+    try {
+      const bazaars = await locationService.getBazaars();
+      res.status(200).json({ success: true, bazaars });
+    } catch (error) {
+      console.error('Error fetching bazaars:', error.message);
+      res.status(400).json({ success: false, error: error.message });
+    }
   }
 };
 

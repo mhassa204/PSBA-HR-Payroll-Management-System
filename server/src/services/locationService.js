@@ -114,6 +114,27 @@ const locationService = {
     const active = await prisma.location.count({ where: { is_deleted: false, is_active: true } });
     const byType = await prisma.location.groupBy({ by: ['type'], where: { is_deleted: false }, _count: { id: true } });
     return { total, active, inactive: total - active, byType };
+  },
+
+  // Get bazaars for employment form dropdown
+  getBazaars: async () => {
+    return prisma.location.findMany({
+      where: { 
+        is_deleted: false, 
+        is_active: true,
+        type: 'BAZAAR'
+      },
+      select: {
+        id: true,
+        name: true,
+        district: true,
+        city: true
+      },
+      orderBy: [
+        { city: 'asc' },
+        { name: 'asc' }
+      ]
+    });
   }
 };
 

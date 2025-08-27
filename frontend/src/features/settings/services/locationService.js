@@ -30,6 +30,11 @@ class LocationService {
     const { data } = await axiosInstance.get('/locations/statistics');
     return data;
   }
+
+  async getBazaars() {
+    const { data } = await axiosInstance.get('/locations/bazaars');
+    return data.bazaars || [];
+  }
 }
 
 export const locationService = new LocationService();

@@ -344,7 +344,9 @@ const DataReviewModal = ({
                 <p className="font-semibold text-gray-900">
                   {data.location.type === "HEAD_OFFICE"
                     ? "Head Office"
-                    : "Bazaar"}
+                    : data.location.type === "HEAD_QUARTER"
+                      ? "Head Quarter"
+                      : "Bazaar"}
                 </p>
               </div>
               {data.location.bazaar_name && (

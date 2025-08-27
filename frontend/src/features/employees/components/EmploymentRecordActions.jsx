@@ -201,7 +201,7 @@ const EmploymentRecordActions = ({
                   <div>
                     <span className="font-medium text-gray-600">Location:</span>
                     <span className="ml-2 text-gray-900">
-                      {record.location.type === 'BAZAAR' 
+                      {record.location.type === 'BAZAAR' || record.location.type === 'SAHULAT_BAZAAR'
                         ? (record.location.bazaar_name || 'Bazaar')
                         : record.location.type === 'HEAD_QUARTER' 
                           ? 'Head Quarter'
@@ -434,7 +434,7 @@ const EmploymentRecordActions = ({
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Location Type:</span>
                     <span className="text-gray-900">
-                      {selectedRecord.location.type === 'BAZAAR' 
+                      {selectedRecord.location.type === 'BAZAAR' || selectedRecord.location.type === 'SAHULAT_BAZAAR'
                         ? 'Bazaar'
                         : selectedRecord.location.type === 'HEAD_QUARTER' 
                           ? 'Head Quarter'
@@ -442,7 +442,7 @@ const EmploymentRecordActions = ({
                       }
                     </span>
                   </div>
-                  {selectedRecord.location.type === 'BAZAAR' && (
+                  {(selectedRecord.location.type === 'BAZAAR' || selectedRecord.location.type === 'SAHULAT_BAZAAR') && (
                     <div className="flex justify-between">
                       <span className="font-medium text-gray-600">Bazaar Name:</span>
                       <span className="text-gray-900">

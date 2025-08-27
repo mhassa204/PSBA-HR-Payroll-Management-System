@@ -190,6 +190,7 @@ const TabbedEmploymentForm = forwardRef(({
     isLoading: formLoading,
     formOptions,
     availableDesignations,
+    bazaarOptions,
     isContractual,
     completedTabs,
     savedEmploymentId,
@@ -341,6 +342,29 @@ const TabbedEmploymentForm = forwardRef(({
       forceRestoreScroll();
     };
   }, []);
+
+  // Watch location type changes to clear bazaar name when head office/head quarter is selected
+  useEffect(() => {
+    const subscription = locationForm.watch((value, { name }) => {
+      if (name === "type") {
+        const locationType = value.type;
+        const bazaarName = locationForm.getValues("bazaar_name");
+        
+        // Clear bazaar name and validation errors when switching to non-bazaar types
+        if ((locationType === 'HEAD_OFFICE' || locationType === 'HEAD_QUARTER') && bazaarName) {
+          locationForm.setValue("bazaar_name", "", { shouldValidate: false, shouldDirty: true });
+          locationForm.clearErrors("bazaar_name");
+        }
+        
+        // Trigger validation when location type changes
+        if (locationType) {
+          locationForm.trigger("bazaar_name");
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [locationForm]);
 
   // Tab configuration with conditional location tab
   const tabsConfig = [
@@ -1378,22 +1402,6 @@ const TabbedEmploymentForm = forwardRef(({
 
   // Monitor form state changes in edit mode - removed to prevent infinite loops
 
-  // Real-time validation updates for location type changes
-  useEffect(() => {
-    const locationType = locationForm.watch("type");
-    const bazaarName = locationForm.watch("bazaar_name");
-    
-    // Clear bazaar name validation errors when switching to non-bazaar types
-    if ((locationType === 'HEAD_OFFICE' || locationType === 'HEAD_QUARTER') && bazaarName) {
-      locationForm.clearErrors("bazaar_name");
-    }
-    
-    // Trigger validation when location type changes
-    if (locationType) {
-      locationForm.trigger("bazaar_name");
-    }
-  }, [locationForm.watch("type"), locationForm]);
-
   if (!formOptions) {
     return (
       <EnhancedModal
@@ -2351,32 +2359,38 @@ const TabbedEmploymentForm = forwardRef(({
                         <p className="text-xs text-gray-500 mt-1">
                           <i className="fas fa-info-circle mr-1"></i>
                           {currentOrganization === 'PSBA' 
-                            ? "Head Quarter: No bazaar name required. Sahulat Bazaar: Bazaar name is mandatory."
-                            : "Head Office: No bazaar name required. Bazaar: Bazaar name is mandatory."
+                            ? "Head Quarter: No bazaar name required. Sahulat Bazaar: Select from available bazaars."
+                            : "Head Office: No bazaar name required. Bazaar: Select from available bazaars."
                           }
                         </p>
                       </div>
 
-                      <div className={getFieldClasses('location', 'bazaar_name')}>
+                      <div className={getFieldClasses('location', 'bazaar_name')} 
+                           style={{ 
+                             display: (locationForm.watch("type") === 'HEAD_OFFICE' || locationForm.watch("type") === 'HEAD_QUARTER') ? 'none' : 'block' 
+                           }}>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Bazaar Name
                           {(locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR') && (
                             <span className="text-red-500"> *</span>
                           )}
                         </label>
-                        <input
-                          type="text"
-                          {...registerLocation("bazaar_name", {
-                            required: (locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR') 
-                              ? "Bazaar name is required when Bazaar or Sahulat Bazaar is selected" 
-                              : false
-                          })}
-                          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900 ${
+                        <SearchableSelect
+                          options={bazaarOptions}
+                          value={locationForm.watch("bazaar_name")}
+                          onChange={(value) => locationForm.setValue("bazaar_name", value)}
+                          placeholder="Select a bazaar"
+                          register={registerLocation}
+                          name="bazaar_name"
+                          required={(locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR') 
+                            ? "Bazaar name is required when Bazaar or Sahulat Bazaar is selected" 
+                            : false}
+                          error={locationErrors.bazaar_name?.message}
+                          className={`w-full ${
                             (locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR')
                               ? (locationForm.watch("bazaar_name")?.trim() ? 'border-green-300 focus:border-green-500' : 'border-red-300 focus:border-red-500')
                               : 'border-gray-300'
                           }`}
-                          placeholder="Enter bazaar name (if applicable)"
                         />
                         {locationErrors.bazaar_name && (
                           <p className="text-red-600 text-sm mt-1">
@@ -2395,9 +2409,9 @@ const TabbedEmploymentForm = forwardRef(({
                           }`}></i>
                           {locationForm.watch("type") === 'BAZAAR' || locationForm.watch("type") === 'SAHULAT_BAZAAR' 
                             ? (locationForm.watch("bazaar_name")?.trim() 
-                                ? "Bazaar name is properly filled ✓" 
-                                : "Bazaar name is required for this location type")
-                            : "Bazaar name is optional for Head Office/Head Quarter"
+                                ? "Bazaar selected successfully ✓" 
+                                : "Please select a bazaar from the dropdown")
+                            : "Bazaar selection is not required for Head Office/Head Quarter"
                           }
                         </p>
                       </div>
