@@ -29,6 +29,8 @@ const LocationForm = ({ locationItem, onSubmit, onCancel, isSubmitting }) => {
     district: '',
     city: '',
     full_address: '',
+    opening_time: '',
+    closing_time: '',
     is_active: true,
     manager_user_id: ''
   });
@@ -58,6 +60,8 @@ const LocationForm = ({ locationItem, onSubmit, onCancel, isSubmitting }) => {
         district: locationItem.district || '',
         city: locationItem.city || '',
         full_address: locationItem.full_address || '',
+        opening_time: locationItem.opening_time || '',
+        closing_time: locationItem.closing_time || '',
         is_active: locationItem.is_active ?? true,
         manager_user_id: locationItem.manager?.id || ''
       });
@@ -97,6 +101,8 @@ const LocationForm = ({ locationItem, onSubmit, onCancel, isSubmitting }) => {
     if (!formData.name.trim()) return showError('Location name is required');
     const payload = {
       ...formData,
+      opening_time: formData.opening_time || null,
+      closing_time: formData.closing_time || null,
       manager_user_id: formData.manager_user_id ? Number(formData.manager_user_id) : null
     };
     onSubmit(payload);
@@ -179,6 +185,22 @@ const LocationForm = ({ locationItem, onSubmit, onCancel, isSubmitting }) => {
               rows={3}
               placeholder="Street, Area, City, Postal code"
             />
+          </div>
+        </div>
+      </div>
+
+      {/* Operational Hours */}
+      <div className="space-y-2">
+        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Operational Hours</h3>
+        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Optional: opening and closing times (24-hour).</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="form-label">Opens at</label>
+            <input type="time" name="opening_time" value={formData.opening_time} onChange={handleChange} className="form-input w-full" />
+          </div>
+          <div>
+            <label className="form-label">Closes at</label>
+            <input type="time" name="closing_time" value={formData.closing_time} onChange={handleChange} className="form-input w-full" />
           </div>
         </div>
       </div>

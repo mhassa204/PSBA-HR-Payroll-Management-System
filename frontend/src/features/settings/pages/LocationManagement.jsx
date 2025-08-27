@@ -133,6 +133,8 @@ const LocationManagement = () => {
     );
   }
 
+  const renderTime = (t) => t ? t : '-';
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background-secondary)' }}>
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -182,6 +184,8 @@ const LocationManagement = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">District</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opens</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Closes</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -194,6 +198,8 @@ const LocationManagement = () => {
                     <td className="px-6 py-4 whitespace-nowrap"><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{loc.type}</span></td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.district || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.city || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{renderTime(loc.opening_time)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{renderTime(loc.closing_time)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.manager?.employee?.full_name || loc.manager?.email || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${loc.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>

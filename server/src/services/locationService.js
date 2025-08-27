@@ -1,6 +1,17 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+// Normalize time to HH:mm; accept H:mm, HH:mm, HH:mm:ss
+function normalizeHHmm(value) {
+  if (value == null || value === '') return null;
+  const m = /^(\d{1,2}):([0-5]\d)(?::\d{2})?$/.exec(String(value).trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  if (h < 0 || h > 23) return null;
+  const hh = String(h).padStart(2, '0');
+  return `${hh}:${m[2]}`;
+}
+
 const locationService = {
   // Create new location
   createLocation: async (data) => {
@@ -14,12 +25,20 @@ const locationService = {
       throw new Error("Location with this name already exists");
     }
 
+    const opening = normalizeHHmm(data.opening_time);
+    const closing = normalizeHHmm(data.closing_time);
+    if ((data.opening_time && !opening) || (data.closing_time && !closing)) {
+      throw new Error('Invalid time format. Use HH:mm (24-hour).');
+    }
+
     const payload = {
       name,
       type,
       district: district || null,
       city: city || null,
       full_address: full_address || null,
+      opening_time: opening,
+      closing_time: closing,
       is_active,
       manager_user_id: manager_user_id ? Number(manager_user_id) : null
     };
@@ -59,12 +78,21 @@ const locationService = {
       if (existing) throw new Error("Another location with this name already exists");
     }
 
+    const opening = normalizeHHmm(data.opening_time);
+    const closing = normalizeHHmm(data.closing_time);
+    if ((data.opening_time !== undefined && data.opening_time !== null && data.opening_time !== '' && !opening) ||
+        (data.closing_time !== undefined && data.closing_time !== null && data.closing_time !== '' && !closing)) {
+      throw new Error('Invalid time format. Use HH:mm (24-hour).');
+    }
+
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (type !== undefined) updateData.type = type;
     if (district !== undefined) updateData.district = district;
     if (city !== undefined) updateData.city = city;
     if (full_address !== undefined) updateData.full_address = full_address;
+    if (data.opening_time !== undefined) updateData.opening_time = opening;
+    if (data.closing_time !== undefined) updateData.closing_time = closing;
     if (is_active !== undefined) updateData.is_active = Boolean(is_active);
     if (manager_user_id !== undefined) updateData.manager_user_id = manager_user_id ? Number(manager_user_id) : null;
 

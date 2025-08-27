@@ -331,6 +331,9 @@ model Location {
   district        String?
   city            String?
   full_address    String?
+  // Operational hours (HH:mm)
+  opening_time    String?
+  closing_time    String?
   is_active       Boolean   @default(true)
   manager_user_id Int?
   manager         User?     @relation(name: "UserManagedLocations", fields: [manager_user_id], references: [id])
