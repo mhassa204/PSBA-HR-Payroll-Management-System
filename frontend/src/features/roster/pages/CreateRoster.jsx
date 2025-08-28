@@ -44,7 +44,11 @@ const CreateRoster = () => {
     setEntries(employees.map((e) => ({
       employee_id: e.id,
       // weekly_off_days removed; manage per-day via type 'weekly_off'
-      day_schedules: days.reduce((acc, d) => ({ ...acc, [d]: { type: 'time', time_from: '', time_to: '', location: '' } }), {}),
+      day_schedules: {
+        ...days.reduce((acc, d) => ({ ...acc, [d]: { type: 'time', time_from: '', time_to: '', location: '' } }), {}),
+        // NEW: collective weekly off range stored in schedules JSON
+        _collective_weekly_off: { enabled: false, from: '', to: '' }
+      },
       remarks: '',
     })));
   }, [employees]);
@@ -105,12 +109,15 @@ const CreateRoster = () => {
                   {days.map((d) => (
                     <th key={d} className="px-3 py-2 text-left text-xs uppercase text-slate-500">{d}</th>
                   ))}
+                  {/* Moved: Collective Weekly Off at the far right */}
+                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Collective Weekly Off</th>
                 </tr>
               </thead>
               <tbody>
                 {group.list.map((emp) => {
                   const entry = entries.find((en) => en.employee_id === emp.id);
                   if (!entry) return null;
+                  const cwo = entry.day_schedules?._collective_weekly_off || { enabled: false, from: '', to: '' };
                   return (
                     <tr key={emp.id} className="border-t">
                       <td className="px-3 py-2 whitespace-nowrap">{emp.full_name}</td>
@@ -171,6 +178,52 @@ const CreateRoster = () => {
                           </td>
                         );
                       })}
+                      {/* Moved: collective weekly off controls at the far right */}
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={!!cwo.enabled}
+                            onChange={(e) => updateEntry(emp.id, (curr) => ({
+                              ...curr,
+                              day_schedules: {
+                                ...curr.day_schedules,
+                                _collective_weekly_off: { ...cwo, enabled: e.target.checked }
+                              }
+                            }))}
+                          />
+                          <span className="text-slate-700">Enable</span>
+                        </label>
+                        {cwo.enabled && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              type="date"
+                              className="border rounded px-2 py-1"
+                              value={cwo.from || ''}
+                              onChange={(e) => updateEntry(emp.id, (curr) => ({
+                                ...curr,
+                                day_schedules: {
+                                  ...curr.day_schedules,
+                                  _collective_weekly_off: { ...cwo, from: e.target.value }
+                                }
+                              }))}
+                            />
+                            <span className="text-slate-500">to</span>
+                            <input
+                              type="date"
+                              className="border rounded px-2 py-1"
+                              value={cwo.to || ''}
+                              onChange={(e) => updateEntry(emp.id, (curr) => ({
+                                ...curr,
+                                day_schedules: {
+                                  ...curr.day_schedules,
+                                  _collective_weekly_off: { ...cwo, to: e.target.value }
+                                }
+                              }))}
+                            />
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

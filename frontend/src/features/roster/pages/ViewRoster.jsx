@@ -97,6 +97,8 @@ const ViewRoster = () => {
               {days.map((d) => (
                 <th key={d} className="px-3 py-2 text-left text-xs uppercase text-slate-500">{d}</th>
               ))}
+              {/* Far right: Collective Weekly Off */}
+              <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Collective Weekly Off</th>
             </tr>
           </thead>
           <tbody>
@@ -104,6 +106,7 @@ const ViewRoster = () => {
               const emp = en.employee;
               const currEmp = emp?.employmentRecords?.[0];
               const designation = currEmp?.designation?.title || '';
+              const cwo = en.day_schedules?._collective_weekly_off || { enabled: false, from: '', to: '' };
               return (
                 <tr key={en.id} className="border-t">
                   <td className="px-3 py-2 whitespace-nowrap">{emp?.full_name}</td>
@@ -127,6 +130,14 @@ const ViewRoster = () => {
                       </td>
                     );
                   })}
+                  {/* Far right: collective weekly off info */}
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {cwo.enabled ? (
+                      <span>{cwo.from || '—'} to {cwo.to || '—'}</span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}

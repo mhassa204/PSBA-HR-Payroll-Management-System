@@ -143,6 +143,8 @@ const EditRoster = () => {
                   {days.map((d) => (
                     <th key={d} className="px-3 py-2 text-left text-xs uppercase text-slate-500">{d}</th>
                   ))}
+                  {/* Far right: Collective Weekly Off */}
+                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Collective Weekly Off</th>
                 </tr>
               </thead>
               <tbody>
@@ -150,6 +152,7 @@ const EditRoster = () => {
                   const emp = en.employee;
                   const currEmp = emp?.employmentRecords?.[0];
                   const designation = currEmp?.designation?.title || '';
+                  const cwo = en.day_schedules?._collective_weekly_off || { enabled: false, from: '', to: '' };
                   return (
                     <tr key={en.id} className="border-t">
                       <td className="px-3 py-2 whitespace-nowrap">{emp?.full_name}</td>
@@ -210,6 +213,52 @@ const EditRoster = () => {
                           </td>
                         );
                       })}
+                      {/* Far right: collective weekly off controls */}
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={!!cwo.enabled}
+                            onChange={(e) => updateEntry(en.id, (curr) => ({
+                              ...curr,
+                              day_schedules: {
+                                ...curr.day_schedules,
+                                _collective_weekly_off: { ...cwo, enabled: e.target.checked }
+                              }
+                            }))}
+                          />
+                          <span className="text-slate-700">Enable</span>
+                        </label>
+                        {cwo.enabled && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              type="date"
+                              className="border rounded px-2 py-1"
+                              value={cwo.from || ''}
+                              onChange={(e) => updateEntry(en.id, (curr) => ({
+                                ...curr,
+                                day_schedules: {
+                                  ...curr.day_schedules,
+                                  _collective_weekly_off: { ...cwo, from: e.target.value }
+                                }
+                              }))}
+                            />
+                            <span className="text-slate-500">to</span>
+                            <input
+                              type="date"
+                              className="border rounded px-2 py-1"
+                              value={cwo.to || ''}
+                              onChange={(e) => updateEntry(en.id, (curr) => ({
+                                ...curr,
+                                day_schedules: {
+                                  ...curr.day_schedules,
+                                  _collective_weekly_off: { ...cwo, to: e.target.value }
+                                }
+                              }))}
+                            />
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
