@@ -278,6 +278,12 @@ async function main() {
       update: {},
     });
   }
+  // Ensure roster.approve permission exists
+  await prisma.permission.upsert({
+    where: { key: 'roster.approve' },
+    create: { key: 'roster.approve', resource: 'roster', action: 'approve' },
+    update: {},
+  });
   // Link permissions to roles
   for (const role of createdRoles) {
     const orig = roles.find(r => r.name === role.name);
@@ -288,6 +294,15 @@ async function main() {
       where: { id: role.id },
       data: { rolePermissions: { create: perms.map(p => ({ permission_id: p.id })) } }
     });
+  }
+  // Grant roster.approve only to Super Admin
+  const approvePerm = await prisma.permission.findUnique({ where: { key: 'roster.approve' } });
+  const superAdminRole = createdRoles.find(r => r.name === 'Super Admin');
+  if (approvePerm && superAdminRole) {
+    const existing = await prisma.rolePermission.findUnique({ where: { role_id_permission_id: { role_id: superAdminRole.id, permission_id: approvePerm.id } } }).catch(() => null);
+    if (!existing) {
+      await prisma.rolePermission.create({ data: { role_id: superAdminRole.id, permission_id: approvePerm.id } });
+    }
   }
 
   // Seed scale grades

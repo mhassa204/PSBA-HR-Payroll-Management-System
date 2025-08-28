@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import rosterService from '../../roster/services/rosterService';
+import { useAuthStore } from '../../auth/authStore';
 
 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
@@ -8,24 +9,47 @@ const ViewRoster = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [roster, setRoster] = useState(null);
+  const can = useAuthStore((s) => s.can);
 
-  useEffect(() => {
-    rosterService.get(id).then((res) => setRoster(res.roster));
-  }, [id]);
+  const load = async () => {
+    const res = await rosterService.get(id);
+    setRoster(res.roster);
+  };
+
+  useEffect(() => { load(); }, [id]);
+
+  const approve = async () => {
+    await rosterService.approve(id);
+    await load();
+  };
+
+  const reject = async () => {
+    await rosterService.reject(id);
+    await load();
+  };
 
   if (!roster) return <div className="p-6">Loading...</div>;
+
+  const canApprove = can('roster.approve');
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-slate-800">Duty Roster #{roster.id}</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <span className={`px-2 py-1 rounded text-xs font-medium ${roster.status === 'APPROVED' ? 'bg-green-100 text-green-700' : roster.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{roster.status}</span>
+          {canApprove && roster.status === 'PENDING' && (
+            <>
+              <button onClick={approve} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded">Approve</button>
+              <button onClick={reject} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded">Reject</button>
+            </>
+          )}
           <button onClick={() => navigate(`/rosters/${roster.id}/edit`)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Edit</button>
           <button onClick={() => navigate('/rosters')} className="px-4 py-2 bg-slate-600 text-white rounded">Back</button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded shadow">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-white p-4 rounded shadow">
         <div>
           <div className="text-sm text-slate-500">Title</div>
           <div className="font-medium">{roster.title || '—'}</div>
@@ -41,6 +65,10 @@ const ViewRoster = () => {
         <div>
           <div className="text-sm text-slate-500">Valid To</div>
           <div className="font-medium">{roster.valid_to?.slice(0,10)}</div>
+        </div>
+        <div>
+          <div className="text-sm text-slate-500">Created By</div>
+          <div className="font-medium">{roster.createdBy?.email || `User #${roster.created_by_user_id}`}</div>
         </div>
       </div>
 
