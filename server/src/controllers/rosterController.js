@@ -119,7 +119,7 @@ const rosterController = {
                 include: {
                   employmentRecords: {
                     where: { is_current: true, is_deleted: false },
-                    include: { designation: true }
+                    include: { designation: true, role_tag: true }
                   }
                 }
               }
@@ -262,26 +262,57 @@ const rosterController = {
         return res.status(400).json({ success: false, error: 'Logged in user not linked to an employee record' });
       }
 
-      // Find latest employment per employee, filter by reporting_officer_id
-      const result = await prisma.employment.findMany({
+      // Subordinates: current PSBA employments reporting to this officer
+      const subordinates = await prisma.employment.findMany({
         where: {
           is_deleted: false,
-          reporting_officer_id: String(user.employee_id),
           is_current: true,
+          organization: 'PSBA',
+          reporting_officer_id: String(user.employee_id),
           employee: { is_deleted: false, status: 'Active' },
         },
         include: {
           employee: true,
           designation: true,
+          role_tag: true,
         }
       });
 
-      const employees = result.map((r) => ({
+      // Officer self: current PSBA employment of the logged-in user
+      const officerEmployment = await prisma.employment.findFirst({
+        where: {
+          is_deleted: false,
+          is_current: true,
+          organization: 'PSBA',
+          employee_id: Number(user.employee_id),
+          employee: { is_deleted: false, status: 'Active' },
+        },
+        include: {
+          employee: true,
+          designation: true,
+          role_tag: true,
+        }
+      });
+
+      // Merge, ensuring uniqueness by employee.id
+      const all = [...subordinates, ...(officerEmployment ? [officerEmployment] : [])];
+      const seen = new Set();
+      const merged = [];
+      for (const r of all) {
+        if (!seen.has(r.employee.id)) {
+          seen.add(r.employee.id);
+          merged.push(r);
+        }
+      }
+
+      const employees = merged.map((r) => ({
         id: r.employee.id,
         full_name: r.employee.full_name,
         designation: r.designation?.title || null,
         cnic: r.employee.cnic || null,
         mobile_number: r.employee.mobile_number || null,
+        role_tag_id: r.role_tag?.id || null,
+        role_tag_name: r.role_tag?.name || 'Unassigned',
       }));
 
       res.json({ success: true, employees });

@@ -28,6 +28,17 @@ const CreateRoster = () => {
     })();
   }, [navigate]);
 
+  // Prepare groups by role tag
+  const grouped = useMemo(() => {
+    const map = new Map();
+    for (const e of employees) {
+      const key = e.role_tag_name || 'Unassigned';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(e);
+    }
+    return Array.from(map.entries()).map(([name, list]) => ({ name, list }));
+  }, [employees]);
+
   // initialize entries when employees change
   useEffect(() => {
     setEntries(employees.map((e) => ({
@@ -78,89 +89,96 @@ const CreateRoster = () => {
         </div>
       </div>
 
-      <div className="overflow-x-auto bg-white rounded shadow">
-        <table className="min-w-full">
-          <thead>
-            <tr className="bg-slate-50">
-              <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Name</th>
-              <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Designation</th>
-              <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">CNIC</th>
-              <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Contact</th>
-              {days.map((d) => (
-                <th key={d} className="px-3 py-2 text-left text-xs uppercase text-slate-500">{d}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {employees.map((emp) => {
-              const entry = entries.find((en) => en.employee_id === emp.id);
-              if (!entry) return null;
-              return (
-                <tr key={emp.id} className="border-t">
-                  <td className="px-3 py-2 whitespace-nowrap">{emp.full_name}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{emp.designation || '—'}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{emp.cnic || '—'}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{emp.mobile_number || '—'}</td>
-                  {days.map((d) => {
-                    const day = entry.day_schedules[d];
-                    return (
-                      <td key={d} className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <select className="border rounded px-2 py-1"
-                            value={day.type}
-                            onChange={(e)=>{
-                              const type = e.target.value;
-                              updateEntry(emp.id, (curr) => ({
-                                ...curr,
-                                day_schedules: { ...curr.day_schedules, [d]: type === 'time' ? { type, time_from: '', time_to: '', location: '' } : (type === 'offsite' ? { type, location: '' } : { type }) }
-                              }));
-                            }}
-                          >
-                            <option value="time">Time</option>
-                            <option value="offsite">Offsite</option>
-                            <option value="weekly_off">Weekly off</option>
-                          </select>
-                          {day.type === 'time' && (
-                            <>
-                              <input type="time" className="border rounded px-2 py-1 w-28"
-                                value={day.time_from}
-                                onChange={(e)=>updateEntry(emp.id, (curr) => ({
-                                  ...curr,
-                                  day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], time_from: e.target.value } }
-                                }))}
-                              />
-                              <span className="text-slate-500">to</span>
-                              <input type="time" className="border rounded px-2 py-1 w-28"
-                                value={day.time_to}
-                                onChange={(e)=>updateEntry(emp.id, (curr) => ({
-                                  ...curr,
-                                  day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], time_to: e.target.value } }
-                                }))}
-                              />
-                            </>
-                          )}
-                          {day.type === 'offsite' && (
-                            <input className="border rounded px-2 py-1 w-36" placeholder="Location (e.g. Chiniot)"
-                              value={day.location}
-                              onChange={(e)=>updateEntry(emp.id, (curr) => ({
-                                ...curr,
-                                day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], location: e.target.value } }
-                              }))}
-                            />
-                          )}
-                          {day.type === 'weekly_off' && (
-                            <span className="text-slate-500 text-sm">Weekly off</span>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
+      {grouped.map(group => (
+        <div key={group.name} className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-700">{group.name}</h3>
+          </div>
+          <div className="overflow-x-auto bg-white rounded shadow">
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Name</th>
+                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Designation</th>
+                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">CNIC</th>
+                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Contact</th>
+                  {days.map((d) => (
+                    <th key={d} className="px-3 py-2 text-left text-xs uppercase text-slate-500">{d}</th>
+                  ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {group.list.map((emp) => {
+                  const entry = entries.find((en) => en.employee_id === emp.id);
+                  if (!entry) return null;
+                  return (
+                    <tr key={emp.id} className="border-t">
+                      <td className="px-3 py-2 whitespace-nowrap">{emp.full_name}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{emp.designation || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{emp.cnic || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{emp.mobile_number || '—'}</td>
+                      {days.map((d) => {
+                        const day = entry.day_schedules[d];
+                        return (
+                          <td key={d} className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <select className="border rounded px-2 py-1"
+                                value={day.type}
+                                onChange={(e)=>{
+                                  const type = e.target.value;
+                                  updateEntry(emp.id, (curr) => ({
+                                    ...curr,
+                                    day_schedules: { ...curr.day_schedules, [d]: type === 'time' ? { type, time_from: '', time_to: '', location: '' } : (type === 'offsite' ? { type, location: '' } : { type }) }
+                                  }));
+                                }}
+                              >
+                                <option value="time">Time</option>
+                                <option value="offsite">Offsite</option>
+                                <option value="weekly_off">Weekly off</option>
+                              </select>
+                              {day.type === 'time' && (
+                                <>
+                                  <input type="time" className="border rounded px-2 py-1 w-28"
+                                    value={day.time_from}
+                                    onChange={(e)=>updateEntry(emp.id, (curr) => ({
+                                      ...curr,
+                                      day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], time_from: e.target.value } }
+                                    }))}
+                                  />
+                                  <span className="text-slate-500">to</span>
+                                  <input type="time" className="border rounded px-2 py-1 w-28"
+                                    value={day.time_to}
+                                    onChange={(e)=>updateEntry(emp.id, (curr) => ({
+                                      ...curr,
+                                      day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], time_to: e.target.value } }
+                                    }))}
+                                  />
+                                </>
+                              )}
+                              {day.type === 'offsite' && (
+                                <input className="border rounded px-2 py-1 w-36" placeholder="Location (e.g. Chiniot)"
+                                  value={day.location}
+                                  onChange={(e)=>updateEntry(emp.id, (curr) => ({
+                                    ...curr,
+                                    day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], location: e.target.value } }
+                                  }))}
+                                />
+                              )}
+                              {day.type === 'weekly_off' && (
+                                <span className="text-slate-500 text-sm">Weekly off</span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
