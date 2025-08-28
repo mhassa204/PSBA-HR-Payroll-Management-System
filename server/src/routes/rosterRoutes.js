@@ -14,8 +14,9 @@ router.post('/', isAuthenticated, authorize('roster.create'), rosterController.c
 router.put('/:id', isAuthenticated, authorize('roster.update'), rosterController.update);
 router.delete('/:id', isAuthenticated, authorize('roster.delete'), rosterController.remove);
 
-// Approval actions (system role only + permission)
-router.post('/:id/approve', isAuthenticated, authorize('roster.approve'), rosterController.approve);
-router.post('/:id/reject', isAuthenticated, authorize('roster.approve'), rosterController.reject);
+// Approval/status actions (system role only + permission)
+router.post('/:id/approve', isAuthenticated, authorize('roster.status'), rosterController.approve);
+router.post('/:id/reject', isAuthenticated, authorize('roster.status'), rosterController.reject);
+router.put('/:id/status', isAuthenticated, authorize('roster.status'), rosterController.setStatus);
 
 module.exports = router;

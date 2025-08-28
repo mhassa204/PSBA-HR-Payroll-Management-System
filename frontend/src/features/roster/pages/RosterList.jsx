@@ -2,14 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import rosterService from '../../roster/services/rosterService';
 import useConfirmation from '../../../hooks/useConfirmation';
-import { useAuthStore } from '../../auth/authStore';
 
 const RosterList = () => {
   const [data, setData] = useState({ rosters: [], total: 0, page: 1, limit: 10 });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { confirmDelete, confirmationState, isOpen, isLoading, handleConfirm, hideConfirmation } = useConfirmation();
-  const can = useAuthStore((s) => s.can);
 
   const load = async () => {
     setLoading(true);
@@ -22,11 +20,6 @@ const RosterList = () => {
   };
 
   useEffect(() => { load(); }, []);
-
-  const approve = async (id) => { await rosterService.approve(id); await load(); };
-  const reject = async (id) => { await rosterService.reject(id); await load(); };
-
-  const canApprove = can('roster.approve');
 
   return (
     <div className="p-6">
@@ -66,12 +59,6 @@ const RosterList = () => {
                     <div className="flex gap-2">
                       <button onClick={() => navigate(`/rosters/${r.id}`)} className="px-3 py-1 text-sm bg-slate-600 text-white rounded">View</button>
                       <button onClick={() => navigate(`/rosters/${r.id}/edit`)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Edit</button>
-                      {canApprove && r.status === 'PENDING' && (
-                        <>
-                          <button onClick={() => approve(r.id)} className="px-3 py-1 text-sm bg-emerald-600 text-white rounded">Approve</button>
-                          <button onClick={() => reject(r.id)} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Reject</button>
-                        </>
-                      )}
                       <button onClick={() => confirmDelete({
                         message: `Delete roster #${r.id}? This action cannot be undone.`,
                         onConfirm: async () => { await rosterService.remove(r.id); await load(); }

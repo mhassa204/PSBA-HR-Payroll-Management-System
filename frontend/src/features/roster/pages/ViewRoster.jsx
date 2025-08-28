@@ -4,6 +4,7 @@ import rosterService from '../../roster/services/rosterService';
 import { useAuthStore } from '../../auth/authStore';
 
 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const STATUSES = ['PENDING','APPROVED','REJECTED'];
 
 const ViewRoster = () => {
   const { id } = useParams();
@@ -18,13 +19,8 @@ const ViewRoster = () => {
 
   useEffect(() => { load(); }, [id]);
 
-  const approve = async () => {
-    await rosterService.approve(id);
-    await load();
-  };
-
-  const reject = async () => {
-    await rosterService.reject(id);
+  const changeStatus = async (status) => {
+    await rosterService.setStatus(id, status);
     await load();
   };
 
@@ -38,11 +34,14 @@ const ViewRoster = () => {
         <h2 className="text-2xl font-semibold text-slate-800">Duty Roster #{roster.id}</h2>
         <div className="flex gap-2 items-center">
           <span className={`px-2 py-1 rounded text-xs font-medium ${roster.status === 'APPROVED' ? 'bg-green-100 text-green-700' : roster.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{roster.status}</span>
-          {canApprove && roster.status === 'PENDING' && (
-            <>
-              <button onClick={approve} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded">Approve</button>
-              <button onClick={reject} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded">Reject</button>
-            </>
+          {canApprove && (
+            <select
+              value={roster.status}
+              onChange={(e) => changeStatus(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
           )}
           <button onClick={() => navigate(`/rosters/${roster.id}/edit`)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Edit</button>
           <button onClick={() => navigate('/rosters')} className="px-4 py-2 bg-slate-600 text-white rounded">Back</button>

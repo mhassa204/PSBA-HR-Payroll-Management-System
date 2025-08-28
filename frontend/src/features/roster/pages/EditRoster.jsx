@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import rosterService from '../../roster/services/rosterService';
+import { useAuthStore } from '../../auth/authStore';
 
 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const STATUSES = ['PENDING','APPROVED','REJECTED'];
 
 const EditRoster = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [roster, setRoster] = useState(null);
+  const can = useAuthStore((s) => s.can);
 
   useEffect(() => {
     rosterService.get(id).then((res) => setRoster(res.roster));
@@ -51,6 +54,12 @@ const EditRoster = () => {
     navigate('/rosters');
   };
 
+  const changeStatus = async (status) => {
+    await rosterService.setStatus(id, status);
+    const res = await rosterService.get(id);
+    setRoster(res.roster);
+  };
+
   // Group by role tag of current employment
   const grouped = useMemo(() => {
     if (!roster) return [];
@@ -66,6 +75,7 @@ const EditRoster = () => {
   }, [roster]);
 
   if (!roster) return <div className="p-6">Loading...</div>;
+  const canApprove = can('roster.approve');
 
   return (
     <div className="p-6 space-y-6">
@@ -78,7 +88,7 @@ const EditRoster = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded shadow">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded shadow">
         <div>
           <label className="block text-sm text-slate-600 mb-1">Title</label>
           <input className="w-full border rounded px-3 py-2" value={roster.title || ''} onChange={(e)=>setRoster({...roster, title: e.target.value})} />
@@ -90,6 +100,21 @@ const EditRoster = () => {
         <div>
           <label className="block text-sm text-slate-600 mb-1">Valid To</label>
           <input type="date" className="w-full border rounded px-3 py-2" value={roster.valid_to?.slice(0,10)} onChange={(e)=>setRoster({...roster, valid_to: e.target.value})} />
+        </div>
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Status</label>
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-1 rounded text-xs font-medium ${roster.status === 'APPROVED' ? 'bg-green-100 text-green-700' : roster.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{roster.status}</span>
+            {canApprove && (
+              <select
+                value={roster.status}
+                onChange={(e) => changeStatus(e.target.value)}
+                className="border rounded px-2 py-1"
+              >
+                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+          </div>
         </div>
       </div>
 

@@ -355,7 +355,6 @@ const rosterController = {
       const id = Number(req.params.id);
       const roster = await prisma.dutyRoster.findUnique({ where: { id } });
       if (!roster || roster.is_deleted) return res.status(404).json({ success: false, error: 'Roster not found' });
-      if (roster.status !== 'PENDING') return res.status(400).json({ success: false, error: `Cannot approve a ${roster.status} roster` });
 
       const updated = await prisma.dutyRoster.update({
         where: { id },
@@ -380,7 +379,6 @@ const rosterController = {
       const id = Number(req.params.id);
       const roster = await prisma.dutyRoster.findUnique({ where: { id } });
       if (!roster || roster.is_deleted) return res.status(404).json({ success: false, error: 'Roster not found' });
-      if (roster.status !== 'PENDING') return res.status(400).json({ success: false, error: `Cannot reject a ${roster.status} roster` });
 
       const updated = await prisma.dutyRoster.update({
         where: { id },
@@ -391,6 +389,36 @@ const rosterController = {
     } catch (e) {
       console.error('Error rejecting roster', e);
       res.status(500).json({ success: false, error: 'Failed to reject roster' });
+    }
+  },
+
+  async setStatus(req, res) {
+    try {
+      const user = req.session.user;
+      const isSystemUser = user?.role?.name === 'Super Admin' || user?.role?.type === 'system';
+      if (!isSystemUser) {
+        return res.status(403).json({ success: false, error: 'Only system users can change roster status' });
+      }
+
+      const id = Number(req.params.id);
+      const { status } = req.body || {};
+      const allowed = ['PENDING', 'APPROVED', 'REJECTED'];
+      if (!allowed.includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid status value' });
+      }
+
+      const roster = await prisma.dutyRoster.findUnique({ where: { id } });
+      if (!roster || roster.is_deleted) return res.status(404).json({ success: false, error: 'Roster not found' });
+
+      const updated = await prisma.dutyRoster.update({
+        where: { id },
+        data: { status },
+        include: { location: true, createdBy: true }
+      });
+      res.json({ success: true, roster: updated });
+    } catch (e) {
+      console.error('Error changing roster status', e);
+      res.status(500).json({ success: false, error: 'Failed to change status' });
     }
   },
 };
