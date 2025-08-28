@@ -18,7 +18,7 @@ const authController = {
         is_deleted: false,
         role: { is: { is_deleted: false, enabled: true } },
       },
-      include: { role: true },
+      include: { role: true, employee: true },
     });
 
     if (!user || decrypt(user.password) !== password) {
@@ -45,6 +45,8 @@ const authController = {
       email: user.email,
       role: { id: user.role.id, name: user.role.name, type: user.role.type },
       permissions,
+      employee_id: user.employee?.id || null,
+      employee_code: user.employee?.employee_id || null,
     };
 
     res.json({ success: true, message: "Logged in", user: req.session.user });
@@ -74,7 +76,7 @@ const authController = {
           is_deleted: false,
           role: { is: { is_deleted: false, enabled: true } },
         },
-        include: { role: true },
+        include: { role: true, employee: true },
       });
 
       if (!dbUser) {
@@ -102,6 +104,8 @@ const authController = {
         email: dbUser.email,
         role: { id: dbUser.role.id, name: dbUser.role.name, type: dbUser.role.type },
         permissions,
+        employee_id: dbUser.employee?.id || null,
+        employee_code: dbUser.employee?.employee_id || null,
       };
       return res.json({ success: true, user: req.session.user });
     } catch (e) {

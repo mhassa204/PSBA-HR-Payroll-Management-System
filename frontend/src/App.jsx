@@ -29,6 +29,9 @@ import {
 import { UserManagement } from "./features/users";
 import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
 import SecuritySettings from "./features/settings/pages/SecuritySettings";
+import RosterList from "./features/roster/pages/RosterList";
+import CreateRoster from "./features/roster/pages/CreateRoster";
+import EditRoster from "./features/roster/pages/EditRoster";
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -86,6 +89,38 @@ function App() {
                       <h1 className="text-4xl font-bold text-slate-800 mb-4">Dashboard</h1>
                       <p className="text-xl text-slate-600">Overview and analytics coming soon</p>
                     </div>
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+
+            {/* Roster routes */}
+            <Route
+              path="/rosters"
+              element={
+                <PrivateRoute permissions={["roster.read"]}>
+                  <LeftSidebarLayout>
+                    <RosterList />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/rosters/create"
+              element={
+                <PrivateRoute permissions={["roster.create"]}>
+                  <LeftSidebarLayout>
+                    <CreateRoster />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/rosters/:id/edit"
+              element={
+                <PrivateRoute permissions={["roster.update"]}>
+                  <LeftSidebarLayout>
+                    <EditRoster />
                   </LeftSidebarLayout>
                 </PrivateRoute>
               }

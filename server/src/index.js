@@ -20,6 +20,7 @@ const authRoutes = require("./routes/authRoutes");
 const permissionRoutes = require("./routes/permissionRoutes");
 const systemSettingsRoutes = require("./routes/systemSettingsRoutes");
 const locationRoutes = require("./routes/locationRoutes");
+const rosterRoutes = require("./routes/rosterRoutes");
 
 const app = express(); 
 const PORT = process.env.PORT || 3000;
@@ -76,6 +77,7 @@ app.use("/api/scale-grades", scaleGradeRoutes);
 app.use("/api/roles", roleRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/locations", locationRoutes);
+app.use("/api/rosters", rosterRoutes);
 const { isAuthenticated } = require("./middleware/auth");
 app.use("/api/admin", isAuthenticated, adminRoutes);
 

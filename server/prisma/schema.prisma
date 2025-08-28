@@ -46,6 +46,7 @@ model Employee {
   employmentRecords       Employment[]
   pastExperiences         PastExperience[]
   user                    User?
+  rosterEntries           DutyRosterEntry[]
 }
 
 model Department {
@@ -278,6 +279,8 @@ model User {
   updatedSettings SystemSetting[] @relation("UserUpdatedSettings")
   // back relation for managed locations
   managedLocations Location[] @relation(name: "UserManagedLocations")
+  // new: rosters created by this user
+  createdRosters DutyRoster[]
 }
 
 model Session {
@@ -340,4 +343,43 @@ model Location {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   is_deleted      Boolean   @default(false)
+  // new: rosters assigned to this location
+  rosters         DutyRoster[]
+}
+
+// New: Duty Roster master
+model DutyRoster {
+  id                 Int               @id @default(autoincrement())
+  title              String?
+  bazaar_id          Int?
+  location           Location?         @relation(fields: [bazaar_id], references: [id])
+  valid_from         DateTime
+  valid_to           DateTime
+  created_by_user_id Int
+  createdBy          User              @relation(fields: [created_by_user_id], references: [id])
+  entries            DutyRosterEntry[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  is_deleted         Boolean           @default(false)
+
+  @@index([bazaar_id])
+  @@index([created_by_user_id])
+}
+
+// New: Duty Roster entries per employee
+model DutyRosterEntry {
+  id               Int        @id @default(autoincrement())
+  roster_id        Int
+  employee_id      Int
+  weekly_off_days  String[]   @default([])
+  day_schedules    Json
+  remarks          String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  roster           DutyRoster @relation(fields: [roster_id], references: [id])
+  employee         Employee   @relation(fields: [employee_id], references: [id])
+
+  @@index([roster_id])
+  @@index([employee_id])
 }

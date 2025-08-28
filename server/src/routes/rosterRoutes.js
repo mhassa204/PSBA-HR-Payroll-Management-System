@@ -1,0 +1,16 @@
+const express = require('express');
+const router = express.Router();
+const rosterController = require('../controllers/rosterController');
+const { isAuthenticated, authorize } = require('../middleware/auth');
+
+router.get('/', isAuthenticated, authorize('roster.read'), rosterController.list);
+router.get('/:id', isAuthenticated, authorize('roster.read'), rosterController.getById);
+router.post('/', isAuthenticated, authorize('roster.create'), rosterController.create);
+router.put('/:id', isAuthenticated, authorize('roster.update'), rosterController.update);
+router.delete('/:id', isAuthenticated, authorize('roster.delete'), rosterController.remove);
+
+// Helper endpoints for roster creation under roster permissions
+router.get('/helpers/officer-employees/list', isAuthenticated, authorize('roster.create'), rosterController.employeesForLoggedInOfficer);
+router.get('/helpers/bazaars', isAuthenticated, authorize('roster.create'), rosterController.bazaarsForRoster);
+
+module.exports = router;

@@ -220,7 +220,8 @@ async function main() {
         "locations.read","locations.create","locations.update","locations.delete",
         "reports.read",
         "users.read","users.manage",
-        "audit.read"
+        "audit.read",
+        "roster.read","roster.create","roster.update","roster.delete"
       ], 
       enabled: true, 
       fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] 
@@ -235,7 +236,7 @@ async function main() {
     { 
       name: "Manager", 
       type: "custom", 
-      allowed_actions: ["employees.read","reports.read","requests.approve"], 
+      allowed_actions: ["employees.read","reports.read","requests.approve","roster.read","roster.create","roster.update"], 
       enabled: true, 
       fields: ["employee_basic", "employee_employment"] 
     },
@@ -262,6 +263,27 @@ async function main() {
     });
     console.log(`✅ Created Role: ${createdRole.name} (${createdRole.type})`);
     createdRoles.push(createdRole);
+  }
+
+  // Add permissions based on allowed_actions
+  const allPermKeys = Array.from(new Set(roles.flatMap(r => r.allowed_actions).filter(k => k !== '*')));
+  for (const key of allPermKeys) {
+    await prisma.permission.upsert({
+      where: { key },
+      create: { key, resource: key.split('.')[0], action: key.split('.')[1] || 'read' },
+      update: {},
+    });
+  }
+  // Link permissions to roles
+  for (const role of createdRoles) {
+    const orig = roles.find(r => r.name === role.name);
+    if (!orig) continue;
+    if (orig.allowed_actions.includes('*')) continue;
+    const perms = await prisma.permission.findMany({ where: { key: { in: orig.allowed_actions } } });
+    await prisma.role.update({
+      where: { id: role.id },
+      data: { rolePermissions: { create: perms.map(p => ({ permission_id: p.id })) } }
+    });
   }
 
   // Seed scale grades
@@ -658,6 +680,42 @@ async function main() {
       filer_status: "filer",
       filer_active_status: "active",
       is_deleted: false
+    },
+    // New: Employees reporting to HR Admin (createdEmployees[1]) for Duty Roster testing
+    {
+      employee_id: createdEmployees[3].id, // Ayesha Malik
+      organization: "PSBA",
+      department_id: createdDepartments.find(d => d.name === "Operations").id,
+      designation_id: createdDesignations.find(d => d.title === "Operations Officer").id,
+      employment_type: "Regular",
+      effective_from: new Date("2023-01-01"),
+      role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
+      office_location: "Karachi Field",
+      remarks: "Reports to HR Admin",
+      scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-17").id,
+      employment_status: "active",
+      is_current: true,
+      filer_status: "non_filer",
+      // critical for roster filtering: reporting officer is HR Admin's employee id as string
+      reporting_officer_id: String(createdEmployees[1].id),
+      is_deleted: false
+    },
+    {
+      employee_id: createdEmployees[4].id, // Usman Khan
+      organization: "PSBA",
+      department_id: createdDepartments.find(d => d.name === "Operations").id,
+      designation_id: createdDesignations.find(d => d.title === "Operations Officer").id,
+      employment_type: "Regular",
+      effective_from: new Date("2023-02-01"),
+      role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
+      office_location: "Karachi Field",
+      remarks: "Reports to HR Admin",
+      scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-17").id,
+      employment_status: "active",
+      is_current: true,
+      filer_status: "non_filer",
+      reporting_officer_id: String(createdEmployees[1].id),
+      is_deleted: false
     }
   ];
 
@@ -751,6 +809,25 @@ async function main() {
       city: "Lahore",
       type: "HEAD_OFFICE",
       full_address: "Regional Office, Model Town, Lahore",
+      is_deleted: false
+    },
+    // New: Locations for subordinates (set to Karachi bazaar context)
+    {
+      employment_id: createdEmployments[3].id,
+      district: "Karachi",
+      city: "Karachi",
+      bazaar_name: "Saddar Bazaar",
+      type: "BAZAAR",
+      full_address: "Saddar Bazaar, Karachi",
+      is_deleted: false
+    },
+    {
+      employment_id: createdEmployments[4].id,
+      district: "Karachi",
+      city: "Karachi",
+      bazaar_name: "Saddar Bazaar",
+      type: "BAZAAR",
+      full_address: "Saddar Bazaar, Karachi",
       is_deleted: false
     }
   ];
