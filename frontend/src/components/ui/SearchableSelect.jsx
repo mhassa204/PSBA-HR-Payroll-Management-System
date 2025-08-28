@@ -18,6 +18,7 @@ import React, { useState, useRef, useEffect } from 'react';
  * @param {Object} props.register - React Hook Form register function
  * @param {string} props.error - Error message to display
  * @param {boolean} props.allowClear - Whether to show clear button
+ * @param {string} props.dropdownPriority - Priority level for z-index management ('high', 'medium', 'low')
  */
 const SearchableSelect = ({
   options = [],
@@ -31,6 +32,7 @@ const SearchableSelect = ({
   register = null,
   error = null,
   allowClear = false,
+  dropdownPriority = 'medium',
   ...props
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,11 +46,19 @@ const SearchableSelect = ({
   // Get dropdown type for better z-index management
   const dropdownType = props['data-dropdown-type'] || 'default';
   
-  // Set much higher z-index for role dropdown to ensure it's always on top
+  // Improved z-index management system to prevent overlapping
   const getZIndex = () => {
-    if (dropdownType === 'role') return 2147483647; // Maximum possible z-index
-    if (dropdownType === 'employee') return 10000; // Much lower for employee
-    return 5000; // Default for others
+    // Use a more reasonable z-index range to prevent conflicts
+    switch (dropdownPriority) {
+      case 'high':
+        return 1000; // For critical dropdowns like role selection
+      case 'medium':
+        return 100; // Default for most dropdowns
+      case 'low':
+        return 50; // For less critical dropdowns
+      default:
+        return 100; // Default medium priority
+    }
   };
 
   // Filter options based on search term
@@ -195,11 +205,8 @@ const SearchableSelect = ({
   return (
     <div className="relative w-full" ref={dropdownRef} style={{ 
       isolation: 'isolate',
-      // Ensure role dropdown container has proper stacking context
-      ...(dropdownType === 'role' && {
-        zIndex: 999999,
-        position: 'relative'
-      })
+      // Use reasonable z-index values to prevent overlapping issues
+      zIndex: isOpen ? getZIndex() : 'auto'
     }}>
       {/* Hidden input for form integration */}
       {register && (
@@ -269,22 +276,12 @@ const SearchableSelect = ({
       {isOpen && (
         <div className={`absolute w-full bg-white border border-gray-300 rounded-lg shadow-xl max-h-80 overflow-hidden min-w-[320px] transform -translate-x-0 ${
           dropdownPosition === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
-        } ${dropdownType === 'role' ? 'role-dropdown-superior' : ''}`} style={{ 
+        }`} style={{ 
           minWidth: '320px',
           maxWidth: '100%',
-          position: dropdownType === 'role' ? 'fixed' : 'absolute',
+          position: 'absolute',
           zIndex: getZIndex(),
-          maxHeight: '320px',
-          // Ensure role dropdown is always visible and properly positioned
-          ...(dropdownType === 'role' && {
-            isolation: 'isolate',
-            contain: 'layout style paint',
-            left: dropdownRef.current ? dropdownRef.current.getBoundingClientRect().left : 0,
-            top: dropdownRef.current ? (dropdownPosition === 'top' ? 
-              dropdownRef.current.getBoundingClientRect().top - 280 : 
-              dropdownRef.current.getBoundingClientRect().bottom + 8) : 0,
-            width: dropdownRef.current ? dropdownRef.current.getBoundingClientRect().width : 'auto'
-          })
+          maxHeight: '320px'
         }}>
           {/* Search input */}
           <div className="p-4 border-b border-gray-200 bg-gray-50">
@@ -339,7 +336,7 @@ const SearchableSelect = ({
                   </svg>
                 </div>
                 <p className="text-gray-500 text-sm">No options found</p>
-                <p className="text-gray-400 text-xs mt-1">Try adjusting your search terms</p>
+                <p className="text-xs text-gray-400 mt-1">Try adjusting your search terms</p>
               </div>
             )}
           </div>

@@ -361,6 +361,8 @@ model DutyRoster {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   is_deleted         Boolean           @default(false)
+  // New: approval status with default pending
+  status             DutyRosterStatus  @default(PENDING)
 
   @@index([bazaar_id])
   @@index([created_by_user_id])
@@ -371,7 +373,6 @@ model DutyRosterEntry {
   id               Int        @id @default(autoincrement())
   roster_id        Int
   employee_id      Int
-  weekly_off_days  String[]   @default([])
   day_schedules    Json
   remarks          String?
   createdAt        DateTime   @default(now())
@@ -382,4 +383,11 @@ model DutyRosterEntry {
 
   @@index([roster_id])
   @@index([employee_id])
+}
+
+// New: enum for Duty Roster approval status
+enum DutyRosterStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

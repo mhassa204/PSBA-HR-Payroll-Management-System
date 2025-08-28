@@ -14,6 +14,11 @@ class HardDeleteUtil {
   static async hardDeleteEmployee(employeeId) {
     return await prisma.$transaction(async (tx) => {
       // Delete all related records in reverse dependency order
+
+      // 0. Delete duty roster entries referencing this employee (prevents FK violations)
+      await tx.dutyRosterEntry.deleteMany({
+        where: { employee_id: employeeId }
+      });
       
       // 1. Delete employment documents
       await tx.employmentDocument.deleteMany({

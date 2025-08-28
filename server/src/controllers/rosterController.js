@@ -114,7 +114,16 @@ const rosterController = {
           location: true,
           createdBy: true,
           entries: {
-            include: { employee: true }
+            include: {
+              employee: {
+                include: {
+                  employmentRecords: {
+                    where: { is_current: true, is_deleted: false },
+                    include: { designation: true }
+                  }
+                }
+              }
+            }
           }
         }
       });
@@ -141,10 +150,9 @@ const rosterController = {
         return res.status(403).json({ success: false, error: 'Only a manager of a location can create a roster' });
       }
 
-      // Validate entries format
+      // Validate entries format (weekly_off_days removed)
       const normalizedEntries = (entries || []).map((e) => ({
         employee_id: Number(e.employee_id),
-        weekly_off_days: Array.isArray(e.weekly_off_days) ? e.weekly_off_days : [],
         day_schedules: e.day_schedules || {},
         remarks: e.remarks || null,
       }));
@@ -183,15 +191,13 @@ const rosterController = {
       const roster = await prisma.dutyRoster.findUnique({ where: { id } });
       if (!roster) return res.status(404).json({ success: false, error: 'Roster not found' });
 
-      // Replace entries: delete then re-create
+      // Delete old entries first
       await prisma.dutyRosterEntry.deleteMany({ where: { roster_id: id } });
 
       const normalizedEntries = (entries || []).map((e) => ({
         employee_id: Number(e.employee_id),
-        weekly_off_days: Array.isArray(e.weekly_off_days) ? e.weekly_off_days : [],
         day_schedules: e.day_schedules || {},
         remarks: e.remarks || null,
-        roster_id: id,
       }));
 
       // Determine bazaar id for update: preserve if undefined, else use provided (or resolve if nullish)
@@ -205,6 +211,7 @@ const rosterController = {
         nextBazaarId = await resolveBazaarIdForUser(req.session.user);
       }
 
+      // Update roster basic fields and recreate entries via nested create
       const updated = await prisma.dutyRoster.update({
         where: { id },
         data: {
@@ -213,7 +220,7 @@ const rosterController = {
           valid_from: valid_from ? new Date(valid_from) : roster.valid_from,
           valid_to: valid_to ? new Date(valid_to) : roster.valid_to,
           updatedAt: new Date(),
-          entries: { createMany: { data: normalizedEntries } }
+          entries: { create: normalizedEntries }
         },
         include: {
           location: true,

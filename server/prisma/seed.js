@@ -21,7 +21,11 @@ async function main() {
     console.log(`🗑️ Hard deleting employee: ${employee.full_name} (ID: ${employee.id})`);
     await HardDeleteUtil.hardDeleteEmployee(employee.id);
   }
-  
+
+  // New: Clean Duty Rosters (entries then rosters) to avoid FK issues with users/locations
+  const existingRosterEntries = await prisma.dutyRosterEntry.deleteMany({});
+  const existingRosters = await prisma.dutyRoster.deleteMany({});
+
   // Hard delete any remaining departments and designations
   const existingDepartments = await prisma.department.findMany({
     select: { id: true, name: true }
@@ -992,10 +996,11 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
-    console.error('❌ Seeding failed:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
+  .then(async () => {
     await prisma.$disconnect();
+  })
+  .catch(async (e) => {
+    console.error(`❌ Seeding failed: ${e}`);
+    await prisma.$disconnect();
+    process.exit(1);
   });

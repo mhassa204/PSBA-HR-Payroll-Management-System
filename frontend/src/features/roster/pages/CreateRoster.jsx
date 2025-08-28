@@ -32,8 +32,8 @@ const CreateRoster = () => {
   useEffect(() => {
     setEntries(employees.map((e) => ({
       employee_id: e.id,
-      weekly_off_days: [],
-      day_schedules: days.reduce((acc, d) => ({ ...acc, [d]: { type: 'time', value: '' } }), {}),
+      // weekly_off_days removed; manage per-day via type 'weekly_off'
+      day_schedules: days.reduce((acc, d) => ({ ...acc, [d]: { type: 'time', time_from: '', time_to: '', location: '' } }), {}),
       remarks: '',
     })));
   }, [employees]);
@@ -86,7 +86,6 @@ const CreateRoster = () => {
               <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Designation</th>
               <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">CNIC</th>
               <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Contact</th>
-              <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Weekly Off (multi)</th>
               {days.map((d) => (
                 <th key={d} className="px-3 py-2 text-left text-xs uppercase text-slate-500">{d}</th>
               ))}
@@ -102,17 +101,6 @@ const CreateRoster = () => {
                   <td className="px-3 py-2 whitespace-nowrap">{emp.designation || '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{emp.cnic || '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{emp.mobile_number || '—'}</td>
-                  <td className="px-3 py-2">
-                    <select multiple className="border rounded px-2 py-1"
-                      value={entry.weekly_off_days}
-                      onChange={(e)=>{
-                        const values = Array.from(e.target.selectedOptions).map(o=>o.value);
-                        updateEntry(emp.id, (curr) => ({ ...curr, weekly_off_days: values }));
-                      }}
-                    >
-                      {days.map((d)=> <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </td>
                   {days.map((d) => {
                     const day = entry.day_schedules[d];
                     return (
@@ -124,7 +112,7 @@ const CreateRoster = () => {
                               const type = e.target.value;
                               updateEntry(emp.id, (curr) => ({
                                 ...curr,
-                                day_schedules: { ...curr.day_schedules, [d]: { type, value: '' } }
+                                day_schedules: { ...curr.day_schedules, [d]: type === 'time' ? { type, time_from: '', time_to: '', location: '' } : (type === 'offsite' ? { type, location: '' } : { type }) }
                               }));
                             }}
                           >
@@ -133,20 +121,30 @@ const CreateRoster = () => {
                             <option value="weekly_off">Weekly off</option>
                           </select>
                           {day.type === 'time' && (
-                            <input className="border rounded px-2 py-1 w-36" placeholder="e.g. 9AM to 5PM"
-                              value={day.value}
-                              onChange={(e)=>updateEntry(emp.id, (curr) => ({
-                                ...curr,
-                                day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], value: e.target.value } }
-                              }))}
-                            />
+                            <>
+                              <input type="time" className="border rounded px-2 py-1 w-28"
+                                value={day.time_from}
+                                onChange={(e)=>updateEntry(emp.id, (curr) => ({
+                                  ...curr,
+                                  day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], time_from: e.target.value } }
+                                }))}
+                              />
+                              <span className="text-slate-500">to</span>
+                              <input type="time" className="border rounded px-2 py-1 w-28"
+                                value={day.time_to}
+                                onChange={(e)=>updateEntry(emp.id, (curr) => ({
+                                  ...curr,
+                                  day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], time_to: e.target.value } }
+                                }))}
+                              />
+                            </>
                           )}
                           {day.type === 'offsite' && (
                             <input className="border rounded px-2 py-1 w-36" placeholder="Location (e.g. Chiniot)"
-                              value={day.value}
+                              value={day.location}
                               onChange={(e)=>updateEntry(emp.id, (curr) => ({
                                 ...curr,
-                                day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], value: e.target.value } }
+                                day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], location: e.target.value } }
                               }))}
                             />
                           )}
