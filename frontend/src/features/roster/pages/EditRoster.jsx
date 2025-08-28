@@ -11,6 +11,9 @@ const EditRoster = () => {
   const navigate = useNavigate();
   const [roster, setRoster] = useState(null);
   const can = useAuthStore((s) => s.can);
+  const user = useAuthStore((s) => s.user);
+  const isSuperAdmin = user?.role?.name === 'Super Admin';
+  const isSystem = user?.role?.type === 'system';
 
   useEffect(() => {
     rosterService.get(id).then((res) => setRoster(res.roster));
@@ -75,7 +78,13 @@ const EditRoster = () => {
   }, [roster]);
 
   if (!roster) return <div className="p-6">Loading...</div>;
-  const canApprove = can('roster.approve');
+
+  const canStatus = (isSystem || isSuperAdmin) && can('roster.status');
+  const isCreator = roster.created_by_user_id === user?.id;
+  const canModifyApproved = roster.status === 'APPROVED'
+    ? (isSuperAdmin || (isSystem && can('roster.status') && !isCreator))
+    : true;
+  const canUpdate = can('roster.update') && canModifyApproved;
 
   return (
     <div className="p-6 space-y-6">
@@ -84,7 +93,9 @@ const EditRoster = () => {
         <div className="flex gap-2">
           <button onClick={cloneAsNew} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded">Clone as New</button>
           <button onClick={() => navigate('/rosters')} className="px-4 py-2 bg-slate-600 text-white rounded">Cancel</button>
-          <button onClick={submit} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Update</button>
+          {canUpdate && (
+            <button onClick={submit} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Update</button>
+          )}
         </div>
       </div>
 
@@ -105,7 +116,7 @@ const EditRoster = () => {
           <label className="block text-sm text-slate-600 mb-1">Status</label>
           <div className="flex items-center gap-2">
             <span className={`px-2 py-1 rounded text-xs font-medium ${roster.status === 'APPROVED' ? 'bg-green-100 text-green-700' : roster.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{roster.status}</span>
-            {canApprove && (
+            {canStatus && (
               <select
                 value={roster.status}
                 onChange={(e) => changeStatus(e.target.value)}

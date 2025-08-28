@@ -11,6 +11,9 @@ const ViewRoster = () => {
   const navigate = useNavigate();
   const [roster, setRoster] = useState(null);
   const can = useAuthStore((s) => s.can);
+  const user = useAuthStore((s) => s.user);
+  const isSuperAdmin = user?.role?.name === 'Super Admin';
+  const isSystem = user?.role?.type === 'system';
 
   const load = async () => {
     const res = await rosterService.get(id);
@@ -26,7 +29,17 @@ const ViewRoster = () => {
 
   if (!roster) return <div className="p-6">Loading...</div>;
 
-  const canApprove = can('roster.approve');
+  const canStatus = (isSystem || isSuperAdmin) && can('roster.status');
+
+  const canModifyApproved = () => {
+    const isCreator = roster.created_by_user_id === user?.id;
+    if (isSuperAdmin) return true;
+    return isSystem && can('roster.status') && !isCreator;
+  };
+
+  const canEdit = roster.status === 'APPROVED'
+    ? (can('roster.update') && canModifyApproved())
+    : can('roster.update');
 
   return (
     <div className="p-6 space-y-6">
@@ -34,7 +47,7 @@ const ViewRoster = () => {
         <h2 className="text-2xl font-semibold text-slate-800">Duty Roster #{roster.id}</h2>
         <div className="flex gap-2 items-center">
           <span className={`px-2 py-1 rounded text-xs font-medium ${roster.status === 'APPROVED' ? 'bg-green-100 text-green-700' : roster.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{roster.status}</span>
-          {canApprove && (
+          {canStatus && (
             <select
               value={roster.status}
               onChange={(e) => changeStatus(e.target.value)}
@@ -43,7 +56,9 @@ const ViewRoster = () => {
               {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
-          <button onClick={() => navigate(`/rosters/${roster.id}/edit`)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Edit</button>
+          {canEdit && (
+            <button onClick={() => navigate(`/rosters/${roster.id}/edit`)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Edit</button>
+          )}
           <button onClick={() => navigate('/rosters')} className="px-4 py-2 bg-slate-600 text-white rounded">Back</button>
         </div>
       </div>

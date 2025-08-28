@@ -191,6 +191,21 @@ const rosterController = {
       const roster = await prisma.dutyRoster.findUnique({ where: { id } });
       if (!roster) return res.status(404).json({ success: false, error: 'Roster not found' });
 
+      // Guard: If roster is APPROVED, only authorized system users (not the creator) may modify; Super Admin exempt
+      if (roster.status === 'APPROVED') {
+        const user = req.session.user;
+        const isSuperAdmin = user?.role?.name === 'Super Admin';
+        if (!isSuperAdmin) {
+          const isSystemUser = user?.role?.type === 'system';
+          const perms = user?.permissions || [];
+          const hasPermission = perms.includes('*') || perms.includes('roster.status');
+          const isCreator = roster.created_by_user_id === user?.id;
+          if (!isSystemUser || !hasPermission || isCreator) {
+            return res.status(403).json({ success: false, error: 'Approved rosters can only be modified by authorized system users (creator cannot modify).' });
+          }
+        }
+      }
+
       // Delete old entries first
       await prisma.dutyRosterEntry.deleteMany({ where: { roster_id: id } });
 
@@ -239,6 +254,25 @@ const rosterController = {
   async remove(req, res) {
     try {
       const id = Number(req.params.id);
+
+      // Load roster to enforce approved guard
+      const roster = await prisma.dutyRoster.findUnique({ where: { id } });
+      if (!roster) return res.status(404).json({ success: false, error: 'Roster not found' });
+
+      if (roster.status === 'APPROVED') {
+        const user = req.session.user;
+        const isSuperAdmin = user?.role?.name === 'Super Admin';
+        if (!isSuperAdmin) {
+          const isSystemUser = user?.role?.type === 'system';
+          const perms = user?.permissions || [];
+          const hasPermission = perms.includes('*') || perms.includes('roster.status');
+          const isCreator = roster.created_by_user_id === user?.id;
+          if (!isSystemUser || !hasPermission || isCreator) {
+            return res.status(403).json({ success: false, error: 'Approved rosters can only be deleted by authorized system users (creator cannot delete).' });
+          }
+        }
+      }
+
       await prisma.dutyRoster.update({ where: { id }, data: { is_deleted: true } });
       res.json({ success: true, message: 'Roster deleted' });
     } catch (e) {

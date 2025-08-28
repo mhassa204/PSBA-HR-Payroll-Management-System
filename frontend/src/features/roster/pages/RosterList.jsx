@@ -2,12 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import rosterService from '../../roster/services/rosterService';
 import useConfirmation from '../../../hooks/useConfirmation';
+import { useAuthStore } from '../../auth/authStore';
 
 const RosterList = () => {
   const [data, setData] = useState({ rosters: [], total: 0, page: 1, limit: 10 });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { confirmDelete, confirmationState, isOpen, isLoading, handleConfirm, hideConfirmation } = useConfirmation();
+
+  const user = useAuthStore((s) => s.user);
+  const can = useAuthStore((s) => s.can);
+  const isSuperAdmin = user?.role?.name === 'Super Admin';
+  const isSystem = user?.role?.type === 'system';
 
   const load = async () => {
     setLoading(true);
@@ -20,6 +26,13 @@ const RosterList = () => {
   };
 
   useEffect(() => { load(); }, []);
+
+  const canModifyApproved = (r) => {
+    const isCreator = r.created_by_user_id ? r.created_by_user_id === user?.id : r.createdBy?.id === user?.id;
+    if (isSuperAdmin) return true;
+    // Only system users with roster.status, and not the creator
+    return isSystem && can('roster.status') && !isCreator;
+  };
 
   return (
     <div className="p-6">
@@ -45,28 +58,37 @@ const RosterList = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {data.rosters.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2">{r.id}</td>
-                  <td className="px-4 py-2">{r.title || '—'}</td>
-                  <td className="px-4 py-2">{r.location?.name || '—'}</td>
-                  <td className="px-4 py-2">{new Date(r.valid_from).toLocaleDateString()} → {new Date(r.valid_to).toLocaleDateString()}</td>
-                  <td className="px-4 py-2">{r._count?.entries || 0}</td>
-                  <td className="px-4 py-2">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${r.status === 'APPROVED' ? 'bg-green-100 text-green-700' : r.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{r.status}</span>
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex gap-2">
-                      <button onClick={() => navigate(`/rosters/${r.id}`)} className="px-3 py-1 text-sm bg-slate-600 text-white rounded">View</button>
-                      <button onClick={() => navigate(`/rosters/${r.id}/edit`)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Edit</button>
-                      <button onClick={() => confirmDelete({
-                        message: `Delete roster #${r.id}? This action cannot be undone.`,
-                        onConfirm: async () => { await rosterService.remove(r.id); await load(); }
-                      })} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Delete</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {data.rosters.map((r) => {
+                const isApproved = r.status === 'APPROVED';
+                const canEdit = isApproved ? (can('roster.update') && canModifyApproved(r)) : can('roster.update');
+                const canDelete = isApproved ? (can('roster.delete') && canModifyApproved(r)) : can('roster.delete');
+                return (
+                  <tr key={r.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2">{r.id}</td>
+                    <td className="px-4 py-2">{r.title || '—'}</td>
+                    <td className="px-4 py-2">{r.location?.name || '—'}</td>
+                    <td className="px-4 py-2">{new Date(r.valid_from).toLocaleDateString()} → {new Date(r.valid_to).toLocaleDateString()}</td>
+                    <td className="px-4 py-2">{r._count?.entries || 0}</td>
+                    <td className="px-4 py-2">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${r.status === 'APPROVED' ? 'bg-green-100 text-green-700' : r.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{r.status}</span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-2">
+                        <button onClick={() => navigate(`/rosters/${r.id}`)} className="px-3 py-1 text-sm bg-slate-600 text-white rounded">View</button>
+                        {canEdit && (
+                          <button onClick={() => navigate(`/rosters/${r.id}/edit`)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Edit</button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => confirmDelete({
+                            message: `Delete roster #${r.id}? This action cannot be undone.`,
+                            onConfirm: async () => { await rosterService.remove(r.id); await load(); }
+                          })} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Delete</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -284,6 +284,7 @@ async function main() {
     create: { key: 'roster.status', resource: 'roster', action: 'status' },
     update: {},
   });
+
   // Link permissions to roles
   for (const role of createdRoles) {
     const orig = roles.find(r => r.name === role.name);
