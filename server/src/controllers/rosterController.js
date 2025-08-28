@@ -278,12 +278,11 @@ const rosterController = {
         }
       });
 
-      // Officer self: current PSBA employment of the logged-in user
+      // Officer self: current employment of the logged-in user (no org filter so the officer always appears)
       const officerEmployment = await prisma.employment.findFirst({
         where: {
           is_deleted: false,
           is_current: true,
-          organization: 'PSBA',
           employee_id: Number(user.employee_id),
           employee: { is_deleted: false, status: 'Active' },
         },

@@ -53,6 +53,7 @@ const RosterList = () => {
                   <td className="px-4 py-2">{r._count?.entries || 0}</td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
+                      <button onClick={() => navigate(`/rosters/${r.id}`)} className="px-3 py-1 text-sm bg-slate-600 text-white rounded">View</button>
                       <button onClick={() => navigate(`/rosters/${r.id}/edit`)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Edit</button>
                       <button onClick={() => confirmDelete({
                         message: `Delete roster #${r.id}? This action cannot be undone.`,

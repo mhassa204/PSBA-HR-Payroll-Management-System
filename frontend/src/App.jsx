@@ -32,6 +32,7 @@ import SecuritySettings from "./features/settings/pages/SecuritySettings";
 import RosterList from "./features/roster/pages/RosterList";
 import CreateRoster from "./features/roster/pages/CreateRoster";
 import EditRoster from "./features/roster/pages/EditRoster";
+import ViewRoster from "./features/roster/pages/ViewRoster";
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -111,6 +112,16 @@ function App() {
                 <PrivateRoute permissions={["roster.create"]}>
                   <LeftSidebarLayout>
                     <CreateRoster />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/rosters/:id"
+              element={
+                <PrivateRoute permissions={["roster.read"]}>
+                  <LeftSidebarLayout>
+                    <ViewRoster />
                   </LeftSidebarLayout>
                 </PrivateRoute>
               }
