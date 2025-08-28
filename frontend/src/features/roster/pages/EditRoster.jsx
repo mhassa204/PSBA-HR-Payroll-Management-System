@@ -36,6 +36,21 @@ const EditRoster = () => {
     navigate('/rosters');
   };
 
+  const cloneAsNew = async () => {
+    const payload = {
+      title: `${roster.title || 'Roster'} (Copy)`,
+      valid_from: roster.valid_from?.slice(0,10),
+      valid_to: roster.valid_to?.slice(0,10),
+      entries: roster.entries.map((e) => ({
+        employee_id: e.employee_id,
+        day_schedules: e.day_schedules,
+        remarks: e.remarks,
+      })),
+    };
+    await rosterService.create(payload);
+    navigate('/rosters');
+  };
+
   if (!roster) return <div className="p-6">Loading...</div>;
 
   return (
@@ -43,6 +58,7 @@ const EditRoster = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-slate-800">Edit Duty Roster</h2>
         <div className="flex gap-2">
+          <button onClick={cloneAsNew} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded">Clone as New</button>
           <button onClick={() => navigate('/rosters')} className="px-4 py-2 bg-slate-600 text-white rounded">Cancel</button>
           <button onClick={submit} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Update</button>
         </div>

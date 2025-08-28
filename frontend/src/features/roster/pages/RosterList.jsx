@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import rosterService from '../../roster/services/rosterService';
+import useConfirmation from '../../../hooks/useConfirmation';
 
 const RosterList = () => {
   const [data, setData] = useState({ rosters: [], total: 0, page: 1, limit: 10 });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { confirmDelete, confirmationState, isOpen, isLoading, handleConfirm, hideConfirmation } = useConfirmation();
 
   const load = async () => {
     setLoading(true);
@@ -52,7 +54,10 @@ const RosterList = () => {
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <button onClick={() => navigate(`/rosters/${r.id}/edit`)} className="px-3 py-1 text-sm bg-blue-600 text-white rounded">Edit</button>
-                      <button onClick={async () => { await rosterService.remove(r.id); load(); }} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Delete</button>
+                      <button onClick={() => confirmDelete({
+                        message: `Delete roster #${r.id}? This action cannot be undone.`,
+                        onConfirm: async () => { await rosterService.remove(r.id); await load(); }
+                      })} className="px-3 py-1 text-sm bg-red-600 text-white rounded">Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -62,6 +67,19 @@ const RosterList = () => {
         </div>
       ) : (
         <div className="text-slate-600">No rosters found.</div>
+      )}
+
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-md shadow-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-2">{confirmationState.title}</h3>
+            <p className="text-slate-700 mb-4">{confirmationState.message}</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={hideConfirmation} className="px-4 py-2 bg-slate-200 rounded">{confirmationState.cancelText || 'Cancel'}</button>
+              <button onClick={handleConfirm} disabled={isLoading} className="px-4 py-2 bg-red-600 text-white rounded">{confirmationState.confirmText || 'Confirm'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
