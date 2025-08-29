@@ -21,6 +21,7 @@ const permissionRoutes = require("./routes/permissionRoutes");
 const systemSettingsRoutes = require("./routes/systemSettingsRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const rosterRoutes = require("./routes/rosterRoutes");
+const deviceRoutes = require("./routes/deviceRoutes");
 
 const app = express(); 
 const PORT = process.env.PORT || 3000;
@@ -78,6 +79,7 @@ app.use("/api/roles", roleRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/rosters", rosterRoutes);
+app.use("/api/devices", deviceRoutes);
 const { isAuthenticated } = require("./middleware/auth");
 app.use("/api/admin", isAuthenticated, adminRoutes);
 

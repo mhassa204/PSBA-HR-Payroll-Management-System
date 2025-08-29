@@ -345,6 +345,8 @@ model Location {
   is_deleted      Boolean   @default(false)
   // new: rosters assigned to this location
   rosters         DutyRoster[]
+  // back relation: devices installed at this location
+  devices         Device[]
 }
 
 // New: Duty Roster master
@@ -390,4 +392,18 @@ enum DutyRosterStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+model Device {
+  id           Int       @id @default(autoincrement())
+  ip_address   String
+  port_number  Int
+  location_id  Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  is_deleted   Boolean   @default(false)
+  location     Location? @relation(fields: [location_id], references: [id])
+
+  @@unique([ip_address, port_number], name: "ip_port_unique")
+  @@index([location_id])
 }

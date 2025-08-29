@@ -24,7 +24,8 @@ import {
   RoleTagManagement,
   ScaleGradeManagement,
   RoleManagement,
-  LocationManagement
+  LocationManagement,
+  DeviceManagement
 } from "./features/settings";
 import { UserManagement } from "./features/users";
 import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
@@ -274,6 +275,16 @@ function App() {
                 <PrivateRoute permissions={["locations.read"]}>
                   <LeftSidebarLayout>
                     <LocationManagement />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings/devices"
+              element={
+                <PrivateRoute permissions={["devices.read"]}>
+                  <LeftSidebarLayout>
+                    <DeviceManagement />
                   </LeftSidebarLayout>
                 </PrivateRoute>
               }

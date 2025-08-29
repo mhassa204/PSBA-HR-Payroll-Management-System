@@ -87,6 +87,14 @@ const SettingsDashboard = () => {
           required: ['locations.read']
         },
         {
+          name: 'Devices',
+          description: 'Manage attendance devices (IP/Port) and their locations',
+          path: '/settings/devices',
+          icon: Users,
+          color: 'indigo',
+          required: ['devices.read']
+        },
+        {
           name: 'Roles',
           description: 'Manage system roles and permissions',
           path: '/settings/roles',

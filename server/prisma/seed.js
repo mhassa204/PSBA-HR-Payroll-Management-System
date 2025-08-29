@@ -222,6 +222,7 @@ async function main() {
         "role-tags.read","role-tags.create","role-tags.update","role-tags.delete",
         "scale-grades.read","scale-grades.create","scale-grades.update","scale-grades.delete",
         "locations.read","locations.create","locations.update","locations.delete",
+        "devices.read","devices.create","devices.update","devices.delete",
         "reports.read",
         "users.read","users.manage",
         "audit.read",
@@ -285,7 +286,7 @@ async function main() {
     update: {},
   });
 
-  // Link permissions to roles
+  // Link permissions to roles (skip Super Admin explicit perms)
   for (const role of createdRoles) {
     const orig = roles.find(r => r.name === role.name);
     if (!orig) continue;
@@ -1005,9 +1006,10 @@ async function main() {
 main()
   .then(async () => {
     await prisma.$disconnect();
+    console.log('✅ Database seeding complete.');
   })
   .catch(async (e) => {
-    console.error(`❌ Seeding failed: ${e}`);
+    console.error(e);
     await prisma.$disconnect();
     process.exit(1);
   });

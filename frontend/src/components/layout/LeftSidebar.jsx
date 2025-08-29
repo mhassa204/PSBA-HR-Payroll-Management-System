@@ -146,7 +146,15 @@ const LeftSidebar = () => {
       icon: CogIcon,
       description: 'Configuration',
       color: 'bg-gray-600',
-      show: () => can('departments.read') || can('designations.read') || can('role-tags.read') || can('scale-grades.read') || can('locations.read')
+      show: () => can('departments.read') || can('designations.read') || can('role-tags.read') || can('scale-grades.read') || can('locations.read') || can('devices.read'),
+      children: [
+        { name: 'Departments', href: '/settings/departments', icon: ViewColumnsIcon, show: () => can('departments.read') },
+        { name: 'Designations', href: '/settings/designations', icon: ViewColumnsIcon, show: () => can('designations.read') },
+        { name: 'Role Tags', href: '/settings/role-tags', icon: ViewColumnsIcon, show: () => can('role-tags.read') },
+        { name: 'Scale Grades', href: '/settings/scale-grades', icon: ViewColumnsIcon, show: () => can('scale-grades.read') },
+        { name: 'Locations', href: '/settings/locations', icon: ViewColumnsIcon, show: () => can('locations.read') },
+        { name: 'Devices', href: '/settings/devices', icon: ViewColumnsIcon, show: () => can('devices.read') }
+      ]
     }
   ];
 
