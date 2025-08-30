@@ -403,7 +403,27 @@ model Device {
   updatedAt    DateTime  @updatedAt
   is_deleted   Boolean   @default(false)
   location     Location? @relation(fields: [location_id], references: [id])
+  // back relation: attendance records captured via this device
+  attendances  Attendance[]
 
   @@unique([ip_address, port_number], name: "ip_port_unique")
   @@index([location_id])
+}
+
+model Attendance {
+  id              Int       @id @default(autoincrement())
+  deviceUserId    String
+  timestamp       DateTime
+  type            String    // IN | OUT
+  device_ip       String
+  device_port     Int
+  attendanceDate  DateTime  // normalized day (UTC midnight)
+  device_id       Int?
+  device          Device?   @relation(fields: [device_id], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([deviceUserId])
+  @@index([attendanceDate])
+  @@unique([deviceUserId, device_ip, device_port, type, attendanceDate], name: "unique_daily_type_per_device_user")
 }

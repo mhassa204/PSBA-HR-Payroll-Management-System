@@ -133,6 +133,14 @@ const LeftSidebar = () => {
       show: () => can('reports.read')
     },
     { 
+      name: 'Attendance', 
+      href: '/attendance', 
+      icon: CalendarIcon,
+      description: 'Device Logs',
+      color: 'bg-sky-600',
+      show: () => can('attendance.read')
+    },
+    { 
       name: 'Audit Logs', 
       href: '/audit-logs', 
       icon: ShieldCheckIcon,

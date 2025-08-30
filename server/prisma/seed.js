@@ -223,6 +223,7 @@ async function main() {
         "scale-grades.read","scale-grades.create","scale-grades.update","scale-grades.delete",
         "locations.read","locations.create","locations.update","locations.delete",
         "devices.read","devices.create","devices.update","devices.delete",
+        "attendance.read","attendance.fetch",
         "reports.read",
         "users.read","users.manage",
         "audit.read",
@@ -285,6 +286,9 @@ async function main() {
     create: { key: 'roster.status', resource: 'roster', action: 'status' },
     update: {},
   });
+  // Ensure attendance permissions exist
+  await prisma.permission.upsert({ where: { key: 'attendance.read' }, create: { key: 'attendance.read', resource: 'attendance', action: 'read' }, update: {} });
+  await prisma.permission.upsert({ where: { key: 'attendance.fetch' }, create: { key: 'attendance.fetch', resource: 'attendance', action: 'fetch' }, update: {} });
 
   // Link permissions to roles (skip Super Admin explicit perms)
   for (const role of createdRoles) {

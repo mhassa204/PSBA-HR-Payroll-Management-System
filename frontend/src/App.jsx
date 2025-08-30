@@ -34,6 +34,7 @@ import RosterList from "./features/roster/pages/RosterList";
 import CreateRoster from "./features/roster/pages/CreateRoster";
 import EditRoster from "./features/roster/pages/EditRoster";
 import ViewRoster from "./features/roster/pages/ViewRoster";
+import AttendanceDashboard from "./features/attendance/pages/AttendanceDashboard";
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -337,6 +338,16 @@ function App() {
                 <PrivateRoute permissions={["users.manage"]}>
                   <LeftSidebarLayout>
                     <UserManagement />
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <LeftSidebarLayout>
+                    <AttendanceDashboard />
                   </LeftSidebarLayout>
                 </PrivateRoute>
               }
