@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import DataTable from "../../../components/DataTable";
 import ErrorPage from "../../../components/ErrorPage";
@@ -24,7 +24,7 @@ const EmployeeTable = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const { confirmDelete } = useConfirmationContext();
 
-  // Get current query parameters
+  // Helpers
   const getCurrentParams = () => ({
     page: parseInt(searchParams.get("page")) || 1,
     pageSize: parseInt(searchParams.get("pageSize")) || 10,
@@ -36,12 +36,37 @@ const EmployeeTable = () => {
     ),
   });
 
+  const getInitials = (name) => {
+    if (!name) return "?";
+    const parts = name.trim().split(/\s+/);
+    const first = parts[0]?.[0] || "";
+    const last = parts.length > 1 ? parts[parts.length - 1]?.[0] || "" : "";
+    return (first + last).toUpperCase();
+  };
+
+  const getCurrentEmployment = (row) => {
+    return (
+      row.employmentRecords?.find((emp) => emp.is_current === true) ||
+      row.employmentRecords?.find(
+        (emp) => emp.effective_till === null || emp.end_date === null
+      ) ||
+      row.employmentRecords?.[0]
+    );
+  };
+
+  const statusColor = (status) => {
+    const s = (status || "").toString().toLowerCase();
+    if (/(active|current)/.test(s)) return "bg-green-100 text-green-700 ring-green-200";
+    if (/(probation|pending)/.test(s)) return "bg-amber-100 text-amber-700 ring-amber-200";
+    if (/(inactive|terminated|left|resigned)/.test(s)) return "bg-red-100 text-red-700 ring-red-200";
+    return "bg-slate-100 text-slate-700 ring-slate-200";
+  };
+
   useEffect(() => {
     const loadEmployees = async () => {
       try {
-        saveCurrentLocation(); // Save current location for return navigation
+        saveCurrentLocation();
 
-        // Check if any employee was updated and force refresh if needed
         const hasUpdates =
           sessionStorage.getItem("employees_updated") === "true";
         if (hasUpdates) {
@@ -60,72 +85,80 @@ const EmployeeTable = () => {
     loadEmployees();
   }, [fetchEmployees, saveCurrentLocation, searchParams, clearCache]);
 
-  const columns = [
-    { header: "Name", accessor: "full_name" },
-    { header: "Father/Husband Name", accessor: "father_husband_name" },
-    { header: "Email", accessor: "email" },
+  const columns = useMemo(() => [
+    {
+      header: "Employee",
+      accessor: "full_name",
+      render: (row) => (
+        <div className="flex items-center gap-2 text-left overflow-visible">
+          <div className="h-8 w-8 flex-shrink-0 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-semibold ring-1 ring-slate-300">
+            {/* If photo available later, swap this for <img /> */}
+            <span className="text-sm leading-none">{getInitials(row.full_name)}</span>
+          </div>
+          <div className="min-w-0">
+            <div className="font-medium text-slate-900 truncate max-w-[180px] md:max-w-[240px]" title={row.full_name}>{row.full_name}</div>
+            <div className="text-xs text-slate-500 truncate max-w-[180px] md:max-w-[240px]" title={row.email}>{row.email || "—"}</div>
+          </div>
+        </div>
+      )
+    },
     {
       header: "CNIC",
       accessor: "cnic",
-      render: (row) => displayCNIC(row.cnic),
+      render: (row) => (
+        <span className="font-mono text-[13px] text-slate-700">{displayCNIC(row.cnic)}</span>
+      )
     },
     {
-      header: "Number",
+      header: "Phone",
       accessor: "mobile_number",
-      render: (row) => displayPhoneNumber(row.mobile_number),
+      render: (row) => (
+        <span className="font-mono text-[13px] text-slate-700">{displayPhoneNumber(row.mobile_number)}</span>
+      )
     },
     {
-      header: "Status",
-      accessor: "employment_status",
-      render: (row) => {
-        // Get current employment record to show status
-        const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
-                                 row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                 row.employmentRecords?.[0];
-        return currentEmployment?.employment_status || "N/A";
-      }
-    },
-    {
-      header: "Department",
-      accessor: "department",
-      render: (row) => {
-        // Get current employment record to show department
-        const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
-                                 row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                 row.employmentRecords?.[0];
-        return currentEmployment?.department?.name || currentEmployment?.department || "N/A";
-      }
-    },
-    {
-      header: "Designation",
+      header: "Role",
       accessor: "designation",
       render: (row) => {
-        // Get current employment record to show designation
-        const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
-                                 row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                 row.employmentRecords?.[0];
-        return currentEmployment?.designation?.title || currentEmployment?.designation || "N/A";
+        const ce = getCurrentEmployment(row);
+        const dept = ce?.department?.name || ce?.department || "N/A";
+        const desig = ce?.designation?.title || ce?.designation || "N/A";
+        return (
+          <div className="text-left">
+            <div className="text-slate-900 text-sm font-medium truncate max-w-[220px]" title={desig}>{desig}</div>
+            <div className="text-xs text-slate-500 truncate max-w-[220px]" title={dept}>{dept}</div>
+          </div>
+        );
       }
     },
     {
       header: "Scale",
       accessor: "scale_grade",
       render: (row) => {
-        // Get current employment record to show scale/grade
-
-        const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
-                                 row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                 row.employmentRecords?.[0];
-        return currentEmployment?.scale_grade?.name || currentEmployment?.scale_grade_id || "N/A";
+        const ce = getCurrentEmployment(row);
+        const scale = ce?.scale_grade?.name || ce?.scale_grade_id || "N/A";
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ring-1 ring-inset bg-slate-50 text-slate-700 ring-slate-200">{scale}</span>
+        );
       }
     },
-  ];
+    {
+      header: "Status",
+      accessor: "employment_status",
+      render: (row) => {
+        const ce = getCurrentEmployment(row);
+        const status = ce?.employment_status || "N/A";
+        return (
+          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ring-1 ring-inset ${statusColor(status)}`}>{status}</span>
+        );
+      }
+    },
+  ], [employees]);
 
   const actions = [
     {
       label: "View",
       handler: (row) => {
-        // Preload current page data for smooth return
         const currentParams = getCurrentParams();
         preloadEmployees(currentParams);
         employeeNav.toView(row.id);
@@ -135,7 +168,6 @@ const EmployeeTable = () => {
     {
       label: "Employment",
       handler: (row) => {
-        // Navigate to employment history page
         const currentParams = getCurrentParams();
         preloadEmployees(currentParams);
         navigate(`/employees/${row.id}/employment`);
@@ -145,7 +177,6 @@ const EmployeeTable = () => {
     {
       label: "edit",
       handler: (row) => {
-        // Preload current page data for smooth return
         const currentParams = getCurrentParams();
         preloadEmployees(currentParams);
         employeeNav.toEdit(row.id);
@@ -166,27 +197,25 @@ const EmployeeTable = () => {
                 <strong>CNIC:</strong> {row.cnic}
               </p>
               <p>
-                <strong>Department:</strong> {
-                  (() => {
-                    const currentEmployment = row.employmentRecords?.find(emp => emp.is_current === true) ||
-                                             row.employmentRecords?.find(emp => emp.effective_till === null || emp.end_date === null) ||
-                                             row.employmentRecords?.[0];
-                    return currentEmployment?.department?.name || currentEmployment?.department_id || "N/A";
-                  })()
-                }
+                <strong>Department:</strong>{" "}
+                {(() => {
+                  const currentEmployment = getCurrentEmployment(row);
+                  return (
+                    currentEmployment?.department?.name ||
+                    currentEmployment?.department_id ||
+                    "N/A"
+                  );
+                })()}
               </p>
-              <p className="text-red-600 font-medium">
-                This action cannot be undone.
-              </p>
+              <p className="text-red-600 font-medium">This action cannot be undone.</p>
             </div>
           ),
           onConfirm: async () => {
             try {
               await deleteEmployee(row.id);
-              // Success notification will be handled by the store or a toast system
             } catch (err) {
               console.error("Failed to delete employee:", err);
-              throw err; // Re-throw to keep modal open on error
+              throw err;
             }
           },
         });
@@ -209,12 +238,11 @@ const EmployeeTable = () => {
   }
 
   return (
-    <div className="w-[95%] h-full my-4 m-auto px-4 sm:px-6 lg:px-8 ">
-      {/* Subtle loading indicator for background updates */}
+    <div className="w-[95%] h-full my-4 m-auto px-2 sm:px-4 lg:px-6">
       {loading && !isInitialLoad && (
         <div className="fixed top-20 right-4 z-50 bg-white shadow-lg rounded-lg px-4 py-2 border border-gray-200">
           <div className="flex items-center text-sm text-gray-600">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-500 mr-2"></div>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-500 mr-2" />
             Updating data...
           </div>
         </div>
@@ -224,7 +252,7 @@ const EmployeeTable = () => {
         <Loader size="large" text="Loading employees..." />
       ) : (
         <DataTable
-          title="All Employees"
+          title="Employees"
           columns={columns}
           data={employees || []}
           actions={actions}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { usePageState } from "../hooks/usePageState";
 
 // Heroicons
@@ -51,9 +51,9 @@ const ViewIcon = () => (
   </svg>
 );
 
-const SearchIcon = () => (
+const EmploymentIcon = () => (
   <svg
-    className="w-5 h-5 text-white"
+    className="w-5 h-5"
     fill="none"
     stroke="currentColor"
     viewBox="0 0 24 24"
@@ -62,7 +62,13 @@ const SearchIcon = () => (
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="2"
-      d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 1016.65 16.65z"
+      d="M9 12h6m-6 4h6M9 8h6m-8 8h-.01M7 8h-.01M7 12h-.01M7 16h-.01M17 8h.01M17 12h.01M17 16h.01"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"
     />
   </svg>
 );
@@ -160,108 +166,92 @@ const DataTable = ({
         return {
           icon: <EditIcon />,
           className:
-            " rounded-full text-green-600 hover:bg-green-100 hover:text-green-700 transition-colors duration-150",
+            "rounded-full text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors duration-150 border border-green-200 px-2 py-2",
         };
       case "delete":
         return {
           icon: <DeleteIcon />,
           className:
-            "p-2 rounded-full text-red-600 hover:bg-red-100 hover:text-red-700 transition-colors duration-150",
+            "rounded-full text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors duration-150 border border-red-200 px-2 py-2",
         };
       case "view":
         return {
           icon: <ViewIcon />,
           className:
-            " rounded-full text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors duration-150",
+            "rounded-full text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150 border border-blue-200 px-2 py-2",
+        };
+      case "employment":
+        return {
+          icon: <EmploymentIcon />,
+          className:
+            "rounded-full text-purple-600 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-150 border border-purple-200 px-2 py-2",
         };
       default:
         return {
           icon: null,
           className:
-            " rounded-full text-gray-600 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-150",
+            "rounded-full text-gray-600 hover:bg-gray-50 hover:text-gray-700 transition-colors duration-150 border border-gray-200 px-2 py-2",
         };
     }
   };
 
   return (
-    <div className="w-full bg-gradient-to-b from-gray-50 to-gray-100 rounded-2xl shadow-lg p-3 sm:p-6">
-      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 text-center mb-4 sm:mb-6">{title}</h1>
-      {/* Search Bar */}
-      {/* <div className="mb-6 flex items-center space-x-3 max-w-md">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by name, CNIC, phone number..."
-            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white text-gray-700 placeholder-gray-400 shadow-sm"
-          />
+    <div className="w-full bg-white/90 backdrop-blur rounded-2xl shadow-xl ring-1 ring-slate-200 p-3 sm:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900">{title}</h1>
+        <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+          <span>Total:</span>
+          <span className="font-semibold text-slate-700">{Array.isArray(data) ? data.length : 0}</span>
         </div>
-        <button
-          onClick={handleSearch}
-          className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300 transition-colors duration-150 flex items-center space-x-2"
-        >
-          <SearchIcon />
-          <span>Search</span>
-        </button>
-      </div> */}
+      </div>
 
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        {/* Left: Search bar */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-1 items-center space-x-3 max-w-md">
           <div className="relative flex-1">
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name, CNIC, phone number..."
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white text-gray-700 placeholder-gray-400 shadow-sm"
+              placeholder="Search by any visible column..."
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white text-slate-700 placeholder-slate-400 shadow-sm"
             />
           </div>
           <button
             onClick={handleSearch}
-            className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-300 transition-colors duration-150 flex items-center space-x-2"
+            className="px-4 py-2.5 bg-sky-600 text-white rounded-xl hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-300 transition-colors duration-150"
           >
-            {/* <SearchIcon /> */}
-            <span>Search</span>
+            Search
           </button>
         </div>
-
-        {/* Right: Create Employee button */}
         <div className="flex justify-end">
-          <button
-            onClick={() => navigate("/employees/create")}
-            className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-colors duration-150"
+          <Link
+            to="/employees/create"
+            className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-colors duration-150"
           >
             + Create Employee
-          </button>
+          </Link>
         </div>
       </div>
 
-      {/* Mobile scroll hint */}
-      <div className="block sm:hidden text-xs text-gray-500 text-center mb-2">
+      <div className="block sm:hidden text-xs text-slate-500 text-center mb-2">
         ← Swipe left/right to view all columns →
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border border-gray-100 rounded-xl shadow-md">
-          <thead className="bg-background-dark text-white">
+      <div className="overflow-x-auto rounded-xl ring-1 ring-slate-200">
+        <table className="min-w-full bg-white rounded-xl">
+          <thead className="bg-slate-800 text-white sticky top-0 z-10">
             <tr>
-              <th className="px-3 py-3 text-left text-xs sm:text-sm font-medium whitespace-nowrap">
-                Sr. No.
-              </th>
+              <th className="px-3 py-3 text-left text-xs sm:text-sm font-medium whitespace-nowrap">Sr. No.</th>
               {columns.map((column) => (
                 <th
                   key={column.accessor}
-                  className="px-2 sm:px-3 py-3 text-center text-xs sm:text-sm font-medium cursor-pointer hover:bg-teal-500 transition-colors duration-150 whitespace-nowrap"
+                  className="px-2 sm:px-3 py-3 text-left text-xs sm:text-sm font-medium cursor-pointer hover:bg-slate-700 transition-colors duration-150 whitespace-nowrap"
                   onClick={() => handleSort(column.accessor)}
                 >
-                  <div className="flex items-center justify-center">
-                    <span className="truncate max-w-[120px] sm:max-w-none">
-                      {column.header}
-                    </span>
+                  <div className="flex items-center justify-start gap-1">
+                    <span className="truncate max-w-[160px] sm:max-w-none">{column.header}</span>
                     {sortConfig.key === column.accessor && (
-                      <span className="ml-1 sm:ml-2 text-teal-100 flex-shrink-0">
+                      <span className="ml-1 sm:ml-2 text-slate-300 flex-shrink-0">
                         {sortConfig.direction === "asc" ? "↑" : "↓"}
                       </span>
                     )}
@@ -269,282 +259,122 @@ const DataTable = ({
                 </th>
               ))}
               {actions.length > 0 && (
-                <th className="px-2 sm:px-3 py-3 text-center text-xs sm:text-sm font-medium whitespace-nowrap">
-                  Actions
-                </th>
+                <th className="px-2 sm:px-3 py-3 text-center text-xs sm:text-sm font-medium whitespace-nowrap">Actions</th>
               )}
             </tr>
           </thead>
           <tbody>
             {paginatedData.length === 0 ? (
               <tr>
-                <td
-                  colSpan={columns.length + 2}
-                  className="px-6 py-8 bg-white text-center"
-                >
+                <td colSpan={columns.length + 2} className="px-6 py-8 bg-white text-center">
                   <div className="flex justify-center items-center">
                     <div>
-                      <svg
-                        className="mx-auto h-12 w-12 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
+                      <svg className="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <h3 className="mt-2 text-lg font-medium text-gray-800">
-                        No Employees Found
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Try adjusting your search or add new employees.
-                      </p>
+                      <h3 className="mt-2 text-lg font-medium text-slate-800">No Results</h3>
+                      <p className="mt-1 text-sm text-slate-500">Try adjusting your search or add new employees.</p>
                     </div>
                   </div>
                 </td>
               </tr>
             ) : (
-            paginatedData.map((row, index) => (
-              <tr
-                key={row.id || index}
-                className={`border-b border-gray-100 transition-colors duration-200 ${
-                  index % 2 === 0 ? "bg-gray-50" : "bg-white"
-                } hover:bg-gray-100`}
-              >
-                <td className="px-2 sm:px-3 py-2 sm:py-3 text-center text-gray-700 text-xs sm:text-sm font-medium whitespace-nowrap">
-                  {(currentPage - 1) * pageSize + index + 1}
-                </td>
-                {columns.map((column) => (
-                  <td
-                    key={column.accessor}
-                    className="px-2 sm:px-3 py-2 sm:py-3 text-center text-gray-700 text-xs sm:text-sm"
-                  >
-                    <div className="max-w-[100px] sm:max-w-[150px] md:max-w-[200px] mx-auto">
-                      <div
-                        className="truncate"
-                        title={column.render
-                          ? String(column.render(row))
-                          : String(column.accessor.includes(".")
-                            ? column.accessor.split(".").reduce((o, i) => o?.[i] || "", row)
-                            : row[column.accessor] || "")
-                        }
-                      >
-                        {column.render
-                          ? column.render(row)
-                          : column.accessor.includes(".")
-                          ? column.accessor
-                              .split(".")
-                              .reduce((o, i) => o?.[i] || "", row)
-                          : row[column.accessor] || ""}
+              paginatedData.map((row, index) => (
+                <tr
+                  key={row.id || index}
+                  className={`border-b border-slate-100 transition-colors duration-150 ${index % 2 === 0 ? "bg-white" : "bg-slate-50"} hover:bg-sky-50`}
+                >
+                  <td className="px-2 sm:px-3 py-3 text-left text-slate-700 text-xs sm:text-sm font-medium whitespace-nowrap">
+                    {(currentPage - 1) * pageSize + index + 1}
+                  </td>
+                  {columns.map((column) => {
+                    const hasRenderer = typeof column.render === 'function';
+                    const value = !hasRenderer
+                      ? (column.accessor.includes(".")
+                        ? column.accessor.split(".").reduce((o, i) => o?.[i] || "", row)
+                        : row[column.accessor] || "")
+                      : null;
+                    return (
+                      <td key={column.accessor} className="px-2 sm:px-3 py-3 text-left text-slate-700 text-xs sm:text-sm align-middle">
+                        <div className={`max-w-[220px] md:max-w-[280px] ${hasRenderer ? 'overflow-visible' : ''}`}>
+                          {hasRenderer ? (
+                            column.render(row)
+                          ) : (
+                            <div className="truncate" title={String(value)}>
+                              {value}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  {actions.length > 0 && (
+                    <td className="px-2 sm:px-3 py-3 text-sm whitespace-nowrap">
+                      <div className="flex justify-start gap-2">
+                        {actions.map((action) => {
+                          const { icon, className } = getActionStyles(action.label);
+                          return (
+                            <button
+                              key={action.label}
+                              onClick={() => action.handler(row)}
+                              className={`${className}`}
+                              title={action.label}
+                            >
+                              {icon}
+                            </button>
+                          );
+                        })}
                       </div>
-                    </div>
-                  </td>
-                ))}
-                {actions.length > 0 && (
-                  <td className="px-2 sm:px-3 py-2 sm:py-3 text-sm whitespace-nowrap">
-                    <div className="flex justify-center space-x-1 sm:space-x-2">
-                      {actions.map((action) => {
-                        const { icon, className } = getActionStyles(
-                          action.label
-                        );
-                        return (
-                          <button
-                            key={action.label}
-                            onClick={() => action.handler(row)}
-                            className={`${className} text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2`}
-                            title={action.label}
-                          >
-                            <span className="block sm:hidden">{icon}</span>
-                            <span className="hidden sm:block">{icon}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </td>
-                )}
-              </tr>
-            ))
-          )}
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* Modern Professional Pagination */}
-      <div className="mt-8 border-t border-gray-200 bg-white px-4 py-6 sm:px-6">
+      <div className="mt-6 border-t border-slate-200 bg-white/70 px-4 py-4 sm:px-6 rounded-b-xl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Results Summary & Page Size Selector */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            {/* Results Summary */}
-            <div className="text-sm text-gray-700">
-              Showing{" "}
-              <span className="font-medium">
-                {Math.min(
-                  (currentPage - 1) * pageSize + 1,
-                  filteredData.length
-                )}
-              </span>{" "}
-              to{" "}
-              <span className="font-medium">
-                {Math.min(currentPage * pageSize, filteredData.length)}
-              </span>{" "}
-              of <span className="font-medium">{filteredData.length}</span>{" "}
-              results
-            </div>
-
-            {/* Page Size Selector */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">Show:</label>
-              <select
-                value={pageSize}
-                onChange={(e) => setPageSize(parseInt(e.target.value))}
-                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <span className="text-sm text-gray-700">per page</span>
-            </div>
+          <div className="text-sm text-slate-700">
+            Showing <span className="font-medium">{Math.min((currentPage - 1) * pageSize + 1, filteredData.length)}</span>
+            {" "}to{" "}
+            <span className="font-medium">{Math.min(currentPage * pageSize, filteredData.length)}</span>{" "}
+            of <span className="font-medium">{filteredData.length}</span> results
           </div>
 
-          {/* Pagination Navigation */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center sm:justify-end">
-              <nav
-                className="isolate inline-flex -space-x-px rounded-md shadow-sm"
-                aria-label="Pagination"
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-slate-700">Show:</label>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(parseInt(e.target.value))}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+            >
+              {[5, 10, 20, 50].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {/* Previous Button */}
-                <button
-                  onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center rounded-l-md px-3 py-2 text-sm font-medium text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span className="ml-1 hidden sm:inline">Previous</span>
-                </button>
-
-                {/* Page Numbers */}
-                {(() => {
-                  const pages = [];
-                  const showPages = 5; // Number of page buttons to show
-                  let startPage = Math.max(
-                    1,
-                    currentPage - Math.floor(showPages / 2)
-                  );
-                  let endPage = Math.min(totalPages, startPage + showPages - 1);
-
-                  // Adjust start if we're near the end
-                  if (endPage - startPage + 1 < showPages) {
-                    startPage = Math.max(1, endPage - showPages + 1);
-                  }
-
-                  // First page + ellipsis
-                  if (startPage > 1) {
-                    pages.push(
-                      <button
-                        key={1}
-                        onClick={() => setCurrentPage(1)}
-                        className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
-                      >
-                        1
-                      </button>
-                    );
-                    if (startPage > 2) {
-                      pages.push(
-                        <span
-                          key="ellipsis1"
-                          className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300"
-                        >
-                          ...
-                        </span>
-                      );
-                    }
-                  }
-
-                  // Page numbers
-                  for (let i = startPage; i <= endPage; i++) {
-                    pages.push(
-                      <button
-                        key={i}
-                        onClick={() => setCurrentPage(i)}
-                        className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 ${
-                          i === currentPage
-                            ? "z-10 bg-teal-600 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
-                            : "text-gray-900"
-                        }`}
-                      >
-                        {i}
-                      </button>
-                    );
-                  }
-
-                  // Last page + ellipsis
-                  if (endPage < totalPages) {
-                    if (endPage < totalPages - 1) {
-                      pages.push(
-                        <span
-                          key="ellipsis2"
-                          className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300"
-                        >
-                          ...
-                        </span>
-                      );
-                    }
-                    pages.push(
-                      <button
-                        key={totalPages}
-                        onClick={() => setCurrentPage(totalPages)}
-                        className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
-                      >
-                        {totalPages}
-                      </button>
-                    );
-                  }
-
-                  return pages;
-                })()}
-
-                {/* Next Button */}
-                <button
-                  onClick={() =>
-                    setCurrentPage(Math.min(currentPage + 1, totalPages))
-                  }
-                  disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center rounded-r-md px-3 py-2 text-sm font-medium text-gray-500 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
-                >
-                  <span className="mr-1 hidden sm:inline">Next</span>
-                  <svg
-                    className="h-4 w-4"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </nav>
+                Prev
+              </button>
+              <span className="text-sm text-slate-600">
+                Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages || 1}</span>
+              </span>
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages || 1, currentPage + 1))}
+                disabled={currentPage >= (totalPages || 1)}
+                className="px-3 py-2 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
