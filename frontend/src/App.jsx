@@ -38,6 +38,9 @@ import AttendanceDashboard from "./features/attendance/pages/AttendanceDashboard
 import AttendanceLocations from "./features/attendance/pages/AttendanceLocations";
 import AttendanceLocationDetail from "./features/attendance/pages/AttendanceLocationDetail";
 import AttendanceDevices from "./features/attendance/pages/AttendanceDevices";
+import AttendanceLocationDetailHome from "./features/attendance/pages/AttendanceLocationDetailHome";
+import LocationFMOPage from "./features/attendance/pages/LocationFMOPage";
+import LocationRosterPage from "./features/attendance/pages/LocationRosterPage";
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -317,7 +320,23 @@ function App() {
               path="attendance/locations/:id"
               element={
                 <PrivateRoute permissions={["attendance.read"]}>
-                  <AttendanceLocationDetail />
+                  <AttendanceLocationDetailHome />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations/:id/fmo"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <LocationFMOPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations/:id/roster"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <LocationRosterPage />
                 </PrivateRoute>
               }
             />
