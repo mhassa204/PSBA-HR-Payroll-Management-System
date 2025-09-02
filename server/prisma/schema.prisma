@@ -41,6 +41,7 @@ model Employee {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   is_deleted              Boolean                  @default(false)
+  deviceUserId            String?                  @unique
   educationQualifications EducationQualification[]
   documents               EmployeeDocument[]
   employmentRecords       Employment[]

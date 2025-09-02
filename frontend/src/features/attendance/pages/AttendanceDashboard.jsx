@@ -3,11 +3,13 @@ import { attendanceService } from '../services/attendanceService';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { useToastContext } from '../../../components/ui/ToastContainer';
 import { useAuthStore } from '../../auth/authStore';
+import AssignDeviceUserDialog from '../components/AssignDeviceUserDialog';
 
 const AttendanceDashboard = () => {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchingId, setFetchingId] = useState(null);
+  const [assignOpen, setAssignOpen] = useState(false);
   const { showError, showSuccess } = useToastContext();
   const can = useAuthStore(s=>s.can);
 
@@ -42,9 +44,14 @@ const AttendanceDashboard = () => {
           <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Attendance</h1>
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Fetch and save daily check-ins/outs from devices</p>
         </div>
-        {can('attendance.fetch') && (
-          <button onClick={async()=>{ const res = await attendanceService.fetchAll().catch(()=>null); if(res) showSuccess(`Fetched ${res.totalFetched}, saved ${res.totalSaved}`)}} className="btn btn-primary">Fetch All</button>
-        )}
+        <div className="flex items-center gap-3">
+          {can('attendance.read') && (
+            <button onClick={()=>setAssignOpen(true)} className="btn btn-secondary">Assign Device User IDs</button>
+          )}
+          {can('attendance.fetch') && (
+            <button onClick={async()=>{ const res = await attendanceService.fetchAll().catch(()=>null); if(res) showSuccess(`Fetched ${res.totalFetched}, saved ${res.totalSaved}`)}} className="btn btn-primary">Fetch All</button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -74,6 +81,8 @@ const AttendanceDashboard = () => {
         </table>
         {devices.length===0 && <div className="text-center py-10 text-gray-500">No devices found.</div>}
       </div>
+
+      <AssignDeviceUserDialog open={assignOpen} onClose={()=>setAssignOpen(false)} />
     </div>
   );
 };

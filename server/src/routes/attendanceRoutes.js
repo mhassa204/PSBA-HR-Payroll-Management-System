@@ -10,4 +10,8 @@ router.post('/devices/:id/fetch', isAuthenticated, authorize('attendance.fetch')
 // Pull for all devices
 router.post('/fetch-all', isAuthenticated, authorize('attendance.fetch'), ctrl.fetchAndSaveForAll);
 
+// New: employee-device user id management
+router.get('/employees', isAuthenticated, authorize('attendance.read'), ctrl.listEmployeesForDeviceUsers);
+router.put('/employees/:employeeId/device-user', isAuthenticated, authorize('attendance.map'), ctrl.setEmployeeDeviceUserId);
+
 module.exports = router;

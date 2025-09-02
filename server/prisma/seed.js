@@ -289,16 +289,23 @@ async function main() {
   // Ensure attendance permissions exist
   await prisma.permission.upsert({ where: { key: 'attendance.read' }, create: { key: 'attendance.read', resource: 'attendance', action: 'read' }, update: {} });
   await prisma.permission.upsert({ where: { key: 'attendance.fetch' }, create: { key: 'attendance.fetch', resource: 'attendance', action: 'fetch' }, update: {} });
+  // New: permission to map device users to employees
+  await prisma.permission.upsert({ where: { key: 'attendance.map' }, create: { key: 'attendance.map', resource: 'attendance', action: 'map' }, update: {} });
 
   // Link permissions to roles (skip Super Admin explicit perms)
   for (const role of createdRoles) {
     const orig = roles.find(r => r.name === role.name);
     if (!orig) continue;
     if (orig.allowed_actions.includes('*')) continue;
-    const perms = await prisma.permission.findMany({ where: { key: { in: orig.allowed_actions } } });
+    const extraPerms = await prisma.permission.findMany({ where: { key: { in: orig.allowed_actions } } });
+    // If HR Admin, ensure attendance.map is granted
+    const attendanceMap = await prisma.permission.findUnique({ where: { key: 'attendance.map' } });
+    const permsToCreate = extraPerms.map(p => ({ permission_id: p.id }));
+    if (orig.name === 'HR Admin' && attendanceMap) permsToCreate.push({ permission_id: attendanceMap.id });
+
     await prisma.role.update({
       where: { id: role.id },
-      data: { rolePermissions: { create: perms.map(p => ({ permission_id: p.id })) } }
+      data: { rolePermissions: { create: permsToCreate } }
     });
   }
 

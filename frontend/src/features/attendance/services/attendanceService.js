@@ -13,6 +13,16 @@ class AttendanceService {
     const { data } = await axiosInstance.post('/attendance/fetch-all');
     return data;
   }
+  // New: list employees with device user ids
+  async listEmployees(search = '') {
+    const { data } = await axiosInstance.get('/attendance/employees', { params: search ? { search } : {} });
+    return data.employees || [];
+  }
+  // New: set or clear device user id for an employee
+  async setEmployeeDeviceUserId(employeeId, deviceUserId) {
+    const { data } = await axiosInstance.put(`/attendance/employees/${employeeId}/device-user`, { deviceUserId });
+    return data.employee;
+  }
 }
 
 export const attendanceService = new AttendanceService();
