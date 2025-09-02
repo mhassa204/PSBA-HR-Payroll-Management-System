@@ -23,6 +23,11 @@ class AttendanceService {
     const { data } = await axiosInstance.put(`/attendance/employees/${employeeId}/device-user`, { deviceUserId });
     return data.employee;
   }
+  // New: list locations for attendance overview
+  async listLocations() {
+    const { data } = await axiosInstance.get('/locations');
+    return data.locations || [];
+  }
 }
 
 export const attendanceService = new AttendanceService();

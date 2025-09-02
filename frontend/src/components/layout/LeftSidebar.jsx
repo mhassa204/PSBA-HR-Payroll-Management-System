@@ -154,7 +154,11 @@ const LeftSidebar = () => {
       icon: CalendarIcon,
       description: 'Device Logs',
       color: 'bg-sky-600',
-      show: () => can('attendance.read')
+      show: () => can('attendance.read'),
+      children: [
+        { name: 'Locations', href: '/attendance/locations', icon: ViewColumnsIcon, show: () => can('attendance.read') },
+        { name: 'Devices', href: '/attendance/devices', icon: ViewColumnsIcon, show: () => can('attendance.read') }
+      ]
     },
     { 
       name: 'Audit Logs', 
@@ -190,7 +194,7 @@ const LeftSidebar = () => {
   };
 
   const isChildActive = (children) => {
-    return children?.some(child => location.pathname === child.href);
+    return children?.some(child => location.pathname.startsWith(child.href));
   };
 
   // Auto-expand any parent whose child is active
