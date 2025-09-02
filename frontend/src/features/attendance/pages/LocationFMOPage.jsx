@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
+import { exportToCSV, exportToExcel } from '../../../lib/exportUtils';
+import { toastBus } from '../../../utils/toastBus';
 
 function getPayrollRangeForMonth(year, month /* 0-based */) {
   // cycle: 21st of given month to 20th of next month
@@ -108,6 +110,48 @@ const LocationFMOPage = () => {
     monthOptions.push({ value: { y: d.getUTCFullYear(), m: d.getUTCMonth() }, label: d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }) });
   }
 
+  // Export helpers
+  const mapFmoForExport = (rowsForExport, daysForExport) => {
+    // Flatten row into object with dynamic date columns and totals
+    return rowsForExport.map(r => {
+      const base = {
+        SrNo: r.sr,
+        BiometricID: r.biometricId || '',
+        CNIC: r.cnic || '',
+        Name: r.name || '',
+        Designation: r.designation || '',
+        CostCenter: r.roleTag || ''
+      };
+      daysForExport.forEach((d, idx) => {
+        const colKey = `${d.dow} ${d.label}`; // align with headers
+        base[colKey] = r.marks[idx] || '';
+      });
+      base.TotalDays = r.totals?.totalDays ?? '';
+      base.Present = r.totals?.present ?? '';
+      base.NotMark = r.totals?.notMark ?? '';
+      base.Absent = r.totals?.absent ?? '';
+      return base;
+    });
+  };
+
+  const titleText = `Attendance FMO - ${data?.location?.name || ''} (${data?.range?.start} to ${data?.range?.end})`;
+
+  const handleExport = (type, onlyFiltered) => {
+    const rowsSrc = onlyFiltered ? filteredRows : rows;
+    if (!rowsSrc?.length) return;
+    const payload = mapFmoForExport(rowsSrc, days);
+    const headers = [
+      'SrNo','BiometricID','CNIC','Name','Designation','CostCenter',
+      ...days.map(d=>`${d.dow} ${d.label}`),
+      'TotalDays','Present','NotMark','Absent'
+    ];
+    const filename = `FMO_${data?.location?.name || 'Location'}_${data?.range?.start}_to_${data?.range?.end}.${type==='csv'?'csv':'xlsx'}`;
+    if (type === 'csv') exportToCSV(filename, payload, headers, titleText);
+    else exportToExcel(filename, payload, 'FMO', headers, titleText);
+    const mode = onlyFiltered ? 'filtered' : 'all';
+    toastBus.emit({ type: 'success', message: `Exported ${rowsSrc.length} ${mode} rows to ${type.toUpperCase()}.` });
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading attendance..." /></div>;
   if (!data?.success) return <div className="p-6 text-red-600">Failed to load</div>;
 
@@ -119,7 +163,7 @@ const LocationFMOPage = () => {
           <p className="text-sm text-gray-600">{data.range.start} to {data.range.end}</p>
         </div>
         <div className="flex items-center gap-2">
-          <select className="border rounded px-2 py-1 text-sm" value={`${selYear}-${selMonth}`} onChange={(e)=>{
+          <select className="border rounded px-2 py-1 text-sm hover:bg-gray-50" value={`${selYear}-${selMonth}`} onChange={(e)=>{
             const [y,m] = e.target.value.split('-').map(n=>parseInt(n,10));
             setSelYear(y); setSelMonth(m);
           }}>
@@ -127,8 +171,23 @@ const LocationFMOPage = () => {
               <option key={idx} value={`${opt.value.y}-${opt.value.m}`}>{opt.label}</option>
             ))}
           </select>
-          <Link to={`/attendance/locations/${id}`} className="btn btn-secondary">Back</Link>
+          <div className="relative group">
+            <button className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Export ▾</button>
+            <div className="absolute right-0 mt-1 hidden group-hover:block bg-white border rounded shadow z-20 min-w-56">
+              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', true)}>Export Filtered CSV</button>
+              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', true)}>Export Filtered Excel</button>
+              <div className="my-1 border-t" />
+              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', false)}>Export All CSV</button>
+              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', false)}>Export All Excel</button>
+            </div>
+          </div>
+          <Link to={`/attendance/locations/${id}`} className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Back</Link>
         </div>
+      </div>
+
+      {/* Report Title Above Table */}
+      <div className="mb-2 text-center">
+        <h2 className="text-base font-semibold">{titleText}</h2>
       </div>
 
       {/* Filters */}
@@ -151,7 +210,7 @@ const LocationFMOPage = () => {
               <th className="px-3 py-2 text-xs text-gray-500">Designation</th>
               <th className="px-3 py-2 text-xs text-gray-500">Cost Center</th>
               {days.map((d)=> (
-                <th key={d.label} className="px-2 py-2 text-center text-[11px] text-gray-500">{d.label}<br/><span className="text-[10px]">{d.dow}</span></th>
+                <th key={d.label} className="px-2 py-2 text-center text-[11px] text-gray-500">{d.dow} {d.label}</th>
               ))}
               <th className="px-3 py-2 text-xs text-gray-500">Total Days</th>
               <th className="px-3 py-2 text-xs text-gray-500">Present</th>

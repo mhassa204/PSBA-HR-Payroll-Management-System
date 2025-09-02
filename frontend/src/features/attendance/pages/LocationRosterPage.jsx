@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
+import { exportToCSV, exportToExcel } from '../../../lib/exportUtils';
+import { toastBus } from '../../../utils/toastBus';
 
 function getPayrollRangeForMonth(year, month /* 0-based */) {
   const start = new Date(Date.UTC(year, month, 21));
@@ -120,6 +122,49 @@ const LocationRosterPage = () => {
     monthOptions.push({ value: { y: d.getUTCFullYear(), m: d.getUTCMonth() }, label: d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }) });
   }
 
+  const titleText = `Attendance vs Duty Roster - ${data?.location?.name || ''} (${data?.range?.start} to ${data?.range?.end})`;
+
+  // Export helpers
+  const mapRosterForExport = (rowsForExport) => {
+    return rowsForExport.map(r => ({
+      EmployeeID: r.employeeId ?? '',
+      BiometricID: r.biometricId ?? '',
+      CNIC: r.cnic ?? '',
+      Name: r.name ?? '',
+      Designation: r.designation ?? '',
+      ActualCostCenter: r.actualCostCenter ?? '',
+      BiometricCostCenter: r.biometricCostCenter ?? '',
+      Date: r.date ?? '',
+      DateLabel: r.dateLabel ?? '',
+      Time1: r.time1 ?? '',
+      Time2: r.time2 ?? '',
+      DutyIn: r.dutyIn ?? '',
+      DutyOut: r.dutyOut ?? '',
+      DutyTimings: r.dutyTimings ?? '',
+      ActualPerformed: r.actualPerformed ?? '',
+      PerformedStatus: r.performedStatus ?? '',
+      TimeInLate: r.timeInLate ?? '',
+      TimeInStatus: r.timeInStatus ?? '',
+      SingleMark: r.singleMark ? 'Yes' : '',
+      TimeOutEarlyLate: r.timeOutEarlyLate ?? '',
+      TimeOutStatus: r.timeOutStatus ?? ''
+    }));
+  };
+
+  const handleExport = (type, onlyFiltered) => {
+    const rowsSrc = onlyFiltered ? filteredRows : rows;
+    if (!rowsSrc?.length) return;
+    const payload = mapRosterForExport(rowsSrc);
+    const headers = [
+      'EmployeeID','BiometricID','CNIC','Name','Designation','ActualCostCenter','BiometricCostCenter','Date','DateLabel','Time1','Time2','DutyIn','DutyOut','DutyTimings','ActualPerformed','PerformedStatus','TimeInLate','TimeInStatus','SingleMark','TimeOutEarlyLate','TimeOutStatus'
+    ];
+    const filename = `Roster_${data?.location?.name || 'Location'}_${data?.range?.start}_to_${data?.range?.end}.${type==='csv'?'csv':'xlsx'}`;
+    if (type === 'csv') exportToCSV(filename, payload, headers, titleText);
+    else exportToExcel(filename, payload, 'Roster', headers, titleText);
+    const mode = onlyFiltered ? 'filtered' : 'all';
+    toastBus.emit({ type: 'success', message: `Exported ${rowsSrc.length} ${mode} rows to ${type.toUpperCase()}.` });
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading attendance..." /></div>;
   if (!data?.success) return <div className="p-6 text-red-600">Failed to load</div>;
 
@@ -131,7 +176,7 @@ const LocationRosterPage = () => {
           <p className="text-sm text-gray-600">{data.range.start} to {data.range.end}</p>
         </div>
         <div className="flex items-center gap-2">
-          <select className="border rounded px-2 py-1 text-sm" value={`${selYear}-${selMonth}`} onChange={(e)=>{
+          <select className="border rounded px-2 py-1 text-sm hover:bg-gray-50" value={`${selYear}-${selMonth}`} onChange={(e)=>{
             const [y,m] = e.target.value.split('-').map(n=>parseInt(n,10));
             setSelYear(y); setSelMonth(m);
           }}>
@@ -139,8 +184,23 @@ const LocationRosterPage = () => {
               <option key={idx} value={`${opt.value.y}-${opt.value.m}`}>{opt.label}</option>
             ))}
           </select>
-          <Link to={`/attendance/locations/${id}`} className="btn btn-secondary">Back</Link>
+          <div className="relative group">
+            <button className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Export ▾</button>
+            <div className="absolute right-0 mt-1 hidden group-hover:block bg-white border rounded shadow z-20 min-w-56">
+              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', true)}>Export Filtered CSV</button>
+              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', true)}>Export Filtered Excel</button>
+              <div className="my-1 border-t" />
+              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', false)}>Export All CSV</button>
+              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', false)}>Export All Excel</button>
+            </div>
+          </div>
+          <Link to={`/attendance/locations/${id}`} className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Back</Link>
         </div>
+      </div>
+
+      {/* Report Title Above Table */}
+      <div className="mb-2 text-center">
+        <h2 className="text-base font-semibold">{titleText}</h2>
       </div>
 
       {/* Filters */}
