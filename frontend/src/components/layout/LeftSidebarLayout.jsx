@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import { Outlet } from 'react-router-dom';
 import LeftSidebar from './LeftSidebar';
 
 /**
@@ -56,7 +57,7 @@ const LeftSidebarLayout = ({ children }) => {
       <div className="lg:ml-72 min-h-screen">
         {/* Content Container */}
         <div className="p-6 pt-20 lg:pt-6">
-          {children}
+          {children || <Outlet />}
         </div>
       </div>
     </div>
@@ -64,7 +65,7 @@ const LeftSidebarLayout = ({ children }) => {
 };
 
 LeftSidebarLayout.propTypes = {
-  children: PropTypes.node.isRequired
+  children: PropTypes.node
 };
 
 export default LeftSidebarLayout;

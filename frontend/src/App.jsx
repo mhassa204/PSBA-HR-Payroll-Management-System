@@ -62,90 +62,78 @@ function App() {
     <ToastProvider>
       <ConfirmationProvider>
         <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/unauthorized"
-              element={<div>Unauthorized Access</div>}
-            />
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/unauthorized" element={<div>Unauthorized Access</div>} />
 
-            {/* Protected Routes with Left Sidebar Layout */}
+          {/* App layout route keeps sidebar mounted across navigations */}
+          <Route element={<LeftSidebarLayout />}>
+            {/* Home */}
             <Route
-              path="/"
+              index
               element={
                 <PrivateRoute permissions={["employees.read","departments.read","designations.read"]}>
-                  <LeftSidebarLayout>
-                    <div className="text-center py-20">
-                      <h1 className="text-4xl font-bold text-slate-800 mb-4">Welcome to PSBA HR Portal</h1>
-                      <p className="text-xl text-slate-600">Select an option from the sidebar to get started</p>
-                    </div>
-                  </LeftSidebarLayout>
+                  <div className="text-center py-20">
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">Welcome to PSBA HR Portal</h1>
+                    <p className="text-xl text-slate-600">Select an option from the sidebar to get started</p>
+                  </div>
                 </PrivateRoute>
               }
             />
 
+            {/* Dashboard */}
             <Route
-              path="/dashboard"
+              path="dashboard"
               element={
                 <PrivateRoute permissions={["employees.read","reports.read"]}>
-                  <LeftSidebarLayout>
-                    <div className="text-center py-20">
-                      <h1 className="text-4xl font-bold text-slate-800 mb-4">Dashboard</h1>
-                      <p className="text-xl text-slate-600">Overview and analytics coming soon</p>
-                    </div>
-                  </LeftSidebarLayout>
+                  <div className="text-center py-20">
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">Dashboard</h1>
+                    <p className="text-xl text-slate-600">Overview and analytics coming soon</p>
+                  </div>
                 </PrivateRoute>
               }
             />
 
             {/* Roster routes */}
             <Route
-              path="/rosters"
+              path="rosters"
               element={
                 <PrivateRoute permissions={["roster.read"]}>
-                  <LeftSidebarLayout>
-                    <RosterList />
-                  </LeftSidebarLayout>
+                  <RosterList />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/rosters/create"
+              path="rosters/create"
               element={
                 <PrivateRoute permissions={["roster.create"]}>
-                  <LeftSidebarLayout>
-                    <CreateRoster />
-                  </LeftSidebarLayout>
+                  <CreateRoster />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/rosters/:id"
+              path="rosters/:id"
               element={
                 <PrivateRoute permissions={["roster.read"]}>
-                  <LeftSidebarLayout>
-                    <ViewRoster />
-                  </LeftSidebarLayout>
+                  <ViewRoster />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/rosters/:id/edit"
+              path="rosters/:id/edit"
               element={
                 <PrivateRoute permissions={["roster.update"]}>
-                  <LeftSidebarLayout>
-                    <EditRoster />
-                  </LeftSidebarLayout>
+                  <EditRoster />
                 </PrivateRoute>
               }
             />
 
+            {/* Employees */}
             <Route
-              path="/employees"
+              path="employees"
               element={
                 <PrivateRoute permissions={["employees.read"]}>
-                  <LeftSidebarLayout>
-                    <EmployeeTable />
-                  </LeftSidebarLayout>
+                  <EmployeeTable />
                 </PrivateRoute>
               }
             />
@@ -153,9 +141,7 @@ function App() {
               path="employees/view/:id"
               element={
                 <PrivateRoute permissions={["employees.read"]}>
-                  <LeftSidebarLayout>
-                    <EnhancedUserProfile />
-                  </LeftSidebarLayout>
+                  <EnhancedUserProfile />
                 </PrivateRoute>
               }
             />
@@ -163,196 +149,161 @@ function App() {
               path="employees/:id/edit"
               element={
                 <PrivateRoute permissions={["employees.update"]}>
-                  <LeftSidebarLayout>
-                    <EditEmployee />
-                  </LeftSidebarLayout>
+                  <EditEmployee />
                 </PrivateRoute>
               }
             />
-
             <Route 
-              path="/employees/create" 
+              path="employees/create" 
               element={
                 <PrivateRoute permissions={["employees.create"]}>
-                  <LeftSidebarLayout>
-                    <CreateEmployeeForm />
-                  </LeftSidebarLayout>
+                  <CreateEmployeeForm />
                 </PrivateRoute>
               } 
             />
             <Route
-              path="/employees/:employeeId/employment"
+              path="employees/:employeeId/employment"
               element={
                 <PrivateRoute permissions={["employment.read"]}>
-                  <LeftSidebarLayout>
-                    <CleanEmploymentHistory />
-                  </LeftSidebarLayout>
+                  <CleanEmploymentHistory />
                 </PrivateRoute>
               }
             />
 
-
-
-            {/* Reports Routes */}
+            {/* Reports */}
             <Route
-              path="/reports"
+              path="reports"
               element={
                 <PrivateRoute permissions={["reports.read"]}>
-                  <LeftSidebarLayout>
-                    <div className="text-center py-20">
-                      <h1 className="text-4xl font-bold text-slate-800 mb-4">Reports & Analytics</h1>
-                      <p className="text-xl text-slate-600">Analytics and reporting dashboard coming soon</p>
-                    </div>
-                  </LeftSidebarLayout>
+                  <div className="text-center py-20">
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">Reports & Analytics</h1>
+                    <p className="text-xl text-slate-600">Analytics and reporting dashboard coming soon</p>
+                  </div>
                 </PrivateRoute>
               }
             />
             
+            {/* Audit Logs */}
             <Route 
-              path="/audit-logs" 
+              path="audit-logs" 
               element={
                 <PrivateRoute permissions={["audit.read"]}>
-                  <LeftSidebarLayout>
-                    <AuditLogsDashboard />
-                  </LeftSidebarLayout>
+                  <AuditLogsDashboard />
                 </PrivateRoute>
               } 
             />
             
-            {/* Settings Routes */}
+            {/* Settings */}
             <Route
-              path="/settings"
+              path="settings"
               element={
                 <PrivateRoute permissions={["departments.read","designations.read","role-tags.read","scale-grades.read"]}>
-                  <LeftSidebarLayout>
-                    <SettingsDashboard />
-                  </LeftSidebarLayout>
+                  <SettingsDashboard />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/departments"
+              path="settings/departments"
               element={
                 <PrivateRoute permissions={["departments.read"]}>
-                  <LeftSidebarLayout>
-                    <DepartmentManagement />
-                  </LeftSidebarLayout>
+                  <DepartmentManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/designations"
+              path="settings/designations"
               element={
                 <PrivateRoute permissions={["designations.read"]}>
-                  <LeftSidebarLayout>
-                    <DesignationManagement />
-                  </LeftSidebarLayout>
+                  <DesignationManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/role-tags"
+              path="settings/role-tags"
               element={
                 <PrivateRoute permissions={["role-tags.read"]}>
-                  <LeftSidebarLayout>
-                    <RoleTagManagement />
-                  </LeftSidebarLayout>
+                  <RoleTagManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/scale-grades"
+              path="settings/scale-grades"
               element={
                 <PrivateRoute permissions={["scale-grades.read"]}>
-                  <LeftSidebarLayout>
-                    <ScaleGradeManagement />
-                  </LeftSidebarLayout>
+                  <ScaleGradeManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/locations"
+              path="settings/locations"
               element={
                 <PrivateRoute permissions={["locations.read"]}>
-                  <LeftSidebarLayout>
-                    <LocationManagement />
-                  </LeftSidebarLayout>
+                  <LocationManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/devices"
+              path="settings/devices"
               element={
                 <PrivateRoute permissions={["devices.read"]}>
-                  <LeftSidebarLayout>
-                    <DeviceManagement />
-                  </LeftSidebarLayout>
+                  <DeviceManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/roles"
+              path="settings/roles"
               element={
                 <PrivateRoute permissions={["roles.read"]}>
-                  <LeftSidebarLayout>
-                    <RoleManagement />
-                  </LeftSidebarLayout>
+                  <RoleManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/database"
+              path="settings/database"
               element={
                 <PrivateRoute permissions={["system.database.read"]}>
-                  <LeftSidebarLayout>
-                    <DatabaseSettings />
-                  </LeftSidebarLayout>
+                  <DatabaseSettings />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/security"
+              path="settings/security"
               element={
                 <PrivateRoute permissions={["system.security.read"]}>
-                  <LeftSidebarLayout>
-                    <SecuritySettings />
-                  </LeftSidebarLayout>
+                  <SecuritySettings />
                 </PrivateRoute>
               }
             />
             
-            {/* Users Routes */}
+            {/* Users */}
             <Route
-              path="/users"
+              path="users"
               element={
                 <PrivateRoute permissions={["users.read"]}>
-                  <LeftSidebarLayout>
-                    <UserManagement />
-                  </LeftSidebarLayout>
+                  <UserManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/users/create"
+              path="users/create"
               element={
                 <PrivateRoute permissions={["users.manage"]}>
-                  <LeftSidebarLayout>
-                    <UserManagement />
-                  </LeftSidebarLayout>
+                  <UserManagement />
                 </PrivateRoute>
               }
             />
+
+            {/* Attendance */}
             <Route
-              path="/attendance"
+              path="attendance"
               element={
                 <PrivateRoute permissions={["attendance.read"]}>
-                  <LeftSidebarLayout>
-                    <AttendanceDashboard />
-                  </LeftSidebarLayout>
+                  <AttendanceDashboard />
                 </PrivateRoute>
               }
             />
-          </Routes>
+          </Route>
+        </Routes>
         </ConfirmationProvider>
       </ToastProvider>
   );

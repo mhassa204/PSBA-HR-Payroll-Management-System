@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../features/auth/authStore';
 import '../../styles/sidebar.css';
@@ -78,6 +78,22 @@ const LeftSidebar = () => {
   const can = useAuthStore((s) => s.can);
   const user = useAuthStore((s) => s.user);
   const [expandedItems, setExpandedItems] = useState(new Set());
+  const STORAGE_KEY = 'leftSidebar.expandedItems';
+
+  // Rehydrate expanded state from storage before paint to avoid flicker
+  useLayoutEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      if (Array.isArray(saved)) {
+        setExpandedItems(new Set(saved));
+      }
+    } catch (_) { /* noop */ }
+  }, []);
+
+  // Persist expanded state
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(expandedItems)));
+  }, [expandedItems]);
 
   const navigation = [
     { 
@@ -177,6 +193,18 @@ const LeftSidebar = () => {
     return children?.some(child => location.pathname === child.href);
   };
 
+  // Auto-expand any parent whose child is active
+  useEffect(() => {
+    navigation.forEach(item => {
+      if (item.children && isChildActive(item.children)) {
+        setExpandedItems(prev => {
+          if (prev.has(item.name)) return prev;
+          const s = new Set(prev); s.add(item.name); return s;
+        });
+      }
+    });
+  }, [location.pathname]);
+
   const toggleExpanded = (itemName) => {
     setExpandedItems(prev => {
       const newSet = new Set(prev);
@@ -189,7 +217,10 @@ const LeftSidebar = () => {
     });
   };
 
-  const handleNavigation = (href) => {
+  const handleNavigation = (href, parentName) => {
+    if (parentName) {
+      setExpandedItems(prev => { const s = new Set(prev); s.add(parentName); return s; });
+    }
     navigate(href);
   };
 
@@ -274,7 +305,7 @@ const LeftSidebar = () => {
                       return (
                         <button
                           key={child.name}
-                          onClick={() => handleNavigation(child.href)}
+                          onClick={() => handleNavigation(child.href, item.name)}
                           className={`
                             w-full flex items-center space-x-3 p-2 rounded-md transition-all duration-200 text-left
                             ${isChildActive 
