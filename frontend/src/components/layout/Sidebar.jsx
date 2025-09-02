@@ -102,9 +102,8 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
           {/* Logo */}
           <div className="flex h-16 shrink-0 items-center">
             <div className="flex items-center">
-              <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">HR</span>
-              </div>
+              {/* Replaced text badge with logo image */}
+              <img src="/psba.png" alt="PSBA" className="h-8 w-8 rounded-lg object-cover" />
               <span className="ml-3 text-xl font-semibold text-gray-900">
                 PSBA Portal
               </span>
@@ -203,9 +202,8 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
               {/* Mobile Logo */}
               <div className="flex h-16 shrink-0 items-center">
                 <div className="flex items-center">
-                  <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">HR</span>
-                  </div>
+                  {/* Replaced text badge with logo image */}
+                  <img src="/psba.png" alt="PSBA" className="h-8 w-8 rounded-lg object-cover" />
                   <span className="ml-3 text-xl font-semibold text-gray-900">
                     PSBA Portal
                   </span>

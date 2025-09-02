@@ -204,9 +204,8 @@ const LeftSidebar = () => {
         {/* Logo Section */}
         <div className="p-6 border-b border-slate-600">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
-              <span className="text-white font-bold text-lg">HR</span>
-            </div>
+            {/* Replaced HR badge with logo image */}
+            <img src="/psba.png" alt="PSBA" className="w-12 h-12 rounded-xl object-contain bg-white p-1 shadow-md" />
             <div>
               <h1 className="text-xl font-bold text-white">
                 PSBA Portal
