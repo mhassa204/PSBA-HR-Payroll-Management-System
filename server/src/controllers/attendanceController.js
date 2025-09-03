@@ -170,6 +170,8 @@ async function getRostersForLocation(locationId, start, end) {
       bazaar_id: Number(locationId),
       valid_to: { gte: start },
       valid_from: { lte: end },
+      // Only include APPROVED rosters
+      status: 'APPROVED',
     },
     include: {
       entries: { include: { employee: true } },
@@ -286,7 +288,7 @@ async function locationAgainstRoster(req, res) {
     // Build calendar days
     const days = []; let d = start; while (d <= end) { days.push(new Date(d)); d = addDays(d,1); }
 
-    // Rosters and employees
+    // Rosters and employees (only APPROVED via helper)
     const rosters = await getRostersForLocation(locationId, start, end);
     const entryByEmp = new Map(); // employee_id -> array of { roster, entry }
     for (const r of rosters) {
@@ -332,10 +334,21 @@ async function locationAgainstRoster(req, res) {
     for (const emp of employees) {
       const designation = emp.employmentRecords?.[0]?.designation?.title || null;
       const roleTag = emp.employmentRecords?.[0]?.role_tag?.name || null;
+      const entries = entryByEmp.get(emp.id) || [];
+
       for (const date of days) {
-        // find roster entry applicable to this date
-        const entries = entryByEmp.get(emp.id) || [];
-        const applicable = entries.find(x => x.roster.valid_from <= date && x.roster.valid_to >= date);
+        // Choose an APPROVED roster entry applicable to this date. If multiple overlap, pick the one with latest valid_from (tie-breaker: latest updatedAt)
+        const applicableList = entries.filter(x => x.roster.valid_from <= date && x.roster.valid_to >= date);
+        if (!applicableList.length) continue; // Skip this date entirely when no approved roster exists
+        const applicable = applicableList.reduce((best, curr) => {
+          if (!best) return curr;
+          if (curr.roster.valid_from > best.roster.valid_from) return curr;
+          if (curr.roster.valid_from.getTime() === best.roster.valid_from.getTime()) {
+            return (curr.roster.updatedAt > best.roster.updatedAt) ? curr : best;
+          }
+          return best;
+        }, null);
+
         const sched = applicable?.entry?.day_schedules || {};
         const dayKey = dayName(date); // 'Monday', etc.
         const dayInfo = sched[dayKey] || { type: 'time', time_from: null, time_to: null };
@@ -345,12 +358,15 @@ async function locationAgainstRoster(req, res) {
         const withinCwo = cwo.enabled && cwo.from && cwo.to && (new Date(cwo.from) <= date && new Date(cwo.to) >= date);
 
         let dutyIn = null, dutyOut = null, weeklyOff = false, offsite = false;
+        let offsiteLocationName = null;
         if (withinCwo) {
           weeklyOff = true;
         } else if (dayInfo?.type === 'weekly_off') {
           weeklyOff = true;
         } else if (dayInfo?.type === 'offsite') {
           offsite = true; // treat separately if needed
+          // Try to read a friendly location name from the roster day schedule
+          offsiteLocationName = dayInfo.location_name || dayInfo.location || dayInfo.offsite_location || dayInfo.site || dayInfo.place || dayInfo.name || null;
         } else if (dayInfo?.type === 'time') {
           dutyIn = dayInfo.time_from || null;
           dutyOut = dayInfo.time_to || null;
@@ -371,6 +387,8 @@ async function locationAgainstRoster(req, res) {
         let performedStatus = '';
         if (weeklyOff) {
           performedStatus = 'Weekly Off';
+        } else if (offsite) {
+          performedStatus = offsiteLocationName ? `At "${offsiteLocationName}"` : 'At Offsite';
         } else if (dutyMinutes != null && actualMinutes != null) {
           performedStatus = actualMinutes >= dutyMinutes ? 'Over-Time' : 'Less-Time';
         } else if ((inOut.in && !inOut.out) || (!inOut.in && inOut.out)) {
@@ -408,7 +426,8 @@ async function locationAgainstRoster(req, res) {
           timeOutEarlyLate: (timeOutDiffMin!=null) ? `${Math.abs(Math.floor(timeOutDiffMin/60))}:${String(Math.abs(timeOutDiffMin%60)).padStart(2,'0')}` : '',
           timeOutStatus,
           weeklyOff,
-          offsite
+          offsite,
+          offsiteLocation: offsiteLocationName || ''
         });
       }
     }
