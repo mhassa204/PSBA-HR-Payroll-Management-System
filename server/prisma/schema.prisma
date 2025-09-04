@@ -50,6 +50,8 @@ model Employee {
   rosterEntries           DutyRosterEntry[]
   // New: leaves for this employee
   leaves                  Leave[]
+  // Back-relation: per-bank leave allocations
+  leaveBankAllocations    LeaveBankAllocation[]
 }
 
 model Department {
@@ -284,6 +286,8 @@ model User {
   managedLocations Location[] @relation(name: "UserManagedLocations")
   // new: rosters created by this user
   createdRosters DutyRoster[]
+  // Back-relation: leave banks created by this user
+  createdLeaveBanks LeaveBank[]
 }
 
 model Session {
@@ -453,4 +457,64 @@ enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// New: Leave Types for configuring bankable leave categories
+model LeaveType {
+  id          Int                  @id @default(autoincrement())
+  name        String               @unique
+  code        String?
+  is_active   Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  is_deleted  Boolean              @default(false)
+  bankDefaults LeaveBankDefault[]
+  allocations  LeaveBankAllocation[]
+}
+
+// New: Leave Bank period definition (e.g., fiscal year)
+model LeaveBank {
+  id               Int                    @id @default(autoincrement())
+  title            String?
+  period_start     DateTime
+  period_end       DateTime
+  createdByUserId  Int?
+  createdBy        User?                  @relation(fields: [createdByUserId], references: [id])
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  is_deleted       Boolean                @default(false)
+  defaults         LeaveBankDefault[]
+  allocations      LeaveBankAllocation[]
+}
+
+// New: Default days per leave type for a leave bank
+model LeaveBankDefault {
+  id             Int        @id @default(autoincrement())
+  leave_bank_id  Int
+  leave_type_id  Int
+  days           Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  bank           LeaveBank  @relation(fields: [leave_bank_id], references: [id], onDelete: Cascade)
+  leaveType      LeaveType  @relation(fields: [leave_type_id], references: [id])
+
+  @@unique([leave_bank_id, leave_type_id], name: "leave_bank_type_unique")
+}
+
+// New: Per-employee allocation for a leave bank and type
+model LeaveBankAllocation {
+  id             Int        @id @default(autoincrement())
+  leave_bank_id  Int
+  employee_id    Int
+  leave_type_id  Int
+  days           Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  bank           LeaveBank  @relation(fields: [leave_bank_id], references: [id], onDelete: Cascade)
+  employee       Employee   @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  leaveType      LeaveType  @relation(fields: [leave_type_id], references: [id])
+
+  @@unique([leave_bank_id, employee_id, leave_type_id], name: "leave_bank_employee_type_unique")
+  @@index([employee_id])
+  @@index([leave_type_id])
 }

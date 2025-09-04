@@ -22,7 +22,58 @@ function toDateOnly(d) {
 function addDays(d, n) { const dt = new Date(d); dt.setUTCDate(dt.getUTCDate()+n); return dt; }
 function ymd(d){ const y=d.getUTCFullYear(); const m=String(d.getUTCMonth()+1).padStart(2,'0'); const dd=String(d.getUTCDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
 
-// GET /api/leaves/employees?search=... -> list employees with aggregated leaves
+async function getActiveLeaveBank() {
+  const today = toDateOnly(new Date());
+  if (!today) return null;
+  const bank = await prisma.leaveBank.findFirst({
+    where: { is_deleted: false, period_start: { lte: today }, period_end: { gte: today } },
+    orderBy: { period_start: 'desc' },
+    include: { defaults: true }
+  });
+  return bank;
+}
+
+function buildSummaryForEmployees({ employees, leaveTypes, bank, allocations, leavesInPeriod }) {
+  const defaultsMap = new Map(); // typeId -> days
+  for (const d of (bank?.defaults || [])) defaultsMap.set(d.leave_type_id, d.days);
+
+  // allocMap: empId -> (typeId -> days)
+  const allocMap = new Map();
+  for (const a of allocations) {
+    const byEmp = allocMap.get(a.employee_id) || new Map();
+    byEmp.set(a.leave_type_id, a.days);
+    allocMap.set(a.employee_id, byEmp);
+  }
+
+  // usage maps by employeeId + typeName
+  const usedApproved = new Map(); // key: empId|typeName -> count
+  const usedPending = new Map();
+  for (const l of leavesInPeriod) {
+    const key = `${l.employee_id}|${l.type || ''}`;
+    if (l.status === 'APPROVED') {
+      usedApproved.set(key, (usedApproved.get(key) || 0) + 1);
+    } else if (l.status === 'PENDING') {
+      usedPending.set(key, (usedPending.get(key) || 0) + 1);
+    }
+  }
+
+  const types = leaveTypes || [];
+  const itemsByEmp = new Map();
+  for (const emp of employees) {
+    const rows = [];
+    for (const t of types) {
+      const allocDays = (allocMap.get(emp.id)?.get(t.id)) ?? defaultsMap.get(t.id) ?? 0;
+      const approved = usedApproved.get(`${emp.id}|${t.name}`) || 0;
+      const pending = usedPending.get(`${emp.id}|${t.name}`) || 0;
+      rows.push({ typeId: t.id, typeName: t.name, allocated: allocDays, approvedUsed: approved, pending, available: Math.max(0, allocDays - approved) });
+    }
+    itemsByEmp.set(emp.id, rows);
+  }
+
+  return itemsByEmp;
+}
+
+// GET /api/leaves/employees?search=... -> list employees with aggregated leaves and current bank summary
 router.get('/employees', canAnyRead, async (req, res) => {
   try {
     const search = String(req.query.search || '').trim();
@@ -49,18 +100,64 @@ router.get('/employees', canAnyRead, async (req, res) => {
       },
       orderBy: [{ full_name: 'asc' }, { id: 'asc' }]
     });
-    res.json({ success: true, employees });
+
+    const activeBank = await getActiveLeaveBank();
+    let leaveTypes = [];
+    let summaryByEmp = new Map();
+    if (activeBank) {
+      leaveTypes = await prisma.leaveType.findMany({ where: { is_deleted: false, is_active: true }, orderBy: { name: 'asc' } });
+      const empIds = employees.map(e => e.id);
+      const allocations = await prisma.leaveBankAllocation.findMany({ where: { leave_bank_id: activeBank.id, employee_id: { in: empIds } } });
+      const leavesInPeriod = await prisma.leave.findMany({
+        where: { is_deleted: false, employee_id: { in: empIds }, date: { gte: toDateOnly(activeBank.period_start), lte: toDateOnly(activeBank.period_end) } },
+        select: { employee_id: true, type: true, status: true }
+      });
+      summaryByEmp = buildSummaryForEmployees({ employees, leaveTypes, bank: activeBank, allocations, leavesInPeriod });
+    }
+
+    const enriched = employees.map(e => ({
+      ...e,
+      currentLeaveBankSummary: activeBank ? {
+        bankId: activeBank.id,
+        title: activeBank.title,
+        period_start: activeBank.period_start,
+        period_end: activeBank.period_end,
+        items: summaryByEmp.get(e.id) || []
+      } : null
+    }));
+
+    res.json({ success: true, employees: enriched, activeBank: activeBank ? { id: activeBank.id, title: activeBank.title, period_start: activeBank.period_start, period_end: activeBank.period_end } : null });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// GET /api/leaves/:employeeId -> leaves for one employee
+// GET /api/leaves/:employeeId -> leaves for one employee plus current bank summary
 router.get('/:employeeId', canAnyRead, async (req, res) => {
   try {
     const employeeId = Number(req.params.employeeId);
     const leaves = await prisma.leave.findMany({ where: { employee_id: employeeId, is_deleted: false }, orderBy: { date: 'desc' } });
-    res.json({ success: true, leaves });
+
+    const activeBank = await getActiveLeaveBank();
+    let summary = null;
+    if (activeBank) {
+      const leaveTypes = await prisma.leaveType.findMany({ where: { is_deleted: false, is_active: true }, orderBy: { name: 'asc' } });
+      const allocations = await prisma.leaveBankAllocation.findMany({ where: { leave_bank_id: activeBank.id, employee_id: employeeId } });
+      const leavesInPeriod = await prisma.leave.findMany({
+        where: { is_deleted: false, employee_id: employeeId, date: { gte: toDateOnly(activeBank.period_start), lte: toDateOnly(activeBank.period_end) } },
+        select: { employee_id: true, type: true, status: true }
+      });
+      const itemsMap = buildSummaryForEmployees({ employees: [{ id: employeeId }], leaveTypes, bank: activeBank, allocations, leavesInPeriod });
+      summary = {
+        bankId: activeBank.id,
+        title: activeBank.title,
+        period_start: activeBank.period_start,
+        period_end: activeBank.period_end,
+        items: itemsMap.get(employeeId) || []
+      };
+    }
+
+    res.json({ success: true, leaves, summary });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

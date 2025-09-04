@@ -24,6 +24,7 @@ const rosterRoutes = require("./routes/rosterRoutes");
 const deviceRoutes = require("./routes/deviceRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
+const leaveBankRoutes = require("./routes/leaveBankRoutes");
 
 const app = express(); 
 const PORT = process.env.PORT || 3000;
@@ -84,6 +85,7 @@ app.use("/api/rosters", rosterRoutes);
 app.use("/api/devices", deviceRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/leaves", leaveRoutes);
+app.use("/api/leave-banks", leaveBankRoutes);
 const { isAuthenticated } = require("./middleware/auth");
 app.use("/api/admin", isAuthenticated, adminRoutes);
 

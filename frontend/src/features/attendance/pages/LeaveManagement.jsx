@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { toastBus } from '../../../utils/toastBus';
+import { useNavigate } from 'react-router-dom';
 
 const LeaveDialog = ({ employee, open, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [leaves, setLeaves] = useState([]);
+  const [types, setTypes] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [form, setForm] = useState({ date: '', type: '', remarks: '' });
   const [canStatus, setCanStatus] = useState(false);
   const [mode, setMode] = useState('single'); // 'single' | 'range' | 'multi'
@@ -21,8 +24,14 @@ const LeaveDialog = ({ employee, open, onClose }) => {
         const me = await axios.get('/me');
         const perms = me?.data?.user?.permissions || [];
         setCanStatus(perms.includes('*') || perms.includes('leaves.status'));
-        const { data } = await axios.get(`/leaves/${employee.id}`);
-        if (!ignore) setLeaves(data.leaves || []);
+        const [{ data: leavesRes }, { data: typesRes }] = await Promise.all([
+          axios.get(`/leaves/${employee.id}`),
+          axios.get('/leave-banks/types')
+        ]);
+        if (ignore) return;
+        setLeaves(leavesRes.leaves || []);
+        setSummary(leavesRes.summary || null);
+        setTypes(typesRes.types || []);
       } catch {}
       finally { setLoading(false); }
     };
@@ -53,6 +62,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       setMultiDates(['']);
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
+      setSummary(data.summary || null);
       toastBus.emit({ type: 'success', message: 'Leaves added' });
     } catch (e) {
       toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to add leaves' });
@@ -64,6 +74,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       await axios.put(`/leaves/${leaveId}`, patch);
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
+      setSummary(data.summary || null);
       toastBus.emit({ type: 'success', message: 'Leave updated' });
     } catch (e) {
       toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to update leave' });
@@ -75,6 +86,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       await axios.patch(`/leaves/${leaveId}/status`, { status });
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
+      setSummary(data.summary || null);
       toastBus.emit({ type: 'success', message: 'Leave status updated' });
     } catch (e) {
       toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to update status' });
@@ -86,6 +98,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       await axios.delete(`/leaves/${leaveId}`);
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
+      setSummary(data.summary || null);
       toastBus.emit({ type: 'success', message: 'Leave deleted' });
     } catch (e) {
       toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to delete leave' });
@@ -95,7 +108,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   if (!open) return null;
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-      <div className="bg-white rounded shadow w-full max-w-3xl p-4 max-h-[85vh] overflow-y-auto">
+      <div className="bg-white rounded shadow w-full max-w-4xl p-4 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Manage Leaves - {employee.full_name}</h2>
           <button onClick={onClose} className="px-3 py-1 border rounded">Close</button>
@@ -104,11 +117,34 @@ const LeaveDialog = ({ employee, open, onClose }) => {
           <div className="py-10 flex items-center justify-center"><LoadingSpinner /></div>
         ) : (
           <div className="space-y-4">
+            {summary && (
+              <div className="border rounded p-3 bg-gray-50">
+                <div className="text-sm font-medium mb-2">Current Leave Bank: {summary.title || `#${summary.bankId}`} ({String(summary.period_start).slice(0,10)} to {String(summary.period_end).slice(0,10)})</div>
+                <div className="grid md:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-2">
+                  {(summary.items || []).map(it => (
+                    <div key={it.typeId} className="text-xs bg-white border rounded p-2">
+                      <div className="font-semibold">{it.typeName}</div>
+                      <div>Allocated: {it.allocated}</div>
+                      <div>Used (Approved): {it.approvedUsed}</div>
+                      <div>Pending: {it.pending}</div>
+                      <div>Available: {it.available}</div>
+                    </div>
+                  ))}
+                  {!summary.items?.length && <div className="text-xs text-gray-600">No types configured</div>}
+                </div>
+              </div>
+            )}
+
             <form className="flex flex-col gap-3" onSubmit={submit}>
               <div className="flex flex-wrap items-end gap-2">
                 <div>
                   <label className="block text-xs text-gray-600">Type</label>
-                  <input type="text" className="border rounded px-2 py-1" placeholder="Sick, Casual, Maternity, etc" value={form.type} onChange={e=>setForm(f=>({...f, type: e.target.value}))} />
+                  <select className="border rounded px-2 py-1" value={form.type} onChange={e=>setForm(f=>({...f, type: e.target.value}))}>
+                    <option value="">Select type</option>
+                    {types.map(t => (
+                      <option key={t.id} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex-1">
                   <label className="block text-xs text-gray-600">Remarks</label>
@@ -180,7 +216,12 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                         <input type="date" className="border rounded px-2 py-1" value={l.date?.slice(0,10)} onChange={e=>update(l.id, { date: e.target.value })} />
                       </td>
                       <td className="px-3 py-2">
-                        <input type="text" className="border rounded px-2 py-1" value={l.type} onChange={e=>update(l.id, { type: e.target.value })} />
+                        <select className="border rounded px-2 py-1" value={l.type} onChange={e=>update(l.id, { type: e.target.value })}>
+                          {types.map(t => (
+                            <option key={t.id} value={t.name}>{t.name}</option>
+                          ))}
+                          {!types.length && <option value={l.type}>{l.type}</option>}
+                        </select>
                       </td>
                       <td className="px-3 py-2">
                         {canStatus ? (
@@ -215,6 +256,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
 };
 
 const LeaveManagement = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState('');
@@ -248,6 +290,7 @@ const LeaveManagement = () => {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Leave Management</h1>
         <div className="flex gap-2 flex-wrap items-center">
+          <button className="px-3 py-1 border rounded" onClick={() => navigate('/attendance/leave-bank')}>Leave Bank</button>
           <input className="border rounded px-2 py-1" placeholder="Search employees" value={search} onChange={e=>setSearch(e.target.value)} />
           <input className="border rounded px-2 py-1" placeholder="Filter CNIC" value={cnicFilter} onChange={e=>setCnicFilter(e.target.value)} />
           <button className="px-3 py-1 border rounded" onClick={load}>Search</button>
@@ -264,6 +307,7 @@ const LeaveManagement = () => {
                 <th className="px-3 py-2 text-left">CNIC</th>
                 <th className="px-3 py-2 text-left">Name</th>
                 <th className="px-3 py-2 text-left">Designation</th>
+                <th className="px-3 py-2 text-left">Current Leave Bank</th>
                 <th className="px-3 py-2 text-left">Recent Leaves</th>
                 <th className="px-3 py-2 text-left">Actions</th>
               </tr>
@@ -275,6 +319,21 @@ const LeaveManagement = () => {
                   <td className="px-3 py-2 text-sm">{emp.cnic || '-'}</td>
                   <td className="px-3 py-2 text-sm">{emp.full_name}</td>
                   <td className="px-3 py-2 text-sm">{emp.employmentRecords?.[0]?.designation?.title || '-'}</td>
+                  <td className="px-3 py-2 text-sm">
+                    {emp.currentLeaveBankSummary ? (
+                      <div className="text-xs">
+                        <div className="font-semibold">{emp.currentLeaveBankSummary.title || `#${emp.currentLeaveBankSummary.bankId}`}</div>
+                        <div className="text-gray-600">{String(emp.currentLeaveBankSummary.period_start).slice(0,10)} to {String(emp.currentLeaveBankSummary.period_end).slice(0,10)}</div>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {(emp.currentLeaveBankSummary.items || []).map(it => (
+                            <span key={it.typeId} className="px-2 py-0.5 border rounded bg-gray-50">{it.typeName}: {it.approvedUsed}/{it.allocated} ({it.available} left)</span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-500">No active leave bank</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-sm">
                     <div className="max-h-24 overflow-y-auto pr-1 space-y-1">
                       {(emp.leaves || []).map(l => (
@@ -289,7 +348,7 @@ const LeaveManagement = () => {
                 </tr>
               ))}
               {!filtered.length && (
-                <tr><td colSpan={6} className="px-3 py-6 text-center text-sm text-gray-500">No employees found</td></tr>
+                <tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-500">No employees found</td></tr>
               )}
             </tbody>
           </table>
