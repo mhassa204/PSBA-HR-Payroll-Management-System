@@ -61,37 +61,85 @@ function reduceFirstLastByDay(logs) {
 }
 
 async function upsertAttendanceForDevice(ip, port, reduced, deviceId) {
-  // reduced: [{ deviceUserId, timestamp, type, attendanceDate }]
-  const writes = [];
+  // Insert mostly-new records, and update existing daily IN/OUT when a newer timestamp arrives
+  const devicePort = Number(port);
+  if (!Array.isArray(reduced) || !reduced.length) return 0;
+
+  // 1) Device-level last timestamp to gate inserts
+  const last = await prisma.attendance.findFirst({
+    where: { device_ip: ip, device_port: devicePort },
+    orderBy: { timestamp: 'desc' },
+    select: { timestamp: true },
+  });
+  const lastTs = last?.timestamp || null;
+
+  // 2) Prepare range and duids to fetch existing rows for the same daily keys
+  const duidsSet = new Set();
+  let minDate = null, maxDate = null;
   for (const r of reduced) {
-    writes.push(
-      prisma.attendance.upsert({
-        where: {
-          unique_daily_type_per_device_user: {
-            deviceUserId: r.deviceUserId,
-            device_ip: ip,
-            device_port: Number(port),
-            type: r.type,
-            attendanceDate: r.attendanceDate,
-          },
-        },
-        create: {
+    if (r.deviceUserId) duidsSet.add(r.deviceUserId);
+    const d = r.attendanceDate;
+    if (!minDate || d < minDate) minDate = d;
+    if (!maxDate || d > maxDate) maxDate = d;
+  }
+  const duids = Array.from(duidsSet);
+
+  const existingRows = duids.length ? await prisma.attendance.findMany({
+    where: {
+      device_ip: ip,
+      device_port: devicePort,
+      deviceUserId: { in: duids },
+      attendanceDate: { gte: minDate, lte: maxDate },
+      type: { in: ['IN', 'OUT'] },
+    },
+    select: { id: true, deviceUserId: true, attendanceDate: true, type: true, timestamp: true },
+  }) : [];
+
+  const existingMap = new Map(); // key: duid|type|dateISO -> row
+  for (const row of existingRows) {
+    const key = `${row.deviceUserId}|${row.type}|${row.attendanceDate.toISOString()}`;
+    existingMap.set(key, row);
+  }
+
+  // 3) Decide creates vs updates
+  const toCreate = [];
+  const toUpdate = [];
+  for (const r of reduced) {
+    const key = `${r.deviceUserId}|${r.type}|${r.attendanceDate.toISOString()}`;
+    const existing = existingMap.get(key);
+    if (existing) {
+      if (r.timestamp > existing.timestamp) {
+        toUpdate.push({ id: existing.id, timestamp: r.timestamp });
+      }
+    } else {
+      // Only insert rows strictly newer than the device's last known timestamp
+      if (!lastTs || r.timestamp > lastTs) {
+        toCreate.push({
           deviceUserId: r.deviceUserId,
-          timestamp: r.timestamp, // already in Pakistan local time (24h)
+          timestamp: r.timestamp,
           type: r.type,
           attendanceDate: r.attendanceDate,
           device_ip: ip,
-          device_port: Number(port),
+          device_port: devicePort,
           device_id: deviceId || null,
-        },
-        update: {
-          timestamp: r.timestamp,
-          updatedAt: new Date(),
-        },
-      })
+        });
+      }
+    }
+  }
+
+  // 4) Perform DB operations efficiently
+  let createdCount = 0;
+  if (toCreate.length) {
+    const result = await prisma.attendance.createMany({ data: toCreate, skipDuplicates: true });
+    createdCount = result.count || 0;
+  }
+  if (toUpdate.length) {
+    await prisma.$transaction(
+      toUpdate.map(u => prisma.attendance.update({ where: { id: u.id }, data: { timestamp: u.timestamp, updatedAt: new Date() } }))
     );
   }
-  await prisma.$transaction(writes);
+
+  return createdCount + toUpdate.length;
 }
 
 module.exports = { toPakistanDate, normalizeDatePK, reduceFirstLastByDay, upsertAttendanceForDevice };

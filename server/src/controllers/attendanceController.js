@@ -48,9 +48,9 @@ async function fetchAndSaveForDevice(req, res) {
       .map(r => ({ deviceUserId: String(r.deviceUserId), recordTime: new Date(r.recordTime), ip: device.ip_address }));
 
     const reduced = reduceFirstLastByDay(normalized);
-    await upsertAttendanceForDevice(device.ip_address, device.port_number, reduced, device.id);
+    const inserted = await upsertAttendanceForDevice(device.ip_address, device.port_number, reduced, device.id);
 
-    res.json({ success: true, fetched: rows.length, saved: reduced.length });
+    res.json({ success: true, fetched: rows.length, saved: inserted });
   } catch (e) {
     console.error(e);
     res.status(500).json({ success: false, error: e.message });
@@ -78,8 +78,8 @@ async function fetchAndSaveForAll(req, res) {
           .map(r => ({ deviceUserId: String(r.deviceUserId), recordTime: new Date(r.recordTime), ip: device.ip_address }));
 
         const reduced = reduceFirstLastByDay(normalized);
-        await upsertAttendanceForDevice(device.ip_address, device.port_number, reduced, device.id);
-        totalSaved += reduced.length;
+        const inserted = await upsertAttendanceForDevice(device.ip_address, device.port_number, reduced, device.id);
+        totalSaved += inserted;
       } catch (inner) {
         console.error(`Failed device ${device.ip_address}:${device.port_number}`, inner.message);
       }
