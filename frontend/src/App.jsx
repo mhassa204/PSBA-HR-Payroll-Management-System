@@ -41,6 +41,7 @@ import AttendanceDevices from "./features/attendance/pages/AttendanceDevices";
 import AttendanceLocationDetailHome from "./features/attendance/pages/AttendanceLocationDetailHome";
 import LocationFMOPage from "./features/attendance/pages/LocationFMOPage";
 import LocationRosterPage from "./features/attendance/pages/LocationRosterPage";
+import LeaveManagement from './features/attendance/pages/LeaveManagement';
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -345,6 +346,14 @@ function App() {
               element={
                 <PrivateRoute permissions={["attendance.read"]}>
                   <AttendanceDevices />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance/leaves"
+              element={
+                <PrivateRoute permissions={["attendance.read","leaves.read"]}>
+                  <LeaveManagement />
                 </PrivateRoute>
               }
             />

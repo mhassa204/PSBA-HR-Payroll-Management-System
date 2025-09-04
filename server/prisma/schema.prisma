@@ -48,6 +48,8 @@ model Employee {
   pastExperiences         PastExperience[]
   user                    User?
   rosterEntries           DutyRosterEntry[]
+  // New: leaves for this employee
+  leaves                  Leave[]
 }
 
 model Department {
@@ -427,4 +429,28 @@ model Attendance {
   @@index([deviceUserId])
   @@index([attendanceDate])
   @@unique([deviceUserId, device_ip, device_port, type, attendanceDate], name: "unique_daily_type_per_device_user")
+}
+
+// New: Leave module
+model Leave {
+  id           Int          @id @default(autoincrement())
+  employee_id  Int
+  date         DateTime
+  type         String
+  status       LeaveStatus  @default(PENDING)
+  remarks      String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  is_deleted   Boolean      @default(false)
+
+  employee     Employee     @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([employee_id, date])
+}
+
+// New: enum for Leave status
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

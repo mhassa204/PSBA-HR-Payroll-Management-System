@@ -57,7 +57,7 @@ const AttendanceDashboard = () => {
       </div>
 
       {/* Cards to navigate */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
         <div className="bg-white rounded-lg shadow p-6 flex flex-col justify-between">
           <div>
             <h2 className="text-lg font-semibold mb-2">Attendance by Location</h2>
@@ -74,6 +74,15 @@ const AttendanceDashboard = () => {
           </div>
           <div className="mt-4">
             <Link to="/attendance/devices" className="btn btn-secondary">Open Devices</Link>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-6 flex flex-col justify-between">
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Leave Management</h2>
+            <p className="text-sm text-gray-600">Manage employee leaves.</p>
+          </div>
+          <div className="mt-4">
+            <Link to="/attendance/leaves" className="btn btn-tertiary">Open Leave Management</Link>
           </div>
         </div>
       </div>
