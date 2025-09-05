@@ -127,7 +127,7 @@ const createEmploymentDirectory = async (baseDir, fullName, cnic) => {
 };
 
 // Absolute upload path
-const uploadDir = path.join(__dirname, "../../Uploads");
+const uploadDir = path.join(__dirname, "../../uploads");
 
 // Ensure the base directory exists
 fs.mkdir(uploadDir, { recursive: true })

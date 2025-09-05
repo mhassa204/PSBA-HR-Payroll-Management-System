@@ -253,14 +253,20 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
       if (key === "same_address" || key === "has_disability") {
         employeeUpdateData[key] = processedData[key] === "true" || processedData[key] === true;
       } else if (dateFields.includes(key)) {
-        employeeUpdateData[key] = processedData[key]; // Fixed: Use processedData[key] instead of processedData[field]
+        employeeUpdateData[key] = processedData[key]; // Use processed date or null
       } else {
         employeeUpdateData[key] = processedData[key];
       }
     }
   }
 
-
+  // Sanitize profile_picture before file logic: if provided but not a non-empty string, set null
+  if (!processedFiles?.profile_picture_file && Object.prototype.hasOwnProperty.call(processedData, 'profile_picture')) {
+    const v = processedData.profile_picture;
+    if (typeof v !== 'string' || v.trim() === '' || v === 'null') {
+      employeeUpdateData.profile_picture = null;
+    }
+  }
 
   // Debug logging for profile picture handling
   console.log("🔍 Profile picture debug info:");
@@ -268,17 +274,26 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
   console.log("  - data.profile_picture type:", typeof data.profile_picture);
   console.log("  - processedFiles?.profile_picture_file:", processedFiles?.profile_picture_file);
   
-  if (processedFiles?.profile_picture_file) {
+  // Determine intent
+  const hasNewProfilePic = !!processedFiles?.profile_picture_file;
+  const explicitRemove = Object.prototype.hasOwnProperty.call(data, 'profile_picture') && (
+    data.profile_picture === null ||
+    data.profile_picture === 'null' ||
+    data.profile_picture === ''
+  );
+
+  // Apply profile picture changes
+  if (hasNewProfilePic) {
     console.log("Found profile picture file, updating employee:", processedFiles.profile_picture_file);
     employeeUpdateData.profile_picture = processedFiles.profile_picture_file;
-  } else if (data.profile_picture === null || data.profile_picture === 'null' || data.profile_picture === '' || data.profile_picture === undefined) {
-    console.log("Profile picture is being removed, setting to null");
+  } else if (explicitRemove) {
+    console.log("Profile picture explicitly removed, setting to null");
     employeeUpdateData.profile_picture = null;
-  }
+  } // else: leave undefined to keep existing value
 
-  // Double-check: ensure profile_picture is explicitly set when removing
-  if (data.profile_picture === null || data.profile_picture === 'null' || data.profile_picture === '' || data.profile_picture === undefined) {
-    console.log("🔄 Double-check: Explicitly setting profile_picture to null in employeeUpdateData");
+  // Ensure only string or null if provided
+  if (employeeUpdateData.hasOwnProperty('profile_picture') && employeeUpdateData.profile_picture !== null && typeof employeeUpdateData.profile_picture !== 'string') {
+    console.log("🔄 Coercing non-string profile_picture to null before DB update");
     employeeUpdateData.profile_picture = null;
   }
 
@@ -294,7 +309,7 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
     console.log("  - Updated employee ID:", employee.id);
     console.log("  - Updated employee profile_picture:", employee.profile_picture);
     console.log("  - Expected profile_picture value:", employeeUpdateData.profile_picture);
-    console.log("  - Profile picture update successful:", employee.profile_picture === employeeUpdateData.profile_picture);
+    console.log("  - Profile picture update successful:", employeeUpdateData.hasOwnProperty('profile_picture') ? (employee.profile_picture === employeeUpdateData.profile_picture) : 'unchanged');
 
     // Handle profile picture changes - update corresponding document record
     console.log("🔍 Profile picture document handling debug:");
@@ -302,20 +317,13 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
     console.log("  - data.profile_picture type:", typeof data.profile_picture);
     console.log("  - employeeUpdateData.profile_picture:", employeeUpdateData.profile_picture);
     
-    // More robust check for profile picture removal
-    const isProfilePictureRemoved = data.profile_picture === null || 
-                                   data.profile_picture === 'null' || 
-                                   data.profile_picture === '' || 
-                                   data.profile_picture === undefined ||
-                                   employeeUpdateData.profile_picture === null;
+    // Removal only if explicitly requested and no new file uploaded
+    const isProfilePictureRemoved = explicitRemove && !hasNewProfilePic;
     
     console.log("🔍 Profile picture removal check:");
     console.log("  - isProfilePictureRemoved:", isProfilePictureRemoved);
-    console.log("  - data.profile_picture === null:", data.profile_picture === null);
-    console.log("  - data.profile_picture === 'null':", data.profile_picture === 'null');
-    console.log("  - data.profile_picture === '':", data.profile_picture === '');
-    console.log("  - data.profile_picture === undefined:", data.profile_picture === undefined);
-    console.log("  - employeeUpdateData.profile_picture === null:", employeeUpdateData.profile_picture === null);
+    console.log("  - explicitRemove:", explicitRemove);
+    console.log("  - hasNewProfilePic:", hasNewProfilePic);
     
     if (isProfilePictureRemoved) {
       console.log("Profile picture removed, updating corresponding document record");
@@ -343,7 +351,7 @@ updateEmployee: async (id, data, processedFiles, documentRecords) => {
       } catch (error) {
         console.error("❌ Error soft deleting profile picture document:", error.message);
       }
-    } else if (processedFiles?.profile_picture_file) {
+    } else if (hasNewProfilePic) {
       console.log("New profile picture uploaded, updating corresponding document record");
       try {
         // Soft delete any existing profile picture document

@@ -47,6 +47,11 @@ class EmployeeService {
           // Skip these - handled below
           return;
         } else if (value instanceof File) {
+          // Send profile picture using the backend-expected field name
+          if (key === 'profile_picture') {
+            formData.append('profile_picture_file', value);
+            return;
+          }
           formData.append(key, value);
         } else if (typeof value === 'object' && !Array.isArray(value)) {
           // Skip complex non-file objects
@@ -143,7 +148,9 @@ class EmployeeService {
   async createEmployee(employeeData) {
     try {
       const formData = this.createFormData(employeeData);
-      const result = await this.apiClient.post('/employees', formData);
+      const result = await this.apiClient.post('/employees', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       return result.data.employee || result.data;
     } catch (error) {
       console.error("Error creating employee:", error);
@@ -160,7 +167,9 @@ class EmployeeService {
   async updateEmployee(id, employeeData) {
     try {
       const formData = this.createFormData(employeeData);
-      const result = await this.apiClient.put(`/employees/${id}`, formData);
+      const result = await this.apiClient.put(`/employees/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       return result.data.employee || result.data;
     } catch (error) {
       console.error("Error updating employee:", error);

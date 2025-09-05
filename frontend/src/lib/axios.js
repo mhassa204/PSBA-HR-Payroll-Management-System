@@ -5,10 +5,22 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
 const axiosInstance = axios.create({
   baseURL: API_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
   withCredentials: true,
+});
+
+// Ensure correct headers for multipart requests
+axiosInstance.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    if (config.headers) {
+      delete config.headers["Content-Type"];
+    }
+  } else {
+    // Default JSON header for non-FormData requests
+    if (config.headers && !config.headers["Content-Type"]) {
+      config.headers["Content-Type"] = "application/json";
+    }
+  }
+  return config;
 });
 
 axiosInstance.interceptors.response.use(
