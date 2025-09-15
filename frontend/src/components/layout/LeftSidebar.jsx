@@ -175,7 +175,7 @@ const LeftSidebar = () => {
       icon: CogIcon,
       description: 'Configuration',
       color: 'bg-gray-600',
-      show: () => can('departments.read') || can('designations.read') || can('role-tags.read') || can('scale-grades.read') || can('locations.read') || can('devices.read') || can('roles.read'),
+      show: () => can('departments.read') || can('designations.read') || can('role-tags.read') || can('scale-grades.read') || can('locations.read') || can('devices.read') || can('roles.read') || can('districts.read') || can('cities.read') || can('education-levels.read'),
       children: [
         { name: 'Departments', href: '/settings/departments', icon: ViewColumnsIcon, show: () => can('departments.read') },
         { name: 'Designations', href: '/settings/designations', icon: ViewColumnsIcon, show: () => can('designations.read') },
@@ -183,7 +183,10 @@ const LeftSidebar = () => {
         { name: 'Scale Grades', href: '/settings/scale-grades', icon: ViewColumnsIcon, show: () => can('scale-grades.read') },
         { name: 'Locations', href: '/settings/locations', icon: ViewColumnsIcon, show: () => can('locations.read') },
         { name: 'Devices', href: '/settings/devices', icon: ViewColumnsIcon, show: () => can('devices.read') },
-        { name: 'Roles', href: '/settings/roles', icon: ViewColumnsIcon, show: () => can('roles.read') }
+        { name: 'Roles', href: '/settings/roles', icon: ViewColumnsIcon, show: () => can('roles.read') },
+        { name: 'Districts', href: '/settings/districts', icon: ViewColumnsIcon, show: () => can('districts.read') },
+        { name: 'Cities', href: '/settings/cities', icon: ViewColumnsIcon, show: () => can('cities.read') },
+        { name: 'Education Levels', href: '/settings/education-levels', icon: ViewColumnsIcon, show: () => can('education-levels.read') }
       ]
     }
   ];
@@ -209,6 +212,16 @@ const LeftSidebar = () => {
         });
       }
     });
+  }, [location.pathname]);
+
+  // Ensure Settings expands on visiting /settings root
+  useEffect(() => {
+    if (location.pathname.startsWith('/settings')) {
+      setExpandedItems(prev => {
+        if (prev.has('Settings')) return prev;
+        const s = new Set(prev); s.add('Settings'); return s;
+      });
+    }
   }, [location.pathname]);
 
   const toggleExpanded = (itemName) => {

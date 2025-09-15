@@ -30,8 +30,12 @@ model Employee {
   present_address         String?
   permanent_address       String?
   same_address            Boolean                  @default(false)
+  // Legacy location fields (deprecated)
   district                String?
   city                    String?
+  // New normalized references
+  district_id             Int?
+  city_id                 Int?
   has_disability          Boolean                  @default(false)
   disability_type         String?
   disability_description  String?
@@ -52,6 +56,9 @@ model Employee {
   leaves                  Leave[]
   // Back-relation: per-bank leave allocations
   leaveBankAllocations    LeaveBankAllocation[]
+  // Relations to master data
+  districtRef             District?                @relation(fields: [district_id], references: [id])
+  cityRef                 City?                    @relation(fields: [city_id], references: [id])
 }
 
 model Department {
@@ -78,6 +85,45 @@ model Designation {
   employmentRecords Employment[]
 
   @@unique([title, department_id], name: "title_department_id")
+}
+
+// New master data: Districts and Cities
+model District {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  is_active   Boolean @default(true)
+  is_deleted  Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  cities      City[]
+  employees   Employee[]
+}
+
+model City {
+  id          Int      @id @default(autoincrement())
+  name        String
+  district_id Int
+  is_active   Boolean  @default(true)
+  is_deleted  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  district    District @relation(fields: [district_id], references: [id])
+  employees   Employee[]
+
+  @@unique([name, district_id], name: "city_name_district_unique")
+}
+
+// New master data: Education Levels
+model EducationLevel {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  order       Int?
+  is_active   Boolean  @default(true)
+  is_deleted  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  qualifications EducationQualification[]
 }
 
 model RoleTag {
@@ -122,14 +168,20 @@ model PastExperience {
 model EducationQualification {
   id                 Int      @id @default(autoincrement())
   employee_id        Int
+  // Legacy level string (deprecated)
   education_level    String
+  // New normalized level reference
+  education_level_id Int?
   institution_name   String
   year_of_completion String
   marks_gpa          String?
+  // New: start date for the education record
+  start_date         DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   is_deleted         Boolean  @default(false)
   employee           Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  level              EducationLevel? @relation(fields: [education_level_id], references: [id])
 }
 
 model EmployeeDocument {
@@ -209,6 +261,7 @@ model EmploymentSalary {
 model EmploymentLocation {
   id            Int        @id @default(autoincrement())
   employment_id Int        @unique
+  // Legacy fields (deprecated)
   district      String?
   city          String?
   bazaar_name   String?

@@ -102,6 +102,30 @@ const SettingsDashboard = () => {
           color: 'orange',
           required: ['roles.read'],
           superOnly: true
+        },
+        {
+          name: 'Districts',
+          description: 'Manage districts list',
+          path: '/settings/districts',
+          icon: Building2,
+          color: 'blue',
+          required: ['districts.read']
+        },
+        {
+          name: 'Cities',
+          description: 'Manage cities by district',
+          path: '/settings/cities',
+          icon: Building2,
+          color: 'green',
+          required: ['cities.read']
+        },
+        {
+          name: 'Education Levels',
+          description: 'Manage education qualification levels',
+          path: '/settings/education-levels',
+          icon: Users,
+          color: 'indigo',
+          required: ['education-levels.read']
         }
       ]
     }

@@ -34,6 +34,10 @@ const employeeService = {
       }
     });
 
+    // Coerce IDs
+    const district_id = processedData.district_id ? parseInt(processedData.district_id) : null;
+    const city_id = processedData.city_id ? parseInt(processedData.city_id) : null;
+
     // Prepare main employee data
     const employeePayload = {
       employee_id,
@@ -57,8 +61,12 @@ const employeeService = {
       present_address: processedData.present_address,
       permanent_address: processedData.permanent_address,
       same_address: processedData.same_address === "true" || processedData.same_address === true,
+      // Legacy string fields preserved for backward compatibility
       district: processedData.district,
       city: processedData.city,
+      // New normalized refs
+      district_id: district_id || null,
+      city_id: city_id || null,
       has_disability: processedData.has_disability === "true" || processedData.has_disability === true,
       disability_type: processedData.disability_type,
       disability_description: processedData.disability_description,
@@ -126,13 +134,23 @@ const employeeService = {
       const educationIdMapping = {};
       if (educations && Array.isArray(educations)) {
         for (const edu of educations) {
+          // Parse start_date
+          let startDate = null;
+          if (edu.start_date && typeof edu.start_date === 'string' && edu.start_date.trim() !== '') {
+            const d = new Date(edu.start_date);
+            if (!isNaN(d.getTime())) startDate = d;
+          }
+          // Coerce level id
+          const levelId = edu.education_level_id ? parseInt(edu.education_level_id) : null;
           const createdEducation = await tx.educationQualification.create({
             data: {
               employee_id: employee.id,
-              education_level: edu.education_level,
+              education_level: edu.education_level || "",
+              education_level_id: levelId,
               institution_name: edu.institution_name,
               year_of_completion: edu.year_of_completion,
-              marks_gpa: edu.marks_gpa || null
+              marks_gpa: edu.marks_gpa || null,
+              start_date: startDate,
             }
           });
           if (edu.id) {
@@ -187,8 +205,10 @@ const employeeService = {
           is_deleted: false
         },
         include: {
+          districtRef: true,
+          cityRef: true,
           pastExperiences: true,
-          educationQualifications: true,
+          educationQualifications: { include: { level: true } },
           documents: true,
           employmentRecords: {
             include: {
@@ -203,375 +223,336 @@ const employeeService = {
     });
   },
 
+  updateEmployee: async (id, data, processedFiles, documentRecords) => {
+    console.log("Updating employee with data:", JSON.stringify(data, null, 2));
 
+    const {
+      past_experiences,
+      educations,
+      experience_documents,
+      education_documents,
+      documents_to_remove,
+      new_documents,
+      ...rest
+    } = data;
 
-
-
-updateEmployee: async (id, data, processedFiles, documentRecords) => {
-  console.log("Updating employee with data:", JSON.stringify(data, null, 2));
-
-  const {
-    past_experiences,
-    educations,
-    experience_documents,
-    education_documents,
-    documents_to_remove,
-    new_documents,
-    ...rest
-  } = data;
-
-  // Process date fields for employee data
-  const processedData = { ...rest };
-  const dateFields = ["cnic_issue_date", "cnic_expire_date", "date_of_birth"];
-  dateFields.forEach(field => {
-    if (processedData[field] === "" || processedData[field] === null || processedData[field] === undefined) {
-      processedData[field] = null;
-    } else if (processedData[field] && typeof processedData[field] === 'string' && processedData[field].trim() !== '') {
-      try {
-        processedData[field] = new Date(processedData[field]);
-      } catch (error) {
-        console.error(`Invalid date format for ${field}: ${processedData[field]}`);
+    // Process date fields for employee data
+    const processedData = { ...rest };
+    const dateFields = ["cnic_issue_date", "cnic_expire_date", "date_of_birth"];
+    dateFields.forEach(field => {
+      if (processedData[field] === "" || processedData[field] === null || processedData[field] === undefined) {
         processedData[field] = null;
+      } else if (processedData[field] && typeof processedData[field] === 'string' && processedData[field].trim() !== '') {
+        try {
+          processedData[field] = new Date(processedData[field]);
+        } catch (error) {
+          console.error(`Invalid date format for ${field}: ${processedData[field]}`);
+          processedData[field] = null;
+        }
       }
-    }
-  });
-
-  // Prepare main employee data
-  const employeeUpdateData = {};
-  const allowedFields = [
-    "employee_id", "full_name", "father_husband_name", "relationship_type",
-    "mother_name", "cnic", "cnic_issue_date", "cnic_expire_date", "date_of_birth",
-    "gender", "marital_status", "nationality", "religion", "blood_group",
-    "domicile_district", "mobile_number", "whatsapp_number", "email",
-    "present_address", "permanent_address", "same_address", "district", "city",
-    "has_disability", "disability_type", "disability_description", "status",
-    "missing_note", "profile_picture"
-  ];
-
-  for (const key of allowedFields) {
-    if (processedData[key] !== undefined) {
-      if (key === "same_address" || key === "has_disability") {
-        employeeUpdateData[key] = processedData[key] === "true" || processedData[key] === true;
-      } else if (dateFields.includes(key)) {
-        employeeUpdateData[key] = processedData[key]; // Use processed date or null
-      } else {
-        employeeUpdateData[key] = processedData[key];
-      }
-    }
-  }
-
-  // Sanitize profile_picture before file logic: if provided but not a non-empty string, set null
-  if (!processedFiles?.profile_picture_file && Object.prototype.hasOwnProperty.call(processedData, 'profile_picture')) {
-    const v = processedData.profile_picture;
-    if (typeof v !== 'string' || v.trim() === '' || v === 'null') {
-      employeeUpdateData.profile_picture = null;
-    }
-  }
-
-  // Debug logging for profile picture handling
-  console.log("🔍 Profile picture debug info:");
-  console.log("  - data.profile_picture:", data.profile_picture);
-  console.log("  - data.profile_picture type:", typeof data.profile_picture);
-  console.log("  - processedFiles?.profile_picture_file:", processedFiles?.profile_picture_file);
-  
-  // Determine intent
-  const hasNewProfilePic = !!processedFiles?.profile_picture_file;
-  const explicitRemove = Object.prototype.hasOwnProperty.call(data, 'profile_picture') && (
-    data.profile_picture === null ||
-    data.profile_picture === 'null' ||
-    data.profile_picture === ''
-  );
-
-  // Apply profile picture changes
-  if (hasNewProfilePic) {
-    console.log("Found profile picture file, updating employee:", processedFiles.profile_picture_file);
-    employeeUpdateData.profile_picture = processedFiles.profile_picture_file;
-  } else if (explicitRemove) {
-    console.log("Profile picture explicitly removed, setting to null");
-    employeeUpdateData.profile_picture = null;
-  } // else: leave undefined to keep existing value
-
-  // Ensure only string or null if provided
-  if (employeeUpdateData.hasOwnProperty('profile_picture') && employeeUpdateData.profile_picture !== null && typeof employeeUpdateData.profile_picture !== 'string') {
-    console.log("🔄 Coercing non-string profile_picture to null before DB update");
-    employeeUpdateData.profile_picture = null;
-  }
-
-  // Update employee with related data in a transaction
-  return prisma.$transaction(async (tx) => {
-    // Update main employee record
-    const employee = await tx.employee.update({
-      where: { id: parseInt(id) },
-      data: employeeUpdateData,
     });
 
-    console.log("🔍 Employee update verification:");
-    console.log("  - Updated employee ID:", employee.id);
-    console.log("  - Updated employee profile_picture:", employee.profile_picture);
-    console.log("  - Expected profile_picture value:", employeeUpdateData.profile_picture);
-    console.log("  - Profile picture update successful:", employeeUpdateData.hasOwnProperty('profile_picture') ? (employee.profile_picture === employeeUpdateData.profile_picture) : 'unchanged');
+    // Prepare main employee data
+    const employeeUpdateData = {};
+    const allowedFields = [
+      "employee_id", "full_name", "father_husband_name", "relationship_type",
+      "mother_name", "cnic", "cnic_issue_date", "cnic_expire_date", "date_of_birth",
+      "gender", "marital_status", "nationality", "religion", "blood_group",
+      "domicile_district", "mobile_number", "whatsapp_number", "email",
+      "present_address", "permanent_address", "same_address", "district", "city",
+      "district_id", "city_id",
+      "has_disability", "disability_type", "disability_description", "status",
+      "missing_note", "profile_picture"
+    ];
 
-    // Handle profile picture changes - update corresponding document record
-    console.log("🔍 Profile picture document handling debug:");
-    console.log("  - data.profile_picture:", data.profile_picture);
-    console.log("  - data.profile_picture type:", typeof data.profile_picture);
-    console.log("  - employeeUpdateData.profile_picture:", employeeUpdateData.profile_picture);
-    
-    // Removal only if explicitly requested and no new file uploaded
-    const isProfilePictureRemoved = explicitRemove && !hasNewProfilePic;
-    
-    console.log("🔍 Profile picture removal check:");
-    console.log("  - isProfilePictureRemoved:", isProfilePictureRemoved);
-    console.log("  - explicitRemove:", explicitRemove);
-    console.log("  - hasNewProfilePic:", hasNewProfilePic);
-    
-    if (isProfilePictureRemoved) {
-      console.log("Profile picture removed, updating corresponding document record");
-      try {
-        // Find and soft delete the profile picture document
-        const profilePictureDoc = await tx.employeeDocument.findFirst({
-          where: {
-            employee_id: employee.id,
-            file_type: 'profile_picture',
-            is_deleted: false
-          }
-        });
-        
-        console.log("  - Found profile picture document:", profilePictureDoc);
-        
-        if (profilePictureDoc) {
-          await tx.employeeDocument.update({
-            where: { id: profilePictureDoc.id },
-            data: { is_deleted: true }
-          });
-          console.log(`✅ Soft deleted profile picture document ${profilePictureDoc.id}`);
+    for (const key of allowedFields) {
+      if (processedData[key] !== undefined) {
+        if (key === "same_address" || key === "has_disability") {
+          employeeUpdateData[key] = processedData[key] === "true" || processedData[key] === true;
+        } else if (dateFields.includes(key)) {
+          employeeUpdateData[key] = processedData[key]; // Use processed date or null
+        } else if (key === 'district_id' || key === 'city_id') {
+          employeeUpdateData[key] = processedData[key] ? parseInt(processedData[key]) : null;
         } else {
-          console.log("No profile picture document found to soft delete");
+          employeeUpdateData[key] = processedData[key];
         }
-      } catch (error) {
-        console.error("❌ Error soft deleting profile picture document:", error.message);
-      }
-    } else if (hasNewProfilePic) {
-      console.log("New profile picture uploaded, updating corresponding document record");
-      try {
-        // Soft delete any existing profile picture document
-        const existingProfilePictureDoc = await tx.employeeDocument.findFirst({
-          where: {
-            employee_id: employee.id,
-            file_type: 'profile_picture',
-            is_deleted: false
-          }
-        });
-        
-        if (existingProfilePictureDoc) {
-          await tx.employeeDocument.update({
-            where: { id: existingProfilePictureDoc.id },
-            data: { is_deleted: true }
-          });
-          console.log(`✅ Soft deleted existing profile picture document ${existingProfilePictureDoc.id}`);
-        }
-        
-        // Create new profile picture document record
-        const newProfilePictureDoc = await tx.employeeDocument.create({
-          data: {
-            employee_id: employee.id,
-            file_type: 'profile_picture',
-            document_name: processedFiles.profile_picture_file.name || 'Profile Picture',
-            file_path: processedFiles.profile_picture_file,
-            file_size: processedFiles.profile_picture_file.size,
-            mime_type: processedFiles.profile_picture_file.type,
-            is_deleted: false
-          }
-        });
-        console.log(`✅ Created new profile picture document ${newProfilePictureDoc.id}`);
-      } catch (error) {
-        console.error("❌ Error updating profile picture document:", error.message);
       }
     }
 
-    // Initialize ID mappings for new records
-    const experienceIdMapping = {};
-    const educationIdMapping = {};
+    // Sanitize profile_picture before file logic: if provided but not a non-empty string, set null
+    if (!processedFiles?.profile_picture_file && Object.prototype.hasOwnProperty.call(processedData, 'profile_picture')) {
+      const v = processedData.profile_picture;
+      if (typeof v !== 'string' || v.trim() === '' || v === 'null') {
+        employeeUpdateData.profile_picture = null;
+      }
+    }
 
-    // Process past experiences
-    if (past_experiences && Array.isArray(past_experiences)) {
-      console.log("Received past_experiences:", JSON.stringify(past_experiences, null, 2));
-      const existingExperiences = await tx.pastExperience.findMany({
-        where: { 
-          employee_id: employee.id,
-          is_deleted: false
+    // Debug logging for profile picture handling
+    console.log("🔍 Profile picture debug info:");
+    console.log("  - data.profile_picture:", data.profile_picture);
+    console.log("  - data.profile_picture type:", typeof data.profile_picture);
+    console.log("  - processedFiles?.profile_picture_file:", processedFiles?.profile_picture_file);
+    
+    // Determine intent
+    const hasNewProfilePic = !!processedFiles?.profile_picture_file;
+    const explicitRemove = Object.prototype.hasOwnProperty.call(data, 'profile_picture') && (
+      data.profile_picture === null ||
+      data.profile_picture === 'null' ||
+      data.profile_picture === ''
+    );
+
+    // Apply profile picture changes
+    if (hasNewProfilePic) {
+      console.log("Found profile picture file, updating employee:", processedFiles.profile_picture_file);
+      employeeUpdateData.profile_picture = processedFiles.profile_picture_file;
+    } else if (explicitRemove) {
+      console.log("Profile picture explicitly removed, setting to null");
+      employeeUpdateData.profile_picture = null;
+    } // else: leave undefined to keep existing value
+
+    // Ensure only string or null if provided
+    if (employeeUpdateData.hasOwnProperty('profile_picture') && employeeUpdateData.profile_picture !== null && typeof employeeUpdateData.profile_picture !== 'string') {
+      console.log("🔄 Coercing non-string profile_picture to null before DB update");
+      employeeUpdateData.profile_picture = null;
+    }
+
+    // Update employee with related data in a transaction
+    return prisma.$transaction(async (tx) => {
+      // Update main employee record
+      const employee = await tx.employee.update({
+        where: { id: parseInt(id) },
+        data: employeeUpdateData,
+      });
+
+      console.log("🔍 Employee update verification:");
+      console.log("  - Updated employee ID:", employee.id);
+      console.log("  - Updated employee profile_picture:", employee.profile_picture);
+      console.log("  - Expected profile_picture value:", employeeUpdateData.profile_picture);
+      console.log("  - Profile picture update successful:", employeeUpdateData.hasOwnProperty('profile_picture') ? (employee.profile_picture === employeeUpdateData.profile_picture) : 'unchanged');
+
+      // Handle profile picture changes - update corresponding document record
+      console.log("🔍 Profile picture document handling debug:");
+      console.log("  - data.profile_picture:", data.profile_picture);
+      console.log("  - data.profile_picture type:", typeof data.profile_picture);
+      console.log("  - employeeUpdateData.profile_picture:", employeeUpdateData.profile_picture);
+      
+      // Removal only if explicitly requested and no new file uploaded
+      const isProfilePictureRemoved = explicitRemove && !hasNewProfilePic;
+      
+      console.log("🔍 Profile picture removal check:");
+      console.log("  - isProfilePictureRemoved:", isProfilePictureRemoved);
+      console.log("  - explicitRemove:", explicitRemove);
+      console.log("  - hasNewProfilePic:", hasNewProfilePic);
+      
+      if (isProfilePictureRemoved) {
+        console.log("Profile picture removed, updating corresponding document record");
+        try {
+          // Find and soft delete the profile picture document
+          const profilePictureDoc = await tx.employeeDocument.findFirst({
+            where: {
+              employee_id: employee.id,
+              file_type: 'profile_picture',
+              is_deleted: false
+            }
+          });
+          
+          console.log("  - Found profile picture document:", profilePictureDoc);
+          
+          if (profilePictureDoc) {
+            await tx.employeeDocument.update({
+              where: { id: profilePictureDoc.id },
+              data: { is_deleted: true }
+            });
+            console.log(`✅ Soft deleted profile picture document ${profilePictureDoc.id}`);
+          } else {
+            console.log("No profile picture document found to soft delete");
+          }
+        } catch (error) {
+          console.error("❌ Error soft deleting profile picture document:", error.message);
         }
-      });
-      console.log("Existing experiences:", JSON.stringify(existingExperiences, null, 2));
-
-      const existingExpMap = new Map(existingExperiences.map(exp => [exp.id, exp]));
-      const incomingExpMap = new Map(
-        past_experiences
-          .filter(exp => exp.id && !isNaN(parseInt(exp.id)) && parseInt(exp.id) > 0)
-          .map(exp => [parseInt(exp.id), exp])
-      );
-      const newExperiences = past_experiences.filter(exp => {
-        const expId = parseInt(exp.id);
-        return !exp.id || isNaN(expId) || !existingExpMap.has(expId);
-      });
-
-      console.log("New experiences to create:", JSON.stringify(newExperiences, null, 2));
-      console.log("Incoming experiences with IDs:", JSON.stringify([...incomingExpMap.values()], null, 2));
-
-      // Update existing experiences
-      for (const [expId, incomingExp] of incomingExpMap) {
-        if (existingExpMap.has(expId)) {
-          console.log(`Updating experience ID ${expId}:`, incomingExp);
-          await tx.pastExperience.update({
-            where: { id: expId },
+      } else if (hasNewProfilePic) {
+        console.log("New profile picture uploaded, updating corresponding document record");
+        try {
+          // Soft delete any existing profile picture document
+          const existingProfilePictureDoc = await tx.employeeDocument.findFirst({
+            where: {
+              employee_id: employee.id,
+              file_type: 'profile_picture',
+              is_deleted: false
+            }
+          });
+          
+          if (existingProfilePictureDoc) {
+            await tx.employeeDocument.update({
+              where: { id: existingProfilePictureDoc.id },
+              data: { is_deleted: true }
+            });
+            console.log(`✅ Soft deleted existing profile picture document ${existingProfilePictureDoc.id}`);
+          }
+          
+          // Create new profile picture document record
+          const newProfilePictureDoc = await tx.employeeDocument.create({
             data: {
+              employee_id: employee.id,
+              file_type: 'profile_picture',
+              document_name: processedFiles.profile_picture_file.name || 'Profile Picture',
+              file_path: processedFiles.profile_picture_file,
+              file_size: processedFiles.profile_picture_file.size,
+              mime_type: processedFiles.profile_picture_file.type,
+              is_deleted: false
+            }
+          });
+          console.log(`✅ Created new profile picture document ${newProfilePictureDoc.id}`);
+        } catch (error) {
+          console.error("❌ Error updating profile picture document:", error.message);
+        }
+      }
+
+      // Initialize ID mappings for new records
+      const experienceIdMapping = {};
+      const educationIdMapping = {};
+
+      // Process past experiences
+      if (past_experiences && Array.isArray(past_experiences)) {
+        console.log("Received past_experiences:", JSON.stringify(past_experiences, null, 2));
+        const existingExperiences = await tx.pastExperience.findMany({
+          where: { employee_id: employee.id, is_deleted: false },
+        });
+
+        const existingExpMap = new Map(existingExperiences.map(exp => [exp.id, exp]));
+        const incomingExpMap = new Map(
+          past_experiences
+            .filter(exp => exp.id && !isNaN(parseInt(exp.id)) && parseInt(exp.id) > 0)
+            .map(exp => [parseInt(exp.id), exp])
+        );
+
+        // Update existing experiences
+        for (const [expId, incomingExp] of incomingExpMap) {
+          if (existingExpMap.has(expId)) {
+            await tx.pastExperience.update({
+              where: { id: expId },
+              data: {
+                company_name: incomingExp.company_name || "",
+                position: incomingExp.position || "",
+                start_date: incomingExp.start_date || "",
+                end_date: incomingExp.end_date || "",
+                description: incomingExp.description || "",
+              }
+            });
+            existingExpMap.delete(expId);
+          }
+        }
+
+        // Create new experiences
+        for (const incomingExp of past_experiences.filter(exp => !exp.id || isNaN(parseInt(exp.id)))) {
+          const createdExp = await tx.pastExperience.create({
+            data: {
+              employee_id: employee.id,
               company_name: incomingExp.company_name || "",
               position: incomingExp.position || "",
               start_date: incomingExp.start_date || "",
               end_date: incomingExp.end_date || "",
-              description: incomingExp.description || ""
+              description: incomingExp.description || "",
             }
           });
-          existingExpMap.delete(expId);
-          console.log(`Updated experience ID ${expId}`);
+          if (incomingExp.id) experienceIdMapping[incomingExp.id] = createdExp.id;
         }
+
+        // Delete remaining existing experiences not in request
+        for (const leftover of existingExpMap.values()) {
+          await tx.pastExperience.delete({ where: { id: leftover.id } });
+        }
+      } else {
+        console.log("No past_experiences provided or not an array");
       }
 
-      // Create new experiences and store ID mappings
-      for (const exp of newExperiences) {
-        if (!exp.company_name || exp.company_name.trim() === "") {
-          console.warn("Skipping experience with missing or empty company_name:", JSON.stringify(exp, null, 2));
-          continue;
-        }
-        try {
-          const createdExp = await tx.pastExperience.create({
-            data: {
-              employee: { connect: { id: employee.id } },
-              company_name: exp.company_name,
-              position: exp.position || "",
-              start_date: exp.start_date || "",
-              end_date: exp.end_date || "",
-              description: exp.description || ""
+      // Handle educations
+      if (educations && Array.isArray(educations)) {
+        console.log("Received educations:", JSON.stringify(educations, null, 2));
+        const existingEducations = await tx.educationQualification.findMany({
+          where: { employee_id: employee.id, is_deleted: false },
+        });
+        console.log("Existing educations:", JSON.stringify(existingEducations, null, 2));
+
+        const existingEduMap = new Map(existingEducations.map(edu => [edu.id, edu]));
+        const incomingEduMap = new Map(
+          educations
+            .filter(edu => edu.id && !isNaN(parseInt(edu.id)) && parseInt(edu.id) > 0)
+            .map(edu => [parseInt(edu.id), edu])
+        );
+        const newEducations = educations.filter(edu => {
+          const eduId = parseInt(edu.id);
+          return !edu.id || isNaN(eduId) || !existingEduMap.has(eduId);
+        });
+
+        console.log("New educations to create:", JSON.stringify(newEducations, null, 2));
+        console.log("Incoming educations with IDs:", JSON.stringify([...incomingEduMap.values()], null, 2));
+
+        // Update existing educations
+        for (const [eduId, incomingEdu] of incomingEduMap) {
+          if (existingEduMap.has(eduId)) {
+            console.log(`Updating education ID ${eduId}:`, incomingEdu);
+            // Parse start_date
+            let startDate = null;
+            if (incomingEdu.start_date && typeof incomingEdu.start_date === 'string' && incomingEdu.start_date.trim() !== '') {
+              const d = new Date(incomingEdu.start_date);
+              if (!isNaN(d.getTime())) startDate = d;
             }
-          });
-          if (exp.id) {
-            experienceIdMapping[exp.id] = createdExp.id; // Map temporary ID to database ID
+            const levelId = incomingEdu.education_level_id ? parseInt(incomingEdu.education_level_id) : null;
+            await tx.educationQualification.update({
+              where: { id: eduId },
+              data: {
+                education_level: incomingEdu.education_level || "",
+                education_level_id: levelId,
+                institution_name: incomingEdu.institution_name || "",
+                year_of_completion: incomingEdu.year_of_completion || "",
+                marks_gpa: incomingEdu.marks_gpa || "",
+                start_date: startDate,
+              }
+            });
+            existingEduMap.delete(eduId);
+            console.log(`Updated education ID ${eduId}`);
           }
-          console.log("Created new experience:", createdExp.id, exp.company_name);
-        } catch (error) {
-          console.error("Error creating experience:", error.message, "Data:", JSON.stringify(exp, null, 2));
         }
-      }
 
-      // Delete unprocessed existing experiences
-      const incomingExperienceIds = (past_experiences || [])
-  .map(exp => parseInt(exp.id))
-  .filter(id => !isNaN(id));
-
-console.log("Incoming experience IDs from request:", incomingExperienceIds);
-console.log("Existing experience IDs in DB:", existingExperiences.map(e => e.id));
-
-// 3. Find experiences that should be deleted (not in request)
-const experiencesToDelete = existingExperiences.filter(
-  exp => !incomingExperienceIds.includes(exp.id)
-);
-
-console.log("Experiences to delete:", experiencesToDelete.map(e => e.id));
-
-// 4. Delete documents and experiences
-for (const exp of experiencesToDelete) {
-  try {
-    await tx.employeeDocument.deleteMany({
-      where: {
-        employee_id: employee.id,
-        file_type: 'experience',
-        associated_id: exp.id
-      }
-    });
-    console.log(`Deleted documents for experience ${exp.id}`);
-
-    await tx.pastExperience.delete({ where: { id: exp.id } });
-    console.log(`✅ Deleted experience ${exp.id}`);
-  } catch (err) {
-    console.error(`❌ Error deleting experience ${exp.id}:`, err.message);
-  }
-}
-    } else {
-      console.log("No past_experiences provided or not an array");
-    }
-
-    // Process education qualifications
-    if (educations && Array.isArray(educations)) {
-      console.log("Received educations:", JSON.stringify(educations, null, 2));
-      const existingEducations = await tx.educationQualification.findMany({
-        where: { 
-          employee_id: employee.id,
-          is_deleted: false
-        }
-      });
-      console.log("Existing educations:", JSON.stringify(existingEducations, null, 2));
-
-      const existingEduMap = new Map(existingEducations.map(edu => [edu.id, edu]));
-      const incomingEduMap = new Map(
-        educations
-          .filter(edu => edu.id && !isNaN(parseInt(edu.id)) && parseInt(edu.id) > 0)
-          .map(edu => [parseInt(edu.id), edu])
-      );
-      const newEducations = educations.filter(edu => {
-        const eduId = parseInt(edu.id);
-        return !edu.id || isNaN(eduId) || !existingEduMap.has(eduId);
-      });
-
-      console.log("New educations to create:", JSON.stringify(newEducations, null, 2));
-      console.log("Incoming educations with IDs:", JSON.stringify([...incomingEduMap.values()], null, 2));
-
-      // Update existing educations
-      for (const [eduId, incomingEdu] of incomingEduMap) {
-        if (existingEduMap.has(eduId)) {
-          console.log(`Updating education ID ${eduId}:`, incomingEdu);
-          await tx.educationQualification.update({
-            where: { id: eduId },
-            data: {
-              education_level: incomingEdu.education_level || "",
-              institution_name: incomingEdu.institution_name || "",
-              year_of_completion: incomingEdu.year_of_completion || "",
-              marks_gpa: incomingEdu.marks_gpa || ""
-            }
-          });
-          existingEduMap.delete(eduId);
-          console.log(`Updated education ID ${eduId}`);
-        }
-      }
-
-      // Create new educations and store ID mappings
-      for (const edu of newEducations) {
-        if (!edu.education_level || edu.education_level.trim() === "" || !edu.institution_name || edu.institution_name.trim() === "") {
-          console.warn("Skipping education with missing or empty required fields:", JSON.stringify(edu, null, 2));
-          continue;
-        }
-        try {
-          const createdEdu = await tx.educationQualification.create({
-            data: {
-              employee: { connect: { id: employee.id } },
-              education_level: edu.education_level,
-              institution_name: edu.institution_name,
-              year_of_completion: edu.year_of_completion || "",
-              marks_gpa: edu.marks_gpa || ""
-            }
-          });
-          if (edu.id) {
-            educationIdMapping[edu.id] = createdEdu.id; // Map temporary ID to database ID
+        // Create new educations and store ID mappings
+        for (const edu of newEducations) {
+          if (!edu.institution_name || edu.institution_name.trim() === "") {
+            console.warn("Skipping education with missing or empty institution_name:", JSON.stringify(edu, null, 2));
+            continue;
           }
-          console.log("Created new education:", createdEdu.id, edu.education_level, edu.institution_name);
-        } catch (error) {
-          console.error("Error creating education:", error.message, "Data:", JSON.stringify(edu, null, 2));
+          // Parse start_date
+          let startDate = null;
+          if (edu.start_date && typeof edu.start_date === 'string' && edu.start_date.trim() !== '') {
+            const d = new Date(edu.start_date);
+            if (!isNaN(d.getTime())) startDate = d;
+          }
+          const levelId = edu.education_level_id ? parseInt(edu.education_level_id) : null;
+          try {
+            const createdEdu = await tx.educationQualification.create({
+              data: {
+                employee: { connect: { id: employee.id } },
+                education_level: edu.education_level || "",
+                education_level_id: levelId,
+                institution_name: edu.institution_name,
+                year_of_completion: edu.year_of_completion || "",
+                marks_gpa: edu.marks_gpa || "",
+                start_date: startDate,
+              }
+            });
+            if (edu.id) {
+              educationIdMapping[edu.id] = createdEdu.id; // Map temporary ID to database ID
+            }
+            console.log("Created new education:", createdEdu.id, edu.education_level, edu.institution_name);
+          } catch (error) {
+            console.error("Error creating education:", error.message, "Data:", JSON.stringify(edu, null, 2));
+          }
         }
-      }
 
-      // Delete unprocessed existing educations
-     const incomingEducationIds = (educations || [])
-  .map(edu => parseInt(edu.id))
-  .filter(id => !isNaN(id));
+        // Delete unprocessed existing educations
+       const incomingEducationIds = (educations || [])
+    .map(edu => parseInt(edu.id))
+    .filter(id => !isNaN(id));
 
 console.log("Incoming education IDs from request:", incomingEducationIds);
 console.log("Existing education IDs in DB:", existingEducations.map(e => e.id));
@@ -601,20 +582,20 @@ for (const edu of educationsToDelete) {
     console.error(`❌ Error deleting education ${edu.id}:`, err.message);
   }
 }
-    } else {
-      console.log("No educations provided or not an array");
+      } else {
+        console.log("No educations provided or not an array");
+      }
+    // Delete disability document if has_disability is false or not provided
+    if (!employeeUpdateData.has_disability) {
+      await tx.employeeDocument.deleteMany({
+        where: {
+          employee_id: employee.id,
+          file_type: 'disability',
+          associated_id: null
+        }
+      });
+      console.log("Deleted disability document as has_disability is false or not provided");
     }
-// Delete disability document if has_disability is false or not provided
-if (!employeeUpdateData.has_disability) {
-  await tx.employeeDocument.deleteMany({
-    where: {
-      employee_id: employee.id,
-      file_type: 'disability',
-      associated_id: null
-    }
-  });
-  console.log("Deleted disability document as has_disability is false or not provided");
-}
 
     // Process document changes
     await processDocumentChanges(tx, employee.id, data, documentRecords || []);
@@ -676,8 +657,10 @@ if (!employeeUpdateData.has_disability) {
         is_deleted: false
       },
       include: {
+        districtRef: true,
+        cityRef: true,
         pastExperiences: true,
-        educationQualifications: true,
+        educationQualifications: { include: { level: true } },
         documents: true,
         employmentRecords: {
           include: {
@@ -718,11 +701,14 @@ if (!employeeUpdateData.has_disability) {
       const employees = await prisma.employee.findMany({
         where: includeDeleted ? {} : { is_deleted: false },
         include: {
+          districtRef: true,
+          cityRef: true,
           pastExperiences: {
             where: includeDeleted ? {} : { is_deleted: false }
           },
           educationQualifications: {
-            where: includeDeleted ? {} : { is_deleted: false }
+            where: includeDeleted ? {} : { is_deleted: false },
+            include: { level: true }
           },
           documents: {
             where: includeDeleted ? {} : { is_deleted: false }
@@ -766,11 +752,14 @@ if (!employeeUpdateData.has_disability) {
         ...(includeDeleted ? {} : { is_deleted: false })
       },
       include: {
+        districtRef: true,
+        cityRef: true,
         pastExperiences: {
           where: includeDeleted ? {} : { is_deleted: false }
         },
         educationQualifications: {
-          where: includeDeleted ? {} : { is_deleted: false }
+          where: includeDeleted ? {} : { is_deleted: false },
+          include: { level: true }
         },
         documents: {
           where: includeDeleted ? {} : { is_deleted: false }
@@ -798,211 +787,28 @@ if (!employeeUpdateData.has_disability) {
             }
           }
         }
-      },
+      }
     });
-
-    if (!emp) return null;
-
-    const processedDocuments = emp.documents.map(doc => {
-      const normalizedPath = doc.file_path.replace(/\\/g, '/');
-      const cleanPath = normalizedPath.startsWith('uploads/') ? normalizedPath.substring(8) : normalizedPath;
-      return {
-        ...doc,
-        url: `/uploads/${cleanPath}`,
-        isImage: /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(doc.file_path),
-        isPdf: /\.pdf$/i.test(doc.file_path),
-        fileExtension: doc.file_path.substring(doc.file_path.lastIndexOf('.') + 1).toLowerCase()
-      };
-    });
-
-    const profilePictureDoc = processedDocuments.find(doc => doc.file_type === 'profile_picture');
-    if (profilePictureDoc && !emp.profile_picture) {
-      await prisma.employee.update({
-        where: { id: emp.id },
-        data: { profile_picture: profilePictureDoc.file_path }
-      });
-      emp.profile_picture = profilePictureDoc.file_path;
-    }
-
-    let profilePictureUrl = null;
-    if (emp.profile_picture) {
-      const normalizedPath = emp.profile_picture.replace(/\\/g, '/');
-      const cleanPath = normalizedPath.startsWith('uploads/') ? normalizedPath.substring(8) : normalizedPath;
-      profilePictureUrl = `/uploads/${cleanPath}`;
-    }
-
-    return {
-      ...emp,
-      documents: processedDocuments,
-      profile_picture_url: profilePictureUrl,
-      profile_picture_document: profilePictureDoc,
-    };
+    return emp;
   },
 
   deleteEmployee: async (id) => {
-    return await prisma.$transaction(async (tx) => {
-      // Soft delete the employee and all related records
-      
-      // 1. Soft delete employment documents
-      await tx.employmentDocument.updateMany({
-        where: {
-          employment: {
-            employee_id: parseInt(id)
-          }
-        },
-        data: { is_deleted: true }
-      });
+    try {
+      const employee = await prisma.employee.findUnique({ where: { id: parseInt(id) } });
+      if (!employee) return null;
 
-      // 2. Soft delete employment contracts
-      await tx.employmentContract.updateMany({
-        where: {
-          employment: {
-            employee_id: parseInt(id)
-          }
-        },
-        data: { is_deleted: true }
-      });
+      // Soft delete employee and related records
+      await prisma.employee.update({ where: { id: parseInt(id) }, data: { is_deleted: true } });
+      await prisma.pastExperience.updateMany({ where: { employee_id: parseInt(id) }, data: { is_deleted: true } });
+      await prisma.educationQualification.updateMany({ where: { employee_id: parseInt(id) }, data: { is_deleted: true } });
+      await prisma.employment.updateMany({ where: { employee_id: parseInt(id) }, data: { is_deleted: true } });
 
-      // 3. Soft delete employment locations
-      await tx.employmentLocation.updateMany({
-        where: {
-          employment: {
-            employee_id: parseInt(id)
-          }
-        },
-        data: { is_deleted: true }
-      });
-
-      // 4. Soft delete employment salaries
-      await tx.employmentSalary.updateMany({
-        where: {
-          employment: {
-            employee_id: parseInt(id)
-          }
-        },
-        data: { is_deleted: true }
-      });
-
-      // 5. Soft delete employment records
-      await tx.employment.updateMany({
-        where: { employee_id: parseInt(id) },
-        data: { is_deleted: true }
-      });
-
-      // 6. Soft delete employee documents
-      await tx.employeeDocument.updateMany({
-        where: { employee_id: parseInt(id) },
-        data: { is_deleted: true }
-      });
-
-      // 7. Soft delete education qualifications
-      await tx.educationQualification.updateMany({
-        where: { employee_id: parseInt(id) },
-        data: { is_deleted: true }
-      });
-
-      // 8. Soft delete past experiences
-      await tx.pastExperience.updateMany({
-        where: { employee_id: parseInt(id) },
-        data: { is_deleted: true }
-      });
-
-      // 9. Finally soft delete the employee
-      const deletedEmployee = await tx.employee.update({
-        where: { id: parseInt(id) },
-        data: { is_deleted: true }
-      });
-
-      return {
-        success: true,
-        message: `Employee ${deletedEmployee.full_name} and all related records soft deleted successfully`,
-        deletedEmployee
-      };
-    });
-  },
-
-  // Restore a soft-deleted employee
-  restoreEmployee: async (id) => {
-    return await prisma.$transaction(async (tx) => {
-      // Restore the employee and all related records
-      
-      // 1. Restore the employee
-      const restoredEmployee = await tx.employee.update({
-        where: { id: parseInt(id) },
-        data: { is_deleted: false }
-      });
-
-      // 2. Restore employment records
-      await tx.employment.updateMany({
-        where: { employee_id: parseInt(id) },
-        data: { is_deleted: false }
-      });
-
-      // 3. Restore employment salaries
-      await tx.employmentSalary.updateMany({
-        where: {
-          employment: {
-            employee_id: parseInt(id)
-          }
-        },
-        data: { is_deleted: false }
-      });
-
-      // 4. Restore employment locations
-      await tx.employmentLocation.updateMany({
-        where: {
-          employment: {
-            employee_id: parseInt(id)
-          }
-        },
-        data: { is_deleted: false }
-      });
-
-      // 5. Restore employment contracts
-      await tx.employmentContract.updateMany({
-        where: {
-          employment: {
-            employee_id: parseInt(id)
-          }
-        },
-        data: { is_deleted: false }
-      });
-
-      // 6. Restore employment documents
-      await tx.employmentDocument.updateMany({
-        where: {
-          employment: {
-            employee_id: parseInt(id)
-          }
-        },
-        data: { is_deleted: false }
-      });
-
-      // 7. Restore employee documents
-      await tx.employeeDocument.updateMany({
-        where: { employee_id: parseInt(id) },
-        data: { is_deleted: false }
-      });
-
-      // 8. Restore education qualifications
-      await tx.educationQualification.updateMany({
-        where: { employee_id: parseInt(id) },
-        data: { is_deleted: false }
-      });
-
-      // 9. Restore past experiences
-      await tx.pastExperience.updateMany({
-        where: { employee_id: parseInt(id) },
-        data: { is_deleted: false }
-      });
-
-      return {
-        success: true,
-        message: `Employee ${restoredEmployee.full_name} and all related records restored successfully`,
-        restoredEmployee
-      };
-    });
-  },
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting employee:", error.message);
+      throw new Error("Failed to delete employee");
+    }
+  }
 };
 
 const processDocumentChanges = async (tx, employeeId, data, documentRecords) => {

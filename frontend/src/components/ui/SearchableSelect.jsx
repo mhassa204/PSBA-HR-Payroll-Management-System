@@ -8,7 +8,8 @@ import React, { useState, useRef, useEffect } from 'react';
  * 
  * @param {Object} props - Component props
  * @param {Array} props.options - Array of options {value, label, description}
- * @param {string} props.value - Current selected value
+ * @param {string|number} props.value - Current selected value
+ * @param {string} [props.valueLabel] - Fallback label to display when selected option is not present in options yet
  * @param {function} props.onChange - Callback when selection changes
  * @param {string} props.placeholder - Placeholder text
  * @param {boolean} props.disabled - Whether the select is disabled
@@ -23,6 +24,7 @@ import React, { useState, useRef, useEffect } from 'react';
 const SearchableSelect = ({
   options = [],
   value = '',
+  valueLabel = '',
   onChange,
   placeholder = 'Select an option...',
   disabled = false,
@@ -67,8 +69,9 @@ const SearchableSelect = ({
     (option.description && option.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Find selected option for display
-  const selectedOption = options.find(option => option.value == value);
+  // Find selected option for display (robust string comparison)
+  const selectedOption = options.find(option => String(option.value) === String(value));
+  const selectedLabel = selectedOption?.label ?? valueLabel;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -140,7 +143,8 @@ const SearchableSelect = ({
   // Handle option selection
   const handleSelect = (option) => {
     if (onChange) {
-      onChange(option.value);
+      // Pass value and label (and full option) for compatibility
+      onChange(option.value, option.label, option);
     }
     setIsOpen(false);
     setSearchTerm('');
@@ -193,19 +197,17 @@ const SearchableSelect = ({
     }
   }, [highlightedIndex]);
 
+  // Build themed base class using existing form-input styles
   const baseClassName = `
-    relative w-full px-4 py-3 border border-gray-300 rounded-lg 
-    focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
-    bg-white text-gray-900 cursor-pointer transition-all duration-200
-    ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:border-gray-400 hover:shadow-sm'}
-    ${error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}
+    form-input relative cursor-pointer transition-all duration-200
+    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+    ${error ? 'error' : ''}
     ${className}
   `.trim();
 
   return (
     <div className="relative w-full" ref={dropdownRef} style={{ 
       isolation: 'isolate',
-      // Use reasonable z-index values to prevent overlapping issues
       zIndex: isOpen ? getZIndex() : 'auto'
     }}>
       {/* Hidden input for form integration */}
@@ -231,17 +233,17 @@ const SearchableSelect = ({
       >
         <div className="flex items-center justify-between min-h-[24px]">
           <div className="flex-1 min-w-0">
-            {selectedOption ? (
-              <div className="text-gray-900 font-medium">
-                <div className="truncate">{selectedOption.label}</div>
-                {selectedOption.description && (
-                  <div className="text-xs text-gray-500 truncate mt-1">
+            {selectedLabel ? (
+              <div className="font-medium" style={{ color: 'var(--form-input-text)' }}>
+                <div className="truncate">{selectedLabel}</div>
+                {selectedOption?.description && (
+                  <div className="text-xs truncate mt-1" style={{ color: 'var(--color-text-muted)' }}>
                     {selectedOption.description}
                   </div>
                 )}
               </div>
             ) : (
-              <span className="text-gray-500">{placeholder}</span>
+              <span className="text-muted">{placeholder}</span>
             )}
           </div>
           <div className="flex items-center space-x-2 ml-3 flex-shrink-0">
@@ -249,9 +251,10 @@ const SearchableSelect = ({
               <button
                 type="button"
                 onClick={handleClear}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+                className="transition-colors p-1 rounded-full hover:bg-gray-100"
                 tabIndex={-1}
                 title="Clear selection"
+                style={{ color: 'var(--color-text-muted)' }}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -259,12 +262,13 @@ const SearchableSelect = ({
               </button>
             )}
             <svg
-              className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${
+              className={`w-5 h-5 transition-transform duration-200 ${
                 isOpen ? 'transform rotate-180' : ''
               }`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              style={{ color: 'var(--color-text-muted)' }}
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
@@ -307,27 +311,30 @@ const SearchableSelect = ({
           {/* Options list */}
           <div className="max-h-48 overflow-y-auto" role="listbox" style={{ maxHeight: '192px' }}>
             {filteredOptions.length > 0 ? (
-              filteredOptions.map((option, index) => (
-                <div
-                  key={option.value}
-                  ref={el => optionsRef.current[index] = el}
-                  className={`
-                    px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0
-                    ${highlightedIndex === index ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50'}
-                    ${value === option.value ? 'bg-blue-100 text-blue-900 font-medium' : 'text-gray-900'}
-                  `}
-                  onClick={() => handleSelect(option)}
-                  role="option"
-                  aria-selected={value === option.value}
-                >
-                  <div className="text-sm font-medium leading-relaxed">{option.label}</div>
-                  {option.description && (
-                    <div className="text-xs text-gray-600 mt-1 leading-relaxed">
-                      {option.description}
-                    </div>
-                  )}
-                </div>
-              ))
+              filteredOptions.map((option, index) => {
+                const isSelected = String(value) === String(option.value);
+                return (
+                  <div
+                    key={option.value}
+                    ref={el => optionsRef.current[index] = el}
+                    className={`
+                      px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0
+                      ${highlightedIndex === index ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50'}
+                      ${isSelected ? 'bg-blue-100 text-blue-900 font-medium' : 'text-gray-900'}
+                    `}
+                    onClick={() => handleSelect(option)}
+                    role="option"
+                    aria-selected={isSelected}
+                  >
+                    <div className="text-sm font-medium leading-relaxed">{option.label}</div>
+                    {option.description && (
+                      <div className="text-xs text-gray-600 mt-1 leading-relaxed">
+                        {option.description}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             ) : (
               <div className="px-4 py-8 text-center">
                 <div className="text-gray-400 mb-2">

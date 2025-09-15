@@ -69,7 +69,20 @@ const navigation = [
     name: 'Settings', 
     href: '/settings', 
     icon: CogIcon,
-    description: 'System configuration'
+    description: 'System configuration',
+    children: [
+      { name: 'Departments', href: '/settings/departments' },
+      { name: 'Designations', href: '/settings/designations' },
+      { name: 'Role Tags', href: '/settings/role-tags' },
+      { name: 'Scale Grades', href: '/settings/scale-grades' },
+      { name: 'Locations', href: '/settings/locations' },
+      { name: 'Devices', href: '/settings/devices' },
+      { name: 'Roles', href: '/settings/roles' },
+      // New entries
+      { name: 'Districts', href: '/settings/districts' },
+      { name: 'Cities', href: '/settings/cities' },
+      { name: 'Education Levels', href: '/settings/education-levels' }
+    ]
   }
 ];
 
@@ -137,6 +150,16 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
         });
       }
     });
+  }, [location.pathname]);
+
+  // Ensure Settings expands on visiting /settings root
+  useEffect(() => {
+    if (location.pathname.startsWith('/settings')) {
+      setExpandedItems(prev => {
+        if (prev.has('Settings')) return prev;
+        const s = new Set(prev); s.add('Settings'); return s;
+      });
+    }
   }, [location.pathname]);
 
   return (

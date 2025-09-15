@@ -11,10 +11,13 @@ import { useAuditLog } from "../../../hooks/useAuditLog";
 import { forceRestoreScroll } from "../../../utils/scrollUtils";
 import ProfilePicture from "../../../components/ui/ProfilePicture";
 import CNICInput from "../../../components/ui/CNICInput";
+import { districtService } from "../../settings/services/districtService";
+import { cityService } from "../../settings/services/cityService";
+import { educationLevelService } from "../../settings/services/educationLevelService";
 import {
   RELIGION_OPTIONS,
   DISABILITY_TYPES,
-  EDUCATION_QUALIFICATIONS,
+  // EDUCATION_QUALIFICATIONS, // replaced with API
   MARITAL_STATUS_OPTIONS,
   RELATIONSHIP_TYPES,
   PAKISTAN_DISTRICTS,
@@ -41,8 +44,16 @@ const CreateEmployeeForm = () => {
   const [experiences, setExperiences] = useState([]);
   const [educations, setEducations] = useState([]);
 
-  // Enhanced form state
-  const [availableCities, setAvailableCities] = useState([]);
+  // Master data options (API-driven)
+  const [districtOptions, setDistrictOptions] = useState([]);
+  const [availableCities, setAvailableCities] = useState([]); // now from API
+  const [educationLevelOptions, setEducationLevelOptions] = useState([]);
+
+  // Quick lookup maps for preview labels
+  const [districtMap, setDistrictMap] = useState({});
+  const [cityMap, setCityMap] = useState({});
+  const [levelMap, setLevelMap] = useState({});
+
   const [profilePicturePreview, setProfilePicturePreview] = useState(null);
   const [uploadedFiles, setUploadedFiles] = useState({
     cnic_front: null,
@@ -80,8 +91,9 @@ const CreateEmployeeForm = () => {
       present_address: "",
       permanent_address: "",
       same_address: false, // New field for address optimization
-      district: "",
-      city: "",
+      // Replaced district/city strings with IDs
+      district_id: "",
+      city_id: "",
       // Enhanced disability information
       has_disability: false,
       disability_type: "",
@@ -112,18 +124,49 @@ const CreateEmployeeForm = () => {
     });
   }, [logPageView]);
 
-  // Watch for district changes to update cities
-  const watchedDistrict = form.watch("district");
+  // Load master data (districts, education levels)
   useEffect(() => {
-    if (watchedDistrict) {
-      const cities = getCitiesForDistrict(watchedDistrict);
-      setAvailableCities(cities);
-      // Reset city when district changes
-      form.setValue("city", "");
-    } else {
-      setAvailableCities([]);
-    }
-  }, [watchedDistrict, form]);
+    (async () => {
+      try {
+        const [districts, levels] = await Promise.all([
+          districtService.getAllDistricts(),
+          educationLevelService.getAllLevels(),
+        ]);
+        const dList = (districts?.districts || districts || []).map(d => ({ value: d.id, label: d.name }));
+        setDistrictOptions(dList);
+        setDistrictMap(Object.fromEntries(dList.map(o => [String(o.value), o.label])));
+
+        const lList = (levels || []).map(l => ({ value: l.id, label: l.name }));
+        setEducationLevelOptions(lList);
+        setLevelMap(Object.fromEntries(lList.map(o => [String(o.value), o.label])));
+      } catch (_) {
+        // ignore; UI will show empty options
+      }
+    })();
+  }, []);
+
+  // Watch for district changes to update cities
+  const watchedDistrictId = form.watch("district_id");
+  useEffect(() => {
+    (async () => {
+      if (watchedDistrictId) {
+        try {
+          const cities = await cityService.getAllCities({ district_id: watchedDistrictId });
+          const cList = (cities?.cities || cities || []).map(c => ({ value: c.id, label: c.name }));
+          setAvailableCities(cList);
+          setCityMap(Object.fromEntries(cList.map(o => [String(o.value), o.label])));
+          // Reset city when district changes
+          form.setValue("city_id", "");
+        } catch (_) {
+          setAvailableCities([]);
+          form.setValue("city_id", "");
+        }
+      } else {
+        setAvailableCities([]);
+        form.setValue("city_id", "");
+      }
+    })();
+  }, [watchedDistrictId, form]);
 
   // Watch for same address checkbox
   const watchedSameAddress = form.watch("same_address");
@@ -459,10 +502,12 @@ const CreateEmployeeForm = () => {
   const addEducation = () => {
     const newEducation = {
       id: Date.now(),
-      education_level: "",
+      education_level_id: "",
+      education_level: "", // keep label for preview
       institution_name: "",
       year_of_completion: "",
-      marks_gpa: ""
+      marks_gpa: "",
+      start_date: "", // new field
     };
     setEducations([...educations, newEducation]);
   };
@@ -497,9 +542,6 @@ const CreateEmployeeForm = () => {
 
   const onSubmit = (data) => {
     clearError();
-    console.log("Form submitted with data:", data);
-    console.log("Current uploadedFiles state:", uploadedFiles);
-
     // Include experiences, educations, and ALL uploaded files in the data
     const formDataWithExperiences = {
       ...data,
@@ -509,10 +551,23 @@ const CreateEmployeeForm = () => {
       ...uploadedFiles
     };
 
-    console.log("Final form data with experiences:", formDataWithExperiences);
+    // Derive labels for preview without affecting submission IDs
+    const districtLabel = districtMap[String(formDataWithExperiences.district_id)] || "";
+    const cityLabel = cityMap[String(formDataWithExperiences.city_id)] || "";
+    const educationsWithLabels = (formDataWithExperiences.educations || []).map(e => ({
+      ...e,
+      education_level: e.education_level || levelMap[String(e.education_level_id)] || "",
+    }));
+
+    const enhancedPreview = {
+      ...formDataWithExperiences,
+      district: districtLabel,
+      city: cityLabel,
+      educations: educationsWithLabels,
+    };
 
     // Log form submission
-    logFormSubmission('CreateEmployeeForm', formDataWithExperiences, true, {
+    logFormSubmission('CreateEmployeeForm', enhancedPreview, true, {
       metadata: {
         has_experiences: experiences.length > 0,
         experience_count: experiences.length,
@@ -523,7 +578,7 @@ const CreateEmployeeForm = () => {
     });
 
     // Show preview modal with all data
-    setPreviewData(formDataWithExperiences);
+    setPreviewData(enhancedPreview);
     setShowPreviewModal(true);
   };
 
@@ -1058,14 +1113,14 @@ const CreateEmployeeForm = () => {
                     District
                   </label>
                   <SearchableSelect
-                    options={PAKISTAN_DISTRICTS}
-                    value={form.watch("district")}
-                    onChange={(value) => form.setValue("district", value)}
+                    options={districtOptions}
+                    value={form.watch("district_id")}
+                    onChange={(value) => form.setValue("district_id", value)}
                     placeholder="Select District"
                     register={form.register}
-                    name="district"
+                    name="district_id"
                     required={false}
-                    error={form.formState.errors.district?.message}
+                    error={form.formState.errors.district_id?.message}
                   />
                 </div>
 
@@ -1076,16 +1131,16 @@ const CreateEmployeeForm = () => {
                   </label>
                   <SearchableSelect
                     options={availableCities}
-                    value={form.watch("city")}
-                    onChange={(value) => form.setValue("city", value)}
+                    value={form.watch("city_id")}
+                    onChange={(value) => form.setValue("city_id", value)}
                     placeholder="Select City"
                     register={form.register}
-                    name="city"
+                    name="city_id"
                     required={false}
-                    disabled={!form.watch("district")}
-                    error={form.formState.errors.city?.message}
+                    disabled={!form.watch("district_id")}
+                    error={form.formState.errors.city_id?.message}
                   />
-                  {!form.watch("district") && (
+                  {!form.watch("district_id") && (
                     <p className="text-gray-500 text-sm mt-1">Please select a district first</p>
                   )}
                 </div>
@@ -1341,18 +1396,20 @@ const CreateEmployeeForm = () => {
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Education Level <span className="text-red-500">*</span>
                               </label>
-                              <select
-                                value={education.education_level}
-                                onChange={(e) => updateEducation(education.id, 'education_level', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                              >
-                                <option value="">Select Education Level</option>
-                                {EDUCATION_QUALIFICATIONS.map((qual) => (
-                                  <option key={qual.value} value={qual.value}>
-                                    {qual.label}
-                                  </option>
-                                ))}
-                              </select>
+                              <SearchableSelect
+                                options={educationLevelOptions}
+                                value={education.education_level_id}
+                                onChange={(value) => {
+                                  const label = levelMap[String(value)] || '';
+                                  updateEducation(education.id, 'education_level_id', value);
+                                  updateEducation(education.id, 'education_level', label); // keep for preview
+                                }}
+                                placeholder={educationLevelOptions.length ? "Select Education Level" : "No levels available"}
+                                register={() => ({})}
+                                name={`education_level_${education.id}`}
+                                required={true}
+                                error={null}
+                              />
                             </div>
 
                             {/* Institution Name */}
@@ -1364,7 +1421,7 @@ const CreateEmployeeForm = () => {
                                 type="text"
                                 value={education.institution_name}
                                 onChange={(e) => updateEducation(education.id, 'institution_name', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                className="form-input w-full"
                                 placeholder="Enter institution name"
                               />
                             </div>
@@ -1380,7 +1437,7 @@ const CreateEmployeeForm = () => {
                                 max={new Date().getFullYear()}
                                 value={education.year_of_completion}
                                 onChange={(e) => updateEducation(education.id, 'year_of_completion', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                className="form-input w-full"
                                 placeholder="e.g., 2020"
                               />
                             </div>
@@ -1394,8 +1451,21 @@ const CreateEmployeeForm = () => {
                                 type="text"
                                 value={education.marks_gpa}
                                 onChange={(e) => updateEducation(education.id, 'marks_gpa', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                className="form-input w-full"
                                 placeholder="e.g., 3.5 GPA or 85%"
+                              />
+                            </div>
+
+                            {/* Start Date */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Start Date
+                              </label>
+                              <input
+                                type="date"
+                                value={education.start_date || ''}
+                                onChange={(e) => updateEducation(education.id, 'start_date', e.target.value)}
+                                className="form-input w-full"
                               />
                             </div>
                           </div>
@@ -2035,12 +2105,15 @@ const CreateEmployeeForm = () => {
                               <span className="font-medium text-gray-600">Marks/GPA:</span>
                               <span className="text-gray-900">{displayValue(edu.marks_gpa) || 'Not specified'}</span>
                             </div>
+                            <div className="flex justify-between">
+                              <span className="font-medium text-gray-600">Start Date:</span>
+                              <span className="text-gray-900">{displayValue(edu.start_date)}</span>
+                            </div>
                           </div>
                           {uploadedFiles.education_documents[edu.id] && (
-                            <div className="mt-3 pt-3 border-t border-green-300">
+                            <div className="mt-3 pt-3 border-top border-green-300">
                               <span className="font-medium text-gray-600">Supporting Document:</span>
                               <div className="mt-2">
-                                {console.log('Rendering education document preview:', uploadedFiles.education_documents[edu.id])}
                                 {renderFilePreview(uploadedFiles.education_documents[edu.id], 'education_documents', edu.id)}
                               </div>
                             </div>
@@ -2089,7 +2162,6 @@ const CreateEmployeeForm = () => {
                             <div className="mt-3 pt-3 border-t border-gray-300">
                               <span className="font-medium text-gray-600">Supporting Document:</span>
                               <div className="mt-2">
-                                {console.log('Rendering experience document preview:', uploadedFiles.experience_documents[exp.id])}
                                 {renderFilePreview(uploadedFiles.experience_documents[exp.id], 'experience_documents', exp.id)}
                               </div>
                             </div>

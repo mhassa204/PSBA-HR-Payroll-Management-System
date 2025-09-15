@@ -88,6 +88,12 @@ async function main() {
     await prisma.location.delete({ where: { id: loc.id } });
   }
 
+  // NEW: Clear Districts, Cities, and EducationLevels before seeding
+  console.log('🧹 Clearing districts, cities, and education levels...');
+  await prisma.city.deleteMany({});
+  await prisma.district.deleteMany({});
+  await prisma.educationLevel.deleteMany({});
+
   // Seed departments
   const departments = [
     { name: "Engineering", code: "ENG", description: "Engineering and Technical Services" },
@@ -219,6 +225,9 @@ async function main() {
         "employment.contract.read","employment.contract.create","employment.contract.update","employment.contract.delete",
         "departments.read","departments.create","departments.update","departments.delete",
         "designations.read","designations.create","designations.update","designations.delete",
+        "districts.read","districts.create","districts.update","districts.delete",
+        "cities.read","cities.create","cities.update","cities.delete",
+        "education-levels.read","education-levels.create","education-levels.update","education-levels.delete",
         "role-tags.read","role-tags.create","role-tags.update","role-tags.delete",
         "scale-grades.read","scale-grades.create","scale-grades.update","scale-grades.delete",
         "locations.read","locations.create","locations.update","locations.delete",
@@ -464,7 +473,11 @@ async function main() {
   console.log('👥 Seeding employees...');
   const createdEmployees = [];
   for (const emp of employees) {
-    const employee = await prisma.employee.create({ data: emp });
+    // Map normalized district/city IDs if available
+    const dist = createdDistricts.find((d) => d.name === emp.district);
+    const city = createdCities.find((c) => c.name === emp.city && (!dist || c.district_id === dist.id))
+              || createdCities.find((c) => c.name === emp.city);
+    const employee = await prisma.employee.create({ data: { ...emp, district_id: dist?.id || null, city_id: city?.id || null } });
     console.log(`✅ Created Employee: ${employee.full_name} (${employee.employee_id})`);
     createdEmployees.push(employee);
   }
@@ -615,8 +628,29 @@ async function main() {
   ];
 
   console.log('🎓 Seeding education qualifications...');
+  const mapLevelName = (txt) => {
+    if (!txt) return null;
+    const t = txt.toLowerCase();
+    if (t.includes('matric')) return 'Matric';
+    if (t.includes('inter') || t.includes('fsc') || t.includes('fa')) return 'Intermediate (FA/FSc)';
+    if (t.includes('bachelor')) return 'Bachelor';
+    if (t.includes('master')) return 'Master';
+    if (t.includes('mphil')) return 'MPhil';
+    if (t.includes('phd') || t.includes('doctor')) return 'PhD';
+    return null;
+  };
+  const levelIdByName = Object.fromEntries(createdEducationLevels.map((l) => [l.name, l.id]));
+
   for (const edu of educationQualifications) {
-    const qualification = await prisma.educationQualification.create({ data: edu });
+    const mappedName = mapLevelName(edu.education_level);
+    const levelId = mappedName ? levelIdByName[mappedName] : null;
+    // Attempt to generate a start_date approximately 4 years before completion year
+    let start_date = null;
+    const yr = parseInt(edu.year_of_completion);
+    if (!isNaN(yr)) {
+      try { start_date = new Date(`${yr - 4}-01-01`); } catch (_) { start_date = null; }
+    }
+    const qualification = await prisma.educationQualification.create({ data: { ...edu, education_level_id: levelId || null, start_date } });
     console.log(`✅ Created Education: ${qualification.education_level} - ${qualification.institution_name}`);
   }
 

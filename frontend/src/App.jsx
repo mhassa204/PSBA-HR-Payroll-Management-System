@@ -25,7 +25,10 @@ import {
   ScaleGradeManagement,
   RoleManagement,
   LocationManagement,
-  DeviceManagement
+  DeviceManagement,
+  DistrictManagement,
+  CityManagement,
+  EducationLevelManagement
 } from "./features/settings";
 import { UserManagement } from "./features/users";
 import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
@@ -263,6 +266,31 @@ function App() {
               element={
                 <PrivateRoute permissions={["roles.read"]}>
                   <RoleManagement />
+                </PrivateRoute>
+              }
+            />
+            {/* New Settings routes */}
+            <Route
+              path="settings/districts"
+              element={
+                <PrivateRoute permissions={["districts.read"]}>
+                  <DistrictManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/cities"
+              element={
+                <PrivateRoute permissions={["cities.read"]}>
+                  <CityManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/education-levels"
+              element={
+                <PrivateRoute permissions={["education-levels.read"]}>
+                  <EducationLevelManagement />
                 </PrivateRoute>
               }
             />

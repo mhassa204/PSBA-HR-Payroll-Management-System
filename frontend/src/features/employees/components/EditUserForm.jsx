@@ -1,4 +1,3 @@
-
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -11,9 +10,9 @@ import {
   RELATIONSHIP_TYPES,
   RELIGION_OPTIONS,
   MARITAL_STATUS_OPTIONS,
-  EDUCATION_QUALIFICATIONS,
+  // EDUCATION_QUALIFICATIONS, // replaced by API
   PAKISTAN_DISTRICTS,
-  getCitiesForDistrict,
+  // getCitiesForDistrict, // replaced by API
   DISABILITY_TYPES,
   BLOOD_GROUP_OPTIONS
 } from "../../../constants/employeeOptions";
@@ -32,6 +31,10 @@ import { formatDatabaseDateForInput } from "../../../utils/formatters";
 import DocumentManager from "../../../components/ui/DocumentManager";
 import { useDocumentManager } from "../hooks/useDocumentManager";
 import { employeeService } from "../services/employeeService";
+// New services for master data
+import { districtService } from "../../settings/services/districtService";
+import { cityService } from "../../settings/services/cityService";
+import { educationLevelService } from "../../settings/services/educationLevelService";
 
 const EditUserForm = ({ user }) => {
   console.log("EditUserForm received user data:", user);
@@ -41,9 +44,27 @@ const EditUserForm = ({ user }) => {
   const { error, isLoading, clearError, withErrorHandling } = useErrorHandler();
 
   // State for dynamic sections and file uploads
-  const [educations, setEducations] = useState(user?.educationQualifications || []);
+  const [educations, setEducations] = useState(() =>
+    (user?.educationQualifications || []).map(eq => ({
+      id: eq.id,
+      education_level_id: eq.education_level_id || eq.level?.id || "",
+      education_level: eq.level?.name || eq.education_level || "",
+      institution_name: eq.institution_name || "",
+      year_of_completion: eq.year_of_completion || "",
+      marks_gpa: eq.marks_gpa || "",
+      start_date: formatDatabaseDateForInput(eq.start_date) || "",
+    }))
+  );
   const [experiences, setExperiences] = useState(user?.pastExperiences || []);
+
+  // API-driven master data
+  const [districtOptions, setDistrictOptions] = useState([]);
   const [availableCities, setAvailableCities] = useState([]);
+  const [educationLevelOptions, setEducationLevelOptions] = useState([]);
+  const [districtMap, setDistrictMap] = useState({});
+  const [cityMap, setCityMap] = useState({});
+  const [levelMap, setLevelMap] = useState({});
+
   const [profilePicturePreview, setProfilePicturePreview] = useState(() => {
     if (user?.profile_picture_url) {
       return `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${user.profile_picture_url}`;
@@ -90,81 +111,98 @@ const EditUserForm = ({ user }) => {
       present_address: user?.present_address || "",
       permanent_address: user?.permanent_address || "",
       same_address: user?.same_address || false,
-      district: user?.district || "",
-      city: user?.city || "",
+      // Switch to normalized IDs
+      district_id: user?.district_id || "",
+      city_id: user?.city_id || "",
       has_disability: user?.has_disability || false,
       disability_type: user?.disability_type || "",
       disability_description: user?.disability_description || "",
       missing_note: user?.missing_note || "",
       has_past_experience: user?.has_past_experience || false,
       past_experiences: user?.pastExperiences || [],
-      educations: user?.educationQualifications || [],
+      educations: (user?.educationQualifications || []).map(eq => ({
+        id: eq.id,
+        education_level_id: eq.education_level_id || eq.level?.id || "",
+        education_level: eq.level?.name || eq.education_level || "",
+        institution_name: eq.institution_name || "",
+        year_of_completion: eq.year_of_completion || "",
+        marks_gpa: eq.marks_gpa || "",
+        start_date: formatDatabaseDateForInput(eq.start_date) || "",
+      })),
     },
   });
 
   const { register, handleSubmit, formState: { errors }, watch, setValue } = form;
 
+  // Load master data
+  useEffect(() => {
+    (async () => {
+      try {
+        const [districts, levels] = await Promise.all([
+          districtService.getAllDistricts(),
+          educationLevelService.getAllLevels(),
+        ]);
+        const dList = (districts?.districts || districts || []).map(d => ({ value: d.id, label: d.name }));
+        setDistrictOptions(dList);
+        setDistrictMap(Object.fromEntries(dList.map(o => [String(o.value), o.label])));
+        const lList = (levels || []).map(l => ({ value: l.id, label: l.name }));
+        setEducationLevelOptions(lList);
+        setLevelMap(Object.fromEntries(lList.map(o => [String(o.value), o.label])));
+      } catch (e) {
+        // ignore
+      }
+    })();
+  }, []);
+
+  // Initialize and react to district_id to fetch cities
+  const watchedDistrictId = watch("district_id");
+  useEffect(() => {
+    (async () => {
+      const dId = watchedDistrictId || user?.district_id;
+      if (dId) {
+        try {
+          const cities = await cityService.getAllCities({ district_id: dId });
+          const cList = (cities?.cities || cities || []).map(c => ({ value: c.id, label: c.name }));
+          setAvailableCities(cList);
+          setCityMap(Object.fromEntries(cList.map(o => [String(o.value), o.label])));
+          // If user's city_id is set initially, keep it; else ensure valid
+          const currentCityId = form.getValues("city_id");
+          if (currentCityId && !cList.some(c => String(c.value) === String(currentCityId))) {
+            setValue("city_id", "");
+          }
+        } catch (_) {
+          setAvailableCities([]);
+          setValue("city_id", "");
+        }
+      } else {
+        setAvailableCities([]);
+        setValue("city_id", "");
+      }
+    })();
+  }, [watchedDistrictId, user?.district_id, form, setValue]);
+
   // Watch for disability checkbox to show/hide related fields
   const hasDisability = watch("has_disability");
   const sameAddress = watch("same_address");
-  const watchedDistrict = watch("district");
   const watchedPresentAddress = watch("present_address");
 
-  // Watch for district changes to update cities
-  useEffect(() => {
-    if (watchedDistrict) {
-      const cities = getCitiesForDistrict(watchedDistrict);
-      setAvailableCities(cities);
-      const currentCity = form.getValues("city");
-      if (currentCity && !cities.some(city => city.value === currentCity)) {
-        setValue("city", "");
-      }
-    } else {
-      setAvailableCities([]);
-      setValue("city", "");
-    }
-  }, [watchedDistrict, setValue, form]);
-
-  // Watch for same address checkbox
+  // Same address auto-fill
   useEffect(() => {
     if (sameAddress && watchedPresentAddress) {
       setValue("permanent_address", watchedPresentAddress);
     }
   }, [sameAddress, watchedPresentAddress, setValue]);
 
-  // Initialize cities when component loads
-  useEffect(() => {
-    if (user?.district) {
-      const cities = getCitiesForDistrict(user.district);
-      setAvailableCities(cities);
-      if (user.city && cities.some(city => city.value === user.city)) {
-        setValue("city", user.city);
-      }
-    }
-  }, [user?.district, user?.city, setValue]);
-
-  // Initialize removeProfilePicture state based on user's profile picture
-  useEffect(() => {
-    if (user?.profile_picture) {
-      setRemoveProfilePicture(false);
-      setProfilePicturePreview(user.profile_picture_url ? 
-        `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${user.profile_picture_url}` : 
-        getImageUrl(user.profile_picture)
-      );
-    } else {
-      setRemoveProfilePicture(true);
-      setProfilePicturePreview(null);
-    }
-  }, [user?.profile_picture, user?.profile_picture_url]);
-
   // Helper functions for dynamic sections
   const addEducation = () => {
     const newEducation = {
       id: Date.now(),
+      education_level_id: "",
       education_level: "",
       institution_name: "",
       year_of_completion: "",
-      marks_gpa: ""
+      marks_gpa: "",
+      start_date: "",
     };
     setEducations([...educations, newEducation]);
   };
@@ -302,54 +340,21 @@ const EditUserForm = ({ user }) => {
 
   const handleUpdate = async (data) => {
     try {
-      console.log("HandleUpdate called with data:", JSON.stringify(data, null, 2));
-      console.log("Educations:", JSON.stringify(educations, null, 2));
-      console.log("Experiences:", JSON.stringify(experiences, null, 2));
-      console.log("Remove profile picture flag:", removeProfilePicture);
-
-      const filesToUpload = documentManager.getFilesToUpload() || {};
-      const documentsToRemove = documentManager.getDocumentsToRemove() || [];
-      console.log("Files to upload:", JSON.stringify(Object.keys(filesToUpload), null, 2));
-      console.log("Documents to remove (raw):", JSON.stringify(documentsToRemove, null, 2));
-
-      if (documentsToRemove.length > 0) {
-        console.log("Documents to remove (validated):", documentsToRemove);
-        documentsToRemove.forEach(id => {
-          const doc = documentManager._rawState.removedDocuments.find(d => d.id === id);
-          console.log(`Document ID ${id}:`, doc ? `Type: ${doc.file_type}, Name: ${doc.document_name}` : 'Not found in removedDocuments');
-        });
-      } else {
-        console.warn("No documents marked for deletion in documents_to_remove");
-      }
+      // Collect document changes from DocumentManager
+      const filesData = documentManager.getFormData();
+      const documentsToRemove = documentManager.getDocumentsToRemove();
 
       const completeData = {
         ...data,
         educations: educations,
         past_experiences: experiences,
-        documents_to_remove: Array.isArray(documentsToRemove) ? documentsToRemove.map(id => parseInt(id, 10)) : [],
-        ...documentManager.getFormData(),
-        profile_picture: removeProfilePicture ? null : (data.profile_picture_file || user?.profile_picture),
+        // include files from document manager and removal list
+        ...filesData,
+        documents_to_remove: documentsToRemove,
       };
 
-      // Ensure profile_picture is null when removeProfilePicture is true
-      if (removeProfilePicture) {
-        completeData.profile_picture = null;
-        console.log("🔄 Frontend: Force setting profile_picture to null due to removeProfilePicture flag");
-      }
-
-      console.log("🔍 Frontend debug info:");
-      console.log("  - removeProfilePicture:", removeProfilePicture);
-      console.log("  - data.profile_picture_file:", data.profile_picture_file);
-      console.log("  - user?.profile_picture:", user?.profile_picture);
-      console.log("  - completeData.profile_picture:", completeData.profile_picture);
-      console.log("Complete data being sent to backend:", JSON.stringify(completeData, null, 2));
-
-      // Additional debugging for profile picture
-      console.log("🔍 Profile picture final check:");
-      console.log("  - removeProfilePicture flag:", removeProfilePicture);
-      console.log("  - completeData.profile_picture value:", completeData.profile_picture);
-      console.log("  - completeData.profile_picture type:", typeof completeData.profile_picture);
-      console.log("  - completeData.profile_picture === null:", completeData.profile_picture === null);
+      // Preserve existing profile picture logic
+      completeData.profile_picture = removeProfilePicture ? null : (data.profile_picture_file || user?.profile_picture);
 
       await withErrorHandling(
         () => updateEmployee(user.id, completeData),
@@ -359,17 +364,10 @@ const EditUserForm = ({ user }) => {
         }
       );
 
-      // Debug: Check the response
-      console.log("🔍 Update completed, checking response...");
+      // Optionally refresh user data
       try {
-        const updatedEmployee = await employeeService.getEmployeeById(user.id);
-        console.log("🔍 Updated employee data:", updatedEmployee);
-        console.log("🔍 Updated employee profile_picture:", updatedEmployee.profile_picture);
-        console.log("🔍 Updated employee profile_picture_url:", updatedEmployee.profile_picture_url);
-        console.log("🔍 Updated employee documents:", updatedEmployee.documents?.filter(d => d.file_type === 'profile_picture'));
-      } catch (error) {
-        console.error("❌ Error fetching updated employee:", error);
-      }
+        await employeeService.getEmployeeById(user.id);
+      } catch (_) {}
 
       navigate(`/employees/view/${user.id}`);
     } catch (error) {
@@ -413,19 +411,19 @@ const EditUserForm = ({ user }) => {
           </div>
         )}
 
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>
-              <i className="fas fa-user mr-2"></i>
-              Basic Employee Information
-            </h3>
-            <p style={{ color: "var(--color-text-secondary)" }}>
-              Update the basic personal information for the employee
-            </p>
-          </div>
+        <form onSubmit={handleSubmit(handleUpdate)}>
+          <div className="card">
+            <div className="card-header">
+              <h3 className="text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                <i className="fas fa-user mr-2"></i>
+                Basic Employee Information
+              </h3>
+              <p style={{ color: "var(--color-text-secondary)" }}>
+                Update the basic personal information for the employee
+              </p>
+            </div>
 
-          <div className="p-6 text-gray-800">
-            <form onSubmit={handleSubmit(handleUpdate)} className="space-y-6">
+            <div className="p-6 text-gray-800">
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <h4 className="text-lg font-medium text-gray-900 mb-4">
                   <i className="fas fa-camera mr-2"></i>
@@ -814,33 +812,31 @@ const EditUserForm = ({ user }) => {
                     <div>
                       <label className="form-label">District</label>
                       <SearchableSelect
-                        options={PAKISTAN_DISTRICTS}
-                        value={watch("district")}
-                        onChange={(value) => setValue("district", value)}
+                        options={districtOptions}
+                        value={watch("district_id")}
+                        onChange={(value) => setValue("district_id", value)}
                         placeholder="Select District"
                         register={register}
-                        name="district"
+                        name="district_id"
                         required={false}
-                        error={errors.district?.message}
+                        error={errors.district_id?.message}
                       />
                     </div>
                     <div>
                       <label className="form-label">City</label>
                       <SearchableSelect
                         options={availableCities}
-                        value={watch("city")}
-                        onChange={(value) => setValue("city", value)}
+                        value={watch("city_id")}
+                        onChange={(value) => setValue("city_id", value)}
                         placeholder="Select City"
                         register={register}
-                        name="city"
+                        name="city_id"
                         required={false}
-                        error={errors.city?.message}
-                        disabled={!watchedDistrict}
+                        error={errors.city_id?.message}
+                        disabled={!watch("district_id")}
                       />
-                      {!watchedDistrict && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          Please select a district first
-                        </p>
+                      {!watch("district_id") && (
+                        <p className="text-gray-500 text-sm mt-1">Please select a district first</p>
                       )}
                     </div>
                     <div>
@@ -959,23 +955,30 @@ const EditUserForm = ({ user }) => {
                                 </button>
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Education Level */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Education Level <span className="text-red-500">*</span>
                                   </label>
-                                  <select
-                                    value={education.education_level}
-                                    onChange={(e) => updateEducation(education.id, 'education_level', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                                  >
-                                    <option value="">Select Education Level</option>
-                                    {EDUCATION_QUALIFICATIONS.map((qual) => (
-                                      <option key={qual.value} value={qual.value}>
-                                        {qual.label}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <SearchableSelect
+                                    options={educationLevelOptions}
+                                    value={education.education_level_id}
+                                    valueLabel={education.education_level}
+                                    onChange={(value, label) => {
+                                      updateEducation(education.id, 'education_level_id', value);
+                                      updateEducation(education.id, 'education_level', label || levelMap[String(value)] || '');
+                                    }}
+                                    placeholder={educationLevelOptions.length ? "Select Education Level" : "No levels available"}
+                                    register={() => ({})}
+                                    name={`education_level_${education.id}`}
+                                    required={true}
+                                    error={null}
+                                    allowClear={true}
+                                    dropdownPriority="high"
+                                  />
                                 </div>
+
+                                {/* Institution Name */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Institution Name <span className="text-red-500">*</span>
@@ -984,10 +987,12 @@ const EditUserForm = ({ user }) => {
                                     type="text"
                                     value={education.institution_name}
                                     onChange={(e) => updateEducation(education.id, 'institution_name', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    className="form-input w-full"
                                     placeholder="Enter institution name"
                                   />
                                 </div>
+
+                                {/* Year of Completion */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Year of Completion <span className="text-red-500">*</span>
@@ -998,10 +1003,12 @@ const EditUserForm = ({ user }) => {
                                     max={new Date().getFullYear()}
                                     value={education.year_of_completion}
                                     onChange={(e) => updateEducation(education.id, 'year_of_completion', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    className="form-input w-full"
                                     placeholder="e.g., 2020"
                                   />
                                 </div>
+
+                                {/* Marks/GPA */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Marks/GPA
@@ -1010,8 +1017,21 @@ const EditUserForm = ({ user }) => {
                                     type="text"
                                     value={education.marks_gpa}
                                     onChange={(e) => updateEducation(education.id, 'marks_gpa', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    placeholder="Enter marks or GPA"
+                                    className="form-input w-full"
+                                    placeholder="e.g., 3.5 GPA or 85%"
+                                  />
+                                </div>
+
+                                {/* Start Date */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Start Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={education.start_date || ''}
+                                    onChange={(e) => updateEducation(education.id, 'start_date', e.target.value)}
+                                    className="form-input w-full"
                                   />
                                 </div>
                               </div>
@@ -1283,9 +1303,9 @@ const EditUserForm = ({ user }) => {
                   Update User Information
                 </button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

@@ -562,7 +562,7 @@ const EnhancedUserProfile = () => {
                       <div className="flex justify-between">
                         <span className="text-gray-700 font-medium">City:</span>
                         <span className="font-semibold text-gray-900">
-                          {formatCityName(employee.city)}
+                          {employee.cityRef?.name || formatCityName(employee.city) || "N/A"}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -570,7 +570,7 @@ const EnhancedUserProfile = () => {
                           District:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {formatDistrictName(employee.district)}
+                          {employee.districtRef?.name || formatDistrictName(employee.district) || "N/A"}
                         </span>
                       </div>
                     </div>
@@ -916,13 +916,19 @@ const EnhancedUserProfile = () => {
                               <div className="flex justify-between">
                                 <span className="text-gray-600 text-sm">Education Level:</span>
                                 <span className="font-medium text-green-800">
-                                  {education.education_level || "N/A"}
+                                  {education.level?.name || education.education_level || "N/A"}
                                 </span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-600 text-sm">Institution:</span>
                                 <span className="font-medium">
                                   {education.institution_name || "N/A"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 text-sm">Start Date:</span>
+                                <span className="font-medium">
+                                  {education.start_date ? formatDate(education.start_date) : "N/A"}
                                 </span>
                               </div>
                               <div className="flex justify-between">
@@ -1003,13 +1009,13 @@ const EnhancedUserProfile = () => {
                     <div className="flex justify-between py-2 border-b border-gray-100">
                       <span className="text-gray-600">City:</span>
                       <span className="font-medium">
-                        {formatCityName(employee.city)}
+                        {employee.cityRef?.name || formatCityName(employee.city) || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-gray-100">
                       <span className="text-gray-600">District:</span>
                       <span className="font-medium">
-                        {formatDistrictName(employee.district)}
+                        {employee.districtRef?.name || formatDistrictName(employee.district) || "N/A"}
                       </span>
                     </div>
                   </div>
