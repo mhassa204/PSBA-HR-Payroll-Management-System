@@ -422,13 +422,13 @@ const EmploymentRecordActions = ({
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">District:</span>
                     <span className="text-gray-900">
-                      {selectedRecord.location.district || "N/A"}
+                      {(selectedRecord.location?.district && selectedRecord.location.district.name) || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">City:</span>
                     <span className="text-gray-900">
-                      {selectedRecord.location.city || "N/A"}
+                      {(selectedRecord.location?.city && selectedRecord.location.city.name) || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between">

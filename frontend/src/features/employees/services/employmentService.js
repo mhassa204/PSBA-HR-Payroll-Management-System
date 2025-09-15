@@ -287,8 +287,8 @@ class EmploymentService {
       // Flatten the entire employment data object
       flattenObject(employmentData);
 
-      // Handle document files that are passed directly as properties
-      const documentFields = ['medical_fitness_report_pdf', 'police_character_certificate', 'renewal_report'];
+      // Employment-level medical fitness and police certificate removed; only renewal_report remains
+      const documentFields = ['renewal_report'];
       documentFields.forEach(field => {
         if (employmentData[field] && employmentData[field] instanceof File) {
           formData.append(field, employmentData[field]);
@@ -352,8 +352,8 @@ class EmploymentService {
       // Flatten the entire employment data object
       flattenObject(employmentData);
 
-      // Handle document files that are passed directly as properties
-      const documentFields = ['medical_fitness_report_pdf', 'police_character_certificate', 'renewal_report'];
+      // Employment-level medical fitness and police certificate removed; only renewal_report remains
+      const documentFields = ['renewal_report'];
       documentFields.forEach(field => {
         if (employmentData[field] && employmentData[field] instanceof File) {
           formData.append(field, employmentData[field]);

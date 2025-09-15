@@ -96,7 +96,7 @@ const DocumentManager = ({
     const files = Array.from(e.target.files);
 
     // For single document types, remove existing documents first
-    const singleDocumentTypes = ['cnic_front', 'cnic_back', 'domicile', 'disability', 'education', 'experience'];
+    const singleDocumentTypes = ['cnic_front', 'cnic_back', 'domicile', 'disability', 'education', 'experience', 'medical_fitness', 'police_character'];
     if (singleDocumentTypes.includes(documentType)) {
       // Remove existing documents of this type (for education/experience, only those with same associatedId)
       relevantDocuments.forEach(doc => {
@@ -104,7 +104,8 @@ const DocumentManager = ({
       });
     }
 
-    files.forEach(file => {
+    const filesToProcess = singleDocumentTypes.includes(documentType) ? files.slice(0, 1) : files;
+    filesToProcess.forEach(file => {
       if (validateFile(file)) {
         onDocumentAdd(file, documentType, associatedId);
       }
@@ -159,7 +160,7 @@ const DocumentManager = ({
     const files = Array.from(e.dataTransfer.files);
 
     // For single document types, remove existing documents first
-    const singleDocumentTypes = ['cnic_front', 'cnic_back', 'domicile', 'disability', 'education', 'experience'];
+    const singleDocumentTypes = ['cnic_front', 'cnic_back', 'domicile', 'disability', 'education', 'experience', 'medical_fitness', 'police_character'];
     if (singleDocumentTypes.includes(documentType)) {
       // Remove existing documents of this type (for education/experience, only those with same associatedId)
       relevantDocuments.forEach(doc => {
@@ -167,7 +168,8 @@ const DocumentManager = ({
       });
     }
 
-    files.forEach(file => {
+    const filesToProcess = singleDocumentTypes.includes(documentType) ? files.slice(0, 1) : files;
+    filesToProcess.forEach(file => {
       if (validateFile(file)) {
         onDocumentAdd(file, documentType, associatedId);
       }

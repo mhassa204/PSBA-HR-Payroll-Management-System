@@ -196,8 +196,8 @@ const LocationManagement = () => {
                   <tr key={loc.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900">{loc.name}</div></td>
                     <td className="px-6 py-4 whitespace-nowrap"><span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{loc.type}</span></td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.district || '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.city || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{(loc.district && loc.district.name) || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{(loc.city && loc.city.name) || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{renderTime(loc.opening_time)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{renderTime(loc.closing_time)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.manager?.employee?.full_name || loc.manager?.email || '-'}</td>

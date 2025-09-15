@@ -218,12 +218,12 @@ const employmentController = {
         hidden: ['department', 'employment_type', 'role_tag', 'reporting_officer_id', 'office_location', 'scale_grade', 'medical_fitness_report_pdf', 'filer_status', 'filer_active_status', 'employment_status', 'is_current', 'is_on_probation', 'probation_end_date']
       },
       PMBMC: {
-        required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
+        required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'filer_status', 'is_current'],
         optional: ['effective_till', 'remarks', 'filer_active_status', 'basic_salary', 'medical_allowance', 'house_rent', 'conveyance_allowance', 'other_allowances', 'scale_grade', 'reporting_officer_id', 'office_location', 'employment_status'],
         hidden: []
       },
       PSBA: {
-        required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
+        required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'filer_status', 'is_current'],
         optional: ['effective_till', 'remarks', 'filer_active_status', 'scale_grade', 'employment_status', 'is_on_probation', 'probation_end_date', 'reporting_officer_id', 'office_location'],
         hidden: []
       }
@@ -423,71 +423,9 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       fieldValue = employmentData.scale_grade || employmentData.scale_grade_id || employmentData.scale_grade_name;
     } else if (field === 'reporting_officer_id') {
       fieldValue = employmentData.reporting_officer_id || employmentData.reporting_officer || employmentData.reporting_officer_name;
-    } else if (field === 'medical_fitness_report_pdf') {
-      // Check for new file upload OR existing document in database
-      const uploadedFile = uploadedFiles.find(f => 
-        f.fieldname === 'medical_fitness_report_pdf' || 
-        f.fieldname.startsWith('medical_fitness_report_pdf_')
-      );
-      
-      // Check if document already exists in database (for edit operations)
-      // Handle both object format and flattened format
-      let existingDocument = employmentData.medical_fitness_report_pdf;
-      
-      // If we have flattened fields, reconstruct the document object
-      if (!existingDocument && employmentData.medical_fitness_report_pdf_id) {
-        existingDocument = {
-          id: employmentData.medical_fitness_report_pdf_id,
-          url: employmentData.medical_fitness_report_pdf_url,
-          file_path: employmentData.medical_fitness_report_pdf_file_path,
-          document_name: employmentData.medical_fitness_report_pdf_document_name,
-          file_type: employmentData.medical_fitness_report_pdf_file_type,
-          file_size: employmentData.medical_fitness_report_pdf_file_size,
-          mime_type: employmentData.medical_fitness_report_pdf_mime_type
-        };
-      }
-      
-      const hasExistingDocument = existingDocument && (
-        existingDocument.id || 
-        existingDocument.url || 
-        existingDocument.file_path || 
-        existingDocument.document_name
-      );
-      
-      fieldValue = uploadedFile || hasExistingDocument;
-
-    } else if (field === 'police_character_certificate') {
-      // Check for new file upload OR existing document in database
-      const uploadedFile = uploadedFiles.find(f => 
-        f.fieldname === 'police_character_certificate' || 
-        f.fieldname.startsWith('police_character_certificate_')
-      );
-      
-      // Check if document already exists in database (for edit operations)
-      // Handle both object format and flattened format
-      let existingDocument = employmentData.police_character_certificate;
-      
-      // If we have flattened fields, reconstruct the document object
-      if (!existingDocument && employmentData.police_character_certificate_id) {
-        existingDocument = {
-          id: employmentData.police_character_certificate_id,
-          url: employmentData.police_character_certificate_url,
-          file_path: employmentData.police_character_certificate_file_path,
-          document_name: employmentData.police_character_certificate_document_name,
-          file_type: employmentData.police_character_certificate_file_type,
-          file_size: employmentData.police_character_certificate_file_size,
-          mime_type: employmentData.police_character_certificate_mime_type
-        };
-      }
-      
-      const hasExistingDocument = existingDocument && (
-        existingDocument.id || 
-        existingDocument.url || 
-        existingDocument.file_path || 
-        existingDocument.document_name
-      );
-      
-      fieldValue = uploadedFile || hasExistingDocument;
+    } else if (field === 'medical_fitness_report_pdf' || field === 'police_character_certificate') {
+      // These employment-level documents are no longer required; skip validation
+      fieldValue = true;
 
     } else if (field === 'renewal_report') {
       // Check for new file upload OR existing document in database

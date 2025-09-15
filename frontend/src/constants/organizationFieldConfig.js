@@ -243,7 +243,7 @@ export const ORGANIZATION_VALIDATION_RULES = {
   },
   
   PMBMC: {
-    required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
+    required: ['employee_id', 'organization', 'department', 'designation', 'employment_type', 'role_tag', 'effective_from', 'filer_status', 'is_current'],
     optional: ['effective_till', 'remarks', 'filer_active_status', 'basic_salary', 'medical_allowance', 'house_rent', 'conveyance_allowance', 'other_allowances', 'scale_grade', 'reporting_officer_id', 'office_location', 'employment_status'],
     hidden: [],
     fieldLabels: {
@@ -253,7 +253,7 @@ export const ORGANIZATION_VALIDATION_RULES = {
       role_tag: 'Role Tag',
       effective_from: 'Effective From Date',
       effective_till: 'Effective Till Date',
-      medical_fitness_report_pdf: 'Medical Fitness Report',
+      // medical_fitness_report_pdf removed from employment module
       filer_status: 'Filer Status',
       filer_active_status: 'Filer Active Status',
       is_current: 'Current Employment',
@@ -266,7 +266,7 @@ export const ORGANIZATION_VALIDATION_RULES = {
   },
   
   PSBA: {
-    required: ['employee_id', 'organization', 'designation', 'effective_from', 'medical_fitness_report_pdf', 'filer_status', 'is_current'],
+    required: ['employee_id', 'organization', 'designation', 'effective_from', 'filer_status', 'is_current'],
     optional: ['department', 'employment_type', 'role_tag', 'effective_till', 'remarks', 'filer_active_status', 'scale_grade', 'employment_status', 'is_on_probation', 'probation_end_date', 'reporting_officer_id', 'office_location'],
     hidden: [],
     fieldLabels: {
@@ -276,7 +276,7 @@ export const ORGANIZATION_VALIDATION_RULES = {
       role_tag: 'Role Tag',
       effective_from: 'Effective From Date',
       effective_till: 'Effective Till Date',
-      medical_fitness_report_pdf: 'Medical Fitness Report',
+      // medical_fitness_report_pdf removed from employment module
       filer_status: 'Filer Status',
       filer_active_status: 'Filer Active Status',
       is_current: 'Current Employment',
@@ -378,69 +378,7 @@ export const validateEmploymentData = (data) => {
     }
   }
   
-  // Validate file uploads for organizations that require them
-  if (rules.required.includes('medical_fitness_report_pdf')) {
-
-    
-    // Check if the field exists and has a value
-    const hasMedicalFitnessField = 'medical_fitness_report_pdf' in employmentData;
-    const medicalFitnessValue = employmentData.medical_fitness_report_pdf;
-    
-    // For document validation, we need to check if:
-    // 1. A new file is uploaded (File object)
-    // 2. An existing document exists (object with id, url, etc.)
-    // 3. The field is explicitly set to null/undefined (which would be invalid)
-    const hasValidMedicalFitness = medicalFitnessValue && (
-      medicalFitnessValue instanceof File || 
-      (typeof medicalFitnessValue === 'object' && medicalFitnessValue !== null && (
-        medicalFitnessValue.id || 
-        medicalFitnessValue.url || 
-        medicalFitnessValue.file_path ||
-        medicalFitnessValue.document_name
-      ))
-    );
-    
-
-    
-    if (!hasValidMedicalFitness) {
-
-      errors.push('Medical fitness report is required for this organization');
-    } else {
-
-    }
-  }
-  
-  // Validate police character certificate if required
-  if (rules.required.includes('police_character_certificate')) {
-
-    
-    // Check if the field exists and has a value
-    const hasPoliceCharacterField = 'police_character_certificate' in employmentData;
-    const policeCharacterValue = employmentData.police_character_certificate;
-    
-    // For document validation, we need to check if:
-    // 1. A new file is uploaded (File object)
-    // 2. An existing document exists (object with id, url, etc.)
-    // 3. The field is explicitly set to null/undefined (which would be invalid)
-    const hasValidPoliceCharacter = policeCharacterValue && (
-      policeCharacterValue instanceof File || 
-      (typeof policeCharacterValue === 'object' && policeCharacterValue !== null && (
-        policeCharacterValue.id || 
-        policeCharacterValue.url || 
-        policeCharacterValue.file_path ||
-        policeCharacterValue.document_name
-      ))
-    );
-    
-
-    
-    if (!hasValidPoliceCharacter) {
-
-      errors.push('Police character certificate is required for this organization');
-    } else {
-
-    }
-  }
+  // Document validations removed from employment module
   
 
   

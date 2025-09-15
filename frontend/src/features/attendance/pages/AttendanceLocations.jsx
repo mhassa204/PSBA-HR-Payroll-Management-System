@@ -54,8 +54,8 @@ const AttendanceLocations = () => {
               <tr key={loc.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.name}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.type}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.district || '-'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{loc.city || '-'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{(loc.district && loc.district.name) || '-'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{(loc.city && loc.city.name) || '-'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <button className="btn btn-primary" onClick={()=>navigate(`/attendance/locations/${loc.id}`)}>View Attendance</button>
                 </td>

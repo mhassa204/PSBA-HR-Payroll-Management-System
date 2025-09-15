@@ -97,6 +97,7 @@ model District {
   updatedAt   DateTime @updatedAt
   cities      City[]
   employees   Employee[]
+  locations   Location[]
 }
 
 model City {
@@ -109,6 +110,7 @@ model City {
   updatedAt   DateTime @updatedAt
   district    District @relation(fields: [district_id], references: [id])
   employees   Employee[]
+  locations   Location[]
 
   @@unique([name, district_id], name: "city_name_district_unique")
 }
@@ -391,8 +393,10 @@ model Location {
   id              Int       @id @default(autoincrement())
   name            String
   type            String    @default("BAZAAR") // BAZAAR | HEAD_OFFICE
-  district        String?
-  city            String?
+  district_id     Int?
+  city_id         Int?
+  district        District? @relation(fields: [district_id], references: [id])
+  city            City?     @relation(fields: [city_id], references: [id])
   full_address    String?
   // Operational hours (HH:mm)
   opening_time    String?
@@ -407,6 +411,9 @@ model Location {
   rosters         DutyRoster[]
   // back relation: devices installed at this location
   devices         Device[]
+
+  @@index([district_id])
+  @@index([city_id])
 }
 
 // New: Duty Roster master

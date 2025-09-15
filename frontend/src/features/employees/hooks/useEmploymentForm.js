@@ -68,8 +68,6 @@ export const useEmploymentForm = ({
       is_current: true,
       filer_status: "non_filer",
       filer_active_status: "",
-      medical_fitness_report_pdf: null,
-      police_character_certificate: null,
       // Probation fields
       is_on_probation: false,
       probation_end_date: "",
@@ -138,9 +136,9 @@ export const useEmploymentForm = ({
         try {
           const bazaars = await locationService.getBazaars();
           const bazaarOptions = bazaars.map(bazaar => ({
-            value: bazaar.name,
-            label: `${bazaar.name}${bazaar.city ? ` - ${bazaar.city}` : ''}${bazaar.district ? ` (${bazaar.district})` : ''}`,
-            description: `${bazaar.city || ''}${bazaar.district ? `, ${bazaar.district}` : ''}`
+            value: bazaar.id,
+            label: `${bazaar.name}${bazaar.city && bazaar.city.name ? ` - ${bazaar.city.name}` : ''}${bazaar.district && bazaar.district.name ? ` (${bazaar.district.name})` : ''}`,
+            description: `${bazaar.city && bazaar.city.name ? bazaar.city.name : ''}${bazaar.district && bazaar.district.name ? `, ${bazaar.district.name}` : ''}`
           }));
           setBazaarOptions(bazaarOptions);
         } catch (error) {
@@ -268,11 +266,7 @@ export const useEmploymentForm = ({
       const employmentData = {
         employee_id: userId,
         ...data,
-        // Convert file inputs to actual files
-        files: {
-          medical_fitness_report_pdf: data.medical_fitness_report_pdf?.[0] || null,
-          police_character_certificate: data.police_character_certificate?.[0] || null,
-        }
+        // No employment-level document uploads (moved to employee module)
       };
 
       let result;

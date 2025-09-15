@@ -15,7 +15,7 @@ function normalizeHHmm(value) {
 const locationService = {
   // Create new location
   createLocation: async (data) => {
-    const { name, type = 'BAZAAR', district, city, full_address, is_active = true, manager_user_id } = data;
+    const { name, type = 'BAZAAR', district_id, city_id, full_address, is_active = true, manager_user_id } = data;
 
     // Unique name among non-deleted
     const existing = await prisma.location.findFirst({
@@ -34,8 +34,8 @@ const locationService = {
     const payload = {
       name,
       type,
-      district: district || null,
-      city: city || null,
+      district_id: district_id ? Number(district_id) : null,
+      city_id: city_id ? Number(city_id) : null,
       full_address: full_address || null,
       opening_time: opening,
       closing_time: closing,
@@ -45,7 +45,11 @@ const locationService = {
 
     return prisma.location.create({
       data: payload,
-      include: { manager: { select: { id: true, email: true, employee: { select: { full_name: true } } } } }
+      include: { 
+        manager: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
+        district: { select: { id: true, name: true } },
+        city: { select: { id: true, name: true, district_id: true } }
+      }
     });
   },
 
@@ -53,7 +57,11 @@ const locationService = {
   getAllLocations: async () => {
     return prisma.location.findMany({
       where: { is_deleted: false },
-      include: { manager: { select: { id: true, email: true, employee: { select: { full_name: true } } } } },
+      include: { 
+        manager: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
+        district: { select: { id: true, name: true } },
+        city: { select: { id: true, name: true, district_id: true } }
+      },
       orderBy: [{ type: 'asc' }, { name: 'asc' }]
     });
   },
@@ -62,13 +70,17 @@ const locationService = {
   getLocationById: async (id) => {
     return prisma.location.findFirst({
       where: { id: Number(id), is_deleted: false },
-      include: { manager: { select: { id: true, email: true, employee: { select: { full_name: true } } } } }
+      include: { 
+        manager: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
+        district: { select: { id: true, name: true } },
+        city: { select: { id: true, name: true, district_id: true } }
+      }
     });
   },
 
   // Update location
   updateLocation: async (id, data) => {
-    const { name, type, district, city, full_address, is_active, manager_user_id } = data;
+    const { name, type, district_id, city_id, full_address, is_active, manager_user_id } = data;
 
     // Uniqueness check for name
     if (name) {
@@ -88,8 +100,8 @@ const locationService = {
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (type !== undefined) updateData.type = type;
-    if (district !== undefined) updateData.district = district;
-    if (city !== undefined) updateData.city = city;
+    if (district_id !== undefined) updateData.district_id = district_id ? Number(district_id) : null;
+    if (city_id !== undefined) updateData.city_id = city_id ? Number(city_id) : null;
     if (full_address !== undefined) updateData.full_address = full_address;
     if (data.opening_time !== undefined) updateData.opening_time = opening;
     if (data.closing_time !== undefined) updateData.closing_time = closing;
@@ -99,7 +111,11 @@ const locationService = {
     return prisma.location.update({
       where: { id: Number(id) },
       data: updateData,
-      include: { manager: { select: { id: true, email: true, employee: { select: { full_name: true } } } } }
+      include: { 
+        manager: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
+        district: { select: { id: true, name: true } },
+        city: { select: { id: true, name: true, district_id: true } }
+      }
     });
   },
 
@@ -127,13 +143,10 @@ const locationService = {
       select: {
         id: true,
         name: true,
-        district: true,
-        city: true
+        district: { select: { id: true, name: true } },
+        city: { select: { id: true, name: true } }
       },
-      orderBy: [
-        { city: 'asc' },
-        { name: 'asc' }
-      ]
+      orderBy: [{ name: 'asc' }]
     });
   }
 };

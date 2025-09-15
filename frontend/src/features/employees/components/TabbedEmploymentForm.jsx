@@ -548,8 +548,6 @@ const TabbedEmploymentForm = forwardRef(({
         }
         result = await createLocationRecord({
           employment_id: savedEmploymentId,
-          district: confirmData.district || "",
-          city: confirmData.city || "",
           bazaar_name: confirmData.bazaar_name || "",
           type: confirmData.type || "HEAD_OFFICE",
           full_address: confirmData.full_address || "",
@@ -624,17 +622,8 @@ const TabbedEmploymentForm = forwardRef(({
       console.log("🗑️ Documents to remove:", documentsToRemove);
       console.log("📄 Existing documents:", existingDocuments);
 
-      // Create document data for validation that includes both new files and existing documents
-      const documentData = { ...filesToUpload };
-      
-      // Add existing documents that haven't been removed
-      existingDocuments.forEach(doc => {
-        if (doc.file_type === 'medical_fitness') {
-          documentData.medical_fitness_report_pdf = doc;
-        } else if (doc.file_type === 'police_character') {
-          documentData.police_character_certificate = doc;
-        }
-      });
+      // Employment-level documents removed; ignore medical_fitness and police_character here
+      const documentData = {};
 
       // Add userId and document data for validation
       const dataWithUserIdAndDocuments = {
@@ -646,8 +635,6 @@ const TabbedEmploymentForm = forwardRef(({
 
       console.log("🔍 TabbedEmploymentForm: Employment validation data:", {
         organization: dataWithUserIdAndDocuments.organization,
-        hasMedicalFitness: !!dataWithUserIdAndDocuments.medical_fitness_report_pdf,
-        hasPoliceCharacter: !!dataWithUserIdAndDocuments.police_character_certificate,
         filesToUpload: Object.keys(filesToUpload),
         existingDocuments: existingDocuments.map(d => ({ type: d.file_type, id: d.id })),
         allDataKeys: Object.keys(dataWithUserIdAndDocuments)
@@ -718,16 +705,7 @@ const TabbedEmploymentForm = forwardRef(({
     try {
       console.log("📝 TabbedEmploymentForm: Location form submitted with data:", data);
 
-      // Validate location fields based on organization-specific visibility
-      if (isFieldVisible('location', 'district') && !data.district?.trim()) {
-        alert("Please select a district");
-        return;
-      }
-
-      if (isFieldVisible('location', 'city') && !data.city?.trim()) {
-        alert("Please enter a city");
-        return;
-      }
+      // District and City removed from employment module
 
       if (isFieldVisible('location', 'type') && !data.type?.trim()) {
         alert("Please select a location type");
@@ -904,9 +882,7 @@ const TabbedEmploymentForm = forwardRef(({
         bank_branch_code: salaryData.bank_branch_code || "",
         payment_mode: salaryData.payment_mode || "Bank Transfer",
         payroll_status: salaryData.payroll_status || "Active",
-        // Location data
-        district: locationData.district || "",
-        city: locationData.city || "",
+        // Location data (district/city removed)
         bazaar_name: locationData.bazaar_name || "",
         location_type: locationData.type || "HEAD_OFFICE",
         full_address: locationData.full_address || "",
@@ -976,14 +952,7 @@ const TabbedEmploymentForm = forwardRef(({
       // Create document data for validation that includes both new files and existing documents
       const documentData = { ...filesToUpload };
       
-      // Add existing documents that haven't been removed
-      existingDocuments.forEach(doc => {
-        if (doc.file_type === 'medical_fitness') {
-          documentData.medical_fitness_report_pdf = doc;
-        } else if (doc.file_type === 'police_character') {
-          documentData.police_character_certificate = doc;
-        }
-      });
+      // No employment-level documents to merge
 
       // Add userId and document data for validation
       // Ensure all required fields are at top level for backend validation
@@ -1027,14 +996,9 @@ const TabbedEmploymentForm = forwardRef(({
 
       console.log("🔍 TabbedEmploymentForm: Data for validation:", {
         organization: dataWithUserIdAndDocuments.organization,
-        hasMedicalFitness: !!dataWithUserIdAndDocuments.medical_fitness_report_pdf,
-        hasPoliceCharacter: !!dataWithUserIdAndDocuments.police_character_certificate,
         hasRenewalReport: !!dataWithUserIdAndDocuments.renewal_report,
         filesToUpload: Object.keys(filesToUpload),
         filesToUploadValues: Object.entries(filesToUpload).map(([key, value]) => ({ key, fileName: value?.name })),
-        medicalFitnessValue: dataWithUserIdAndDocuments.medical_fitness_report_pdf,
-        policeCharacterValue: dataWithUserIdAndDocuments.police_character_certificate,
-        renewalReportValue: dataWithUserIdAndDocuments.renewal_report,
         allDataKeys: Object.keys(dataWithUserIdAndDocuments)
       });
 
@@ -1047,9 +1011,7 @@ const TabbedEmploymentForm = forwardRef(({
 
       // Restructure the flat data into the nested format expected by handleUpdateRecord
       const structuredData = {
-        // Include document fields at top level for parent validation
-        medical_fitness_report_pdf: filesToUpload.medical_fitness_report_pdf || existingDocuments.find(doc => doc.file_type === 'medical_fitness') || null,
-        police_character_certificate: filesToUpload.police_character_certificate || existingDocuments.find(doc => doc.file_type === 'police_character') || null,
+        // Employment-level doc fields removed; keep renewal report if any
         renewal_report: filesToUpload.renewal_report || previewData.renewal_report || null,
         // Include required fields at top level for backend validation
         organization: previewData.organization || "",
@@ -1099,8 +1061,6 @@ const TabbedEmploymentForm = forwardRef(({
           payroll_status: previewData.payroll_status || "Active",
         },
         location: {
-          district: previewData.district || "",
-          city: previewData.city || "",
           bazaar_name: previewData.bazaar_name || "",
           type: previewData.location_type || "HEAD_OFFICE",
           full_address: previewData.full_address || "",
@@ -1271,8 +1231,7 @@ const TabbedEmploymentForm = forwardRef(({
                 reporting_officer_id: employmentData.reporting_officer_id || "",
                 remarks: employmentData.remarks || "",
                 scale_grade: employmentData.scale_grade_id || "", // Use scale_grade_id from schema
-                medical_fitness_report_pdf: employmentData.medical_fitness_report_pdf || null,
-                police_character_certificate: employmentData.police_character_certificate || null,
+                // Removed employment-level documents from data mapping
                 filer_status: employmentData.filer_status || "non_filer",
                 filer_active_status: employmentData.filer_active_status || "",
                 employment_status: employmentData.employment_status || "active",
@@ -1818,43 +1777,7 @@ const TabbedEmploymentForm = forwardRef(({
                         />
                       </div>
 
-                      {/* Document Uploads Section */}
-                      <div className="col-span-2 bg-gray-50 p-6 rounded-lg border border-gray-200">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                          <i className="fas fa-file-upload mr-2"></i>
-                          Required Documents
-                        </h4>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* Medical Fitness Report */}
-                          <div className={getFieldClasses('employment', 'medical_fitness_report_pdf')}>
-                            <EmploymentDocumentManager
-                              documents={documentManager.documents}
-                              documentType="medical_fitness"
-                              title="Medical Fitness Report"
-                              accept="application/pdf"
-                              maxSize={50 * 1024 * 1024}
-                              onDocumentAdd={documentManager.addDocument}
-                              onDocumentRemove={documentManager.removeDocument}
-                              isEditMode={isEditMode}
-                            />
-                          </div>
-
-                          {/* Police Character Certificate */}
-                          <div>
-                            <EmploymentDocumentManager
-                              documents={documentManager.documents}
-                              documentType="police_character"
-                              title="Police Character Certificate"
-                              accept="application/pdf"
-                              maxSize={50 * 1024 * 1024}
-                              onDocumentAdd={documentManager.addDocument}
-                              onDocumentRemove={documentManager.removeDocument}
-                              isEditMode={isEditMode}
-                            />
-                          </div>
-                        </div>
-                      </div>
+                      {/* Document uploads moved to employee module: medical fitness and police character removed */}
 
                       {/* Filer Status */}
                       <div className={getFieldClasses('employment', 'filer_status')}>
@@ -2289,47 +2212,7 @@ const TabbedEmploymentForm = forwardRef(({
 
                   <form onSubmit={handleLocationSubmit(onLocationSubmit)}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className={getFieldClasses('location', 'district')}>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          District <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          {...registerLocation("district",
-                            getValidationRules('location', 'district', {
-                              required: "District is required",
-                            })
-                          )}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900"
-                          placeholder="Enter district"
-                        />
-                        {locationErrors.district && (
-                          <p className="text-red-600 text-sm mt-1">
-                            {locationErrors.district.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className={getFieldClasses('location', 'city')}>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          City <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          {...registerLocation("city",
-                            getValidationRules('location', 'city', {
-                              required: "City is required",
-                            })
-                          )}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900"
-                          placeholder="Enter city"
-                        />
-                        {locationErrors.city && (
-                          <p className="text-red-600 text-sm mt-1">
-                            {locationErrors.city.message}
-                          </p>
-                        )}
-                      </div>
+                      
 
                       <div className={getFieldClasses('location', 'location_type')}>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -2962,14 +2845,7 @@ const TabbedEmploymentForm = forwardRef(({
                   Location Information
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">District:</span>
-                    <span className="text-gray-900">{displayValue(previewData.district)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">City:</span>
-                    <span className="text-gray-900">{displayValue(previewData.city)}</span>
-                  </div>
+                  
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Bazaar/Area:</span>
                     <span className="text-gray-900">{displayValue(previewData.bazaar_name)}</span>

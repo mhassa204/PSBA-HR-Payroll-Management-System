@@ -84,6 +84,8 @@ const EditUserForm = ({ user }) => {
     cnic_back: user?.cnic_back || null,
     domicile_certificate: user?.domicile_certificate || null,
     disability_document: user?.disability_document || null,
+    medical_fitness_file: user?.medical_fitness_file || null,
+    police_character_certificate_file: user?.police_character_certificate_file || null,
     education_documents: user?.education_documents || {},
     experience_documents: user?.experience_documents || {},
     other_documents: user?.other_documents || []
@@ -1215,6 +1217,26 @@ const EditUserForm = ({ user }) => {
                     onDocumentAdd={documentManager.addDocument}
                     onDocumentRemove={documentManager.removeDocument}
                   />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <DocumentManager
+                      documents={documentManager.documents}
+                      documentType="medical_fitness"
+                      title="Medical Fitness Report (Optional)"
+                      accept="application/pdf"
+                      maxSize={50 * 1024 * 1024}
+                      onDocumentAdd={documentManager.addDocument}
+                      onDocumentRemove={documentManager.removeDocument}
+                    />
+                    <DocumentManager
+                      documents={documentManager.documents}
+                      documentType="police_character"
+                      title="Police Character Certificate (Optional)"
+                      accept="application/pdf"
+                      maxSize={50 * 1024 * 1024}
+                      onDocumentAdd={documentManager.addDocument}
+                      onDocumentRemove={documentManager.removeDocument}
+                    />
+                  </div>
                   {experiences.length > 0 && (
                     <div className="space-y-6">
                       <h4 className="text-lg font-medium text-gray-900">

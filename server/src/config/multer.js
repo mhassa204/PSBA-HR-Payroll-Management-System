@@ -24,6 +24,12 @@ const DOCUMENT_TYPES = {
   'domicile_certificate': 'domicile',
   'domicile_certificate_file': 'domicile',
   'domicile': 'domicile',
+  // Move medical fitness and police character to employee-level optional docs
+  'medical_fitness_file': 'medical_fitness',
+  'medical_fitness': 'medical_fitness',
+  'police_character': 'police_character',
+  'police_character_certificate': 'police_character',
+  'police_character_certificate_file': 'police_character',
   'disability_document': 'disability',
   'disability_document_file': 'disability',
   'disability': 'disability',
@@ -37,10 +43,7 @@ const DOCUMENT_TYPES = {
   'experience': 'experience',
 
   // Employment documents
-  'medical_fitness_report_pdf': 'medical_fitness',
-  'medical_fitness_report_pdf_file': 'medical_fitness',
-  'police_character_certificate': 'police_character',
-  'police_character_certificate_file': 'police_character',
+  // removed: medical_fitness_report_pdf (moved to employee module)
   'renewal_report': 'renewal_report',
   'renewal_report_file': 'renewal_report',
   'contract_renewal_report': 'renewal_report',

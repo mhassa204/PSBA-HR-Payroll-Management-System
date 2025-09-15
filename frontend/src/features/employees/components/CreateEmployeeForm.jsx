@@ -60,6 +60,8 @@ const CreateEmployeeForm = () => {
     cnic_back: null,
     certificates: null,
     disability_document: null,
+    medical_fitness_file: null,
+    police_character_certificate_file: null,
     experience_documents: {},
     education_documents: {},
     other_documents: []
@@ -104,6 +106,8 @@ const CreateEmployeeForm = () => {
       cnic_back_file: null,
       domicile_certificate_file: null,
       disability_document_file: null,
+      medical_fitness_file: null,
+      police_character_certificate_file: null,
       experience_documents_files: {},
       education_documents_files: {},
       other_documents_files: [],
@@ -1631,6 +1635,88 @@ const CreateEmployeeForm = () => {
                     </p>
                   </div>
 
+                  {/* Medical Fitness Report (Optional) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Medical Fitness Report (Optional)
+                    </label>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        data-file-type="medical_fitness_file"
+                        onChange={(e) => handleFileUpload(e, 'medical_fitness_file')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {uploadedFiles.medical_fitness_file && (
+                        <div className="mt-2">
+                          {renderFilePreview(uploadedFiles.medical_fitness_file, 'medical_fitness_file')}
+                        </div>
+                      )}
+                    </div>
+                    {uploadedFiles.medical_fitness_file && (
+                      <div className="flex items-center justify-between mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center">
+                          <i className="fas fa-file-pdf mr-2 text-green-600"></i>
+                          <div>
+                            <p className="text-sm font-medium text-green-800">{uploadedFiles.medical_fitness_file.name}</p>
+                            <p className="text-xs text-green-600">{(uploadedFiles.medical_fitness_file.size / 1024 / 1024).toFixed(2)} MB</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleFileRemove('medical_fitness_file')}
+                          className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                          title="Remove medical fitness report"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-sm text-gray-500 mt-1">Upload medical fitness report (PDF only)</p>
+                  </div>
+
+                  {/* Police Character Certificate (Optional) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Police Character Certificate (Optional)
+                    </label>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        data-file-type="police_character_certificate_file"
+                        onChange={(e) => handleFileUpload(e, 'police_character_certificate_file')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {uploadedFiles.police_character_certificate_file && (
+                        <div className="mt-2">
+                          {renderFilePreview(uploadedFiles.police_character_certificate_file, 'police_character_certificate_file')}
+                        </div>
+                      )}
+                    </div>
+                    {uploadedFiles.police_character_certificate_file && (
+                      <div className="flex items-center justify-between mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center">
+                          <i className="fas fa-file-pdf mr-2 text-green-600"></i>
+                          <div>
+                            <p className="text-sm font-medium text-green-800">{uploadedFiles.police_character_certificate_file.name}</p>
+                            <p className="text-xs text-green-600">{(uploadedFiles.police_character_certificate_file.size / 1024 / 1024).toFixed(2)} MB</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleFileRemove('police_character_certificate_file')}
+                          className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                          title="Remove police character certificate"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-sm text-gray-500 mt-1">Upload police character certificate (PDF only)</p>
+                  </div>
+
                   {/* Conditional Disability Document */}
                   {form.watch("has_disability") && (
                     <div>
@@ -2042,11 +2128,11 @@ const CreateEmployeeForm = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">District:</span>
-                    <span className="text-gray-900">{displayValue(previewData.district)}</span>
+                    <span className="text-gray-900">{displayValue(previewData.district?.name || previewData.district)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">City:</span>
-                    <span className="text-gray-900">{displayValue(previewData.city)}</span>
+                    <span className="text-gray-900">{displayValue(previewData.city?.name || previewData.city)}</span>
                   </div>
                 </div>
                 <div className="space-y-3">

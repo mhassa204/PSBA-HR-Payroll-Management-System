@@ -30,7 +30,7 @@ const DeviceForm = ({ initial, onSubmit, onCancel, isSubmitting }) => {
       setLoadingLocs(true);
       try {
         const res = await locationService.getAllLocations();
-        const options = (res.locations || []).map((l) => ({ value: l.id, label: `${l.name}${l.city ? ' — ' + l.city : ''}` }));
+        const options = (res.locations || []).map((l) => ({ value: l.id, label: `${l.name}${l.city && l.city.name ? ' — ' + l.city.name : ''}` }));
         setLocations(options);
       } catch (e) {
         console.error('Failed to load locations', e);

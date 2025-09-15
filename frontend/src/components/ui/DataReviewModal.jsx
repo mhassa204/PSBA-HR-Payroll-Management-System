@@ -328,13 +328,13 @@ const DataReviewModal = ({
               <div>
                 <span className="text-gray-700 font-medium">District:</span>
                 <p className="font-semibold text-gray-900">
-                  {formatValue(data.location.district)}
+                  {formatValue(data.location?.district?.name)}
                 </p>
               </div>
               <div>
                 <span className="text-gray-700 font-medium">City:</span>
                 <p className="font-semibold text-gray-900">
-                  {formatValue(data.location.city)}
+                  {formatValue(data.location?.city?.name)}
                 </p>
               </div>
               <div>
@@ -526,13 +526,13 @@ const DataReviewModal = ({
             <div>
               <span className="text-gray-700 font-medium">City:</span>
               <p className="font-semibold text-gray-900">
-                {formatValue(data.city)}
+                {formatValue(data.city?.name || data.city)}
               </p>
             </div>
             <div>
               <span className="text-gray-700 font-medium">District:</span>
               <p className="font-semibold text-gray-900">
-                {formatValue(data.district)}
+                {formatValue(data.district?.name || data.district)}
               </p>
             </div>
           </div>

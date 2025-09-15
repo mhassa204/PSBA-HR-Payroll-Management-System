@@ -47,11 +47,20 @@ const processUploadedFiles = (files, req) => {
 
     if (fieldName === 'profile_picture_file') {
       processedFiles.profile_picture_file = relativePath;
-    } else if (fieldName === 'medical_fitness_file') {
+    } else if (fieldName === 'medical_fitness_file' || fieldName === 'medical_fitness') {
       processedFiles.medical_fitness_file = relativePath;
       documentRecords.push({
         file_path: relativePath,
         file_type: 'medical_fitness',
+        document_name: file.originalname,
+        file_size: file.size,
+        mime_type: file.mimetype,
+      });
+    } else if (fieldName === 'police_character_certificate_file' || fieldName === 'police_character_certificate' || fieldName === 'police_character') {
+      processedFiles.police_character_certificate_file = relativePath;
+      documentRecords.push({
+        file_path: relativePath,
+        file_type: 'police_character',
         document_name: file.originalname,
         file_size: file.size,
         mime_type: file.mimetype,
