@@ -1,0 +1,453 @@
+import { motion } from "framer-motion";
+import LoadingSpinner from "../../../../components/ui/LoadingSpinner";
+import SearchableSelect from "../../../../components/ui/SearchableSelect";
+import { ORGANIZATION_OPTIONS } from "../../../../constants/organizationFieldConfig";
+
+const EmploymentTab = ({
+  employmentForm,
+  formOptions,
+  availableDesignations,
+  formLoading,
+  getFieldClasses,
+  getValidationRules,
+  handleOrganizationChange,
+  onEmploymentSubmit,
+  isEditMode,
+  currentOrganization,
+  watchedEmploymentType,
+  watchedFilerStatus,
+  employmentErrors,
+}) => {
+  const { register, handleSubmit, watch } = employmentForm;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="space-y-6"
+    >
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-blue-900 mb-4">
+          <i className="fas fa-briefcase mr-2"></i>
+          Employment Information
+        </h3>
+
+        {/* Organization-specific guidance */}
+        {currentOrganization === 'MBWO' && (
+          <div className="mb-4 p-3 bg-green-100 border border-green-300 rounded-lg">
+            <p className="text-sm text-green-800">
+              <i className="fas fa-info-circle mr-2"></i>
+              <strong>MBWO Organization:</strong> Only Designation and Effective From are required fields.
+            </p>
+          </div>
+        )}
+        {currentOrganization === 'PMBMC' && (
+          <div className="mb-4 p-3 bg-purple-100 border border-purple-300 rounded-lg">
+            <p className="text-sm text-purple-800">
+              <i className="fas fa-info-circle mr-2"></i>
+              <strong>PMBMC Organization:</strong> Department, Designation, Employment Type, Role Tag, Effective From, and Medical Fitness Report are required fields.
+            </p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit(onEmploymentSubmit)}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Organization <span className="text-red-500">*</span>
+              </label>
+              <SearchableSelect
+                options={ORGANIZATION_OPTIONS}
+                value={watch("organization")}
+                onChange={(value) => {
+                  employmentForm.setValue("organization", value);
+                  handleOrganizationChange(value);
+                }}
+                placeholder="Select Organization"
+                register={register}
+                name="organization"
+                required={true}
+                error={employmentErrors?.organization?.message}
+              />
+              {employmentErrors?.organization && (
+                <p className="text-red-600 text-sm mt-1">
+                  {employmentErrors.organization.message}
+                </p>
+              )}
+            </div>
+
+            <div className={getFieldClasses('employment', 'department')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Department <span className="text-red-500">*</span>
+              </label>
+              {formLoading ? (
+                <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border">
+                  <LoadingSpinner size="sm" />
+                  <span className="text-sm text-gray-600">Loading departments...</span>
+                </div>
+              ) : (
+                <SearchableSelect
+                  options={formOptions?.departments || []}
+                  value={watch("department")}
+                  onChange={(value) => employmentForm.setValue("department", value)}
+                  placeholder={formOptions?.departments?.length > 0 ? "Select Department" : "No departments available"}
+                  register={register}
+                  name="department"
+                  required={getValidationRules('employment', 'department', { required: "Department is required" }).required}
+                  error={employmentErrors?.department?.message}
+                  disabled={isEditMode ? false : (!formOptions?.departments || formOptions.departments.length === 0)}
+                />
+              )}
+              {!formLoading && (!formOptions?.departments || formOptions.departments.length === 0) && (
+                <p className="text-yellow-600 text-sm mt-1">
+                  ⚠️ No departments available. Please check your connection or contact support.
+                </p>
+              )}
+              {employmentErrors?.department && (
+                <p className="text-red-600 text-sm mt-1">
+                  {employmentErrors.department.message}
+                </p>
+              )}
+            </div>
+
+            <div className={getFieldClasses('employment', 'designation')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Designation <span className="text-red-500">*</span>
+              </label>
+              {formLoading ? (
+                <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border">
+                  <LoadingSpinner size="sm" />
+                  <span className="text-sm text-gray-600">Loading designations...</span>
+                </div>
+              ) : (
+                <>
+                  <SearchableSelect
+                    options={availableDesignations || []}
+                    value={watch("designation")}
+                    onChange={(value) => {
+                      employmentForm.setValue("designation", value);
+                    }}
+                    placeholder={availableDesignations?.length > 0 ? "Select Designation" : "No designations available"}
+                    register={register}
+                    name="designation"
+                    required={getValidationRules('employment', 'designation', { required: "Designation is required" }).required}
+                    error={employmentErrors?.designation?.message}
+                    disabled={isEditMode ? false : (!availableDesignations || availableDesignations.length === 0)}
+                  />
+                </>
+              )}
+              {!formLoading && (!availableDesignations || availableDesignations.length === 0) && (
+                <p className="text-yellow-600 text-sm mt-1">
+                  {currentOrganization === 'MBWO' 
+                    ? "⚠️ No designations available. Please check your connection or contact support."
+                    : "⚠️ No designations available. Please select a department first or check your connection."}
+                </p>
+              )}
+              {employmentErrors?.designation && (
+                <p className="text-red-600 text-sm mt-1">
+                  {employmentErrors.designation.message}
+                </p>
+              )}
+            </div>
+
+            <div className={getFieldClasses('employment', 'employment_type')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Employment Type <span className="text-red-500">*</span>
+              </label>
+              <SearchableSelect
+                options={formOptions?.employmentTypes || []}
+                value={watch("employment_type")}
+                onChange={(value) => employmentForm.setValue("employment_type", value)}
+                placeholder="Select Employment Type"
+                register={register}
+                name="employment_type"
+                required={getValidationRules('employment', 'employment_type', { required: "Employment type is required" }).required}
+                error={employmentErrors?.employment_type?.message}
+              />
+              {employmentErrors?.employment_type && (
+                <p className="text-red-600 text-sm mt-1">
+                  {employmentErrors.employment_type.message}
+                </p>
+              )}
+            </div>
+
+            {/* Conditional Probation Section */}
+            {(watchedEmploymentType === "Regular" || watchedEmploymentType === "Contract") &&
+              currentOrganization !== 'MBWO' && (
+              <div className="col-span-2 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <h4 className="text-md font-semibold text-yellow-800 mb-3">
+                  <i className="fas fa-clock mr-2"></i>
+                  Probation Information
+                </h4>
+
+                <div className="space-y-4">
+                  {/* Probation Checkbox */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      {...register("is_on_probation")}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 text-sm font-medium text-gray-700">
+                      Employee is on probation
+                    </label>
+                  </div>
+
+                  {/* Conditional Probation End Date */}
+                  {watch("is_on_probation") && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Probation End Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        {...register("probation_end_date", {
+                          required: watch("is_on_probation") ? "Probation end date is required when employee is on probation" : false,
+                          validate: (value) => {
+                            if (watch("is_on_probation") && value) {
+                              const selectedDate = new Date(value);
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+
+                              if (selectedDate <= today) {
+                                return "Probation end date must be in the future";
+                              }
+                            }
+                            return true;
+                          }
+                        })}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                        min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                      />
+                      {employmentErrors?.probation_end_date && (
+                        <p className="text-red-600 text-sm mt-1">
+                          {employmentErrors.probation_end_date.message}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-500 mt-1">
+                        Select a future date when the probation period will end
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className={getFieldClasses('employment', 'role_tag')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Role Tag <span className="text-red-500">*</span>
+              </label>
+              <SearchableSelect
+                options={formOptions?.roleTags || []}
+                value={watch("role_tag")}
+                onChange={(value) => employmentForm.setValue("role_tag", value)}
+                placeholder="Select Role Tag"
+                register={register}
+                name="role_tag"
+                required={getValidationRules('employment', 'role_tag', { required: "Role tag is required" }).required}
+                error={employmentErrors?.role_tag?.message}
+                disabled={isEditMode ? false : (!formOptions?.roleTags || formOptions.roleTags.length === 0)}
+              />
+              {employmentErrors?.role_tag && (
+                <p className="text-red-600 text-sm mt-1">
+                  {employmentErrors.role_tag.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Effective From <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                {...register("effective_from", { required: "Effective from date is required" })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+              />
+              {employmentErrors?.effective_from && (
+                <p className="text-red-600 text-sm mt-1">
+                  {employmentErrors.effective_from.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Effective Till
+              </label>
+              <input
+                type="date"
+                {...register("effective_till")}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+              />
+            </div>
+
+            <div className={getFieldClasses('employment', 'reporting_officer_id')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Reporting Officer
+              </label>
+              {formLoading ? (
+                <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border">
+                  <LoadingSpinner size="sm" />
+                  <span className="text-sm text-gray-600">Loading users...</span>
+                </div>
+              ) : (
+                <>
+                  <SearchableSelect
+                    options={formOptions?.users || []}
+                    value={watch("reporting_officer_id")}
+                    onChange={(value) => employmentForm.setValue("reporting_officer_id", value)}
+                    placeholder={formOptions?.users?.length > 0 ? "Select Reporting Officer" : "No users available"}
+                    register={register}
+                    name="reporting_officer_id"
+                    required={false}
+                    error={employmentErrors?.reporting_officer_id?.message}
+                    disabled={!formOptions?.users || formOptions.users.length === 0}
+                  />
+                </>
+              )}
+              {!formLoading && (!formOptions?.users || formOptions.users.length === 0) && (
+                <p className="text-yellow-600 text-sm mt-1">
+                  ⚠️ No users available for reporting officer selection. Please check your connection or contact support.
+                </p>
+              )}
+            </div>
+
+            {/* Scale/Grade */}
+            <div className={getFieldClasses('employment', 'scale_grade')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Scale/Grade
+              </label>
+              <SearchableSelect
+                options={formOptions?.scaleGrades || []}
+                value={watch("scale_grade")}
+                onChange={(value) => employmentForm.setValue("scale_grade", value)}
+                placeholder="Select Scale/Grade"
+                register={register}
+                name="scale_grade"
+                required={false}
+                error={employmentErrors?.scale_grade?.message}
+              />
+            </div>
+
+            {/* Filer Status */}
+            <div className={getFieldClasses('employment', 'filer_status')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Tax Filer Status
+              </label>
+              <SearchableSelect
+                options={[
+                  { value: "non_filer", label: "Non-Filer" },
+                  { value: "filer", label: "Filer" },
+                ]}
+                value={watch("filer_status")}
+                onChange={(value) => employmentForm.setValue("filer_status", value)}
+                placeholder="Select Tax Filer Status"
+                register={register}
+                name="filer_status"
+                required={false}
+                error={employmentErrors?.filer_status?.message}
+              />
+            </div>
+
+            {/* Filer Active Status (conditional) */}
+            {watchedFilerStatus === "filer" && (
+              <div className={getFieldClasses('employment', 'filer_active_status')}>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Filer Active Status <span className="text-red-500">*</span>
+                </label>
+                <SearchableSelect
+                  options={[
+                    { value: "active", label: "Active" },
+                    { value: "not_active", label: "Not Active" },
+                  ]}
+                  value={watch("filer_active_status")}
+                  onChange={(value) => employmentForm.setValue("filer_active_status", value)}
+                  placeholder="Select Status"
+                  register={register}
+                  name="filer_active_status"
+                  required={getValidationRules('employment', 'filer_active_status', {
+                    required: watchedFilerStatus === "filer" ? "Filer active status is required" : false,
+                  }).required}
+                  error={employmentErrors?.filer_active_status?.message}
+                />
+                {employmentErrors?.filer_active_status && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {employmentErrors.filer_active_status.message}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Employment Status */}
+            <div className={getFieldClasses('employment', 'employment_status')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Employment Status <span className="text-red-500">*</span>
+              </label>
+              <SearchableSelect
+                options={[
+                  { value: "active", label: "Active" },
+                  { value: "inactive", label: "Inactive" },
+                  { value: "terminated", label: "Terminated" },
+                  { value: "resigned", label: "Resigned" },
+                ]}
+                value={watch("employment_status")}
+                onChange={(value) => employmentForm.setValue("employment_status", value)}
+                placeholder="Select Status"
+                register={register}
+                name="employment_status"
+                required={getValidationRules('employment', 'employment_status', { required: "Employment status is required" }).required}
+                error={employmentErrors?.employment_status?.message}
+              />
+              {employmentErrors?.employment_status && (
+                <p className="text-red-600 text-sm mt-1">
+                  {employmentErrors.employment_status.message}
+                </p>
+              )}
+            </div>
+
+            {/* Is Current Employee */}
+            <div className={getFieldClasses('employment', 'is_current')}>
+              <label className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  {...register("is_current")}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm font-semibold text-gray-700">
+                  Current Employee
+                </span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">Check if this is the employee's current position</p>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Remarks
+            </label>
+            <textarea
+              {...register("remarks")}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+              rows={3}
+              placeholder="Any additional remarks or notes"
+            />
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <button
+              type="submit"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              <i className="fas fa-arrow-right mr-2"></i>
+              Continue to Salary
+            </button>
+          </div>
+        </form>
+      </div>
+    </motion.div>
+  );
+};
+
+export default EmploymentTab;

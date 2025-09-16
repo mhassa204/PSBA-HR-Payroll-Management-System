@@ -72,6 +72,12 @@ const CleanEmploymentHistory = () => {
     }
   };
 
+  // Provide a refresh callback for child forms to trigger page refresh after clone/edit
+  const refreshEmploymentPage = async () => {
+    await loadEmployeeData();
+    setRefreshKey(prev => prev + 1);
+  };
+
   const handleAddEmployment = async (data) => {
     try {
       console.log("📝 CleanEmploymentHistory: Received employment data:", data);
@@ -338,6 +344,16 @@ const CleanEmploymentHistory = () => {
         // Document uploads - properly structure document data for backend
         medical_fitness_report_pdf: updatedRecord.medical_fitness_report_pdf || employmentData.medical_fitness_report_pdf || null,
         police_character_certificate: updatedRecord.police_character_certificate || employmentData.police_character_certificate || null,
+        // Pass-through existing renewal report metadata if present (when no new upload)
+        ...(updatedRecord.renewal_report_id || updatedRecord.renewal_report_url || updatedRecord.renewal_report_file_path || updatedRecord.renewal_report_document_name || updatedRecord.renewal_report_file_type || updatedRecord.renewal_report_file_size || updatedRecord.renewal_report_mime_type ? {
+          renewal_report_id: updatedRecord.renewal_report_id,
+          renewal_report_url: updatedRecord.renewal_report_url,
+          renewal_report_file_path: updatedRecord.renewal_report_file_path,
+          renewal_report_document_name: updatedRecord.renewal_report_document_name,
+          renewal_report_file_type: updatedRecord.renewal_report_file_type,
+          renewal_report_file_size: updatedRecord.renewal_report_file_size,
+          renewal_report_mime_type: updatedRecord.renewal_report_mime_type,
+        } : {}),
         // Document removal - include documents to remove
         documents_to_remove: employmentData.documents_to_remove || [],
         // Related data
@@ -527,22 +543,24 @@ const CleanEmploymentHistory = () => {
         employeeName={employee.full_name}
         userId={employee.id}
         isEditMode={false}
+        onRefresh={refreshEmploymentPage}
       />
 
-                          {/* Edit Employment Modal */}
-                    {editingRecord && (
-                      <TabbedEmploymentForm
-                        ref={editFormRef}
-                        key={`edit-${editingRecord.id}-${refreshKey}`}
-                        isOpen={showEditModal}
-                        onClose={handleEditModalClose}
-                        onSubmit={handleUpdateEmployment}
-                        editingRecord={editingRecord}
-                        isEditMode={true}
-                        employeeName={employee.full_name}
-                        userId={employee.id}
-                      />
-                    )}
+      {/* Edit Employment Modal */}
+      {editingRecord && (
+        <TabbedEmploymentForm
+          ref={editFormRef}
+          key={`edit-${editingRecord.id}-${refreshKey}`}
+          isOpen={showEditModal}
+          onClose={handleEditModalClose}
+          onSubmit={handleUpdateEmployment}
+          editingRecord={editingRecord}
+          isEditMode={true}
+          employeeName={employee.full_name}
+          userId={employee.id}
+          onRefresh={refreshEmploymentPage}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       <EnhancedModal

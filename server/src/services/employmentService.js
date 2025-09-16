@@ -222,7 +222,6 @@ createEmployment: async (data) => {
           confirmation_status: cleanValue(contract.confirmation_status),
           confirmation_date: contract.confirmation_date ? new Date(contract.confirmation_date) : null,
           is_renewed: toBoolean(contract.is_renewed),
-         
         }
       });
     }
@@ -900,21 +899,35 @@ updateEmployment: async (id, data) => {
 
     const { documentRecords = [], ...contractFields } = contractData;
 
+    // Helpers to normalize incoming values (can be strings from the UI)
+    const toBoolean = (value) => {
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') return value.toLowerCase() === 'true';
+      return Boolean(value);
+    };
+    const toIntOrDefault = (value, def = 0) => {
+      if (value === undefined || value === null || value === '') return def;
+      const n = parseInt(value, 10);
+      return Number.isNaN(n) ? def : n;
+    };
+    const cleanDate = (value) => (value && value !== 'null' && value !== 'undefined') ? new Date(value) : null;
+    const cleanText = (value) => (value === undefined || value === null || value === 'null' || value === 'undefined') ? null : value;
+
     return prisma.$transaction(async (tx) => {
       const contract = await tx.employmentContract.create({
         data: {
           employment_id: parseInt(employmentId),
-          contract_type: contractFields.contract_type || null,
-          contract_number: contractFields.contract_number || null,
-          start_date: contractFields.start_date ? new Date(contractFields.start_date) : null,
-          end_date: contractFields.end_date ? new Date(contractFields.end_date) : null,
-          renewal_count: contractFields.renewal_count || 0,
-          probation_start: contractFields.probation_start ? new Date(contractFields.probation_start) : null,
-          probation_end: contractFields.probation_end ? new Date(contractFields.probation_end) : null,
-          confirmation_status: contractFields.confirmation_status || null,
-          confirmation_date: contractFields.confirmation_date ? new Date(contractFields.confirmation_date) : null,
-          is_renewed: contractFields.is_renewed || false,
-          renewal_report: contractFields.renewal_report || null
+          contract_type: cleanText(contractFields.contract_type),
+          contract_number: cleanText(contractFields.contract_number),
+          start_date: cleanDate(contractFields.start_date),
+          end_date: cleanDate(contractFields.end_date),
+          renewal_count: toIntOrDefault(contractFields.renewal_count, 0),
+          probation_start: cleanDate(contractFields.probation_start),
+          probation_end: cleanDate(contractFields.probation_end),
+          confirmation_status: cleanText(contractFields.confirmation_status),
+          confirmation_date: cleanDate(contractFields.confirmation_date),
+          is_renewed: toBoolean(contractFields.is_renewed)
+          // Note: renewal_report is stored as an EmploymentDocument, not a field on EmploymentContract
         }
       });
 
@@ -937,21 +950,35 @@ updateEmployment: async (id, data) => {
 
     const { documentRecords = [], ...contractFields } = contractData;
 
+    // Helpers to normalize incoming values (can be strings from the UI)
+    const toBoolean = (value) => {
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') return value.toLowerCase() === 'true';
+      return Boolean(value);
+    };
+    const toIntOrDefault = (value, def = 0) => {
+      if (value === undefined || value === null || value === '') return def;
+      const n = parseInt(value, 10);
+      return Number.isNaN(n) ? def : n;
+    };
+    const cleanDate = (value) => (value && value !== 'null' && value !== 'undefined') ? new Date(value) : null;
+    const cleanText = (value) => (value === undefined || value === null || value === 'null' || value === 'undefined') ? null : value;
+
     return prisma.$transaction(async (tx) => {
       const contract = await tx.employmentContract.update({
         where: { employment_id: parseInt(employmentId) },
         data: {
-          contract_type: contractFields.contract_type || null,
-          contract_number: contractFields.contract_number || null,
-          start_date: contractFields.start_date ? new Date(contractFields.start_date) : null,
-          end_date: contractFields.end_date ? new Date(contractFields.end_date) : null,
-          renewal_count: contractFields.renewal_count || 0,
-          probation_start: contractFields.probation_start ? new Date(contractFields.probation_start) : null,
-          probation_end: contractFields.probation_end ? new Date(contractFields.probation_end) : null,
-          confirmation_status: contractFields.confirmation_status || null,
-          confirmation_date: contractFields.confirmation_date ? new Date(contractFields.confirmation_date) : null,
-          is_renewed: contractFields.is_renewed || false,
-          renewal_report: contractFields.renewal_report || null
+          contract_type: cleanText(contractFields.contract_type),
+          contract_number: cleanText(contractFields.contract_number),
+          start_date: cleanDate(contractFields.start_date),
+          end_date: cleanDate(contractFields.end_date),
+          renewal_count: toIntOrDefault(contractFields.renewal_count, 0),
+          probation_start: cleanDate(contractFields.probation_start),
+          probation_end: cleanDate(contractFields.probation_end),
+          confirmation_status: cleanText(contractFields.confirmation_status),
+          confirmation_date: cleanDate(contractFields.confirmation_date),
+          is_renewed: toBoolean(contractFields.is_renewed)
+          // Note: renewal_report is stored as an EmploymentDocument, not a field on EmploymentContract
         }
       });
 

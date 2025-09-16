@@ -167,6 +167,33 @@ const EnhancedUserProfile = () => {
     return currentRecord;
   };
 
+  // Format employment location without using city/district fields and avoiding raw IDs
+  const displayEmploymentLocation = (rec) => {
+    const loc = rec?.location;
+    if (loc && typeof loc === 'object') {
+      const sanitizeBazaar = (val) => {
+        if (val === undefined || val === null) return '';
+        const s = String(val).trim();
+        if (!s || s.toLowerCase() === 'null' || /^\d+$/.test(s)) return '';
+        return s;
+      };
+      switch (loc.type) {
+        case 'HEAD_OFFICE':
+          return 'Head Office';
+        case 'HEAD_QUARTER':
+          return 'Head Quarter';
+        case 'BAZAAR':
+          return sanitizeBazaar(loc.bazaar_name) || 'Bazaar';
+        case 'SAHULAT_BAZAAR':
+          return sanitizeBazaar(loc.bazaar_name) || 'Sahulat Bazaar';
+        default:
+          break;
+      }
+    }
+    // Fallback for older data
+    return rec?.office_location || 'N/A';
+  };
+
   if (isLoading) {
     return (
       <div
@@ -489,9 +516,7 @@ const EnhancedUserProfile = () => {
                           Office Location
                         </p>
                         <p className="font-semibold text-gray-900">
-                          {currentPosition.location?.city ? formatCityName(currentPosition.location.city) : 
-                           currentPosition.location?.district ? currentPosition.location.district : 
-                           currentPosition.office_location || "N/A"}
+                          {displayEmploymentLocation(currentPosition)}
                         </p>
                       </div>
                     </div>
@@ -682,9 +707,7 @@ const EnhancedUserProfile = () => {
                                     Location:
                                   </span>
                                   <p className="font-semibold text-gray-900">
-                                    {record.location?.city ? formatCityName(record.location.city) : 
-                                     record.location?.district ? record.location.district : 
-                                     record.office_location || "N/A"}
+                                    {displayEmploymentLocation(record)}
                                   </p>
                                 </div>
                               </div>

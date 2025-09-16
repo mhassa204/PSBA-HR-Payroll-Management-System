@@ -1,6 +1,3 @@
-
-
-
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Pencil, Trash, Eye } from "lucide-react";
@@ -103,6 +100,33 @@ const EmploymentRecordActions = ({
     return `PKR ${Number(amount).toLocaleString()}`;
   };
 
+  // New: location formatter without city/district
+  const formatLocation = (rec) => {
+    const loc = rec?.location;
+    const sanitizeBazaar = (val) => {
+      if (!val) return '';
+      if (typeof val !== 'string') return '';
+      const t = val.trim();
+      if (!t || t.toLowerCase() === 'null') return '';
+      // If numeric-like (e.g., '99'), avoid showing raw ID
+      if (/^\d+$/.test(t)) return '';
+      return t;
+    };
+    if (loc && typeof loc === 'object') {
+      if (loc.type === 'HEAD_OFFICE') return 'Head Office';
+      if (loc.type === 'HEAD_QUARTER') return 'Head Quarter';
+      if (loc.type === 'BAZAAR') {
+        const name = sanitizeBazaar(loc.bazaar_name);
+        return name ? `Bazaar - ${name}` : 'Bazaar';
+      }
+      if (loc.type === 'SAHULAT_BAZAAR') {
+        const name = sanitizeBazaar(loc.bazaar_name);
+        return name ? `Sahulat Bazaar - ${name}` : 'Sahulat Bazaar';
+      }
+    }
+    return rec?.office_location || 'N/A';
+  };
+
   if (employmentRecords.length === 0) {
     return (
       <div className="text-center py-12">
@@ -200,14 +224,7 @@ const EmploymentRecordActions = ({
                 {record.location && (
                   <div>
                     <span className="font-medium text-gray-600">Location:</span>
-                    <span className="ml-2 text-gray-900">
-                      {record.location.type === 'BAZAAR' || record.location.type === 'SAHULAT_BAZAAR'
-                        ? (record.location.bazaar_name || 'Bazaar')
-                        : record.location.type === 'HEAD_QUARTER' 
-                          ? 'Head Quarter'
-                          : 'Head Office'
-                      }
-                    </span>
+                    <span className="ml-2 text-gray-900">{formatLocation(record)}</span>
                   </div>
                 )}
                 {record.contract && (
@@ -413,44 +430,17 @@ const EmploymentRecordActions = ({
               )}
             </div>
 
-            {selectedRecord.location && (
+            {(selectedRecord.location || selectedRecord.office_location) && (
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
                   Location Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">District:</span>
-                    <span className="text-gray-900">
-                      {(selectedRecord.location?.district && selectedRecord.location.district.name) || "N/A"}
-                    </span>
+                    <span className="font-medium text-gray-600">Location:</span>
+                    <span className="text-gray-900">{formatLocation(selectedRecord)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">City:</span>
-                    <span className="text-gray-900">
-                      {(selectedRecord.location?.city && selectedRecord.location.city.name) || "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Location Type:</span>
-                    <span className="text-gray-900">
-                      {selectedRecord.location.type === 'BAZAAR' || selectedRecord.location.type === 'SAHULAT_BAZAAR'
-                        ? 'Bazaar'
-                        : selectedRecord.location.type === 'HEAD_QUARTER' 
-                          ? 'Head Quarter'
-                          : 'Head Office'
-                      }
-                    </span>
-                  </div>
-                  {(selectedRecord.location.type === 'BAZAAR' || selectedRecord.location.type === 'SAHULAT_BAZAAR') && (
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Bazaar Name:</span>
-                      <span className="text-gray-900">
-                        {selectedRecord.location.bazaar_name || "N/A"}
-                      </span>
-                    </div>
-                  )}
-                  {selectedRecord.location.full_address && (
+                  {selectedRecord.location?.full_address && (
                     <div className="col-span-2">
                       <span className="font-medium text-gray-600">Full Address:</span>
                       <p className="mt-1 text-sm text-gray-700 bg-gray-50 p-2 rounded">
