@@ -398,6 +398,52 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
   
   const requiredFields = rules.required.filter(field => field !== 'employee_id' && field !== 'organization');
   console.log("🔍 Backend validation - Required fields for", organization, ":", requiredFields);
+
+  // Helpers
+  const isEmptyish = (v) => v === undefined || v === null || v === '' || v === 'null' || v === 'undefined';
+  const normalizeVal = (v) => (isEmptyish(v) ? null : v);
+  const buildDocFromFlat = (src) => {
+    const id = normalizeVal(src.renewal_report_id);
+    const url = normalizeVal(src.renewal_report_url);
+    const file_path = normalizeVal(src.renewal_report_file_path);
+    const document_name = normalizeVal(src.renewal_report_document_name);
+    const file_type = normalizeVal(src.renewal_report_file_type);
+    const file_size = normalizeVal(src.renewal_report_file_size);
+    const mime_type = normalizeVal(src.renewal_report_mime_type);
+    if (id || url || file_path || document_name || file_type || file_size || mime_type) {
+      return { id, url, file_path, document_name, file_type, file_size, mime_type };
+    }
+    return null;
+  };
+  const buildDocFromContractFlat = (src) => {
+    const id = normalizeVal(src.contract_renewal_report_id);
+    const url = normalizeVal(src.contract_renewal_report_url);
+    const file_path = normalizeVal(src.contract_renewal_report_file_path);
+    const document_name = normalizeVal(src.contract_renewal_report_document_name);
+    const file_type = normalizeVal(src.contract_renewal_report_file_type);
+    const file_size = normalizeVal(src.contract_renewal_report_file_size);
+    const mime_type = normalizeVal(src.contract_renewal_report_mime_type);
+    if (id || url || file_path || document_name || file_type || file_size || mime_type) {
+      return { id, url, file_path, document_name, file_type, file_size, mime_type };
+    }
+    return null;
+  };
+  const hasDocProps = (doc) => !!(doc && (doc.id || doc.url || doc.file_path || doc.document_name));
+  const getExistingRenewalFromPayload = (src) => {
+    // 1) renewal_report as object
+    if (src.renewal_report && typeof src.renewal_report === 'object') return src.renewal_report;
+    // 2) renewal_report as non-empty string path
+    if (!isEmptyish(src.renewal_report) && typeof src.renewal_report === 'string') return { file_path: src.renewal_report };
+    // 3) flattened renewal_report_* at root
+    const flat = buildDocFromFlat(src); if (flat) return flat;
+    // 4) nested contract.renewal_report object (if present)
+    if (src.contract && src.contract.renewal_report && typeof src.contract.renewal_report === 'object') return src.contract.renewal_report;
+    // 5) flattened contract_renewal_report_* at root
+    const flatContract = buildDocFromContractFlat(src); if (flatContract) return flatContract;
+    // 6) contract_renewal_report as non-empty string path
+    if (!isEmptyish(src.contract_renewal_report) && typeof src.contract_renewal_report === 'string') return { file_path: src.contract_renewal_report };
+    return null;
+  };
   
   requiredFields.forEach(field => {
     let fieldValue;
@@ -424,52 +470,17 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
     } else if (field === 'reporting_officer_id') {
       fieldValue = employmentData.reporting_officer_id || employmentData.reporting_officer || employmentData.reporting_officer_name;
     } else if (field === 'medical_fitness_report_pdf' || field === 'police_character_certificate') {
-      // These employment-level documents are no longer required; skip validation
-      fieldValue = true;
-
+      fieldValue = true; // not required anymore
     } else if (field === 'renewal_report') {
-      // Check for new file upload OR existing document in database
       const uploadedFile = uploadedFiles.find(f => 
         f.fieldname === 'renewal_report' || 
         f.fieldname === 'contract_renewal_report' ||
         f.fieldname.startsWith('renewal_report_') ||
         f.fieldname.startsWith('contract_renewal_report_')
       );
-      
-      // Check if document already exists in database (for edit operations)
-      // Handle both object format and flattened format
-      let existingDocument = employmentData.renewal_report;
-      
-      // If we have flattened fields, reconstruct the document object
-      if (!existingDocument && employmentData.renewal_report_id) {
-        existingDocument = {
-          id: employmentData.renewal_report_id,
-          url: employmentData.renewal_report_url,
-          file_path: employmentData.renewal_report_file_path,
-          document_name: employmentData.renewal_report_document_name,
-          file_type: employmentData.renewal_report_file_type,
-          file_size: employmentData.renewal_report_file_size,
-          mime_type: employmentData.renewal_report_mime_type
-        };
-      }
-      
-      const hasExistingDocument = existingDocument && (
-        existingDocument.id || 
-        existingDocument.url || 
-        existingDocument.file_path || 
-        existingDocument.document_name
-      );
-      
+      const existingDocument = getExistingRenewalFromPayload(employmentData);
+      const hasExistingDocument = hasDocProps(existingDocument);
       fieldValue = uploadedFile || hasExistingDocument;
-
-    } else if (field === 'role_tag') {
-      // Handle role_tag field - check both role_tag and role_tag_id
-      fieldValue = employmentData.role_tag || employmentData.role_tag_id;
-      
-    } else if (field === 'scale_grade') {
-      // Handle scale_grade field - check both scale_grade and scale_grade_id
-      fieldValue = employmentData.scale_grade || employmentData.scale_grade_id;
-      
     } else {
       fieldValue = employmentData[field];
     }
@@ -482,128 +493,58 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
     }
   });
   
-  // Check for is_renewed in multiple possible locations
-  const isRenewed = employmentData.is_renewed === true || employmentData.is_renewed === 'true' || 
-                    employmentData.contract_is_renewed === true || employmentData.contract_is_renewed === 'true';
-  
-
+  // Check for is_renewed across possible locations
+  const isRenewed = (
+    employmentData.is_renewed === true || employmentData.is_renewed === 'true' ||
+    employmentData.contract_is_renewed === true || employmentData.contract_is_renewed === 'true' ||
+    (employmentData.contract && (employmentData.contract.is_renewed === true || employmentData.contract.is_renewed === 'true'))
+  );
   
   if (isRenewed) {
-
-    
-    // Check for new file upload OR existing document in database
     const renewalReportFile = uploadedFiles.find(f => 
       f.fieldname === 'renewal_report' || 
       f.fieldname === 'contract_renewal_report' ||
       f.fieldname.startsWith('renewal_report_') ||
       f.fieldname.startsWith('contract_renewal_report_')
     );
-    
-    // Check if renewal report already exists in database (for edit operations)
-    let existingRenewalReport = employmentData.renewal_report;
-    
-    // If we have flattened fields, reconstruct the document object
-    if (!existingRenewalReport && employmentData.renewal_report_id) {
-      existingRenewalReport = {
-        id: employmentData.renewal_report_id,
-        url: employmentData.renewal_report_url,
-        file_path: employmentData.renewal_report_file_path,
-        document_name: employmentData.renewal_report_document_name,
-        file_type: employmentData.renewal_report_file_type,
-        file_size: employmentData.renewal_report_file_size,
-        mime_type: employmentData.renewal_report_mime_type
-      };
-    }
-    
-    // Also check for renewal_report field directly
-    if (!existingRenewalReport && employmentData.renewal_report) {
-      existingRenewalReport = employmentData.renewal_report;
-    }
-    
-    // Check for renewal_report in the flattened contract fields
-    if (!existingRenewalReport && employmentData.renewal_report) {
-      existingRenewalReport = employmentData.renewal_report;
-    }
-    
-    // Check for renewal_report in the contract object if it exists
-    if (!existingRenewalReport && employmentData.contract && employmentData.contract.renewal_report) {
-      existingRenewalReport = employmentData.contract.renewal_report;
-    }
-    
-    // If we still don't have a renewal report and we have an employment ID, query the database
+
+    let existingRenewalReport = getExistingRenewalFromPayload(employmentData);
+    let employmentRecord = null; // capture for reuse
+
+    // Fallback: query DB if still not found
     if (!existingRenewalReport && employmentId) {
       try {
-        
-        
-        // Use the existing working getEmploymentById method to get documents
-        const employmentRecord = await employmentService.getEmploymentById(employmentId);
-        
+        employmentRecord = await employmentService.getEmploymentById(employmentId);
         if (employmentRecord && employmentRecord.documents) {
-  
-          
-          // Look for renewal report documents
-          const renewalDocuments = employmentRecord.documents.filter(doc => 
-            doc.file_type === 'renewal_report'
-          );
-          
-          
-          
+          const renewalDocuments = employmentRecord.documents.filter(doc => {
+            const t = (doc.file_type || '').toLowerCase();
+            return t === 'renewal_report' || t === 'contract_renewal_report' || t.includes('renewal');
+          });
           if (renewalDocuments.length > 0) {
             existingRenewalReport = renewalDocuments[0];
-            
-          } else {
-            console.log(`⚠️ Backend: No renewal report documents found in database for employment ID: ${employmentId}`);
           }
-        } else {
-          console.log(`⚠️ Backend: No employment record or documents found for employment ID: ${employmentId}`);
         }
       } catch (error) {
         console.error(`❌ Backend: Error querying database for renewal report documents:`, error);
-        // Don't fail validation due to database query error, continue with other checks
       }
-    } else {
-      console.log(`🔍 Backend: Skipping database query - existingRenewalReport: ${!!existingRenewalReport}, employmentId: ${employmentId}`);
     }
     
-    const hasExistingRenewalReport = existingRenewalReport && (
-      existingRenewalReport.id || 
-      existingRenewalReport.url || 
-      existingRenewalReport.file_path || 
-      existingRenewalReport.document_name
-    );
-    
-    console.log(`🔍 Backend: Renewal report validation details:`, {
-      hasNewFile: !!renewalReportFile,
-      hasExistingDocument: !!hasExistingRenewalReport,
-      existingDocument: existingRenewalReport,
-      renewalReportField: employmentData.renewal_report,
-      renewalReportId: employmentData.renewal_report_id,
-      renewalReportUrl: employmentData.renewal_report_url,
-      renewalReportFilePath: employmentData.renewal_report_file_path,
-      renewalReportDocumentName: employmentData.renewal_report_document_name,
-      contractObject: employmentData.contract,
-      contractRenewalReport: employmentData.contract?.renewal_report,
-      allRenewalReportFields: Object.keys(employmentData).filter(key => key.includes('renewal')),
-      flattenedFields: {
-        id: employmentData.renewal_report_id,
-        url: employmentData.renewal_report_url,
-        file_path: employmentData.renewal_report_file_path,
-        document_name: employmentData.renewal_report_document_name
-      },
-      uploadedFileFound: !!renewalReportFile,
-      uploadedFilesCount: uploadedFiles.length,
-      uploadedFileNames: uploadedFiles.map(f => f.fieldname),
-      // Add debugging for all fields that might contain renewal info
-      allFieldsWithRenewal: Object.keys(employmentData).filter(key => key.includes('renewal')),
-      allFieldsWithContract: Object.keys(employmentData).filter(key => key.includes('contract')),
-      employmentId: employmentId
+    const hasExistingRenewalReport = hasDocProps(existingRenewalReport);
+    console.log('🔎 Renewal check:', {
+      isRenewed,
+      hasUpload: !!renewalReportFile,
+      hasExistingRenewalReport,
+      fromPayload: existingRenewalReport ? Object.keys(existingRenewalReport) : null,
+      employmentId
     });
-    
+
     if (!renewalReportFile && !hasExistingRenewalReport) {
-      console.log(`❌ Backend: Renewal report validation failed - no new file and no existing document`);
-      errors.push("Contract renewal report is required when contract is marked as renewed");
-    } else {
-      console.log(`✅ Backend: Renewal report validation passed`);
+      // If the record was already renewed previously, do not force re-validation
+      if (employmentRecord && employmentRecord.contract && employmentRecord.contract.is_renewed === true) {
+        console.log('ℹ️ Skipping renewal_report requirement: record already marked renewed previously.');
+      } else {
+        errors.push("Contract renewal report is required when contract is marked as renewed");
+      }
     }
   }
   
@@ -845,7 +786,7 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       if ('salary_bank_account_primary' in req.body) salary.bank_account_primary = req.body.salary_bank_account_primary;
       if ('salary_bank_name_primary' in req.body) salary.bank_name_primary = req.body.salary_bank_name_primary;
       if ('salary_bank_branch_code' in req.body) salary.bank_branch_code = req.body.salary_bank_branch_code;
-      if ('salary_payment_mode' in req.body) salary.payment_mode = req.body.salary_payment_mode;
+      if ('salary_payment_mode' in req.body) salary.salary_payment_mode = req.body.salary_payment_mode;
       if ('salary_salary_effective_from' in req.body) salary.salary_effective_from = req.body.salary_salary_effective_from;
       if ('salary_salary_effective_till' in req.body) salary.salary_effective_till = req.body.salary_salary_effective_till;
       if ('salary_payroll_status' in req.body) salary.payroll_status = req.body.salary_payroll_status;

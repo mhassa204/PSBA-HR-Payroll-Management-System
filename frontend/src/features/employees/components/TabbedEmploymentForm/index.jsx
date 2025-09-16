@@ -167,6 +167,7 @@ const TabbedEmploymentForm = forwardRef(({
       const salaryBase = existing?.salary || existing?.employment?.salary || null;
       const contractBase = existing?.contract || existing?.employment?.contract || null;
       const locationBase = existing?.location || existing?.employment?.location || null;
+      const renewalReportDoc = Array.isArray(existing?.documents) ? existing.documents.find(doc => doc.file_type === 'renewal_report') : null;
 
       // Read current form values (user may have changed some before cloning)
       const eForm = employmentForm.getValues();
@@ -294,6 +295,15 @@ const TabbedEmploymentForm = forwardRef(({
           confirmation_status: c.confirmation_status || "",
           confirmation_date: c.confirmation_date || null,
           is_renewed: typeof c.is_renewed === 'string' ? c.is_renewed === 'true' : Boolean(c.is_renewed),
+          // If contract is renewed and renewal_report exists, carry over its metadata
+          ...(c.is_renewed && renewalReportDoc ? {
+            renewal_report_id: renewalReportDoc.id,
+            renewal_report_file_path: renewalReportDoc.file_path,
+            renewal_report_document_name: renewalReportDoc.document_name,
+            renewal_report_file_type: renewalReportDoc.file_type,
+            renewal_report_file_size: renewalReportDoc.file_size,
+            renewal_report_mime_type: renewalReportDoc.mime_type,
+          } : {})
         };
         await employmentService.createContract(created.id, contractPayload);
       }

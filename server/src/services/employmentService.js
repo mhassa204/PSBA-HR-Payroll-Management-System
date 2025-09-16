@@ -5,8 +5,8 @@ const employmentService = {
   // Helper function to check for existing renewal report documents
   checkExistingRenewalReport: async (employmentId) => {
     try {
-      // Query the employmentdocument table for renewal report documents
-      const allDocuments = await prisma.employmentdocument.findMany({
+      // Query the EmploymentDocument table for renewal report documents
+      const allDocuments = await prisma.employmentDocument.findMany({
         where: {
           employment_id: parseInt(employmentId),
           is_deleted: false
@@ -15,7 +15,6 @@ const employmentService = {
           id: true,
           file_path: true,
           document_name: true,
-          url: true,
           file_type: true
         }
       });
@@ -56,6 +55,55 @@ const employmentService = {
     filteredData.organization = organization;
     
     return filteredData;
+  },
+
+  // New helper: build renewal document record from provided metadata or an existing doc id
+  buildRenewalDocFromMeta: async (tx, employmentId, data) => {
+    try {
+      // If explicit metadata provided, prefer that
+      const hasMeta = data.renewal_report_file_path || data.renewal_report_document_name || data.renewal_report_url;
+      const hasId = data.renewal_report_id;
+
+      let source = null;
+      if (hasMeta) {
+        source = {
+          file_path: data.renewal_report_file_path || (typeof data.renewal_report_url === 'string' ? data.renewal_report_url.replace(/^\/uploads\//, 'uploads/') : null),
+          document_name: data.renewal_report_document_name || 'Contract Renewal Report',
+          mime_type: data.renewal_report_mime_type || 'application/pdf',
+          file_size: data.renewal_report_file_size ? parseInt(data.renewal_report_file_size, 10) : null
+        };
+      } else if (hasId) {
+        const existing = await tx.employmentDocument.findFirst({
+          where: { id: parseInt(data.renewal_report_id, 10), is_deleted: false }
+        });
+        if (existing) {
+          source = {
+            file_path: existing.file_path,
+            document_name: existing.document_name,
+            mime_type: existing.mime_type,
+            file_size: existing.file_size
+          };
+        }
+      }
+
+      if (!source || !source.file_path) return null; // Nothing to create
+
+      // Create a new employment document for this employment
+      const created = await tx.employmentDocument.create({
+        data: {
+          employment_id: parseInt(employmentId, 10),
+          file_path: source.file_path,
+          file_type: 'renewal_report',
+          document_name: source.document_name || 'Contract Renewal Report',
+          file_size: source.file_size || 0,
+          mime_type: source.mime_type || 'application/pdf'
+        }
+      });
+      return created;
+    } catch (e) {
+      console.warn('⚠️ EmploymentService: Failed to build renewal doc from metadata:', e.message);
+      return null;
+    }
   },
 
  
@@ -224,6 +272,12 @@ createEmployment: async (data) => {
           is_renewed: toBoolean(contract.is_renewed),
         }
       });
+    }
+
+    // If no uploaded files but renewal doc metadata is provided, create a document record
+    const hasUploadedRenewal = Array.isArray(documentRecords) && documentRecords.some(d => d.file_type === 'renewal_report');
+    if (!hasUploadedRenewal) {
+      await employmentService.buildRenewalDocFromMeta(tx, employment.id, filteredData);
     }
 
     if (documentRecords && documentRecords.length > 0) {
@@ -622,6 +676,14 @@ updateEmployment: async (id, data) => {
       }
     }
 
+    // If still no renewal_report document and metadata provided, create it now
+    const alreadyHasRenewal = await tx.employmentDocument.findFirst({
+      where: { employment_id: employment.id, file_type: 'renewal_report', is_deleted: false }
+    });
+    if (!alreadyHasRenewal) {
+      await employmentService.buildRenewalDocFromMeta(tx, employment.id, filteredData);
+    }
+
     return tx.employment.findFirst({
       where: { 
         id: employment.id,
@@ -931,10 +993,30 @@ updateEmployment: async (id, data) => {
         }
       });
 
-      // Document records are already created by createEmployment/updateEmployment
-      // No need to create them again here to avoid duplicates
+      // If no uploaded renewal_report doc was provided but metadata exists, create the document now
+      const hasUploadedRenewal = Array.isArray(documentRecords) && documentRecords.some(d => d.file_type === 'renewal_report');
+      if (!hasUploadedRenewal) {
+        await employmentService.buildRenewalDocFromMeta(tx, employment.id, contractFields);
+      }
 
-      return contract;
+      // Document records (if any uploads) are created here
+      if (documentRecords && documentRecords.length > 0) {
+        for (const doc of documentRecords) {
+          await tx.employmentDocument.create({
+            data: {
+              employment_id: employment.id,
+              file_path: doc.file_path,
+              file_type: doc.file_type,
+              document_name: doc.document_name,
+              file_size: doc.file_size,
+              mime_type: doc.mime_type,
+              associated_id: doc.associated_id
+            }
+          });
+        }
+      }
+
+    return contract;
     });
   },
 
@@ -982,8 +1064,49 @@ updateEmployment: async (id, data) => {
         }
       });
 
-      // Document records are already created by createEmployment/updateEmployment
-      // No need to create them again here to avoid duplicates
+      // If still no renewal_report document and only metadata is provided, create it now
+      const hasUploadedRenewal = Array.isArray(documentRecords) && documentRecords.some(d => d.file_type === 'renewal_report');
+      if (!hasUploadedRenewal) {
+        // Check if one already exists to avoid duplicates
+        const alreadyHasRenewal = await tx.employmentDocument.findFirst({
+          where: { employment_id: employment.id, file_type: 'renewal_report', is_deleted: false }
+        });
+        if (!alreadyHasRenewal) {
+          await employmentService.buildRenewalDocFromMeta(tx, employment.id, contractFields);
+        }
+      }
+
+      // Document records (if any uploads) are created/updated here
+      if (documentRecords && documentRecords.length > 0) {
+        for (const doc of documentRecords) {
+          const existingDoc = await tx.employmentDocument.findFirst({
+            where: { employment_id: employment.id, file_type: doc.file_type, is_deleted: false }
+          });
+          if (existingDoc) {
+            await tx.employmentDocument.update({
+              where: { id: existingDoc.id },
+              data: {
+                file_path: doc.file_path,
+                document_name: doc.document_name,
+                file_size: doc.file_size,
+                mime_type: doc.mime_type
+              }
+            });
+          } else {
+            await tx.employmentDocument.create({
+              data: {
+                employment_id: employment.id,
+                file_path: doc.file_path,
+                file_type: doc.file_type,
+                document_name: doc.document_name,
+                file_size: doc.file_size,
+                mime_type: doc.mime_type,
+                associated_id: doc.associated_id
+              }
+            });
+          }
+        }
+      }
 
       return contract;
     });
