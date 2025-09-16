@@ -7,6 +7,11 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seeding...');
 
+  // Predeclare cross-section collections to avoid ReferenceError if sections reorder
+  let createdDistricts = [];
+  let createdCities = [];
+  let createdEducationLevels = [];
+
   // Clear existing data using hard delete utility
   console.log('🧹 Cleaning existing data using hard delete...');
   
@@ -93,6 +98,46 @@ async function main() {
   await prisma.city.deleteMany({});
   await prisma.district.deleteMany({});
   await prisma.educationLevel.deleteMany({});
+
+  // Seed Districts
+  console.log('🗺️ Seeding districts...');
+  const districtNames = ['Lahore', 'Karachi', 'Islamabad', 'Peshawar'];
+  createdDistricts = [];
+  for (const name of districtNames) {
+    const d = await prisma.district.create({ data: { name, is_active: true, is_deleted: false } });
+    createdDistricts.push(d);
+  }
+
+  // Seed Cities
+  console.log('🏙️ Seeding cities...');
+  const citySeeds = [
+    { name: 'Lahore', district: 'Lahore' },
+    { name: 'Karachi', district: 'Karachi' },
+    { name: 'Islamabad', district: 'Islamabad' },
+    { name: 'Peshawar', district: 'Peshawar' }
+  ];
+  createdCities = [];
+  for (const c of citySeeds) {
+    const dist = createdDistricts.find(d => d.name === c.district);
+    const city = await prisma.city.create({ data: { name: c.name, district_id: dist?.id, is_active: true, is_deleted: false } });
+    createdCities.push(city);
+  }
+
+  // Seed Education Levels
+  console.log('🎓 Seeding education levels...');
+  const educationLevelSeeds = [
+    { name: 'Matric', description: 'Matriculation', order: 1 },
+    { name: 'Intermediate (FA/FSc)', description: 'Intermediate', order: 2 },
+    { name: 'Bachelor', description: 'Bachelor Degree', order: 3 },
+    { name: 'Master', description: 'Master Degree', order: 4 },
+    { name: 'MPhil', description: 'Master of Philosophy', order: 5 },
+    { name: 'PhD', description: 'Doctorate', order: 6 }
+  ];
+  createdEducationLevels = [];
+  for (const lvl of educationLevelSeeds) {
+    const level = await prisma.educationLevel.create({ data: { ...lvl, is_active: true, is_deleted: false } });
+    createdEducationLevels.push(level);
+  }
 
   // Seed departments
   const departments = [
@@ -566,7 +611,19 @@ async function main() {
   ];
   const createdLocations = [];
   for (const loc of masterLocations) {
-    const created = await prisma.location.create({ data: loc });
+    // Map district/city strings to normalized IDs
+    const dist = createdDistricts.find(d => d.name === loc.district);
+    const cty = createdCities.find(c => c.name === loc.city && (!dist || c.district_id === dist.id)) || createdCities.find(c => c.name === loc.city);
+    const data = {
+      name: loc.name,
+      type: loc.type,
+      district_id: dist?.id || null,
+      city_id: cty?.id || null,
+      full_address: loc.full_address,
+      is_active: loc.is_active,
+      manager_user_id: loc.manager_user_id
+    };
+    const created = await prisma.location.create({ data });
     console.log(`✅ Created Location: ${created.name} (${created.type})`);
     createdLocations.push(created);
   }
