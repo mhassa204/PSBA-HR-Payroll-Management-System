@@ -233,8 +233,12 @@ model Employment {
   scale_grade          ScaleGrade?          @relation(fields: [scale_grade_id], references: [id])
   contract             EmploymentContract?
   documents            EmploymentDocument[]
-  location             EmploymentLocation?
+  // Changed: reference main Location instead of EmploymentLocation
+  location_id          Int?
+  location             Location?            @relation(fields: [location_id], references: [id])
   salary               EmploymentSalary?
+
+  @@index([location_id])
 }
 
 model EmploymentSalary {
@@ -258,21 +262,6 @@ model EmploymentSalary {
   updatedAt             DateTime   @updatedAt
   is_deleted            Boolean    @default(false)
   employment            Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
-}
-
-model EmploymentLocation {
-  id            Int        @id @default(autoincrement())
-  employment_id Int        @unique
-  // Legacy fields (deprecated)
-  district      String?
-  city          String?
-  bazaar_name   String?
-  type          String     @default("HEAD_OFFICE")
-  full_address  String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  is_deleted    Boolean    @default(false)
-  employment    Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
 }
 
 model EmploymentContract {
@@ -411,6 +400,8 @@ model Location {
   rosters         DutyRoster[]
   // back relation: devices installed at this location
   devices         Device[]
+  // back relation: employments assigned to this location
+  employments     Employment[]
 
   @@index([district_id])
   @@index([city_id])

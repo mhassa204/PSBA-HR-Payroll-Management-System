@@ -611,19 +611,9 @@ async function main() {
   ];
   const createdLocations = [];
   for (const loc of masterLocations) {
-    // Map district/city strings to normalized IDs
     const dist = createdDistricts.find(d => d.name === loc.district);
-    const cty = createdCities.find(c => c.name === loc.city && (!dist || c.district_id === dist.id)) || createdCities.find(c => c.name === loc.city);
-    const data = {
-      name: loc.name,
-      type: loc.type,
-      district_id: dist?.id || null,
-      city_id: cty?.id || null,
-      full_address: loc.full_address,
-      is_active: loc.is_active,
-      manager_user_id: loc.manager_user_id
-    };
-    const created = await prisma.location.create({ data });
+    const city = createdCities.find(c => c.name === loc.city && (!dist || c.district_id === dist.id)) || createdCities.find(c => c.name === loc.city);
+    const created = await prisma.location.create({ data: { name: loc.name, type: loc.type, district_id: dist?.id || null, city_id: city?.id || null, full_address: loc.full_address, is_active: loc.is_active, manager_user_id: loc.manager_user_id } });
     console.log(`✅ Created Location: ${created.name} (${created.type})`);
     createdLocations.push(created);
   }
@@ -739,7 +729,10 @@ async function main() {
     console.log(`✅ Created Document: ${document.file_type} for employee ${document.employee_id}`);
   }
 
-  // Seed employment records
+  // Helper to find a master location id by name
+  const findLocationId = (name) => createdLocations.find(l => l.name === name)?.id || null;
+
+  // Seed employment records (now referencing main Location via location_id)
   const employmentRecords = [
     {
       employee_id: createdEmployees[0].id,
@@ -756,6 +749,7 @@ async function main() {
       is_current: true,
       filer_status: "filer",
       filer_active_status: "active",
+      location_id: findLocationId('Lahore Head Office'),
       is_deleted: false
     },
     {
@@ -774,6 +768,7 @@ async function main() {
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
+      location_id: findLocationId('Karachi Regional Office'),
       is_deleted: false
     },
     {
@@ -784,7 +779,7 @@ async function main() {
       employment_type: "Regular",
       effective_from: new Date("2022-06-01"),
       role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
-      office_location: "Lahore Regional Office",
+      office_location: "Lahore Head Office",
       is_on_probation: true,
       probation_end_date: new Date("2024-06-01"),
       remarks: "Currently on probation period",
@@ -793,6 +788,7 @@ async function main() {
       is_current: true,
       filer_status: "filer",
       filer_active_status: "active",
+      location_id: findLocationId('Lahore Head Office'),
       is_deleted: false
     },
     // New: Employees reporting to HR Admin (createdEmployees[1]) for Duty Roster testing
@@ -804,14 +800,14 @@ async function main() {
       employment_type: "Regular",
       effective_from: new Date("2023-01-01"),
       role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
-      office_location: "Karachi Field",
+      office_location: "Karachi Regional Office",
       remarks: "Reports to HR Admin",
       scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-17").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
-      // critical for roster filtering: reporting officer is HR Admin's employee id as string
       reporting_officer_id: String(createdEmployees[1].id),
+      location_id: findLocationId('Saddar Bazaar Karachi'),
       is_deleted: false
     },
     {
@@ -822,13 +818,14 @@ async function main() {
       employment_type: "Regular",
       effective_from: new Date("2023-02-01"),
       role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
-      office_location: "Karachi Field",
+      office_location: "Karachi Regional Office",
       remarks: "Reports to HR Admin",
       scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-17").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
       reporting_officer_id: String(createdEmployees[1].id),
+      location_id: findLocationId('Saddar Bazaar Karachi'),
       is_deleted: false
     }
   ];
@@ -898,59 +895,7 @@ async function main() {
     console.log(`✅ Created Salary Record: Employment ${employmentSalary.employment_id} - Basic: ${employmentSalary.basic_salary}`);
   }
 
-  // Seed employment locations
-  const locationRecords = [
-    {
-      employment_id: createdEmployments[0].id,
-      district: "Lahore",
-      city: "Lahore",
-      type: "HEAD_OFFICE",
-      full_address: "Main Office Building, Gulberg III, Lahore",
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[1].id,
-      district: "Karachi",
-      city: "Karachi",
-      bazaar_name: "Saddar Bazaar",
-      type: "BAZAAR",
-      full_address: "Saddar Bazaar Complex, Karachi",
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[2].id,
-      district: "Lahore",
-      city: "Lahore",
-      type: "HEAD_OFFICE",
-      full_address: "Regional Office, Model Town, Lahore",
-      is_deleted: false
-    },
-    // New: Locations for subordinates (set to Karachi bazaar context)
-    {
-      employment_id: createdEmployments[3].id,
-      district: "Karachi",
-      city: "Karachi",
-      bazaar_name: "Saddar Bazaar",
-      type: "BAZAAR",
-      full_address: "Saddar Bazaar, Karachi",
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[4].id,
-      district: "Karachi",
-      city: "Karachi",
-      bazaar_name: "Saddar Bazaar",
-      type: "BAZAAR",
-      full_address: "Saddar Bazaar, Karachi",
-      is_deleted: false
-    }
-  ];
-
-  console.log('📍 Seeding employment locations...');
-  for (const location of locationRecords) {
-    const employmentLocation = await prisma.employmentLocation.create({ data: location });
-    console.log(`✅ Created Location Record: Employment ${employmentLocation.employment_id} - ${employmentLocation.city}`);
-  }
+  // Remove employment location seeding (replaced by location_id on Employment)
 
   // Seed employment contracts
   const contractRecords = [
@@ -1100,7 +1045,6 @@ async function main() {
   console.log(`   - Education Qualifications: ${educationQualifications.length}`);
   console.log(`   - Employee Documents: ${documents.length}`);
   console.log(`   - Salary Records: ${salaryRecords.length}`);
-  console.log(`   - Location Records: ${locationRecords.length}`);
   console.log(`   - Contract Records: ${contractRecords.length}`);
   console.log(`   - Employment Documents: ${employmentDocuments.length}`);
 }

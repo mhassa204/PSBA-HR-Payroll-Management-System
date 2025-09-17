@@ -8,40 +8,45 @@ async function resolveBazaarIdForUser(user) {
     if (!user?.employee_id) return null;
     const emp = await prisma.employment.findFirst({
       where: { employee_id: Number(user.employee_id), is_current: true, is_deleted: false },
-      include: { location: true },
+      include: { location: { include: { city: true, district: true } } },
     });
     const loc = emp?.location;
     if (!loc) return null;
 
-    // Try match by bazaar_name, then by city, then by district
+    // If employment already linked to a bazaar, use it directly
+    if (loc.type === 'BAZAAR' && loc.is_active && !loc.is_deleted) {
+      return loc.id;
+    }
+
+    // Try match by name, then by city_id, then by district_id
     let bazaar = null;
-    if (loc.bazaar_name) {
+    if (loc.name) {
       bazaar = await prisma.location.findFirst({
         where: {
           type: 'BAZAAR',
           is_deleted: false,
           is_active: true,
-          name: loc.bazaar_name,
+          name: loc.name,
         },
       });
     }
-    if (!bazaar && loc.city) {
+    if (!bazaar && loc.city_id) {
       bazaar = await prisma.location.findFirst({
         where: {
           type: 'BAZAAR',
           is_deleted: false,
           is_active: true,
-          city: loc.city,
+          city_id: loc.city_id,
         },
       });
     }
-    if (!bazaar && loc.district) {
+    if (!bazaar && loc.district_id) {
       bazaar = await prisma.location.findFirst({
         where: {
           type: 'BAZAAR',
           is_deleted: false,
           is_active: true,
-          district: loc.district,
+          district_id: loc.district_id,
         },
       });
     }
@@ -362,14 +367,15 @@ const rosterController = {
       if (!managedLocationId) {
         return res.status(403).json({ success: false, error: 'Only a manager of a location can create roster' });
       }
-      const [bazaars, defaultBazaarId] = await Promise.all([
+      const [rawBazaars, defaultBazaarId] = await Promise.all([
         prisma.location.findMany({
           where: { type: 'BAZAAR', is_active: true, is_deleted: false },
           orderBy: { name: 'asc' },
-          select: { id: true, name: true, city: true, district: true },
+          select: { id: true, name: true, city: { select: { name: true } }, district: { select: { name: true } } },
         }),
         Promise.resolve(managedLocationId)
       ]);
+      const bazaars = rawBazaars.map(b => ({ id: b.id, name: b.name, city: b.city?.name || null, district: b.district?.name || null }));
       res.json({ success: true, bazaars, defaultBazaarId });
     } catch (e) {
       console.error('Error fetching bazaars for roster', e);
