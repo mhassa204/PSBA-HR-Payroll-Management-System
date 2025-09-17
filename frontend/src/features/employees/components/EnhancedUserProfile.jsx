@@ -167,30 +167,35 @@ const EnhancedUserProfile = () => {
     return currentRecord;
   };
 
-  // Format employment location without using city/district fields and avoiding raw IDs
+  // Format employment location preferring actual location name (loc.name) over generic type labels
   const displayEmploymentLocation = (rec) => {
     const loc = rec?.location;
     if (loc && typeof loc === 'object') {
-      const sanitizeBazaar = (val) => {
+      const clean = (val) => {
         if (val === undefined || val === null) return '';
         const s = String(val).trim();
-        if (!s || s.toLowerCase() === 'null' || /^\d+$/.test(s)) return '';
+        if (!s || s.toLowerCase() === 'null') return '';
         return s;
       };
-      switch (loc.type) {
-        case 'HEAD_OFFICE':
-          return 'Head Office';
-        case 'HEAD_QUARTER':
-          return 'Head Quarter';
-        case 'BAZAAR':
-          return sanitizeBazaar(loc.bazaar_name) || 'Bazaar';
-        case 'SAHULAT_BAZAAR':
-          return sanitizeBazaar(loc.bazaar_name) || 'Sahulat Bazaar';
-        default:
-          break;
-      }
+
+      // Prefer the canonical location name field
+      const name = clean(loc.name);
+      if (name) return name;
+
+      // Fallbacks for legacy bazaar_name field
+      const bazaarName = clean(loc.bazaar_name);
+      if (bazaarName) return bazaarName;
+
+      // As last resort, map by type
+      const typeMap = {
+        HEAD_OFFICE: 'Head Office',
+        HEAD_QUARTER: 'Head Quarter',
+        BAZAAR: 'Bazaar',
+        SAHULAT_BAZAAR: 'Sahulat Bazaar'
+      };
+      return typeMap[loc.type] || rec?.office_location || 'N/A';
     }
-    // Fallback for older data
+    // Fallback for older data without populated location relation
     return rec?.office_location || 'N/A';
   };
 

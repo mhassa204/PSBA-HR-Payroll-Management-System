@@ -7,8 +7,10 @@ const employmentService = {
     if (!loc) return null;
     return {
       ...loc,
+      // expose canonical name (prefer existing name field if present)
+      name: loc.name || loc.bazaar_name || loc.head_office_name || null,
       // compat fields expected by frontend (from old EmploymentLocation)
-      bazaar_name: loc.name || null,
+      bazaar_name: loc.name || loc.bazaar_name || null,
       // expose city/district names if relations are loaded; fallback null
       city: typeof loc.city === 'object' && loc.city !== null ? loc.city.name : null,
       district: typeof loc.district === 'object' && loc.district !== null ? loc.district.name : null,

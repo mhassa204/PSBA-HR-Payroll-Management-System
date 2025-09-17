@@ -103,28 +103,42 @@ const EmploymentRecordActions = ({
   // New: location formatter without city/district
   const formatLocation = (rec) => {
     const loc = rec?.location;
-    const sanitizeBazaar = (val) => {
-      if (!val) return '';
-      if (typeof val !== 'string') return '';
-      const t = val.trim();
-      if (!t || t.toLowerCase() === 'null') return '';
-      // If numeric-like (e.g., '99'), avoid showing raw ID
-      if (/^\d+$/.test(t)) return '';
-      return t;
-    };
-    if (loc && typeof loc === 'object') {
-      if (loc.type === 'HEAD_OFFICE') return 'Head Office';
-      if (loc.type === 'HEAD_QUARTER') return 'Head Quarter';
-      if (loc.type === 'BAZAAR') {
-        const name = sanitizeBazaar(loc.bazaar_name);
-        return name ? `Bazaar - ${name}` : 'Bazaar';
-      }
-      if (loc.type === 'SAHULAT_BAZAAR') {
-        const name = sanitizeBazaar(loc.bazaar_name);
-        return name ? `Sahulat Bazaar - ${name}` : 'Sahulat Bazaar';
-      }
+    if (!loc) return rec?.office_location || 'N/A';
+
+    // Debug (can be removed later)
+    if (process.env.NODE_ENV !== 'production') {
+      try { console.debug('Location object for record', rec.id, loc); } catch(e) {}
     }
-    return rec?.office_location || 'N/A';
+
+    // Primary: explicit master location name
+    if (loc.name && typeof loc.name === 'string' && loc.name.trim() && loc.name.toLowerCase() !== 'null') {
+      return loc.name.trim();
+    }
+
+    // Secondary: legacy bazaar_name injected by backend compat mapper
+    if (loc.bazaar_name && typeof loc.bazaar_name === 'string' && loc.bazaar_name.trim() && loc.bazaar_name.toLowerCase() !== 'null') {
+      return loc.bazaar_name.trim();
+    }
+
+    // Tertiary: compose from city/district if present
+    const parts = [];
+    if (loc.city && typeof loc.city === 'string') parts.push(loc.city);
+    if (loc.district && typeof loc.district === 'string') parts.push(loc.district);
+    if (parts.length) return parts.join(', ');
+
+    // Fallback by type
+    switch (loc.type) {
+      case 'HEAD_OFFICE':
+        return 'Head Office';
+      case 'HEAD_QUARTER':
+        return 'Head Quarter';
+      case 'BAZAAR':
+        return 'Bazaar';
+      case 'SAHULAT_BAZAAR':
+        return 'Sahulat Bazaar';
+      default:
+        return rec?.office_location || 'N/A';
+    }
   };
 
   if (employmentRecords.length === 0) {
