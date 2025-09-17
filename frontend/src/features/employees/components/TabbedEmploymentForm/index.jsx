@@ -274,7 +274,6 @@ const TabbedEmploymentForm = forwardRef(({
         const mergedLocation = { ...(locationBase || {}), ...(lForm || {}) };
         const locationPayload = {
           location_id: mergedLocation.location_id || null,
-          full_address: mergedLocation.full_address || "",
         };
         await employmentService.createLocation(created.id, locationPayload);
       }
@@ -414,7 +413,7 @@ const TabbedEmploymentForm = forwardRef(({
         setSuccessMessage("Salary information saved successfully! You can now add location details in the Location tab.");
       } else if (confirmType === "location") {
         if (!savedEmploymentId) throw new Error("Employment record must be saved first");
-        result = await createLocationRecord({ employment_id: savedEmploymentId, location_id: confirmData.location_id || null, full_address: confirmData.full_address || "" });
+        result = await createLocationRecord({ employment_id: savedEmploymentId, location_id: confirmData.location_id || null, });
         setCompletedTabs((prev) => ({ ...prev, location: true }));
         setSuccessMessage(isContractual ? "Location details saved successfully! You can now add contract information in the Contract tab." : "Location details saved successfully! Employment record is now complete.");
       } else if (confirmType === "contract") {
@@ -525,7 +524,7 @@ const TabbedEmploymentForm = forwardRef(({
         // bazaar_name removed (legacy)
         // location_type removed (legacy)
         location_id: locationData.location_id || null,
-        full_address: locationData.full_address || "",
+        // removed full_address
         contract_type: contractData.contract_type || "",
         contract_number: contractData.contract_number || "",
         contract_start_date: contractData.start_date || "",
@@ -631,7 +630,6 @@ const TabbedEmploymentForm = forwardRef(({
         },
         location: {
           location_id: previewData.location_id || null,
-          full_address: previewData.full_address || "",
         },
         contract: {
           contract_type: previewData.contract_type || "",
@@ -724,7 +722,7 @@ const TabbedEmploymentForm = forwardRef(({
                 salary_effective_from: employmentData.salary.salary_effective_from ? employmentData.salary.salary_effective_from.split('T')[0] : "",
                 salary_effective_till: employmentData.salary.salary_effective_till ? employmentData.salary.salary_effective_till.split('T')[0] : "",
               } : {},
-              location: employmentData.location ? { location_id: employmentData.location.id, full_address: employmentData.location.full_address || '' } : {},
+              location: employmentData.location ? { location_id: employmentData.location.id } : {},
               contract: employmentData.contract ? {
                 ...employmentData.contract,
                 start_date: employmentData.contract.start_date ? employmentData.contract.start_date.split('T')[0] : "",
@@ -953,7 +951,6 @@ const TabbedEmploymentForm = forwardRef(({
                 <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Location Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div><span className="text-gray-600">Type:</span> <span className="ml-1 text-gray-900">{getLocationTypeLabel(previewData.location_type, previewData.organization)}</span></div>
-                  <div className="md:col-span-2"><span className="text-gray-600">Description:</span> <span className="ml-1 text-gray-900">{displayValue(previewData.full_address)}</span></div>
                 </div>
               </div>
 

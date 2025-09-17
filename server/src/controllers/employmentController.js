@@ -644,7 +644,7 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       if ('location_city' in req.body) location.city = req.body.location_city;
       if ('location_bazaar_name' in req.body) location.bazaar_name = req.body.location_bazaar_name;
       if ('location_type' in req.body) location.type = req.body.location_type;
-      if ('location_full_address' in req.body) location.full_address = req.body.location_full_address;
+      // removed location_full_address usage
       // NEW: capture direct id coming from flattened nesting
       if ('location_id' in req.body) location.location_id = req.body.location_id;
       if ('location_location_id' in req.body && !location.location_id) location.location_id = req.body.location_location_id;
@@ -829,7 +829,7 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       if ('location_city' in req.body) location.city = req.body.location_city;
       if ('location_bazaar_name' in req.body) location.bazaar_name = req.body.location_bazaar_name;
       if ('location_type' in req.body) location.type = req.body.location_type;
-      if ('location_full_address' in req.body) location.full_address = req.body.location_full_address;
+      // removed location_full_address usage
       if ('location_id' in req.body) location.location_id = req.body.location_id;
       if ('location_location_id' in req.body && !location.location_id) location.location_id = req.body.location_location_id;
 

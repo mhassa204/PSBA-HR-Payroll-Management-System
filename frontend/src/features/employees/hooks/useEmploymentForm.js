@@ -96,8 +96,7 @@ export const useEmploymentForm = ({
 
   const locationForm = useForm({
     defaultValues: {
-      location_id: "",      // NEW single selection
-      full_address: "",
+      location_id: "",      // single selection only
       _location_type_filter: 'ALL', // virtual filter state
     },
   });
@@ -320,7 +319,7 @@ export const useEmploymentForm = ({
       if (!savedEmploymentId) {
         throw new Error("Employment record must be saved first");
       }
-      const payload = { location_id: data.location_id ? Number(data.location_id) : null, full_address: data.full_address || '' };
+      const payload = { location_id: data.location_id ? Number(data.location_id) : null }; // removed full_address
       let result;
       if (isEditMode) {
         result = await employmentService.updateLocation(savedEmploymentId, payload);
@@ -443,6 +442,7 @@ export const useEmploymentForm = ({
       
       if (data.location) {
         Object.entries(data.location).forEach(([key, value]) => {
+          if (key === 'full_address') return; // skip removed field
           locationForm.setValue(key, value !== undefined ? value : null, { shouldValidate: false, shouldDirty: true });
         });
       }
@@ -462,7 +462,7 @@ export const useEmploymentForm = ({
       const newCompletedTabs = {
         employment: !!(data.employment && Object.keys(data.employment).length > 0),
         salary: !!(data.salary && Object.keys(data.salary).length > 0),
-        location: !!(data.location && Object.keys(data.location).length > 0),
+        location: !!(data.location && Object.keys(data.location).some(k => k !== 'full_address')), // ignore removed field
         contract: !!(data.contract && Object.keys(data.contract).length > 0),
       };
       setCompletedTabs(newCompletedTabs);

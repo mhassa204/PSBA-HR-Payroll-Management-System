@@ -47,7 +47,6 @@ const LocationTab = ({
   const locationSelectOptions = filteredLocations.map(l => ({
     value: l.id,
     label: `${l.name}${l.city?.name ? ' - ' + l.city.name : ''}${l.district?.name ? ' (' + l.district.name + ')' : ''}`,
-    description: l.full_address || ''
   }));
 
   return (
@@ -94,16 +93,6 @@ const LocationTab = ({
               <p className="text-xs text-gray-500 mt-1">
                 Filter by type using the chips above. List shows active locations from master data.
               </p>
-            </div>
-
-            <div className={getFieldClasses('location', 'full_address')}>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Description / Notes (optional)</label>
-              <textarea
-                {...register("full_address")}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900"
-                rows={4}
-                placeholder="Enter additional notes (optional)"
-              />
             </div>
           </div>
 

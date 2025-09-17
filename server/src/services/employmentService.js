@@ -169,7 +169,7 @@ const employmentService = {
     }
 
     const created = await tx.location.create({
-      data: { name, type, district_id, city_id, full_address: loc.full_address || null, is_active: true, is_deleted: false }
+      data: { name, type, district_id, city_id, is_active: true, is_deleted: false }
     });
     return created.id;
   },
@@ -183,7 +183,7 @@ createEmployment: async (data) => {
     filteredData.location_id = possibleLocId;
   }
   if (!filteredData.location && filteredData.location_id) {
-    filteredData.location = { id: filteredData.location_id, full_address: filteredData.location_full_address || filteredData['location_full_address'] || null };
+    filteredData.location = { id: filteredData.location_id };
   }
 
   let { 
@@ -531,7 +531,7 @@ createEmployment: async (data) => {
     const possibleLocId = filteredData.location_id || filteredData.location_location_id || filteredData['location_location_id'] || filteredData['location[location_id]'] || filteredData.locationId;
     if (!filteredData.location_id && possibleLocId) filteredData.location_id = possibleLocId;
     if (!filteredData.location && filteredData.location_id) {
-      filteredData.location = { id: filteredData.location_id, full_address: filteredData.location_full_address || filteredData['location_full_address'] || null };
+      filteredData.location = { id: filteredData.location_id };
     }
     
     let { organization, department_id, designation_id, employment_type, effective_from, effective_till, role_tag_id, reporting_officer_id, office_location, remarks, scale_grade_id, employment_status, is_current, filer_status, filer_active_status, is_on_probation, probation_end_date, salary, location, location_id, contract, documentRecords = [] } = filteredData;
