@@ -122,21 +122,41 @@ const employmentService = {
   // Helper: resolve or create a master Location and return its id
   resolveLocationId: async (tx, loc) => {
     if (!loc) return null;
-    const name = loc.bazaar_name || loc.name || loc.full_address || loc.city || loc.district || 'Office';
-    // Try to find by name and type
-    const type = loc.type || 'HEAD_OFFICE';
-    const existing = await tx.location.findFirst({
-      where: {
-        name: name,
-        type: type,
-        is_deleted: false
+    const explicitId = loc.location_id || loc.id;
+    if (explicitId !== undefined && explicitId !== null && explicitId !== '' && explicitId !== 'null' && explicitId !== 'undefined') {
+      const numeric = Number(explicitId);
+      if (!Number.isNaN(numeric)) {
+        const existingById = await tx.location.findFirst({ where: { id: numeric, is_deleted: false } });
+        return existingById ? existingById.id : null;
       }
+    }
+
+    // Backward compatibility: older payloads used bazaar_name + type to derive / create
+    const rawName = loc.bazaar_name || loc.name;
+    const type = loc.type || 'HEAD_OFFICE';
+
+    // If no meaningful name provided OR name equals generic type labels, do NOT auto-create
+    if (!rawName || ['BAZAAR', 'SAHULAT_BAZAAR', 'HEAD_OFFICE', 'HEAD_QUARTER', 'HEADQUARTER', 'OFFICE'].includes(String(rawName).toUpperCase())) {
+      return null; // ignore incomplete placeholder
+    }
+
+    const name = String(rawName).trim();
+
+    // Try exact match first (case-sensitive), then case-insensitive
+    let existing = await tx.location.findFirst({
+      where: { name, type, is_deleted: false }
     });
+    if (!existing) {
+      existing = await tx.location.findFirst({
+        where: { name: { equals: name, mode: 'insensitive' }, type, is_deleted: false }
+      });
+    }
     if (existing) return existing.id;
 
-    // Optionally map district/city ids if provided as names
-    let district_id = null;
-    let city_id = null;
+    // LAST RESORT (legacy behaviour): only create if a real custom name (length > 2)
+    if (name.length <= 2) return null;
+
+    let district_id = null; let city_id = null;
     if (loc.district_id) district_id = parseInt(loc.district_id);
     if (loc.city_id) city_id = parseInt(loc.city_id);
     if (!district_id && loc.district) {
@@ -149,15 +169,7 @@ const employmentService = {
     }
 
     const created = await tx.location.create({
-      data: {
-        name,
-        type,
-        district_id,
-        city_id,
-        full_address: loc.full_address || null,
-        is_active: true,
-        is_deleted: false
-      }
+      data: { name, type, district_id, city_id, full_address: loc.full_address || null, is_active: true, is_deleted: false }
     });
     return created.id;
   },
@@ -165,7 +177,15 @@ const employmentService = {
 // src/services/employmentService.js
 createEmployment: async (data) => {
   const filteredData = employmentService.filterDataByOrganization(data);
-  
+  // Normalize possible incoming location id field names (flat, nested, legacy, bracket, camelCase)
+  const possibleLocId = filteredData.location_id || filteredData.location_location_id || filteredData['location_location_id'] || filteredData['location[location_id]'] || filteredData.locationId;
+  if (!filteredData.location_id && possibleLocId) {
+    filteredData.location_id = possibleLocId;
+  }
+  if (!filteredData.location && filteredData.location_id) {
+    filteredData.location = { id: filteredData.location_id, full_address: filteredData.location_full_address || filteredData['location_full_address'] || null };
+  }
+
   let { 
     user_id,
     employee_id,
@@ -188,65 +208,37 @@ createEmployment: async (data) => {
     probation_end_date,
     salary,
     location,
+    location_id,
     contract,
     documentRecords = []
   } = filteredData;
 
-  // Set organization-specific default for is_current
+  if (!location && location_id) {
+    location = { id: location_id };
+  }
   if (is_current === undefined) {
     is_current = organization === 'MBWO' ? false : true;
   }
-
-  // Use employee_id or user_id
   const actualEmployeeId = employee_id || user_id;
-
-  // Validate employee exists
-  const employee = await prisma.employee.findFirst({
-    where: { 
-      id: parseInt(actualEmployeeId),
-      is_deleted: false
-    }
-  });
+  const employee = await prisma.employee.findFirst({ where: { id: parseInt(actualEmployeeId), is_deleted: false } });
   if (!employee) throw new Error("Invalid employee_id");
-
-  // Validate department if provided
   if (department_id) {
-    const department = await prisma.department.findFirst({
-      where: { 
-        id: parseInt(department_id),
-        is_deleted: false
-      }
-    });
+    const department = await prisma.department.findFirst({ where: { id: parseInt(department_id), is_deleted: false } });
     if (!department) throw new Error("Invalid department_id");
   }
-
-  // Validate designation if provided
   if (designation_id) {
-    const designation = await prisma.designation.findFirst({
-      where: { 
-        id: parseInt(designation_id),
-        is_deleted: false
-      }
-    });
+    const designation = await prisma.designation.findFirst({ where: { id: parseInt(designation_id), is_deleted: false } });
     if (!designation) throw new Error("Invalid designation_id");
   }
-
-  const toBoolean = (value) => {
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'string') {
-      return value.toLowerCase() === 'true';
-    }
-    return Boolean(value);
-  };
-
-  const cleanValue = (value) => {
-    return value === undefined || value === 'undefined'||value === 'null' ? null : value;
-  };
+  const toBoolean = (value) => { if (typeof value === 'boolean') return value; if (typeof value === 'string') { return value.toLowerCase() === 'true'; } return Boolean(value); };
+  const cleanValue = (value) => (value === undefined || value === 'undefined' || value === 'null') ? null : value;
 
   return prisma.$transaction(async (tx) => {
-
-
-    // Create main employment record without document paths
+    // Single location resolution (no duplicate post-create blocks)
+    let resolvedLocationId = null;
+    if (location) {
+      resolvedLocationId = await employmentService.resolveLocationId(tx, location);
+    }
     const employment = await tx.employment.create({
       data: {
         employee_id: parseInt(actualEmployeeId),
@@ -266,11 +258,11 @@ createEmployment: async (data) => {
         filer_status,
         filer_active_status: cleanValue(filer_active_status),
         is_on_probation: toBoolean(is_on_probation),
-        probation_end_date: probation_end_date ? new Date(probation_end_date) : null
+        probation_end_date: probation_end_date ? new Date(probation_end_date) : null,
+        location_id: resolvedLocationId || null,
       }
     });
 
-    // Create salary, location, contract, and document records as before
     if (salary) {
       await tx.employmentSalary.create({
         data: {
@@ -293,75 +285,36 @@ createEmployment: async (data) => {
       });
     }
 
-    if (location) {
-      const locId = await employmentService.resolveLocationId(tx, location);
-      if (locId) {
-        await tx.employment.update({
-          where: { id: employment.id },
-          data: { location_id: locId }
-        });
-      }
-    }
-
     if (contract) {
       await tx.employmentContract.create({
         data: {
           employment_id: employment.id,
           contract_type: cleanValue(contract.contract_type),
           contract_number: cleanValue(contract.contract_number),
-          start_date: contract.start_date ? new Date(contract.start_date) : null,
-          end_date: contract.end_date ? new Date(contract.end_date) : null,
-          renewal_count: contract.renewal_count ? parseInt(contract.renewal_count) : 0,
-          probation_start: contract.probation_start ? new Date(contract.probation_start) : null,
-          probation_end: contract.probation_end ? new Date(contract.probation_end) : null,
-          confirmation_status: cleanValue(contract.confirmation_status),
-          confirmation_date: contract.confirmation_date ? new Date(contract.confirmation_date) : null,
-          is_renewed: toBoolean(contract.is_renewed),
+            start_date: contract.start_date ? new Date(contract.start_date) : null,
+            end_date: contract.end_date ? new Date(contract.end_date) : null,
+            renewal_count: contract.renewal_count ? parseInt(contract.renewal_count) : 0,
+            probation_start: contract.probation_start ? new Date(contract.probation_start) : null,
+            probation_end: contract.probation_end ? new Date(contract.probation_end) : null,
+            confirmation_status: cleanValue(contract.confirmation_status),
+            confirmation_date: contract.confirmation_date ? new Date(contract.confirmation_date) : null,
+            is_renewed: toBoolean(contract.is_renewed),
         }
       });
     }
 
-    // If no uploaded files but renewal doc metadata is provided, create a document record
     const hasUploadedRenewal = Array.isArray(documentRecords) && documentRecords.some(d => d.file_type === 'renewal_report');
-    if (!hasUploadedRenewal) {
-      await employmentService.buildRenewalDocFromMeta(tx, employment.id, filteredData);
-    }
-
+    if (!hasUploadedRenewal) { await employmentService.buildRenewalDocFromMeta(tx, employment.id, filteredData); }
     if (documentRecords && documentRecords.length > 0) {
       for (const doc of documentRecords) {
-        await tx.employmentDocument.create({
-          data: {
-            employment_id: employment.id,
-            file_path: doc.file_path,
-            file_type: doc.file_type,
-            document_name: doc.document_name,
-            file_size: doc.file_size,
-            mime_type: doc.mime_type,
-            associated_id: doc.associated_id
-          }
-        });
+        await tx.employmentDocument.create({ data: { employment_id: employment.id, file_path: doc.file_path, file_type: doc.file_type, document_name: doc.document_name, file_size: doc.file_size, mime_type: doc.mime_type, associated_id: doc.associated_id } });
       }
     }
 
     return tx.employment.findFirst({
-      where: { 
-        id: employment.id,
-        is_deleted: false
-      },
-      include: {
-        employee: true,
-        department: true,
-        designation: true,
-        salary: true,
-        // include relations for location's city/district to build compat fields
-        location: { include: { city: true, district: true } },
-        contract: true,
-        documents: true
-      }
-    }).then((e) => ({
-      ...e,
-      location: employmentService.mapLocationCompat(e.location)
-    }));
+      where: { id: employment.id, is_deleted: false },
+      include: { employee: true, department: true, designation: true, salary: true, location: { include: { city: true, district: true } }, contract: true, documents: true }
+    }).then((e) => ({ ...e, location: employmentService.mapLocationCompat(e.location) }));
   });
 },
 
@@ -574,88 +527,37 @@ createEmployment: async (data) => {
   // Update employment record
   updateEmployment: async (id, data) => {
     const filteredData = employmentService.filterDataByOrganization(data);
+    // Normalize location id patterns
+    const possibleLocId = filteredData.location_id || filteredData.location_location_id || filteredData['location_location_id'] || filteredData['location[location_id]'] || filteredData.locationId;
+    if (!filteredData.location_id && possibleLocId) filteredData.location_id = possibleLocId;
+    if (!filteredData.location && filteredData.location_id) {
+      filteredData.location = { id: filteredData.location_id, full_address: filteredData.location_full_address || filteredData['location_full_address'] || null };
+    }
     
-    let {
-      organization,
-      department_id,
-      designation_id,
-      employment_type,
-      effective_from,
-      effective_till,
-      role_tag_id,
-      reporting_officer_id,
-      office_location,
-      remarks,
-      scale_grade_id,
-      employment_status,
-      is_current,
-      filer_status,
-      filer_active_status,
-      is_on_probation,
-      probation_end_date,
-      salary,
-      location,
-      contract,
-      documentRecords = []
-    } = filteredData;
+    let { organization, department_id, designation_id, employment_type, effective_from, effective_till, role_tag_id, reporting_officer_id, office_location, remarks, scale_grade_id, employment_status, is_current, filer_status, filer_active_status, is_on_probation, probation_end_date, salary, location, location_id, contract, documentRecords = [] } = filteredData;
 
-    // Set organization-specific default for is_current if not provided
-    if (is_current === undefined) {
-      is_current = organization === 'MBWO' ? false : true;
-    }
+    if (!location && location_id) { location = { id: location_id }; }
+    if (is_current === undefined) { is_current = organization === 'MBWO' ? false : true; }
 
-    // Remove direct references to document fields
-    // const actualMedicalFitness = medical_fitness_report_pdf;
-    // const actualPoliceCertificate = police_character_certificate;
+    if (department_id) { const department = await prisma.department.findFirst({ where: { id: parseInt(department_id), is_deleted: false } }); if (!department) throw new Error("Invalid department_id"); }
+    if (designation_id) { const designation = await prisma.designation.findFirst({ where: { id: parseInt(designation_id), is_deleted: false } }); if (!designation) throw new Error("Invalid designation_id"); }
 
-    if (department_id) {
-      const department = await prisma.department.findFirst({
-        where: { 
-          id: parseInt(department_id),
-          is_deleted: false
-        }
-      });
-      if (!department) throw new Error("Invalid department_id");
-    }
-
-    if (designation_id) {
-      const designation = await prisma.designation.findFirst({
-        where: { 
-          id: parseInt(designation_id),
-          is_deleted: false
-        }
-      });
-      if (!designation) throw new Error("Invalid designation_id");
-    }
-
-    const currentEmployment = await prisma.employment.findFirst({
-      where: { 
-        id: parseInt(id),
-        is_deleted: false
-      }
-    });
+    const currentEmployment = await prisma.employment.findFirst({ where: { id: parseInt(id), is_deleted: false } });
     if (!currentEmployment) throw new Error("Employment record not found");
 
-    const toBoolean = (value) => {
-      if (typeof value === 'boolean') return value;
-      if (typeof value === 'string') {
-        return value.toLowerCase() === 'true';
-      }
-      return Boolean(value);
-    };
-
-    const cleanValue = (value) => {
-      return value === undefined || value === 'undefined' ? null : value;
-    };
+    const toBoolean = (value) => { if (typeof value === 'boolean') return value; if (typeof value === 'string') { return value.toLowerCase() === 'true'; } return Boolean(value); };
+    const cleanValue = (value) => (value === undefined || value === 'undefined') ? null : value;
 
     return prisma.$transaction(async (tx) => {
+      let resolvedLocId = null;
+      if (location) { resolvedLocId = await employmentService.resolveLocationId(tx, location); }
       const employmentUpdateData = {};
       if (organization !== undefined) employmentUpdateData.organization = organization;
       if (department_id !== undefined) employmentUpdateData.department_id = department_id ? parseInt(department_id) : null;
       if (designation_id !== undefined) employmentUpdateData.designation_id = designation_id ? parseInt(designation_id) : null;
       if (employment_type !== undefined) employmentUpdateData.employment_type = employment_type;
-      if (effective_from !== undefined) employmentUpdateData.effective_from = effective_from !=='null'? new Date(effective_from) : null;
-      if (effective_till !== undefined) employmentUpdateData.effective_till = effective_till!=='null' ? new Date(effective_till) : null;
+      if (effective_from !== undefined) employmentUpdateData.effective_from = effective_from !== 'null' ? new Date(effective_from) : null;
+      if (effective_till !== undefined) employmentUpdateData.effective_till = effective_till !== 'null' ? new Date(effective_till) : null;
       if (role_tag_id !== undefined) employmentUpdateData.role_tag_id = role_tag_id ? parseInt(role_tag_id) : null;
       if (scale_grade_id !== undefined) employmentUpdateData.scale_grade_id = scale_grade_id ? parseInt(scale_grade_id) : null;
       if (reporting_officer_id !== undefined) employmentUpdateData.reporting_officer_id = cleanValue(reporting_officer_id);
@@ -666,75 +568,19 @@ createEmployment: async (data) => {
       if (filer_status !== undefined) employmentUpdateData.filer_status = filer_status;
       if (filer_active_status !== undefined) employmentUpdateData.filer_active_status = cleanValue(filer_active_status);
       if (is_on_probation !== undefined) employmentUpdateData.is_on_probation = toBoolean(is_on_probation);
-      if (probation_end_date !== undefined) employmentUpdateData.probation_end_date = probation_end_date !=='null'? new Date(probation_end_date) : null;
+      if (probation_end_date !== undefined) employmentUpdateData.probation_end_date = probation_end_date !== 'null' ? new Date(probation_end_date) : null;
+      if (resolvedLocId !== null) employmentUpdateData.location_id = resolvedLocId;
 
-      const employment = await tx.employment.update({
-        where: { id: parseInt(id) },
-        data: employmentUpdateData
-      });
+      const employment = await tx.employment.update({ where: { id: parseInt(id) }, data: employmentUpdateData });
 
       if (salary) {
-        const salaryData = {
-          basic_salary: salary.basic_salary ? parseFloat(salary.basic_salary) : 0,
-          gross_salary: salary.gross_salary ? parseFloat(salary.gross_salary) : null,
-          medical_allowance: salary.medical_allowance ? parseFloat(salary.medical_allowance) : 0,
-          house_rent: salary.house_rent ? parseFloat(salary.house_rent) : 0,
-          conveyance_allowance: salary.conveyance_allowance ? parseFloat(salary.conveyance_allowance) : 0,
-          other_allowances: salary.other_allowances ? parseFloat(salary.other_allowances) : 0,
-          daily_wage_rate: salary.daily_wage_rate ? parseFloat(salary.daily_wage_rate) : null,
-          bank_account_primary: salary.bank_account_primary || null,
-          bank_name_primary: salary.bank_name_primary || null,
-          bank_branch_code: salary.bank_branch_code || null,
-          payment_mode: salary.payment_mode || "Bank Transfer",
-          salary_effective_from: salary.salary_effective_from ? new Date(salary.salary_effective_from) : null,
-          salary_effective_till: salary.salary_effective_till ? new Date(salary.salary_effective_till) : null,
-          payroll_status: salary.payroll_status || "Active"
-        };
-
-        await tx.employmentSalary.upsert({
-          where: { employment_id: employment.id },
-          update: salaryData,
-          create: {
-            employment_id: employment.id,
-            ...salaryData
-          }
-        });
-      }
-
-      if (location) {
-        const locId = await employmentService.resolveLocationId(tx, location);
-        await tx.employment.update({
-          where: { id: employment.id },
-          data: { location_id: locId }
-        });
+        const salaryData = { basic_salary: salary.basic_salary ? parseFloat(salary.basic_salary) : 0, gross_salary: salary.gross_salary ? parseFloat(salary.gross_salary) : null, medical_allowance: salary.medical_allowance ? parseFloat(salary.medical_allowance) : 0, house_rent: salary.house_rent ? parseFloat(salary.house_rent) : 0, conveyance_allowance: salary.conveyance_allowance ? parseFloat(salary.conveyance_allowance) : 0, other_allowances: salary.other_allowances ? parseFloat(salary.other_allowances) : 0, daily_wage_rate: salary.daily_wage_rate ? parseFloat(salary.daily_wage_rate) : null, bank_account_primary: salary.bank_account_primary || null, bank_name_primary: salary.bank_name_primary || null, bank_branch_code: salary.bank_branch_code || null, payment_mode: salary.payment_mode || "Bank Transfer", salary_effective_from: salary.salary_effective_from ? new Date(salary.salary_effective_from) : null, salary_effective_till: salary.salary_effective_till ? new Date(salary.salary_effective_till) : null, payroll_status: salary.payroll_status || "Active" };
+        await tx.employmentSalary.upsert({ where: { employment_id: employment.id }, update: salaryData, create: { employment_id: employment.id, ...salaryData } });
       }
 
       if (contract) {
-
-      
-        const contractData = {
-          contract_type: cleanValue(contract.contract_type),
-          contract_number: cleanValue(contract.contract_number),
-          start_date: contract.start_date ? new Date(contract.start_date) : null,
-          end_date: contract.end_date ? new Date(contract.end_date) : null,
-          renewal_count: contract.renewal_count ? parseInt(contract.renewal_count) : 0,
-          probation_start: contract.probation_start ? new Date(contract.probation_start) : null,
-          probation_end: contract.probation_end ? new Date(contract.probation_end) : null,
-          confirmation_status: cleanValue(contract.confirmation_status),
-          confirmation_date: contract.confirmation_date ? new Date(contract.confirmation_date) : null,
-          is_renewed: toBoolean(contract.is_renewed),
-        };
-      
-
-
-        await tx.employmentContract.upsert({
-          where: { employment_id: employment.id },
-          update: contractData,
-          create: {
-            employment_id: employment.id,
-            ...contractData
-          }
-        });
+        const contractData = { contract_type: cleanValue(contract.contract_type), contract_number: cleanValue(contract.contract_number), start_date: contract.start_date ? new Date(contract.start_date) : null, end_date: contract.end_date ? new Date(contract.end_date) : null, renewal_count: contract.renewal_count ? parseInt(contract.renewal_count) : 0, probation_start: contract.probation_start ? new Date(contract.probation_start) : null, probation_end: contract.probation_end ? new Date(contract.probation_end) : null, confirmation_status: cleanValue(contract.confirmation_status), confirmation_date: contract.confirmation_date ? new Date(contract.confirmation_date) : null, is_renewed: toBoolean(contract.is_renewed) };
+        await tx.employmentContract.upsert({ where: { employment_id: employment.id }, update: contractData, create: { employment_id: employment.id, ...contractData } });
       }
 
       // Handle document updates (add new, remove old)
@@ -990,7 +836,15 @@ createEmployment: async (data) => {
     if (!employment) throw new Error("Employment record not found");
 
     return prisma.$transaction(async (tx) => {
-      const locId = await employmentService.resolveLocationId(tx, locationData);
+      // NEW: accept direct id/location_id
+      let locId = null;
+      if (locationData.location_id || locationData.id) {
+        const existing = await tx.location.findFirst({ where: { id: Number(locationData.location_id || locationData.id), is_deleted: false } });
+        if (!existing) throw new Error("Invalid location_id");
+        locId = existing.id;
+      } else {
+        locId = await employmentService.resolveLocationId(tx, locationData);
+      }
       const updated = await tx.employment.update({
         where: { id: parseInt(employmentId) },
         data: { location_id: locId }
@@ -1010,7 +864,14 @@ createEmployment: async (data) => {
     if (!employment) throw new Error("Employment record not found");
 
     return prisma.$transaction(async (tx) => {
-      const locId = await employmentService.resolveLocationId(tx, locationData);
+      let locId = null;
+      if (locationData.location_id || locationData.id) {
+        const existing = await tx.location.findFirst({ where: { id: Number(locationData.location_id || locationData.id), is_deleted: false } });
+        if (!existing) throw new Error("Invalid location_id");
+        locId = existing.id;
+      } else {
+        locId = await employmentService.resolveLocationId(tx, locationData);
+      }
       const updated = await tx.employment.update({
         where: { id: parseInt(employmentId) },
         data: { location_id: locId }

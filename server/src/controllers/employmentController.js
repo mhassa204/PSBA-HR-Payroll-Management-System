@@ -579,7 +579,14 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
   // Create new employment record
   createEmployment: async (req, res) => {
     try {
-
+      // Normalize flattened location id BEFORE any processing
+      if (req.body && req.body.location_location_id && !req.body.location_id) {
+        req.body.location_id = req.body.location_location_id;
+      }
+      // Also accept alternative patterns that may appear from different flatteners
+      if (req.body && req.body['location[location_id]'] && !req.body.location_id) {
+        req.body.location_id = req.body['location[location_id]'];
+      }
 
       const { user_id, employee_id, organization, department_id, designation_id, effective_from } = req.body;
       const actualEmployeeId = employee_id || user_id;
@@ -627,7 +634,7 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       if ('salary_bank_account_primary' in req.body) salary.bank_account_primary = req.body.salary_bank_account_primary;
       if ('salary_bank_name_primary' in req.body) salary.bank_name_primary = req.body.salary_bank_name_primary;
       if ('salary_bank_branch_code' in req.body) salary.bank_branch_code = req.body.salary_bank_branch_code;
-      if ('salary_payment_mode' in req.body) salary.payment_mode = req.body.salary_payment_mode;
+      if ('salary_payment_mode' in req.body) salary.salary_payment_mode = req.body.salary_payment_mode;
       if ('salary_salary_effective_from' in req.body) salary.salary_effective_from = req.body.salary_salary_effective_from;
       if ('salary_salary_effective_till' in req.body) salary.salary_effective_till = req.body.salary_salary_effective_till;
       if ('salary_payroll_status' in req.body) salary.payroll_status = req.body.salary_payroll_status;
@@ -638,6 +645,9 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       if ('location_bazaar_name' in req.body) location.bazaar_name = req.body.location_bazaar_name;
       if ('location_type' in req.body) location.type = req.body.location_type;
       if ('location_full_address' in req.body) location.full_address = req.body.location_full_address;
+      // NEW: capture direct id coming from flattened nesting
+      if ('location_id' in req.body) location.location_id = req.body.location_id;
+      if ('location_location_id' in req.body && !location.location_id) location.location_id = req.body.location_location_id;
 
       // Extract contract fields - check if field exists in request body
       if ('contract_contract_type' in req.body) contract.contract_type = req.body.contract_contract_type;
@@ -683,6 +693,15 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
         location: Object.keys(location).length > 0 ? location : null,
         contract: Object.keys(contract).length > 0 ? contract : null
       };
+
+      // DEBUG LOGGING
+      console.log('🛰 createEmployment incoming location keys:', Object.keys(req.body).filter(k=>k.includes('location')));
+      console.log('🛰 createEmployment reconstructed location object:', location);
+      console.log('🛰 createEmployment final employmentData location_id candidates:', {
+        topLevel_location_id: employmentData.location_id,
+        topLevel_location_location_id: employmentData.location_location_id,
+        nested_location: employmentData.location
+      });
 
       const employment = await employmentService.createEmployment(employmentData);
       res.status(201).json({ success: true, employment });
@@ -743,18 +762,32 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
   // Update employment record
   updateEmployment: async (req, res) => {
     try {
-      console.log("🔍 Backend updateEmployment - Received data:")
+      // Normalize flattened location id BEFORE any processing
+      if (req.body && req.body.location_location_id && !req.body.location_id) {
+        req.body.location_id = req.body.location_location_id;
+      }
+      if (req.body && req.body['location[location_id]'] && !req.body.location_id) {
+        req.body.location_id = req.body['location[location_id]'];
+      }
+      console.log('🛰 updateEmployment incoming location keys:', Object.keys(req.body).filter(k=>k.includes('location')));
 
-      console.log("Hello Salary Effective Till:",req.body.salary_salary_effective_till==="")
-      // Parse documents_to_remove if it's a JSON string
+      // Parse documents_to_remove safely (was lost during refactor)
       let documentsToRemove = req.body.documents_to_remove;
-      if (typeof documentsToRemove === 'string') {
+      if (Array.isArray(documentsToRemove)) {
+        // ok
+      } else if (typeof documentsToRemove === 'string') {
         try {
-          documentsToRemove = JSON.parse(documentsToRemove);
-        } catch (error) {
-          // If it's not JSON, it might be comma-separated
-          documentsToRemove = documentsToRemove.split(',').map(id => id.trim());
+          // Try JSON first
+            documentsToRemove = JSON.parse(documentsToRemove);
+            if (!Array.isArray(documentsToRemove)) {
+              documentsToRemove = documentsToRemove ? [documentsToRemove] : [];
+            }
+        } catch (e) {
+          // Fallback comma separated
+          documentsToRemove = documentsToRemove.split(',').map(s => s.trim()).filter(Boolean);
         }
+      } else if (!documentsToRemove) {
+        documentsToRemove = [];
       }
 
       // Organization-specific validation
@@ -797,6 +830,8 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
       if ('location_bazaar_name' in req.body) location.bazaar_name = req.body.location_bazaar_name;
       if ('location_type' in req.body) location.type = req.body.location_type;
       if ('location_full_address' in req.body) location.full_address = req.body.location_full_address;
+      if ('location_id' in req.body) location.location_id = req.body.location_id;
+      if ('location_location_id' in req.body && !location.location_id) location.location_id = req.body.location_location_id;
 
       // Extract contract fields - check if field exists in request body
       if ('contract_contract_type' in req.body) contract.contract_type = req.body.contract_contract_type;
@@ -833,13 +868,18 @@ validateEmploymentData: async (data, uploadedFiles = [], employmentId = null) =>
         ...req.body,
         ...processedFiles,
         documentRecords,
-        // Use parsed documents_to_remove instead of raw req.body.documents_to_remove
-        documents_to_remove: documentsToRemove,
+        documents_to_remove: documentsToRemove, // parsed value
         salary: Object.keys(salary).length > 0 ? salary : null,
         location: Object.keys(location).length > 0 ? location : null,
         contract: Object.keys(contract).length > 0 ? contract : null
       };
-      
+      console.log('🛰 updateEmployment reconstructed location object:', location);
+      console.log('🛰 updateEmployment final employmentData location candidates:', {
+        topLevel_location_id: employmentData.location_id,
+        topLevel_location_location_id: employmentData.location_location_id,
+        nested_location: employmentData.location
+      });
+
 
 
       const employment = await employmentService.updateEmployment(req.params.id, employmentData);

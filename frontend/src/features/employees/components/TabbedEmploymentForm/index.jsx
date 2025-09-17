@@ -136,6 +136,7 @@ const TabbedEmploymentForm = forwardRef(({
     setCompletedTabs,
     setSavedEmploymentId,
     setIsContractual,
+    allLocations, // <-- added
   } = useEmploymentForm({
     initialData: transformedInitialData,
     isEditMode,
@@ -272,8 +273,7 @@ const TabbedEmploymentForm = forwardRef(({
       if (locationBase || Object.values(lForm || {}).some(v => v !== undefined && v !== null && v !== "")) {
         const mergedLocation = { ...(locationBase || {}), ...(lForm || {}) };
         const locationPayload = {
-          type: mergedLocation.type || (organization === 'PSBA' ? 'HEAD_QUARTER' : 'HEAD_OFFICE'),
-          bazaar_name: toBazaarNameString(mergedLocation.bazaar_name),
+          location_id: mergedLocation.location_id || null,
           full_address: mergedLocation.full_address || "",
         };
         await employmentService.createLocation(created.id, locationPayload);
@@ -357,14 +357,8 @@ const TabbedEmploymentForm = forwardRef(({
   useEffect(() => () => { setShowConfirmModal(false); setShowSuccessModal(false); setShowPreviewModal(false); forceRestoreScroll(); }, []);
   useEffect(() => {
     const subscription = locationForm.watch((value, { name }) => {
-      if (name === "type") {
-        const locationType = value.type;
-        const bazaarName = locationForm.getValues("bazaar_name");
-        if ((locationType === 'HEAD_OFFICE' || locationType === 'HEAD_QUARTER') && bazaarName) {
-          locationForm.setValue("bazaar_name", "", { shouldValidate: false, shouldDirty: true });
-          locationForm.clearErrors("bazaar_name");
-        }
-        if (locationType) locationForm.trigger("bazaar_name");
+      if (name === "type" || name === 'bazaar_name') {
+        // legacy watcher no longer needed; keep for backwards safety
       }
     });
     return () => subscription.unsubscribe();
@@ -420,7 +414,7 @@ const TabbedEmploymentForm = forwardRef(({
         setSuccessMessage("Salary information saved successfully! You can now add location details in the Location tab.");
       } else if (confirmType === "location") {
         if (!savedEmploymentId) throw new Error("Employment record must be saved first");
-        result = await createLocationRecord({ employment_id: savedEmploymentId, bazaar_name: toBazaarNameString(confirmData.bazaar_name), type: confirmData.type || "HEAD_OFFICE", full_address: confirmData.full_address || "", });
+        result = await createLocationRecord({ employment_id: savedEmploymentId, location_id: confirmData.location_id || null, full_address: confirmData.full_address || "" });
         setCompletedTabs((prev) => ({ ...prev, location: true }));
         setSuccessMessage(isContractual ? "Location details saved successfully! You can now add contract information in the Contract tab." : "Location details saved successfully! Employment record is now complete.");
       } else if (confirmType === "contract") {
@@ -476,16 +470,8 @@ const TabbedEmploymentForm = forwardRef(({
 
   const onLocationSubmit = async (data) => {
     try {
-      const typeValue = data?.type;
-      const hasType = typeof typeValue === 'string' ? typeValue.trim() !== '' : Boolean(typeValue);
-      if (isFieldVisible('location', 'type') && !hasType) { alert("Please select a location type"); return; }
-
-      const isBazaarType = typeValue === 'BAZAAR' || typeValue === 'SAHULAT_BAZAAR';
-      if (isBazaarType) {
-        const bazaarValue = data?.bazaar_name;
-        const hasBazaar = typeof bazaarValue === 'string' ? bazaarValue.trim() !== '' : (bazaarValue !== null && bazaarValue !== undefined && bazaarValue !== '');
-        if (!hasBazaar) { alert("Bazaar name is required when Bazaar or Sahulat Bazaar is selected"); return; }
-      }
+      const locId = data?.location_id;
+      if (!locId) { alert("Please select a location"); return; }
       setCompletedTabs(prev => ({ ...prev, location: true }));
       if (isContractual) setActiveTab("contract"); else await handleCompleteForm();
     } catch (error) {
@@ -536,8 +522,9 @@ const TabbedEmploymentForm = forwardRef(({
         bank_branch_code: salaryData.bank_branch_code || "",
         payment_mode: salaryData.payment_mode || "Bank Transfer",
         payroll_status: salaryData.payroll_status || "Active",
-        bazaar_name: locationData.bazaar_name || "",
-        location_type: locationData.type || "HEAD_OFFICE",
+        // bazaar_name removed (legacy)
+        // location_type removed (legacy)
+        location_id: locationData.location_id || null,
         full_address: locationData.full_address || "",
         contract_type: contractData.contract_type || "",
         contract_number: contractData.contract_number || "",
@@ -643,8 +630,7 @@ const TabbedEmploymentForm = forwardRef(({
           payroll_status: previewData.payroll_status || "Active",
         },
         location: {
-          bazaar_name: previewData.bazaar_name || "",
-          type: previewData.location_type || "HEAD_OFFICE",
+          location_id: previewData.location_id || null,
           full_address: previewData.full_address || "",
         },
         contract: {
@@ -683,26 +669,6 @@ const TabbedEmploymentForm = forwardRef(({
     if (type === 'currency') return `PKR ${Number(value).toLocaleString()}`;
     if (type === 'boolean') return value ? 'Yes' : 'No';
     return String(value);
-  };
-  // Map bazaar id/string to label for preview
-  const getBazaarLabel = (val) => {
-    if (!val && val !== 0) return 'N/A';
-    const byOption = getLabelFromId(val, bazaarOptions, 'label');
-    if (byOption && byOption !== 'N/A') return byOption;
-    const s = String(val).trim();
-    if (/^\d+$/.test(s) || s.toLowerCase() === 'null') return 'N/A';
-    return s;
-  };
-
-  // Ensure we always send a string bazaar name to the backend (not a numeric ID)
-  const toBazaarNameString = (val) => {
-    if (val === null || val === undefined || val === '') return '';
-    const opt = Array.isArray(bazaarOptions) ? bazaarOptions.find(o => o.value == val) : null;
-    if (opt && opt.label) return opt.label; // prefer dropdown label
-    if (typeof val === 'object') return val.name || val.label || '';
-    const s = String(val).trim();
-    if (!s || s.toLowerCase() === 'null' || /^\d+$/.test(s)) return '';
-    return s;
   };
 
   const handleContinueToNext = () => {
@@ -758,7 +724,7 @@ const TabbedEmploymentForm = forwardRef(({
                 salary_effective_from: employmentData.salary.salary_effective_from ? employmentData.salary.salary_effective_from.split('T')[0] : "",
                 salary_effective_till: employmentData.salary.salary_effective_till ? employmentData.salary.salary_effective_till.split('T')[0] : "",
               } : {},
-              location: employmentData.location || {},
+              location: employmentData.location ? { location_id: employmentData.location.id, full_address: employmentData.location.full_address || '' } : {},
               contract: employmentData.contract ? {
                 ...employmentData.contract,
                 start_date: employmentData.contract.start_date ? employmentData.contract.start_date.split('T')[0] : "",
@@ -885,6 +851,7 @@ const TabbedEmploymentForm = forwardRef(({
                 currentOrganization={currentOrganization}
                 isContractual={isContractual}
                 locationErrors={locationErrors}
+                allLocations={allLocations}
               />
             )}
 
@@ -986,9 +953,6 @@ const TabbedEmploymentForm = forwardRef(({
                 <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Location Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div><span className="text-gray-600">Type:</span> <span className="ml-1 text-gray-900">{getLocationTypeLabel(previewData.location_type, previewData.organization)}</span></div>
-                  {(previewData.location_type === 'BAZAAR' || previewData.location_type === 'SAHULAT_BAZAAR') && (
-                    <div><span className="text-gray-600">Bazaar:</span> <span className="ml-1 text-gray-900">{getBazaarLabel(previewData.bazaar_name)}</span></div>
-                  )}
                   <div className="md:col-span-2"><span className="text-gray-600">Description:</span> <span className="ml-1 text-gray-900">{displayValue(previewData.full_address)}</span></div>
                 </div>
               </div>

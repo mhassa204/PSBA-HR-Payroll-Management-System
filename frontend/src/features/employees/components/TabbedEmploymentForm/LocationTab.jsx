@@ -7,10 +7,11 @@ const LocationTab = ({
   isSectionVisible,
   getFieldClasses,
   getValidationRules,
-  bazaarOptions,
+  bazaarOptions, // legacy, will be ignored
   currentOrganization,
   isContractual,
   locationErrors,
+  allLocations = [], // NEW: pass full location list
 }) => {
   const { register, handleSubmit, watch } = locationForm;
 
@@ -26,13 +27,28 @@ const LocationTab = ({
     );
   }
 
-  // Normalize watched values to avoid calling .trim on non-strings
-  const typeValue = watch("type");
-  const bazaarValue = watch("bazaar_name");
-  const isBazaarType = typeValue === 'BAZAAR' || typeValue === 'SAHULAT_BAZAAR';
-  const bazaarSelected = typeof bazaarValue === 'string' ? bazaarValue.trim().length > 0 : Boolean(bazaarValue);
-  // Fallback label if the current stored value is a string label not present in options yet
-  const bazaarValueLabel = typeof bazaarValue === 'string' ? bazaarValue : '';
+  // Watch selected location id and active type filter
+  const selectedLocationId = watch("location_id");
+  const activeType = watch("_location_type_filter") || "ALL"; // virtual field
+
+  const typeOptions = [
+    { value: 'ALL', label: 'All' },
+    { value: 'HEAD_OFFICE', label: 'Head Office' },
+    { value: 'HEAD_QUARTER', label: 'Head Quarter' },
+    { value: 'BAZAAR', label: 'Bazaar' },
+    { value: 'SAHULAT_BAZAAR', label: 'Sahulat Bazaar' },
+  ];
+
+  const filteredLocations = Array.isArray(allLocations) ? allLocations.filter(l => {
+    if (activeType === 'ALL') return true;
+    return (l.type || '').toUpperCase() === activeType;
+  }) : [];
+
+  const locationSelectOptions = filteredLocations.map(l => ({
+    value: l.id,
+    label: `${l.name}${l.city?.name ? ' - ' + l.city.name : ''}${l.district?.name ? ' (' + l.district.name + ')' : ''}`,
+    description: l.full_address || ''
+  }));
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
@@ -43,91 +59,52 @@ const LocationTab = ({
         </h3>
 
         <form onSubmit={handleSubmit(onLocationSubmit)}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className={getFieldClasses('location', 'location_type')}>
+          <div className="space-y-6">
+            {/* Type filter chips */}
+            <div className="flex flex-wrap gap-2">
+              {typeOptions.map(t => (
+                <button
+                  type="button"
+                  key={t.value}
+                  onClick={() => locationForm.setValue("_location_type_filter", t.value)}
+                  className={`px-3 py-1 rounded-full text-sm border transition ${activeType === t.value ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-700 border-purple-300 hover:bg-purple-100'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className={getFieldClasses('location', 'location_id')}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Location Type <span className="text-red-500">*</span>
+                Select Location <span className="text-red-500">*</span>
               </label>
               <SearchableSelect
-                options={currentOrganization === 'PSBA' ? [
-                  { value: "HEAD_QUARTER", label: "Head Quarter" },
-                  { value: "SAHULAT_BAZAAR", label: "Sahulat Bazaar (requires bazaar name)" },
-                ] : [
-                  { value: "HEAD_OFFICE", label: "Head Office" },
-                  { value: "BAZAAR", label: "Bazaar (requires bazaar name)" },
-                ]}
-                value={typeValue}
-                onChange={(value) => locationForm.setValue("type", value)}
-                placeholder="Select Location Type"
+                options={locationSelectOptions}
+                value={selectedLocationId}
+                onChange={(value) => locationForm.setValue("location_id", value)}
+                placeholder="Choose a location"
                 register={register}
-                name="type"
-                required={getValidationRules('location', 'location_type', { required: "Location type is required" }).required}
-                error={locationErrors?.type?.message}
+                name="location_id"
+                required={getValidationRules('location', 'location_id', { required: 'Location is required' }).required}
+                error={locationErrors?.location_id?.message}
               />
-              {locationErrors?.type && (
-                <p className="text-red-600 text-sm mt-1">{locationErrors.type.message}</p>
+              {locationErrors?.location_id && (
+                <p className="text-red-600 text-sm mt-1">{locationErrors.location_id.message}</p>
               )}
               <p className="text-xs text-gray-500 mt-1">
-                <i className="fas fa-info-circle mr-1"></i>
-                {currentOrganization === 'PSBA' ? "Head Quarter: No bazaar name required. Sahulat Bazaar: Select from available bazaars." : "Head Office: No bazaar name required. Bazaar: Select from available bazaars."}
+                Filter by type using the chips above. List shows active locations from master data.
               </p>
             </div>
 
-            <div
-              className={getFieldClasses('location', 'bazaar_name')}
-              style={{ display: (typeValue === 'HEAD_OFFICE' || typeValue === 'HEAD_QUARTER') ? 'none' : 'block' }}
-            >
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Bazaar Name
-                {isBazaarType && <span className="text-red-500"> *</span>}
-              </label>
-              <SearchableSelect
-                options={bazaarOptions}
-                value={bazaarValue}
-                valueLabel={bazaarValueLabel}
-                onChange={(value) => locationForm.setValue("bazaar_name", value)}
-                placeholder="Select a bazaar"
-                register={register}
-                name="bazaar_name"
-                required={isBazaarType ? "Bazaar name is required when Bazaar or Sahulat Bazaar is selected" : false}
-                error={locationErrors?.bazaar_name?.message}
-                className={`w-full ${
-                  isBazaarType
-                    ? (bazaarSelected ? 'border-green-300 focus:border-green-500' : 'border-red-300 focus:border-red-500')
-                    : 'border-gray-300'
-                }`}
+            <div className={getFieldClasses('location', 'full_address')}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Description / Notes (optional)</label>
+              <textarea
+                {...register("full_address")}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900"
+                rows={4}
+                placeholder="Enter additional notes (optional)"
               />
-              {locationErrors?.bazaar_name && (
-                <p className="text-red-600 text-sm mt-1">{locationErrors.bazaar_name.message}</p>
-              )}
-              <p className={`text-xs mt-1 ${
-                isBazaarType
-                  ? (bazaarSelected ? 'text-green-600 font-medium' : 'text-red-600 font-medium')
-                  : 'text-gray-500'
-              }`}>
-                <i className={`fas mr-1 ${
-                  isBazaarType
-                    ? (bazaarSelected ? 'fa-check-circle text-green-500' : 'fa-exclamation-triangle text-red-500')
-                    : 'fa-info-circle text-gray-400'
-                }`}></i>
-                {isBazaarType
-                  ? (bazaarSelected ? "Bazaar selected successfully ✓" : "Please select a bazaar from the dropdown")
-                  : "Bazaar selection is not required for Head Office/Head Quarter"}
-              </p>
             </div>
-          </div>
-
-          <div className={getFieldClasses('location', 'full_address', 'mt-6')}>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Description (if any)</label>
-            <textarea
-              {...register("full_address", getValidationRules('location', 'full_address', { required: false }))}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white text-gray-900"
-              rows={4}
-              placeholder="Enter additional description (optional)"
-            />
-            {locationErrors?.full_address && (
-              <p className="text-red-600 text-sm mt-1">{locationErrors.full_address.message}</p>
-            )}
           </div>
 
           <div className="mt-6 flex justify-end">

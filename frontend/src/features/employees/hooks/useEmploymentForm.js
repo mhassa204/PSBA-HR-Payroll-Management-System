@@ -46,6 +46,7 @@ export const useEmploymentForm = ({
     contract: false,
   });
   const [savedEmploymentId, setSavedEmploymentId] = useState(null);
+  const [allLocations, setAllLocations] = useState([]); // NEW
 
   // Ref to prevent recursive calls to loadDataIntoForms
   const isLoadingDataRef = useRef(false);
@@ -95,11 +96,9 @@ export const useEmploymentForm = ({
 
   const locationForm = useForm({
     defaultValues: {
-      district: "",
-      city: "",
-      bazaar_name: "",
-      type: "HEAD_OFFICE",
+      location_id: "",      // NEW single selection
       full_address: "",
+      _location_type_filter: 'ALL', // virtual filter state
     },
   });
 
@@ -127,23 +126,17 @@ export const useEmploymentForm = ({
     const loadFormOptions = async () => {
       try {
         setIsLoading(true);
-        
         const options = await employmentService.getFormOptions();
-        
         setFormOptions(options);
-
-        // Load bazaar options for the employment form
+        // Load ALL locations (not just bazaars)
         try {
-          const bazaars = await locationService.getBazaars();
-          const bazaarOptions = bazaars.map(bazaar => ({
-            value: bazaar.id,
-            label: `${bazaar.name}${bazaar.city && bazaar.city.name ? ` - ${bazaar.city.name}` : ''}${bazaar.district && bazaar.district.name ? ` (${bazaar.district.name})` : ''}`,
-            description: `${bazaar.city && bazaar.city.name ? bazaar.city.name : ''}${bazaar.district && bazaar.district.name ? `, ${bazaar.district.name}` : ''}`
-          }));
-          setBazaarOptions(bazaarOptions);
+          const locationsResp = await locationService.getAllLocations();
+          // API returns { success, locations } – normalize
+            const locs = Array.isArray(locationsResp.locations) ? locationsResp.locations : (Array.isArray(locationsResp) ? locationsResp : []);
+          setAllLocations(locs);
         } catch (error) {
-          console.error("❌ Error loading bazaar options:", error);
-          setBazaarOptions([]);
+          console.error("❌ Error loading locations:", error);
+          setAllLocations([]);
         }
       } catch (error) {
         console.error("❌ Error loading form options:", error);
@@ -324,21 +317,16 @@ export const useEmploymentForm = ({
   const submitLocation = useCallback(async (data) => {
     try {
       setIsLoading(true);
-
-
       if (!savedEmploymentId) {
         throw new Error("Employment record must be saved first");
       }
-
+      const payload = { location_id: data.location_id ? Number(data.location_id) : null, full_address: data.full_address || '' };
       let result;
       if (isEditMode) {
-        result = await employmentService.updateLocation(savedEmploymentId, data);
-
+        result = await employmentService.updateLocation(savedEmploymentId, payload);
       } else {
-        result = await employmentService.createLocation(savedEmploymentId, data);
-
+        result = await employmentService.createLocation(savedEmploymentId, payload);
       }
-
       if (onSuccess) onSuccess(result, "location");
       return result;
     } catch (error) {
@@ -532,6 +520,7 @@ export const useEmploymentForm = ({
     isContractual,
     completedTabs,
     savedEmploymentId,
+    allLocations, // NEW expose to consumer
 
     // Methods
     submitEmployment,
