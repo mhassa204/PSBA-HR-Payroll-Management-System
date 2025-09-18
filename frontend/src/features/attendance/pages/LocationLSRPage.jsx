@@ -99,6 +99,20 @@ const LocationLSRPage = () => {
     return r.approvedLeaveDisplay || r.approvedFullDayLeaveDates?.join(',') || '';
   }
 
+  // Helpers for scrollable date lists
+  function fmtYMDtoDMY(ymd){
+    if(!ymd) return '';
+    // ymd expected YYYY-MM-DD
+    if(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(ymd)){
+      const y=ymd.slice(0,4); const m=ymd.slice(5,7); const d=ymd.slice(8,10);
+      return `${d}-${m}-${y}`;
+    }
+    // fallback already d-m-y
+    return ymd;
+  }
+  function weeklyOffList(r){ return (r.weeklyOffDates||[]).map(fmtYMDtoDMY); }
+  function approvedLeaveList(r){ return (r.approvedFullDayLeaveDates||[]).map(fmtYMDtoDMY); }
+
   // Export mapping similar to sample columns
   function mapRowsForExport(list) {
     return list.map(r => ({
@@ -191,9 +205,9 @@ const LocationLSRPage = () => {
               <th className="px-3 py-2">Present</th>
               <th className="px-3 py-2">Absents</th>
               <th className="px-3 py-2">Holidays (Weekly Off)</th>
-              <th className="px-3 py-2">Weekly Off Dates</th>
-              <th className="px-3 py-2">Full Day Leaves (Approved)</th>
-              <th className="px-3 py-2">Approved Leave Dates</th>
+              <th className="px-3 py-2 w-48">Weekly Off Dates</th>
+              <th className="px-3 py-2 w-48">Full Day Leaves (Approved)</th>
+              <th className="px-3 py-2 w-48">Approved Leave Dates</th>
               <th className="px-3 py-2">Unapproved Leaves</th>
               <th className="px-3 py-2">Remarks</th>
             </tr>
@@ -213,9 +227,17 @@ const LocationLSRPage = () => {
                 <td className="px-3 py-2 text-center text-green-700 font-semibold">{r.totals?.presentDays ?? ''}</td>
                 <td className="px-3 py-2 text-center text-red-600 font-semibold">{r.totals?.absents ?? ''}</td>
                 <td className="px-3 py-2 text-center">{r.totals?.holidays ?? ''}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{formatWeeklyOffDisplay(r)}</td>
+                <td className="px-3 py-2 align-top text-[11px]">
+                  <div className="max-h-32 overflow-y-auto pr-1 custom-thin-scroll space-y-1 min-w-[180px]">
+                    {weeklyOffList(r).length ? weeklyOffList(r).map(d => <div key={d} className="leading-snug whitespace-nowrap">{d}</div>) : <span className="text-gray-400">-</span>}
+                  </div>
+                </td>
                 <td className="px-3 py-2 text-center">{r.totals?.fullDayLeaves ?? ''}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{formatApprovedLeaveDisplay(r)}</td>
+                <td className="px-3 py-2 align-top text-[11px]">
+                  <div className="max-h-32 overflow-y-auto pr-1 custom-thin-scroll space-y-1 min-w-[180px]">
+                    {approvedLeaveList(r).length ? approvedLeaveList(r).map(d => <div key={d} className="leading-snug whitespace-nowrap">{d}</div>) : <span className="text-gray-400">-</span>}
+                  </div>
+                </td>
                 <td className="px-3 py-2 text-center">{r.totals?.unapprovedLeaves ?? ''}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{r.remarks || ''}</td>
               </tr>
