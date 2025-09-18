@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
@@ -152,90 +152,85 @@ const LocationFMOPage = () => {
     toastBus.emit({ type: 'success', message: `Exported ${rowsSrc.length} ${mode} rows to ${type.toUpperCase()}.` });
   };
 
+  const exportRef = useRef(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  useEffect(()=>{ if(!exportOpen) return; const handler = (e)=>{ if(exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false); }; document.addEventListener('mousedown', handler); return ()=>document.removeEventListener('mousedown', handler); },[exportOpen]);
+  useEffect(()=>{ const key=(e)=>{ if(e.key==='Escape') setExportOpen(false); }; window.addEventListener('keydown', key); return ()=>window.removeEventListener('keydown', key); },[]);
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading attendance..." /></div>;
   if (!data?.success) return <div className="p-6 text-red-600">Failed to load</div>;
 
   return (
-    <div className="max-w-[95vw] mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold">Attendance FMO - {data.location?.name}</h1>
-          <p className="text-sm text-gray-600">{data.range.start} to {data.range.end}</p>
+    <div className="max-w-[97vw] mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-primary">Attendance FMO - {data.location?.name}</h1>
+          <p className="text-xs text-gray-500">{data.range.start} to {data.range.end}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <select className="border rounded px-2 py-1 text-sm hover:bg-gray-50" value={`${selYear}-${selMonth}`} onChange={(e)=>{
-            const [y,m] = e.target.value.split('-').map(n=>parseInt(n,10));
-            setSelYear(y); setSelMonth(m);
-          }}>
-            {monthOptions.map((opt, idx) => (
-              <option key={idx} value={`${opt.value.y}-${opt.value.m}`}>{opt.label}</option>
-            ))}
+        <div className="actions-inline">
+          <select className="form-input dense-input !w-auto text-xs" value={`${selYear}-${selMonth}`} onChange={(e)=>{ const [y,m]=e.target.value.split('-').map(n=>parseInt(n,10)); setSelYear(y); setSelMonth(m); }}>
+            {monthOptions.map((opt, idx) => (<option key={idx} value={`${opt.value.y}-${opt.value.m}`}>{opt.label}</option>))}
           </select>
-          <div className="relative group">
-            <button className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Export ▾</button>
-            <div className="absolute right-0 mt-1 hidden group-hover:block bg-white border rounded shadow z-20 min-w-56">
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', true)}>Export Filtered CSV</button>
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', true)}>Export Filtered Excel</button>
-              <div className="my-1 border-t" />
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', false)}>Export All CSV</button>
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', false)}>Export All Excel</button>
-            </div>
+          <div className="relative" ref={exportRef}>
+            <button type="button" className="btn btn-secondary text-xs" onClick={()=>setExportOpen(o=>!o)}>Export ▾</button>
+            {exportOpen && (
+              <div className="menu-surface absolute right-0 mt-1 z-30 flex flex-col" role="menu">
+                <button className="menu-item" onClick={()=>{handleExport('csv', true); setExportOpen(false);}}>Filtered CSV</button>
+                <button className="menu-item" onClick={()=>{handleExport('xlsx', true); setExportOpen(false);}}>Filtered Excel</button>
+                <div className="h-px my-1 bg-gray-200" />
+                <button className="menu-item" onClick={()=>{handleExport('csv', false); setExportOpen(false);}}>All CSV</button>
+                <button className="menu-item" onClick={()=>{handleExport('xlsx', false); setExportOpen(false);}}>All Excel</button>
+              </div>
+            )}
           </div>
-          <Link to={`/attendance/locations/${id}`} className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Back</Link>
+          <Link to={`/attendance/locations/${id}`} className="btn btn-outline text-xs">Back</Link>
         </div>
       </div>
 
-      {/* Report Title Above Table */}
-      <div className="mb-2 text-center">
-        <h2 className="text-base font-semibold">{titleText}</h2>
+      <div className="card-soft p-4 space-y-3">
+        <div className="filter-panel compact">
+          <input className="form-input" placeholder="Biometric ID" value={fBiometricId} onChange={e=>setFBiometricId(e.target.value)} />
+          <input className="form-input" placeholder="CNIC No." value={fCnic} onChange={e=>setFCnic(e.target.value)} />
+            <input className="form-input" placeholder="Name" value={fName} onChange={e=>setFName(e.target.value)} />
+          <input className="form-input" placeholder="Designation" value={fDesignation} onChange={e=>setFDesignation(e.target.value)} />
+          <input className="form-input" placeholder="Cost Center" value={fCostCenter} onChange={e=>setFCostCenter(e.target.value)} />
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded shadow p-3 mb-3 grid grid-cols-1 md:grid-cols-5 gap-2">
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Biometric ID" value={fBiometricId} onChange={e=>setFBiometricId(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="CNIC No." value={fCnic} onChange={e=>setFCnic(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Name" value={fName} onChange={e=>setFName(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Designation" value={fDesignation} onChange={e=>setFDesignation(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Cost Center" value={fCostCenter} onChange={e=>setFCostCenter(e.target.value)} />
-      </div>
-
-      <div className="overflow-auto bg-white rounded shadow">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
+      <div className="table-shell card-soft p-0 custom-thin-scroll table-fixed-viewport">
+        <table className="table-enhanced table-no-wrap" style={{ tableLayout:'auto', minWidth: '100%' }}>
+          <thead>
             <tr>
-              <th className="px-3 py-2 text-xs text-gray-500">Sr. No.</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Biometric ID</th>
-              <th className="px-3 py-2 text-xs text-gray-500">CNIC No.</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Name</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Designation</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Cost Center</th>
-              {days.map((d)=> (
-                <th key={d.label} className="px-2 py-2 text-center text-[11px] text-gray-500">{d.dow} {d.label}</th>
-              ))}
-              <th className="px-3 py-2 text-xs text-gray-500">Total Days</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Present</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Not Mark</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Absent</th>
+              <th>Sr. No.</th>
+              <th>Biometric ID</th>
+              <th>CNIC No.</th>
+              <th>Name</th>
+              <th>Designation</th>
+              <th>Cost Center</th>
+              {days.map((d)=>(<th key={d.label} className="text-center">{d.dow} {d.label}</th>))}
+              <th>Total Days</th>
+              <th>Present</th>
+              <th>Not Mark</th>
+              <th>Absent</th>
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((r) => (
-              <tr key={r.sr} className="border-t">
-                <td className="px-3 py-2 text-sm">{r.sr}</td>
-                <td className="px-3 py-2 text-sm">{r.biometricId || '-'}</td>
-                <td className="px-3 py-2 text-sm">{r.cnic || '-'}</td>
-                <td className="px-3 py-2 text-sm">{r.name}</td>
-                <td className="px-3 py-2 text-sm">{r.designation || '-'}</td>
-                <td className="px-3 py-2 text-sm">{r.roleTag || '-'}</td>
-                {r.marks.map((m, i) => (
-                  <td key={i} className={`px-2 py-2 text-center text-xs font-semibold ${m==='P'?'text-green-600':'text-red-600'}`}>{m}</td>
-                ))}
-                <td className="px-3 py-2 text-sm">{r.totals.totalDays}</td>
-                <td className="px-3 py-2 text-sm">{r.totals.present}</td>
-                <td className="px-3 py-2 text-sm">{r.totals.notMark}</td>
-                <td className="px-3 py-2 text-sm">{r.totals.absent}</td>
+            {filteredRows.map(r => (
+              <tr key={r.sr}>
+                <td>{r.sr}</td>
+                <td>{r.biometricId || '-'}</td>
+                <td>{r.cnic || '-'}</td>
+                <td>{r.name}</td>
+                <td>{r.designation || '-'}</td>
+                <td>{r.roleTag || '-'}</td>
+                {r.marks.map((m,i)=>(<td key={i} className={m==='P'? 'mark-present':'mark-absent'}>{m}</td>))}
+                <td>{r.totals.totalDays}</td>
+                <td className="mark-present">{r.totals.present}</td>
+                <td>{r.totals.notMark}</td>
+                <td className="mark-absent">{r.totals.absent}</td>
               </tr>
             ))}
+            {!filteredRows.length && <tr><td colSpan={11+days.length} className="text-center py-6 text-gray-500 text-xs">No records</td></tr>}
           </tbody>
         </table>
       </div>

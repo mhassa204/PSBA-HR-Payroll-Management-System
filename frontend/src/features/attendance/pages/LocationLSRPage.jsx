@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
@@ -31,6 +31,8 @@ const LocationLSRPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ name:'', designation:'', cnic:'', account:'', remarks:'' });
+  const exportRef = useRef(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // keep month in URL
   useEffect(()=>{
@@ -115,8 +117,8 @@ const LocationLSRPage = () => {
 
   // Export mapping similar to sample columns
   function mapRowsForExport(list) {
-    return list.map(r => ({
-      Sr: r.sr,
+    return list.map((r,i) => ({
+      Sr: r.sr ?? (i+1),
       BazaarName: r.bazaarName,
       EmployeeName: r.name,
       Designation: r.designation || '',
@@ -147,104 +149,105 @@ const LocationLSRPage = () => {
     toastBus.emit({ type: 'success', message: `Exported ${src.length} ${filtered?'filtered':'all'} rows to ${type.toUpperCase()}` });
   }
 
+  useEffect(()=>{ if(!exportOpen) return; const handler=(e)=>{ if(exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false); }; document.addEventListener('mousedown', handler); return ()=>document.removeEventListener('mousedown', handler); },[exportOpen]);
+  useEffect(()=>{ const key=(e)=>{ if(e.key==='Escape') setExportOpen(false); }; window.addEventListener('keydown', key); return ()=>window.removeEventListener('keydown', key); },[]);
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading LSR..." /></div>;
   if (!data?.success) return <div className="p-6 text-red-600">Failed to load</div>;
 
   return (
-    <div className="max-w-[95vw] mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold">Leave Status Report - {data.location?.name}</h1>
-          <p className="text-sm text-gray-600">Cycle: {data.cycle.start} to {data.cycle.end}</p>
+    <div className="max-w-[97vw] mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-primary">Leave Status Report - {data.location?.name}</h1>
+          <p className="text-xs text-gray-500">Cycle: {data.cycle.start} to {data.cycle.end}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <select className="border rounded px-2 py-1 text-sm" value={monthParam} onChange={(e)=>{
-            const v = e.target.value; setSelYear(parseInt(v.slice(0,4),10)); setSelMonth(parseInt(v.slice(5,7),10)-1);
-          }}>
+        <div className="actions-inline">
+          <select className="form-input dense-input !w-auto text-xs" value={monthParam} onChange={(e)=>{ const v=e.target.value; setSelYear(parseInt(v.slice(0,4),10)); setSelMonth(parseInt(v.slice(5,7),10)-1); }}>
             {monthOptions.map((o,i)=>(<option key={i} value={o.param}>{o.label}</option>))}
           </select>
-          <div className="relative group">
-            <button className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Export ▾</button>
-            <div className="absolute right-0 mt-1 hidden group-hover:block bg-white border rounded shadow z-20 min-w-56">
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', true)}>Export Filtered CSV</button>
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', true)}>Export Filtered Excel</button>
-              <div className="my-1 border-t" />
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', false)}>Export All CSV</button>
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', false)}>Export All Excel</button>
-            </div>
+          <div className="relative" ref={exportRef}>
+            <button type="button" className="btn btn-secondary text-xs" onClick={()=>setExportOpen(o=>!o)}>Export ▾</button>
+            {exportOpen && (
+              <div className="menu-surface absolute right-0 mt-1 z-30 flex flex-col" role="menu">
+                <button className="menu-item" onClick={()=>{handleExport('csv', true); setExportOpen(false);}}>Filtered CSV</button>
+                <button className="menu-item" onClick={()=>{handleExport('xlsx', true); setExportOpen(false);}}>Filtered Excel</button>
+                <div className="h-px my-1 bg-gray-200" />
+                <button className="menu-item" onClick={()=>{handleExport('csv', false); setExportOpen(false);}}>All CSV</button>
+                <button className="menu-item" onClick={()=>{handleExport('xlsx', false); setExportOpen(false);}}>All Excel</button>
+              </div>
+            )}
           </div>
-          <Link to={`/attendance/locations/${id}`} className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Back</Link>
+          <Link to={`/attendance/locations/${id}`} className="btn btn-outline text-xs">Back</Link>
         </div>
       </div>
 
-      <div className="mb-2 text-center">
-        <h2 className="text-base font-semibold">{titleText}</h2>
+      <div className="report-title-bar">{titleText}</div>
+
+      <div className="card-soft p-4 space-y-3">
+        <div className="filter-panel compact">
+          <input className="form-input" placeholder="Name" value={filters.name} onChange={e=>setFilters(f=>({...f,name:e.target.value}))} />
+          <input className="form-input" placeholder="Designation" value={filters.designation} onChange={e=>setFilters(f=>({...f,designation:e.target.value}))} />
+          <input className="form-input" placeholder="CNIC" value={filters.cnic} onChange={e=>setFilters(f=>({...f,cnic:e.target.value}))} />
+          <input className="form-input" placeholder="Account #" value={filters.account} onChange={e=>setFilters(f=>({...f,account:e.target.value}))} />
+          <input className="form-input" placeholder="Remarks" value={filters.remarks} onChange={e=>setFilters(f=>({...f,remarks:e.target.value}))} />
+        </div>
       </div>
 
-      <div className="bg-white rounded shadow p-3 mb-3 grid grid-cols-1 md:grid-cols-5 gap-2">
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Name" value={filters.name} onChange={e=>setFilters(f=>({...f,name:e.target.value}))} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Designation" value={filters.designation} onChange={e=>setFilters(f=>({...f,designation:e.target.value}))} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="CNIC" value={filters.cnic} onChange={e=>setFilters(f=>({...f,cnic:e.target.value}))} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Account #" value={filters.account} onChange={e=>setFilters(f=>({...f,account:e.target.value}))} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Remarks" value={filters.remarks} onChange={e=>setFilters(f=>({...f,remarks:e.target.value}))} />
-      </div>
-
-      <div className="overflow-auto bg-white rounded shadow">
-        <table className="min-w-full text-xs">
-          <thead className="bg-gray-50">
+      <div className="table-shell card-soft p-0 overflow-auto custom-thin-scroll table-fixed-viewport">
+        <table className="table-enhanced table-no-wrap text-[11px]" style={{ tableLayout:'auto', minWidth:'100%' }}>
+          <thead>
             <tr>
-              <th className="px-3 py-2">Sr.</th>
-              <th className="px-3 py-2">Bazaar</th>
-              <th className="px-3 py-2">Employee Name</th>
-              <th className="px-3 py-2">Designation</th>
-              <th className="px-3 py-2">CNIC</th>
-              <th className="px-3 py-2">Acct Holder</th>
-              <th className="px-3 py-2">Branch Code</th>
-              <th className="px-3 py-2">Account #</th>
-              <th className="px-3 py-2">Total Working Days</th>
-              <th className="px-3 py-2">Present</th>
-              <th className="px-3 py-2">Absents</th>
-              <th className="px-3 py-2">Holidays (Weekly Off)</th>
-              <th className="px-3 py-2 w-48">Weekly Off Dates</th>
-              <th className="px-3 py-2 w-48">Full Day Leaves (Approved)</th>
-              <th className="px-3 py-2 w-48">Approved Leave Dates</th>
-              <th className="px-3 py-2">Unapproved Leaves</th>
-              <th className="px-3 py-2">Remarks</th>
+              <th>Sr.</th>
+              <th>Bazaar</th>
+              <th>Employee Name</th>
+              <th>Designation</th>
+              <th>CNIC</th>
+              <th>Acct Holder</th>
+              <th>Branch Code</th>
+              <th>Account #</th>
+              <th>Total Working Days</th>
+              <th>Present</th>
+              <th>Absents</th>
+              <th>Holidays (Weekly Off)</th>
+              <th>Weekly Off Dates</th>
+              <th>Full Day Leaves (Approved)</th>
+              <th>Approved Leave Dates</th>
+              <th>Unapproved Leaves</th>
+              <th>Remarks</th>
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map(r => (
-              <tr key={r.employeeId} className="border-t">
-                <td className="px-3 py-2">{r.sr}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.bazaarName}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.name}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.designation || ''}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.cnic || ''}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.bank?.accountHolderName || ''}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.bank?.branchCode || ''}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.bank?.accountNumber || ''}</td>
-                <td className="px-3 py-2 text-center">{r.totals?.workingDays ?? ''}</td>
-                <td className="px-3 py-2 text-center text-green-700 font-semibold">{r.totals?.presentDays ?? ''}</td>
-                <td className="px-3 py-2 text-center text-red-600 font-semibold">{r.totals?.absents ?? ''}</td>
-                <td className="px-3 py-2 text-center">{r.totals?.holidays ?? ''}</td>
-                <td className="px-3 py-2 align-top text-[11px]">
-                  <div className="max-h-32 overflow-y-auto pr-1 custom-thin-scroll space-y-1 min-w-[180px]">
+            {filteredRows.map((r,i) => (
+              <tr key={r.employeeId}>
+                <td>{r.sr ?? (i+1)}</td>
+                <td className="whitespace-nowrap text-left">{r.bazaarName}</td>
+                <td className="whitespace-nowrap text-left">{r.name}</td>
+                <td className="whitespace-nowrap text-left">{r.designation || ''}</td>
+                <td className="whitespace-nowrap text-left">{r.cnic || ''}</td>
+                <td className="whitespace-nowrap text-left">{r.bank?.accountHolderName || ''}</td>
+                <td className="whitespace-nowrap text-left">{r.bank?.branchCode || ''}</td>
+                <td className="whitespace-nowrap text-left">{r.bank?.accountNumber || ''}</td>
+                <td className="text-center">{r.totals?.workingDays ?? ''}</td>
+                <td className="text-center"><span className="badge badge-green !rounded !px-2 !py-1 inline-block w-full text-center">{r.totals?.presentDays ?? ''}</span></td>
+                <td className="text-center"><span className="badge badge-red !rounded !px-2 !py-1 inline-block w-full text-center">{r.totals?.absents ?? ''}</span></td>
+                <td className="text-center">{r.totals?.holidays ?? ''}</td>
+                <td className="align-top">
+                  <div className="max-h-28 overflow-y-auto px-1 custom-thin-scroll space-y-1 text-center">
                     {weeklyOffList(r).length ? weeklyOffList(r).map(d => <div key={d} className="leading-snug whitespace-nowrap">{d}</div>) : <span className="text-gray-400">-</span>}
                   </div>
                 </td>
-                <td className="px-3 py-2 text-center">{r.totals?.fullDayLeaves ?? ''}</td>
-                <td className="px-3 py-2 align-top text-[11px]">
-                  <div className="max-h-32 overflow-y-auto pr-1 custom-thin-scroll space-y-1 min-w-[180px]">
+                <td className="text-center">{r.totals?.fullDayLeaves ?? ''}</td>
+                <td className="align-top">
+                  <div className="max-h-28 overflow-y-auto px-1 custom-thin-scroll space-y-1 text-center">
                     {approvedLeaveList(r).length ? approvedLeaveList(r).map(d => <div key={d} className="leading-snug whitespace-nowrap">{d}</div>) : <span className="text-gray-400">-</span>}
                   </div>
                 </td>
-                <td className="px-3 py-2 text-center">{r.totals?.unapprovedLeaves ?? ''}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.remarks || ''}</td>
+                <td className="text-center">{r.totals?.unapprovedLeaves ?? ''}</td>
+                <td className="whitespace-nowrap text-left">{r.remarks || ''}</td>
               </tr>
             ))}
-            {filteredRows.length===0 && (
-              <tr><td colSpan={17} className="px-3 py-6 text-center text-gray-500">No records</td></tr>
-            )}
+            {!filteredRows.length && <tr><td colSpan={17} className="text-center py-6 text-gray-500 text-xs">No records</td></tr>}
           </tbody>
         </table>
       </div>

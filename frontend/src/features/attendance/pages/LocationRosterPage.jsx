@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
@@ -165,116 +165,117 @@ const LocationRosterPage = () => {
     toastBus.emit({ type: 'success', message: `Exported ${rowsSrc.length} ${mode} rows to ${type.toUpperCase()}.` });
   };
 
+  const exportRef = useRef(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  useEffect(()=>{ if(!exportOpen) return; const handler=(e)=>{ if(exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false); }; document.addEventListener('mousedown', handler); return ()=>document.removeEventListener('mousedown', handler); },[exportOpen]);
+  useEffect(()=>{ const key=(e)=>{ if(e.key==='Escape') setExportOpen(false); }; window.addEventListener('keydown', key); return ()=>window.removeEventListener('keydown', key); },[]);
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading attendance..." /></div>;
   if (!data?.success) return <div className="p-6 text-red-600">Failed to load</div>;
 
   return (
-    <div className="max-w-[95vw] mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold">Attendance vs Duty Roster - {data.location?.name}</h1>
-          <p className="text-sm text-gray-600">{data.range.start} to {data.range.end}</p>
+    <div className="max-w-[97vw] mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-primary">Attendance vs Duty Roster - {data.location?.name}</h1>
+          <p className="text-xs text-gray-500">{data.range.start} to {data.range.end}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <select className="border rounded px-2 py-1 text-sm hover:bg-gray-50" value={`${selYear}-${selMonth}`} onChange={(e)=>{
-            const [y,m] = e.target.value.split('-').map(n=>parseInt(n,10));
-            setSelYear(y); setSelMonth(m);
-          }}>
-            {monthOptions.map((opt, idx) => (
-              <option key={idx} value={`${opt.value.y}-${opt.value.m}`}>{opt.label}</option>
-            ))}
+        <div className="actions-inline">
+          <select className="form-input dense-input !w-auto text-xs" value={`${selYear}-${selMonth}`} onChange={(e)=>{ const [y,m]=e.target.value.split('-').map(n=>parseInt(n,10)); setSelYear(y); setSelMonth(m); }}>
+            {monthOptions.map((opt,idx)=>(<option key={idx} value={`${opt.value.y}-${opt.value.m}`}>{opt.label}</option>))}
           </select>
-          <div className="relative group">
-            <button className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Export ▾</button>
-            <div className="absolute right-0 mt-1 hidden group-hover:block bg-white border rounded shadow z-20 min-w-56">
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', true)}>Export Filtered CSV</button>
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', true)}>Export Filtered Excel</button>
-              <div className="my-1 border-t" />
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('csv', false)}>Export All CSV</button>
-              <button className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>handleExport('xlsx', false)}>Export All Excel</button>
-            </div>
+          <div className="relative" ref={exportRef}>
+            <button type="button" className="btn btn-secondary text-xs" onClick={()=>setExportOpen(o=>!o)}>Export ▾</button>
+            {exportOpen && (
+              <div className="menu-surface absolute right-0 mt-1 z-30 flex flex-col" role="menu">
+                <button className="menu-item" onClick={()=>{handleExport('csv', true); setExportOpen(false);}}>Filtered CSV</button>
+                <button className="menu-item" onClick={()=>{handleExport('xlsx', true); setExportOpen(false);}}>Filtered Excel</button>
+                <div className="h-px my-1 bg-gray-200" />
+                <button className="menu-item" onClick={()=>{handleExport('csv', false); setExportOpen(false);}}>All CSV</button>
+                <button className="menu-item" onClick={()=>{handleExport('xlsx', false); setExportOpen(false);}}>All Excel</button>
+              </div>
+            )}
           </div>
-          <Link to={`/attendance/locations/${id}`} className="px-3 py-1 border rounded text-sm hover:bg-gray-100 transition-colors">Back</Link>
+          <Link to={`/attendance/locations/${id}`} className="btn btn-outline text-xs">Back</Link>
         </div>
       </div>
 
-      {/* Report Title Above Table */}
-      <div className="mb-2 text-center">
-        <h2 className="text-base font-semibold">{titleText}</h2>
+      <div className="report-title-bar">{titleText}</div>
+
+      <div className="card-soft p-4 space-y-3">
+        <div className="filter-panel compact">
+          <input className="form-input" placeholder="Biometric ID" value={fBiometricId} onChange={e=>setFBiometricId(e.target.value)} />
+          <input className="form-input" placeholder="CNIC No." value={fCnic} onChange={e=>setFCnic(e.target.value)} />
+          <input className="form-input" placeholder="Name" value={fName} onChange={e=>setFName(e.target.value)} />
+          <input className="form-input" placeholder="Designation" value={fDesignation} onChange={e=>setFDesignation(e.target.value)} />
+          <input className="form-input" placeholder="Actual Cost Center" value={fActualCC} onChange={e=>setFActualCC(e.target.value)} />
+          <input className="form-input" placeholder="Biometric Cost Center" value={fBioCC} onChange={e=>setFBioCC(e.target.value)} />
+          <input className="form-input" placeholder="Date (YYYY-MM-DD)" value={fDate} onChange={e=>setFDate(e.target.value)} />
+          <input className="form-input" placeholder="Performed Status" value={fPerformedStatus} onChange={e=>setFPerformedStatus(e.target.value)} />
+          <input className="form-input" placeholder="Time In Status" value={fTimeInStatus} onChange={e=>setFTimeInStatus(e.target.value)} />
+          <select className="form-input" value={fSingleMark} onChange={e=>setFSingleMark(e.target.value)}>
+            <option value="">Single Mark (Any)</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+          <input className="form-input" placeholder="Time Out Status" value={fTimeOutStatus} onChange={e=>setFTimeOutStatus(e.target.value)} />
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded shadow p-3 mb-3 grid grid-cols-1 md:grid-cols-6 gap-2">
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Biometric ID" value={fBiometricId} onChange={e=>setFBiometricId(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="CNIC No." value={fCnic} onChange={e=>setFCnic(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Name" value={fName} onChange={e=>setFName(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Designation" value={fDesignation} onChange={e=>setFDesignation(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Actual Cost Center" value={fActualCC} onChange={e=>setFActualCC(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Biometric Cost Center" value={fBioCC} onChange={e=>setFBioCC(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Date (YYYY-MM-DD)" value={fDate} onChange={e=>setFDate(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Performed Status" value={fPerformedStatus} onChange={e=>setFPerformedStatus(e.target.value)} />
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Time In Status" value={fTimeInStatus} onChange={e=>setFTimeInStatus(e.target.value)} />
-        <select className="border rounded px-2 py-1 text-sm" value={fSingleMark} onChange={e=>setFSingleMark(e.target.value)}>
-          <option value="">Single Mark (Any)</option>
-          <option value="Yes">Yes</option>
-          <option value="No">No</option>
-        </select>
-        <input className="border rounded px-2 py-1 text-sm" placeholder="Time Out Status" value={fTimeOutStatus} onChange={e=>setFTimeOutStatus(e.target.value)} />
-      </div>
-
-      <div className="overflow-auto bg-white rounded shadow">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
+      <div className="table-shell card-soft p-0 custom-thin-scroll table-fixed-viewport">
+        <table className="table-enhanced table-no-wrap" style={{ tableLayout:'auto', minWidth:'100%' }}>
+          <thead>
             <tr>
-              <th className="px-3 py-2 text-xs text-gray-500">Employ ID</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Biometric ID</th>
-              <th className="px-3 py-2 text-xs text-gray-500">CNIC No.</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Name</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Designation</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Actual Cost Center</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Biometric Cost Center</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Date</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Date (Label)</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Time-1</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Time-2</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Duty In</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Duty Out</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Duty Timings</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Actual Performed</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Performed Status</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Time In Late</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Time In Status</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Single Mark</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Time Out Early/Late</th>
-              <th className="px-3 py-2 text-xs text-gray-500">Time Out Status</th>
+              <th>Employ ID</th>
+              <th>Biometric ID</th>
+              <th>CNIC No.</th>
+              <th>Name</th>
+              <th>Designation</th>
+              <th>Actual Cost Center</th>
+              <th>Biometric Cost Center</th>
+              <th>Date</th>
+              <th>Date (Label)</th>
+              <th>Time-1</th>
+              <th>Time-2</th>
+              <th>Duty In</th>
+              <th>Duty Out</th>
+              <th>Duty Timings</th>
+              <th>Actual Performed</th>
+              <th>Performed Status</th>
+              <th>Time In Late</th>
+              <th>Time In Status</th>
+              <th>Single Mark</th>
+              <th>Time Out Early/Late</th>
+              <th>Time Out Status</th>
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((r, i) => (
-              <tr key={`${r.employeeId}-${r.date}-${i}`} className="border-t">
-                <td className="px-3 py-2 text-sm">{r.employeeId}</td>
-                <td className="px-3 py-2 text-sm">{r.biometricId || '-'}</td>
-                <td className="px-3 py-2 text-sm">{r.cnic || '-'}</td>
-                <td className="px-3 py-2 text-sm">{r.name}</td>
-                <td className="px-3 py-2 text-sm">{r.designation || '-'}</td>
-                <td className="px-3 py-2 text-sm">{r.actualCostCenter || '-'}</td>
-                <td className="px-3 py-2 text-sm">{r.biometricCostCenter || '-'}</td>
-                <td className="px-3 py-2 text-sm">{r.date}</td>
-                <td className="px-3 py-2 text-sm">{r.dateLabel}</td>
-                <td className="px-3 py-2 text-sm">{r.time1}</td>
-                <td className="px-3 py-2 text-sm">{r.time2}</td>
-                <td className="px-3 py-2 text-sm">{r.dutyIn}</td>
-                <td className="px-3 py-2 text-sm">{r.dutyOut}</td>
-                <td className="px-3 py-2 text-sm">{r.dutyTimings}</td>
-                <td className="px-3 py-2 text-sm">{r.actualPerformed}</td>
-                <td className="px-3 py-2 text-sm">{r.performedStatus}</td>
-                <td className="px-3 py-2 text-sm">{r.timeInLate}</td>
-                <td className="px-3 py-2 text-sm">{r.timeInStatus}</td>
-                <td className="px-3 py-2 text-sm">{r.singleMark ? 'Yes' : ''}</td>
-                <td className="px-3 py-2 text-sm">{r.timeOutEarlyLate}</td>
-                <td className="px-3 py-2 text-sm">{r.timeOutStatus}</td>
+            {filteredRows.map((r,i)=>(
+              <tr key={`${r.employeeId}-${r.date}-${i}`}>
+                <td>{r.employeeId}</td>
+                <td>{r.biometricId || '-'}</td>
+                <td>{r.cnic || '-'}</td>
+                <td>{r.name}</td>
+                <td>{r.designation || '-'}</td>
+                <td>{r.actualCostCenter || '-'}</td>
+                <td>{r.biometricCostCenter || '-'}</td>
+                <td>{r.date}</td>
+                <td>{r.dateLabel}</td>
+                <td>{r.time1}</td>
+                <td>{r.time2}</td>
+                <td>{r.dutyIn}</td>
+                <td>{r.dutyOut}</td>
+                <td>{r.dutyTimings}</td>
+                <td>{r.actualPerformed}</td>
+                <td>{r.performedStatus}</td>
+                <td>{r.timeInLate}</td>
+                <td>{r.timeInStatus}</td>
+                <td>{r.singleMark ? 'Yes' : ''}</td>
+                <td>{r.timeOutEarlyLate}</td>
+                <td>{r.timeOutStatus}</td>
               </tr>
             ))}
+            {!filteredRows.length && <tr><td colSpan={21} className="text-center py-6 text-gray-500 text-xs">No records</td></tr>}
           </tbody>
         </table>
       </div>

@@ -107,52 +107,52 @@ const LeaveDialog = ({ employee, open, onClose }) => {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-      <div className="bg-white rounded shadow w-full max-w-4xl p-4 max-h-[85vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Manage Leaves - {employee.full_name}</h2>
-          <button onClick={onClose} className="px-3 py-1 border rounded">Close</button>
+    <div className="fixed inset-0 backdrop-fade bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="modal-surface w-full max-w-5xl max-h-[90vh] overflow-y-auto custom-thin-scroll">
+        <div className="modal-header">
+          <h2 className="text-sm font-semibold tracking-wide">Manage Leaves - {employee.full_name}</h2>
+          <button onClick={onClose} className="btn btn-outline btn-sm text-xs">Close</button>
         </div>
         {loading ? (
-          <div className="py-10 flex items-center justify-center"><LoadingSpinner /></div>
+          <div className="py-12 flex items-center justify-center"><LoadingSpinner /></div>
         ) : (
-          <div className="space-y-4">
+          <div className="p-4 space-y-6">
             {summary && (
-              <div className="border rounded p-3 bg-gray-50">
-                <div className="text-sm font-medium mb-2">Current Leave Bank: {summary.title || `#${summary.bankId}`} ({String(summary.period_start).slice(0,10)} to {String(summary.period_end).slice(0,10)})</div>
-                <div className="grid md:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-2">
+              <div className="card-soft p-4 space-y-3">
+                <div className="text-xs font-semibold text-gray-700">Current Leave Bank: {summary.title || `#${summary.bankId}`} ({String(summary.period_start).slice(0,10)} to {String(summary.period_end).slice(0,10)})</div>
+                <div className="grid md:grid-cols-4 sm:grid-cols-3 grid-cols-2 gap-3">
                   {(summary.items || []).map(it => (
-                    <div key={it.typeId} className="text-xs bg-white border rounded p-2">
-                      <div className="font-semibold">{it.typeName}</div>
-                      <div>Allocated: {it.allocated}</div>
-                      <div>Used (Approved): {it.approvedUsed}</div>
-                      <div>Pending: {it.pending}</div>
-                      <div>Available: {it.available}</div>
+                    <div key={it.typeId} className="rounded border border-gray-200 bg-white p-2 shadow-sm">
+                      <div className="text-[11px] font-semibold text-gray-700 mb-1">{it.typeName}</div>
+                      <div className="flex flex-col gap-0.5 text-[10px] text-gray-600">
+                        <span>Allocated: {it.allocated}</span>
+                        <span className="text-green-700">Approved: {it.approvedUsed}</span>
+                        <span className="text-amber-700">Pending: {it.pending}</span>
+                        <span className="text-blue-700 font-medium">Available: {it.available}</span>
+                      </div>
                     </div>
                   ))}
-                  {!summary.items?.length && <div className="text-xs text-gray-600">No types configured</div>}
+                  {!summary.items?.length && <div className="text-xs text-gray-500">No types configured</div>}
                 </div>
               </div>
             )}
 
-            <form className="flex flex-col gap-3" onSubmit={submit}>
-              <div className="flex flex-wrap items-end gap-2">
+            <form className="card-soft p-4 space-y-4" onSubmit={submit}>
+              <div className="filter-panel compact">
                 <div>
-                  <label className="block text-xs text-gray-600">Type</label>
-                  <select className="border rounded px-2 py-1" value={form.type} onChange={e=>setForm(f=>({...f, type: e.target.value}))}>
+                  <label className="form-label text-[11px] mb-1">Type</label>
+                  <select className="form-input" value={form.type} onChange={e=>setForm(f=>({...f, type: e.target.value}))}>
                     <option value="">Select type</option>
-                    {types.map(t => (
-                      <option key={t.id} value={t.name}>{t.name}</option>
-                    ))}
+                    {types.map(t => (<option key={t.id} value={t.name}>{t.name}</option>))}
                   </select>
                 </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-600">Remarks</label>
-                  <input type="text" className="border rounded px-2 py-1 w-full" placeholder="Optional" value={form.remarks} onChange={e=>setForm(f=>({...f, remarks: e.target.value}))} />
+                <div className="col-span-2">
+                  <label className="form-label text-[11px] mb-1">Remarks</label>
+                  <input className="form-input" placeholder="Optional" value={form.remarks} onChange={e=>setForm(f=>({...f, remarks: e.target.value}))} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600">Mode</label>
-                  <select className="border rounded px-2 py-1" value={mode} onChange={e=>setMode(e.target.value)}>
+                  <label className="form-label text-[11px] mb-1">Mode</label>
+                  <select className="form-input" value={mode} onChange={e=>setMode(e.target.value)}>
                     <option value="single">Single Date</option>
                     <option value="range">Date Range</option>
                     <option value="multi">Multiple Dates</option>
@@ -162,91 +162,83 @@ const LeaveDialog = ({ employee, open, onClose }) => {
 
               {mode === 'single' && (
                 <div>
-                  <label className="block text-xs text-gray-600">Date</label>
-                  <input type="date" className="border rounded px-2 py-1" value={form.date} onChange={e=>setForm(f=>({...f, date: e.target.value}))} />
+                  <label className="form-label text-[11px] mb-1">Date</label>
+                  <input type="date" className="form-input" value={form.date} onChange={e=>setForm(f=>({...f, date: e.target.value}))} />
                 </div>
               )}
 
               {mode === 'range' && (
-                <div className="flex items-end gap-2">
-                  <div>
-                    <label className="block text-xs text-gray-600">Start</label>
-                    <input type="date" className="border rounded px-2 py-1" value={range.start} onChange={e=>setRange(r=>({...r, start: e.target.value}))} />
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="form-label text-[11px] mb-1">Start</label>
+                    <input type="date" className="form-input" value={range.start} onChange={e=>setRange(r=>({...r, start: e.target.value}))} />
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-600">End</label>
-                    <input type="date" className="border rounded px-2 py-1" value={range.end} onChange={e=>setRange(r=>({...r, end: e.target.value}))} />
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="form-label text-[11px] mb-1">End</label>
+                    <input type="date" className="form-input" value={range.end} onChange={e=>setRange(r=>({...r, end: e.target.value}))} />
                   </div>
                 </div>
               )}
 
               {mode === 'multi' && (
                 <div className="space-y-2">
-                  <label className="block text-xs text-gray-600">Dates</label>
+                  <label className="form-label text-[11px] mb-1">Dates</label>
                   {multiDates.map((d, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <input type="date" className="border rounded px-2 py-1" value={d} onChange={e=>setMultiDates(arr=>{ const c=[...arr]; c[idx]=e.target.value; return c; })} />
-                      <button type="button" className="px-2 py-1 border rounded" onClick={()=>setMultiDates(arr=>arr.filter((_,i)=>i!==idx))}>Remove</button>
+                      <input type="date" className="form-input !py-1 !px-2" value={d} onChange={e=>setMultiDates(arr=>{ const c=[...arr]; c[idx]=e.target.value; return c; })} />
+                      <button type="button" className="btn btn-error-soft text-[11px]" onClick={()=>setMultiDates(arr=>arr.filter((_,i)=>i!==idx))}>Remove</button>
                     </div>
                   ))}
-                  <button type="button" className="px-2 py-1 border rounded" onClick={()=>setMultiDates(arr=>[...arr, ''])}>Add another date</button>
+                  <button type="button" className="btn btn-outline text-[11px]" onClick={()=>setMultiDates(arr=>[...arr, ''])}>Add another date</button>
                 </div>
               )}
 
               <div>
-                <button type="submit" className="px-3 py-2 bg-emerald-600 text-white rounded">Save</button>
+                <button type="submit" className="btn btn-success text-xs">Save</button>
               </div>
             </form>
 
-            <div className="border rounded max-h-[60vh] overflow-y-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-gray-50 text-xs text-gray-600 sticky top-0 z-10">
-                    <th className="px-3 py-2 text-left">Date</th>
-                    <th className="px-3 py-2 text-left">Type</th>
-                    <th className="px-3 py-2 text-left">Status</th>
-                    <th className="px-3 py-2 text-left">Remarks</th>
-                    <th className="px-3 py-2 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaves.map(l => (
-                    <tr key={l.id} className="border-t">
-                      <td className="px-3 py-2">
-                        <input type="date" className="border rounded px-2 py-1" value={l.date?.slice(0,10)} onChange={e=>update(l.id, { date: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <select className="border rounded px-2 py-1" value={l.type} onChange={e=>update(l.id, { type: e.target.value })}>
-                          {types.map(t => (
-                            <option key={t.id} value={t.name}>{t.name}</option>
-                          ))}
-                          {!types.length && <option value={l.type}>{l.type}</option>}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2">
-                        {canStatus ? (
-                          <select className="border rounded px-2 py-1" value={l.status} onChange={e=>updateStatus(l.id, e.target.value)}>
-                            <option value="PENDING">PENDING</option>
-                            <option value="APPROVED">APPROVED</option>
-                            <option value="REJECTED">REJECTED</option>
-                          </select>
-                        ) : (
-                          <span className="text-sm">{l.status}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <input type="text" className="border rounded px-2 py-1 w-full" value={l.remarks || ''} onChange={e=>update(l.id, { remarks: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <button className="px-2 py-1 border rounded text-red-600" onClick={()=>remove(l.id)}>Delete</button>
-                      </td>
+            <div className="card-soft p-0 overflow-hidden">
+              <div className="table-shell overflow-auto max-h-[55vh] custom-thin-scroll">
+                <table className="table-enhanced">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Remarks</th>
+                      <th>Actions</th>
                     </tr>
-                  ))}
-                  {!leaves.length && (
-                    <tr><td colSpan={5} className="px-3 py-4 text-center text-sm text-gray-500">No leaves</td></tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {leaves.map(l => (
+                      <tr key={l.id}>
+                        <td><input type="date" className="form-input !py-1 !px-2" value={l.date?.slice(0,10)} onChange={e=>update(l.id, { date: e.target.value })} /></td>
+                        <td>
+                          <select className="form-input !py-1 !px-2" value={l.type} onChange={e=>update(l.id, { type: e.target.value })}>
+                            {types.map(t => (<option key={t.id} value={t.name}>{t.name}</option>))}
+                            {!types.length && <option value={l.type}>{l.type}</option>}
+                          </select>
+                        </td>
+                        <td>
+                          {canStatus ? (
+                            <select className="form-input !py-1 !px-2" value={l.status} onChange={e=>updateStatus(l.id, e.target.value)}>
+                              <option value="PENDING">PENDING</option>
+                              <option value="APPROVED">APPROVED</option>
+                              <option value="REJECTED">REJECTED</option>
+                            </select>
+                          ) : (
+                            <span className="badge badge-gray">{l.status}</span>
+                          )}
+                        </td>
+                        <td><input className="form-input !py-1 !px-2" value={l.remarks || ''} onChange={e=>update(l.id, { remarks: e.target.value })} /></td>
+                        <td><button className="btn btn-error-soft text-[11px]" onClick={()=>remove(l.id)}>Delete</button></td>
+                      </tr>
+                    ))}
+                    {!leaves.length && <tr><td colSpan={5} className="text-center py-6 text-xs text-gray-500">No leaves</td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -255,6 +247,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   );
 };
 
+// Main page reskin
 const LeaveManagement = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -286,76 +279,72 @@ const LeaveManagement = () => {
   }, [employees, cnicFilter]);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Leave Management</h1>
-        <div className="flex gap-2 flex-wrap items-center">
-          <button className="px-3 py-1 border rounded" onClick={() => navigate('/attendance/leave-bank')}>Leave Bank</button>
-          <input className="border rounded px-2 py-1" placeholder="Search employees" value={search} onChange={e=>setSearch(e.target.value)} />
-          <input className="border rounded px-2 py-1" placeholder="Filter CNIC" value={cnicFilter} onChange={e=>setCnicFilter(e.target.value)} />
-          <button className="px-3 py-1 border rounded" onClick={load}>Search</button>
+    <div className="p-6 space-y-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h1 className="text-xl font-semibold tracking-tight text-primary">Leave Management</h1>
+        <div className="actions-inline">
+          <button className="btn btn-outline text-xs" onClick={() => navigate('/attendance/leave-bank')}>Leave Bank</button>
+          <input className="form-input !py-1 !px-2 text-xs w-48" placeholder="Search employees" value={search} onChange={e=>setSearch(e.target.value)} />
+          <input className="form-input !py-1 !px-2 text-xs w-40" placeholder="Filter CNIC" value={cnicFilter} onChange={e=>setCnicFilter(e.target.value)} />
+          <button className="btn btn-secondary text-xs" onClick={load}>Search</button>
         </div>
       </div>
       {loading ? (
         <div className="py-20 flex items-center justify-center"><LoadingSpinner /></div>
       ) : (
-        <div className="overflow-auto bg-white rounded shadow">
-          <table className="min-w-full">
-            <thead className="bg-gray-50 text-xs text-gray-600">
+        <div className="table-shell card-soft p-0 overflow-auto custom-thin-scroll">
+          <table className="table-enhanced">
+            <thead>
               <tr>
-                <th className="px-3 py-2 text-left">Employee ID</th>
-                <th className="px-3 py-2 text-left">CNIC</th>
-                <th className="px-3 py-2 text-left">Name</th>
-                <th className="px-3 py-2 text-left">Designation</th>
-                <th className="px-3 py-2 text-left">Current Leave Bank</th>
-                <th className="px-3 py-2 text-left">Recent Leaves</th>
-                <th className="px-3 py-2 text-left">Actions</th>
+                <th>Employee ID</th>
+                <th>CNIC</th>
+                <th>Name</th>
+                <th>Designation</th>
+                <th>Current Leave Bank</th>
+                <th>Recent Leaves</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(emp => (
-                <tr key={emp.id} className="border-t">
-                  <td className="px-3 py-2 text-sm">{emp.employee_id || '-'}</td>
-                  <td className="px-3 py-2 text-sm">{emp.cnic || '-'}</td>
-                  <td className="px-3 py-2 text-sm">{emp.full_name}</td>
-                  <td className="px-3 py-2 text-sm">{emp.employmentRecords?.[0]?.designation?.title || '-'}</td>
-                  <td className="px-3 py-2 text-sm">
+                <tr key={emp.id}>
+                  <td>{emp.employee_id || '-'}</td>
+                  <td>{emp.cnic || '-'}</td>
+                  <td className="text-left">{emp.full_name}</td>
+                  <td className="text-left">{emp.employmentRecords?.[0]?.designation?.title || '-'}</td>
+                  <td className="text-left">
                     {emp.currentLeaveBankSummary ? (
-                      <div className="text-xs">
-                        <div className="font-semibold">{emp.currentLeaveBankSummary.title || `#${emp.currentLeaveBankSummary.bankId}`}</div>
-                        <div className="text-gray-600">{String(emp.currentLeaveBankSummary.period_start).slice(0,10)} to {String(emp.currentLeaveBankSummary.period_end).slice(0,10)}</div>
-                        <div className="flex flex-wrap gap-2 mt-1">
+                      <div className="space-y-1 text-[10px]">
+                        <div className="font-semibold text-gray-700">{emp.currentLeaveBankSummary.title || `#${emp.currentLeaveBankSummary.bankId}`}</div>
+                        <div className="text-gray-500">{String(emp.currentLeaveBankSummary.period_start).slice(0,10)} to {String(emp.currentLeaveBankSummary.period_end).slice(0,10)}</div>
+                        <div className="flex flex-wrap gap-1 mt-1">
                           {(emp.currentLeaveBankSummary.items || []).map(it => (
-                            <span key={it.typeId} className="px-2 py-0.5 border rounded bg-gray-50">{it.typeName}: {it.approvedUsed}/{it.allocated} ({it.available} left)</span>
+                            <span key={it.typeId} className="badge badge-blue">{it.typeName}: {it.approvedUsed}/{it.allocated}</span>
                           ))}
                         </div>
                       </div>
                     ) : (
-                      <span className="text-xs text-gray-500">No active leave bank</span>
+                      <span className="text-[10px] text-gray-500">No active leave bank</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-sm">
-                    <div className="max-h-24 overflow-y-auto pr-1 space-y-1">
+                  <td>
+                    <div className="max-h-24 overflow-y-auto pr-1 space-y-1 custom-thin-scroll text-[10px]">
                       {(emp.leaves || []).map(l => (
-                        <div key={l.id} className="text-xs text-gray-700">{l.date?.slice(0,10)} - {l.type} ({l.status})</div>
+                        <div key={l.id} className="text-gray-700">{l.date?.slice(0,10)} - {l.type} ({l.status})</div>
                       ))}
-                      {!emp.leaves?.length && <span className="text-xs text-gray-500">No leaves</span>}
+                      {!emp.leaves?.length && <span className="text-gray-400">No leaves</span>}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-sm">
-                    <button className="px-3 py-1 border rounded hover:bg-gray-50" onClick={()=>setSelected(emp)}>Manage</button>
+                  <td>
+                    <button className="btn btn-secondary text-[11px]" onClick={()=>setSelected(emp)}>Manage</button>
                   </td>
                 </tr>
               ))}
-              {!filtered.length && (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-500">No employees found</td></tr>
-              )}
+              {!filtered.length && <tr><td colSpan={7} className="text-center py-6 text-xs text-gray-500">No employees found</td></tr>}
             </tbody>
           </table>
         </div>
       )}
-
-      {/* Ensure list refreshes after closing dialog */}
       <LeaveDialog open={!!selected} employee={selected} onClose={() => { setSelected(null); load(); }} />
     </div>
   );
