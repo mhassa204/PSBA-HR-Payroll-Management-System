@@ -20,5 +20,6 @@ router.put('/employees/:employeeId/device-user', isAuthenticated, authorize('att
 // New: location-based attendance views
 router.get('/locations/:id/fmo', isAuthenticated, authorize('attendance.read'), ctrl.locationFMO);
 router.get('/locations/:id/roster', isAuthenticated, authorize('attendance.read'), ctrl.locationAgainstRoster);
+router.get('/locations/:id/lsr', isAuthenticated, authorize('attendance.read'), ctrl.locationLSR);
 
 module.exports = router;

@@ -28,6 +28,10 @@ class AttendanceService {
     const { data } = await axiosInstance.get('/locations');
     return data.locations || [];
   }
+  async getLocationLSR(locationId, month) {
+    const { data } = await axiosInstance.get(`/attendance/locations/${locationId}/lsr`, { params: month? { month } : {} });
+    return data;
+  }
 }
 
 export const attendanceService = new AttendanceService();

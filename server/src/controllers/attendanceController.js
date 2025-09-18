@@ -449,4 +449,236 @@ async function listLocations(req, res) {
   }
 }
 
-module.exports = { listDevices, fetchAndSaveForDevice, fetchAndSaveForAll, listEmployeesForDeviceUsers, setEmployeeDeviceUserId, locationFMO, locationAgainstRoster, listLocations }
+// New: Location Salary Summary Report (LSR)
+async function locationLSR(req, res) {
+  try {
+    const locationId = Number(req.params.id);
+    const loc = await prisma.location.findFirst({ where: { id: locationId, is_deleted: false, is_active: true } });
+    if (!loc) return res.status(404).json({ success: false, error: 'Location not found' });
+
+    // Parse month=YYYY-MM (month represents cycle END month e.g. 2025-07 => 21 Jun - 20 Jul)
+    const monthParam = String(req.query.month || '').trim();
+    let cycleStart, cycleEnd, cycleLabel;
+    if (/^\d{4}-\d{2}$/.test(monthParam)) {
+      const y = parseInt(monthParam.slice(0,4),10);
+      const m0 = parseInt(monthParam.slice(5,7),10)-1; // 0-based end month
+      const startMonth0 = m0 === 0 ? 11 : m0-1;
+      const startYear = m0 === 0 ? y-1 : y;
+      cycleStart = new Date(Date.UTC(startYear, startMonth0, 21));
+      cycleEnd = new Date(Date.UTC(y, m0, 20));
+      const endMonthName = cycleEnd.toLocaleString('en-US',{ month:'long', timeZone:'UTC' });
+      cycleLabel = `${endMonthName} ${cycleEnd.getUTCFullYear()}`;
+    } else {
+      // fallback to default payroll logic
+      const r = getDefaultPayrollRangeUTC(new Date());
+      cycleStart = r.start; cycleEnd = r.end;
+      const endMonthName = cycleEnd.toLocaleString('en-US',{ month:'long', timeZone:'UTC' });
+      cycleLabel = `${endMonthName} ${cycleEnd.getUTCFullYear()}`;
+    }
+
+    // Fetch rosters & map entries by employee
+    const rosters = await getRostersForLocation(locationId, cycleStart, cycleEnd);
+    const rosterEntriesByEmp = new Map();
+    for (const r of rosters) {
+      for (const e of r.entries) {
+        if (!rosterEntriesByEmp.has(e.employee_id)) rosterEntriesByEmp.set(e.employee_id, []);
+        rosterEntriesByEmp.get(e.employee_id).push({ roster: r, entry: e });
+      }
+    }
+
+    // Employees via roster
+    const rosterEmpIds = Array.from(rosterEntriesByEmp.keys());
+
+    // Also current employments at this location
+    const employmentsAtLocation = await prisma.employment.findMany({
+      where: { is_deleted: false, is_current: true, location_id: locationId, employee: { is_deleted: false } },
+      include: { designation: true, role_tag: true, salary: true, employee: true }
+    });
+    const employmentEmpIds = employmentsAtLocation.map(e => e.employee_id);
+
+    const allEmpIdsSet = new Set([...rosterEmpIds, ...employmentEmpIds]);
+    const allEmpIds = Array.from(allEmpIdsSet);
+
+    if (!allEmpIds.length) {
+      return res.json({ success: true, location: { id: loc.id, name: loc.name }, cycle: { start: formatYMD(cycleStart), end: formatYMD(cycleEnd), label: cycleLabel }, employees: [] });
+    }
+
+    // Load basic employee info + current employment (for designation if not in employmentAtLocation list)
+    const employees = await prisma.employee.findMany({
+      where: { id: { in: allEmpIds }, is_deleted: false },
+      select: { id: true, full_name: true, cnic: true, deviceUserId: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true, salary: true } } }
+    });
+
+    // Attendance for present calculation
+    const deviceUserIds = employees.map(e => e.deviceUserId).filter(Boolean);
+    const attendanceRows = deviceUserIds.length ? await prisma.attendance.findMany({
+      where: { deviceUserId: { in: deviceUserIds }, attendanceDate: { gte: cycleStart, lte: cycleEnd }, device: { location_id: locationId } },
+      select: { deviceUserId: true, attendanceDate: true }
+    }) : [];
+    const presentSet = new Set(attendanceRows.map(a => `${a.deviceUserId}|${formatYMD(a.attendanceDate)}`));
+
+    // Leaves in range (all statuses)
+    const leaveRows = await prisma.leave.findMany({
+      where: { employee_id: { in: allEmpIds }, is_deleted: false, date: { gte: cycleStart, lte: cycleEnd } },
+      select: { employee_id: true, date: true, status: true, type: true }
+    });
+    const approvedLeaveByEmp = new Map();
+    const unapprovedLeaveByEmp = new Map(); // pending + rejected counts
+    for (const l of leaveRows) {
+      const key = l.employee_id;
+      if (l.status === 'APPROVED') {
+        if (!approvedLeaveByEmp.has(key)) approvedLeaveByEmp.set(key, []);
+        approvedLeaveByEmp.get(key).push(l.date);
+      } else if (l.status === 'PENDING' || l.status === 'REJECTED') {
+        unapprovedLeaveByEmp.set(key, (unapprovedLeaveByEmp.get(key) || 0) + 1);
+      }
+    }
+
+    // Active leave bank (reuse logic from leave module simplified)
+    const activeBank = await prisma.leaveBank.findFirst({ where: { is_deleted: false, period_start: { lte: cycleEnd }, period_end: { gte: cycleStart } }, include: { defaults: true } });
+    let leaveTypes = [];
+    let bankAllocations = [];
+    let leavesInBankPeriod = [];
+    if (activeBank) {
+      leaveTypes = await prisma.leaveType.findMany({ where: { is_deleted: false, is_active: true } });
+      bankAllocations = await prisma.leaveBankAllocation.findMany({ where: { leave_bank_id: activeBank.id, employee_id: { in: allEmpIds } } });
+      leavesInBankPeriod = await prisma.leave.findMany({ where: { is_deleted: false, employee_id: { in: allEmpIds }, date: { gte: activeBank.period_start, lte: activeBank.period_end } }, select: { employee_id: true, type: true, status: true } });
+    }
+    // Build bank summary per employee
+    const defaultsMap = new Map();
+    for (const d of (activeBank?.defaults || [])) defaultsMap.set(d.leave_type_id, d.days);
+    const allocByEmp = new Map();
+    for (const a of bankAllocations) {
+      if (!allocByEmp.has(a.employee_id)) allocByEmp.set(a.employee_id, new Map());
+      allocByEmp.get(a.employee_id).set(a.leave_type_id, a.days);
+    }
+    const usedApproved = new Map();
+    const usedPending = new Map();
+    for (const l of leavesInBankPeriod) {
+      const typeName = l.type || '';
+      const type = leaveTypes.find(t => t.name === typeName);
+      if (!type) continue;
+      const key = `${l.employee_id}|${type.id}`;
+      if (l.status === 'APPROVED') usedApproved.set(key, (usedApproved.get(key)||0)+1);
+      else if (l.status === 'PENDING') usedPending.set(key, (usedPending.get(key)||0)+1);
+    }
+
+    function bankSummaryFor(empId) {
+      if (!activeBank) return null;
+      const rows = leaveTypes.map(t => {
+        const alloc = (allocByEmp.get(empId)?.get(t.id)) ?? defaultsMap.get(t.id) ?? 0;
+        const approved = usedApproved.get(`${empId}|${t.id}`) || 0;
+        const pending = usedPending.get(`${empId}|${t.id}`) || 0;
+        return { typeName: t.name, allocated: alloc, approvedUsed: approved, pending, available: Math.max(0, alloc - approved) };
+      });
+      return { bankId: activeBank.id, title: activeBank.title, period_start: activeBank.period_start, period_end: activeBank.period_end, items: rows };
+    }
+
+    // Build date array for cycle (for presence & weekly off detection)
+    const dayList = []; let d = cycleStart; while (d <= cycleEnd) { dayList.push(new Date(d)); d = addDays(d,1); }
+
+    const employeesOutput = [];
+    let sr = 1;
+    for (const emp of employees) {
+      const currentEmployment = emp.employmentRecords?.[0] || null;
+      const designation = currentEmployment?.designation?.title || null;
+      const salary = currentEmployment?.salary || null;
+      const accountHolderName = emp.full_name || null; // no separate holder name in schema
+      const branchCode = salary?.bank_branch_code || null;
+      const accountNumber = salary?.bank_account_primary || null;
+
+      const rosterEntries = rosterEntriesByEmp.get(emp.id) || [];
+      if (!rosterEntries.length) {
+        // If not rostered at all during cycle, skip (not part of LSR) per requirement to compare roster & leave bank
+        continue;
+      }
+
+      // Build a fast list of dates where roster covers employee
+      // Determine for each date if covered and if weekly off
+      const weeklyOffDates = [];
+      const rosterCoveredDates = [];
+
+      for (const date of dayList) {
+        // determine if any roster entry valid for date
+        const applicable = rosterEntries.find(re => re.roster.valid_from <= date && re.roster.valid_to >= date);
+        if (!applicable) continue; // not rostered that date
+        rosterCoveredDates.push(date);
+        const sched = applicable.entry.day_schedules || {};
+        const dayKey = dayName(date);
+        const dayInfo = sched[dayKey] || null;
+        const cwo = sched._collective_weekly_off || { enabled:false };
+        const withinCwo = cwo.enabled && cwo.from && cwo.to && (new Date(cwo.from) <= date && new Date(cwo.to) >= date);
+        if (withinCwo || dayInfo?.type === 'weekly_off') {
+          weeklyOffDates.push(date);
+        }
+      }
+
+      const weeklyOffSet = new Set(weeklyOffDates.map(dt => formatYMD(dt)));
+
+      // Present days (attendance mark on roster-covered date excluding weekly offs)
+      let presentDays = 0;
+      for (const date of rosterCoveredDates) {
+        const ymdDate = formatYMD(date);
+        if (weeklyOffSet.has(ymdDate)) continue;
+        if (emp.deviceUserId && presentSet.has(`${emp.deviceUserId}|${ymdDate}`)) presentDays++;
+      }
+
+      const workingDays = rosterCoveredDates.length; // includes weekly offs
+
+      const approvedLeaveDates = (approvedLeaveByEmp.get(emp.id) || []).filter(dt => rosterCoveredDates.some(rc => formatYMD(rc) === formatYMD(dt)));
+      const approvedFullDayLeaves = approvedLeaveDates.length; // short leave skipped per instruction
+
+      const weeklyOffCount = weeklyOffDates.length;
+
+      const absents = Math.max(0, workingDays - weeklyOffCount - approvedFullDayLeaves - presentDays);
+      const unapprovedLeaves = unapprovedLeaveByEmp.get(emp.id) || 0;
+
+      // Weekly off display simple formatting (dd-MM-YYYY separated by space)
+      const weeklyOffDisplay = weeklyOffDates.map(dt => {
+        const dd = String(dt.getUTCDate()).padStart(2,'0');
+        const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+        const yyyy = dt.getUTCFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+      }).join(' ');
+
+      const approvedLeaveDisplay = approvedLeaveDates.map(dt => {
+        const dd = String(dt.getUTCDate()).padStart(2,'0');
+        const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+        const yyyy = dt.getUTCFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+      }).join(',');
+
+      employeesOutput.push({
+        sr: sr++,
+        employeeId: emp.id,
+        bazaarName: loc.name,
+        name: emp.full_name,
+        designation,
+        cnic: emp.cnic || null,
+        bank: { accountHolderName, branchCode, accountNumber },
+        totals: {
+          workingDays,
+          presentDays,
+            absents: absents || undefined,
+          holidays: weeklyOffCount, // per clarification holidays = weekly offs
+          weeklyOffCount,
+          fullDayLeaves: approvedFullDayLeaves,
+          unapprovedLeaves
+        },
+        weeklyOffDates: weeklyOffDates.map(d=>formatYMD(d)),
+        weeklyOffDisplay,
+        approvedFullDayLeaveDates: approvedLeaveDates.map(d=>formatYMD(d)),
+        approvedLeaveDisplay,
+        leaveBankSummary: bankSummaryFor(emp.id),
+        remarks: currentEmployment?.remarks || ''
+      });
+    }
+
+    res.json({ success: true, location: { id: loc.id, name: loc.name }, cycle: { start: formatYMD(cycleStart), end: formatYMD(cycleEnd), label: cycleLabel }, generatedAt: new Date().toISOString(), employees: employeesOutput });
+  } catch (e) {
+    console.error('locationLSR error', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+}
+
+module.exports = { listDevices, fetchAndSaveForDevice, fetchAndSaveForAll, listEmployeesForDeviceUsers, setEmployeeDeviceUserId, locationFMO, locationAgainstRoster, listLocations, locationLSR };
