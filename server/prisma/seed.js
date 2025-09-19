@@ -325,58 +325,86 @@ async function main() {
     createdRoles.push(createdRole);
   }
 
-  // Add permissions based on allowed_actions
-  const allPermKeys = Array.from(new Set(roles.flatMap(r => r.allowed_actions).filter(k => k !== '*')));
-  for (const key of allPermKeys) {
-    await prisma.permission.upsert({
-      where: { key },
-      create: { key, resource: key.split('.')[0], action: key.split('.')[1] || 'read' },
-      update: {},
-    });
-  }
-  // Ensure roster.status permission exists
-  await prisma.permission.upsert({
-    where: { key: 'roster.status' },
-    create: { key: 'roster.status', resource: 'roster', action: 'status' },
-    update: {},
-  });
-  // Ensure attendance permissions exist
-  await prisma.permission.upsert({ where: { key: 'attendance.read' }, create: { key: 'attendance.read', resource: 'attendance', action: 'read' }, update: {} });
-  await prisma.permission.upsert({ where: { key: 'attendance.fetch' }, create: { key: 'attendance.fetch', resource: 'attendance', action: 'fetch' }, update: {} });
-  // New: permission to map device users to employees
-  await prisma.permission.upsert({ where: { key: 'attendance.map' }, create: { key: 'attendance.map', resource: 'attendance', action: 'map' }, update: {} });
-  // New: leave module permissions
-  const leavePerms = ['leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete','leave-types.read','leave-types.create','leave-types.update','leave-types.delete','leaves.apply'];
-  for (const key of leavePerms) {
-    await prisma.permission.upsert({ where: { key }, create: { key, resource: key.split('.')[0], action: key.split('.')[1] || 'read' }, update: {} });
-  }
+  // Build a comprehensive permission catalog covering all route actions + domain actions
+  const ROUTE_PERMISSION_KEYS = [
+    // Employees
+    'employees.read','employees.create','employees.update','employees.delete',
+    // Employment & sub-resources
+    'employment.read','employment.create','employment.update','employment.delete',
+    'employment.salary.create','employment.salary.update','employment.salary.delete',
+    'employment.location.create','employment.location.update','employment.location.delete',
+    'employment.contract.create','employment.contract.update','employment.contract.delete',
+    // Master data
+    'departments.read','departments.create','departments.update','departments.delete',
+    'designations.read','designations.create','designations.update','designations.delete',
+    'districts.read','districts.create','districts.update','districts.delete',
+    'cities.read','cities.create','cities.update','cities.delete',
+    'education-levels.read','education-levels.create','education-levels.update','education-levels.delete',
+    'role-tags.read','role-tags.create','role-tags.update','role-tags.delete',
+    'scale-grades.read','scale-grades.create','scale-grades.update','scale-grades.delete',
+    'locations.read','locations.create','locations.update','locations.delete',
+    // Devices & Attendance
+    'devices.read','devices.create','devices.update','devices.delete',
+    'attendance.read','attendance.fetch','attendance.map',
+    // Roster
+    'roster.read','roster.create','roster.update','roster.delete','roster.status',
+    // Leaves & Leave banks/types
+    'leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leaves.apply',
+    'leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete',
+    'leave-types.read','leave-types.create','leave-types.update','leave-types.delete',
+    // Users / Roles / Permissions
+    'users.read','users.manage',
+    'roles.read','roles.manage',
+    'permissions.read','permissions.manage',
+    // System settings
+    'system.database.read','system.security.read','system.security.update','system.themes.read','system.themes.update',
+    // Admin utilities
+    'admin.tools',
+    // Other domain actions surfaced in UI
+    'reports.read','audit.read','requests.approve','profile.read','profile.update'
+  ];
+
+  // Upsert ALL permissions (routes + those referenced by roles)
+  console.log('🔑 Seeding permissions catalog...');
+  const ALL_PERMISSION_KEYS = Array.from(new Set([
+    ...ROUTE_PERMISSION_KEYS,
+    ...roles.flatMap(r => r.allowed_actions).filter(k => k !== '*')
+  ]));
+  await prisma.$transaction(
+    ALL_PERMISSION_KEYS.map((key) =>
+      prisma.permission.upsert({
+        where: { key },
+        update: {},
+        create: { key, resource: key.split('.')[0] || 'custom', action: key.split('.')[1] || 'custom' }
+      })
+    )
+  );
 
   // Link permissions to roles (skip Super Admin explicit perms)
   for (const role of createdRoles) {
     const orig = roles.find(r => r.name === role.name);
     if (!orig) continue;
-    if (orig.allowed_actions.includes('*')) continue;
-    const extraPerms = await prisma.permission.findMany({ where: { key: { in: orig.allowed_actions } } });
-    // If HR Admin, ensure attendance.map is granted
-    const attendanceMap = await prisma.permission.findUnique({ where: { key: 'attendance.map' } });
-    const permsToCreate = extraPerms.map(p => ({ permission_id: p.id }));
-    if (orig.name === 'HR Admin' && attendanceMap) permsToCreate.push({ permission_id: attendanceMap.id });
+    if (orig.allowed_actions.includes('*')) continue; // Super Admin bypass
 
-    // Also grant leave perms to HR Admin
+    // Base permissions from role.allowed_actions
+    const basePerms = await prisma.permission.findMany({ where: { key: { in: orig.allowed_actions.filter(k => k !== '*') } } });
+    const permsToCreate = basePerms.map(p => ({ permission_id: p.id }));
+
+    // Ensure HR Admin gets attendance.map and full leave module permissions
     if (orig.name === 'HR Admin') {
-      const lp = await prisma.permission.findMany({ where: { key: { in: leavePerms } } });
-      for (const p of lp) permsToCreate.push({ permission_id: p.id });
+      const extraKeys = ['attendance.map','leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leaves.apply','leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete','leave-types.read','leave-types.create','leave-types.update','leave-types.delete'];
+      const extraPerms = await prisma.permission.findMany({ where: { key: { in: extraKeys } } });
+      for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
-    // Managers should be able to apply leaves for their subordinates
+    // Managers: allow leaves.apply + minimal read to view own team leaves list
     if (orig.name === 'Manager') {
-      const lp = await prisma.permission.findMany({ where: { key: { in: ['leaves.apply','leaves.read'] } } });
-      for (const p of lp) permsToCreate.push({ permission_id: p.id });
+      const extraPerms = await prisma.permission.findMany({ where: { key: { in: ['leaves.apply','leaves.read'] } } });
+      for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
 
-    await prisma.role.update({
-      where: { id: role.id },
-      data: { rolePermissions: { create: permsToCreate } }
-    });
+    if (permsToCreate.length) {
+      await prisma.role.update({ where: { id: role.id }, data: { rolePermissions: { create: permsToCreate } } });
+    }
   }
 
   // Seed scale grades
@@ -989,46 +1017,7 @@ async function main() {
     console.log(`✅ Created Employment Document: ${employmentDocument.file_type} for employment ${employmentDocument.employment_id}`);
   }
 
-  // After roles and users: Seed normalized permissions and attach to roles
-  console.log('🔑 Seeding permissions and role-permissions...');
-  // collect unique keys from roles (excluding '*') + system settings keys
-  const systemKeys = [
-    'system.database.read',
-    'system.security.read','system.security.update'
-  ];
-  const moduleKeys = [
-    'locations.read','locations.create','locations.update','locations.delete'
-  ];
-  const keys = Array.from(new Set([
-    ...roles.flatMap(r => r.allowed_actions).filter(k => k !== '*'),
-    ...systemKeys,
-    ...moduleKeys
-  ]));
-  const permissionRecords = await prisma.$transaction(keys.map((key) =>
-    prisma.permission.upsert({
-      where: { key },
-      update: {},
-      create: { key, resource: key.split('.')[0] || 'custom', action: key.split('.')[1] || 'custom' }
-    })
-  ));
-
-  // build a quick lookup of permission key -> id
-  const permIdByKey = Object.fromEntries(permissionRecords.map(p => [p.key, p.id]));
-
-  // Attach permissions per role (skip Super Admin)
-  for (const r of createdRoles) {
-    const roleSeed = roles.find(rr => rr.name === r.name);
-    if (!roleSeed) continue;
-    if (roleSeed.allowed_actions.includes('*')) continue; // Super Admin
-    const roleKeys = roleSeed.allowed_actions.filter(k => k !== '*');
-    const data = roleKeys
-      .filter(k => permIdByKey[k])
-      .map(k => ({ role_id: r.id, permission_id: permIdByKey[k] }));
-    if (data.length > 0) {
-      await prisma.rolePermission.createMany({ data, skipDuplicates: true });
-    }
-  }
-
+  // After roles and users: Permissions are already seeded above; proceed to system settings only
   // Seed default system settings (security/ui)
   await prisma.systemSetting.upsert({
     where: { key: 'security' },
