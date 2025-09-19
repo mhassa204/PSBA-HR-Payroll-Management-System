@@ -47,6 +47,7 @@ import LocationRosterPage from "./features/attendance/pages/LocationRosterPage";
 import LeaveManagement from './features/attendance/pages/LeaveManagement';
 import LeaveBankPage from './features/attendance/pages/LeaveBankPage';
 import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
+import LeaveApply from './features/attendance/pages/LeaveApply';
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -392,6 +393,14 @@ function App() {
               element={
                 <PrivateRoute permissions={["attendance.read","leaves.read"]}>
                   <LeaveBankPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance/leave-apply"
+              element={
+                <PrivateRoute permissions={["leaves.apply"]}>
+                  <LeaveApply />
                 </PrivateRoute>
               }
             />

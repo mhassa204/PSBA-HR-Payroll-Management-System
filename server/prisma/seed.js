@@ -345,6 +345,11 @@ async function main() {
   await prisma.permission.upsert({ where: { key: 'attendance.fetch' }, create: { key: 'attendance.fetch', resource: 'attendance', action: 'fetch' }, update: {} });
   // New: permission to map device users to employees
   await prisma.permission.upsert({ where: { key: 'attendance.map' }, create: { key: 'attendance.map', resource: 'attendance', action: 'map' }, update: {} });
+  // New: leave module permissions
+  const leavePerms = ['leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete','leave-types.read','leave-types.create','leave-types.update','leave-types.delete','leaves.apply'];
+  for (const key of leavePerms) {
+    await prisma.permission.upsert({ where: { key }, create: { key, resource: key.split('.')[0], action: key.split('.')[1] || 'read' }, update: {} });
+  }
 
   // Link permissions to roles (skip Super Admin explicit perms)
   for (const role of createdRoles) {
@@ -356,6 +361,17 @@ async function main() {
     const attendanceMap = await prisma.permission.findUnique({ where: { key: 'attendance.map' } });
     const permsToCreate = extraPerms.map(p => ({ permission_id: p.id }));
     if (orig.name === 'HR Admin' && attendanceMap) permsToCreate.push({ permission_id: attendanceMap.id });
+
+    // Also grant leave perms to HR Admin
+    if (orig.name === 'HR Admin') {
+      const lp = await prisma.permission.findMany({ where: { key: { in: leavePerms } } });
+      for (const p of lp) permsToCreate.push({ permission_id: p.id });
+    }
+    // Managers should be able to apply leaves for their subordinates
+    if (orig.name === 'Manager') {
+      const lp = await prisma.permission.findMany({ where: { key: { in: ['leaves.apply','leaves.read'] } } });
+      for (const p of lp) permsToCreate.push({ permission_id: p.id });
+    }
 
     await prisma.role.update({
       where: { id: role.id },

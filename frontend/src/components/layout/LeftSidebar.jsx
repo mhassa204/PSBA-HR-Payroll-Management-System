@@ -166,10 +166,11 @@ const LeftSidebar = () => {
       icon: CalendarIcon,
       description: 'Leave & Entitlements',
       color: 'bg-rose-600',
-      show: () => can('attendance.read') && can('leaves.read'),
+      show: () => can('leaves.read') || can('leaves.apply'),
       children: [
-        { name: 'Leave Management', href: '/attendance/leaves', icon: ViewColumnsIcon, show: () => can('attendance.read') && can('leaves.read') },
-        { name: 'Leave Bank', href: '/attendance/leave-bank', icon: ViewColumnsIcon, show: () => can('attendance.read') && can('leaves.read') }
+        { name: 'Leave Management', href: '/attendance/leaves', icon: ViewColumnsIcon, show: () => can('leaves.read') },
+        { name: 'Leave Bank', href: '/attendance/leave-bank', icon: ViewColumnsIcon, show: () => can('leaves.read') },
+        { name: 'Leave Apply', href: '/attendance/leave-apply', icon: ViewColumnsIcon, show: () => can('leaves.apply') }
       ]
     },
     { 
