@@ -7,7 +7,7 @@ const { isAuthenticated, authorize, authorizeAny } = require('../middleware/auth
 // Permissions: leave-banks.read/create/update/delete, leave-types.read/create/update/delete
 const canReadBanks = authorizeAny(['leave-banks.read', 'leaves.read']);
 const canManageBanks = authorizeAny(['leave-banks.create', 'leave-banks.update', 'leave-banks.delete']);
-const canReadTypes = authorizeAny(['leave-types.read', 'leaves.read']);
+const canReadTypes = authorizeAny(['leave-types.read', 'leaves.read', 'leaves.apply']);
 const canManageTypes = authorizeAny(['leave-types.create', 'leave-types.update', 'leave-types.delete']);
 
 // Leave Types
