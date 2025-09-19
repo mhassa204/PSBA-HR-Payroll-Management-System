@@ -14,6 +14,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   const [mode, setMode] = useState('single'); // 'single' | 'range' | 'multi'
   const [range, setRange] = useState({ start: '', end: '' });
   const [multiDates, setMultiDates] = useState(['']);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => {
     if (!open || !employee) return;
@@ -105,6 +106,60 @@ const LeaveDialog = ({ employee, open, onClose }) => {
     }
   };
 
+  // Group consecutive (by date) leaves of same type into ranges
+  const groupedLeaves = useMemo(() => {
+    if (!leaves?.length) return [];
+    // sort by date ascending
+    const sorted = [...leaves].sort((a,b)=>new Date(a.date) - new Date(b.date));
+    const groups = [];
+    const ONE_DAY = 24*60*60*1000;
+    let current = null;
+    for (const lv of sorted) {
+      const d = new Date(lv.date);
+      if (!current) {
+        current = { type: lv.type, leaves:[lv], start: lv.date, end: lv.date, statuses: new Set([lv.status]), remarksSet: new Set([lv.remarks||'']) };
+        continue;
+      }
+      const prevDate = new Date(current.end);
+      const contiguous = (d - prevDate) === ONE_DAY;
+      if (contiguous && lv.type === current.type) {
+        current.leaves.push(lv);
+        current.end = lv.date;
+        current.statuses.add(lv.status);
+        if (lv.remarks) current.remarksSet.add(lv.remarks);
+      } else {
+        groups.push(current);
+        current = { type: lv.type, leaves:[lv], start: lv.date, end: lv.date, statuses: new Set([lv.status]), remarksSet: new Set([lv.remarks||'']) };
+      }
+    }
+    if (current) groups.push(current);
+    return groups.map((g,i)=>({
+      key: `${g.start}_${g.end}_${g.type}_${i}`,
+      type: g.type,
+      start: g.start,
+      end: g.end,
+      count: g.leaves.length,
+      status: g.statuses.size === 1 ? Array.from(g.statuses)[0] : 'MIXED',
+      remarks: g.remarksSet.size === 1 ? Array.from(g.remarksSet)[0] : '',
+      leaveIds: g.leaves.map(l=>l.id)
+    }));
+  }, [leaves]);
+
+  const bulkUpdateGroupStatus = async (group, status) => {
+    if (!canStatus) return;
+    try {
+      setBulkBusy(true);
+      // perform parallel status updates
+      await Promise.all(group.leaveIds.map(id => axios.patch(`/leaves/${id}/status`, { status })));
+      const { data } = await axios.get(`/leaves/${employee.id}`);
+      setLeaves(data.leaves || []);
+      setSummary(data.summary || null);
+      toastBus.emit({ type: 'success', message: `Updated ${group.leaveIds.length} leaves (${group.start} to ${group.end}) to ${status}` });
+    } catch (e) {
+      toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Bulk status update failed' });
+    } finally { setBulkBusy(false); }
+  };
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 backdrop-fade bg-black/40 z-50 flex items-center justify-center p-4">
@@ -133,6 +188,51 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                     </div>
                   ))}
                   {!summary.items?.length && <div className="text-xs text-gray-500">No types configured</div>}
+                </div>
+              </div>
+            )}
+
+            {/* New grouped consecutive leaves card */}
+            {groupedLeaves.length > 0 && (
+              <div className="card-soft p-0 overflow-hidden">
+                <div className="card-soft-header flex justify-between items-center">
+                  <span>Grouped Consecutive Leaves</span>
+                  <span className="text-[10px] text-gray-500 font-normal">(Same type, adjacent dates)</span>
+                </div>
+                <div className="table-shell overflow-auto max-h-[35vh] custom-thin-scroll">
+                  <table className="table-enhanced text-[11px]">
+                    <thead>
+                      <tr>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Days</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Remarks</th>
+                        {canStatus && <th>Bulk Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupedLeaves.map(g => (
+                        <tr key={g.key}>
+                          <td>{g.start?.slice(0,10)}</td>
+                          <td>{g.end?.slice(0,10)}</td>
+                          <td>{g.count}</td>
+                          <td>{g.type}</td>
+                          <td>{g.status}</td>
+                          <td className="text-left whitespace-nowrap max-w-[160px] overflow-hidden text-ellipsis" title={g.remarks}>{g.remarks || '-'}</td>
+                          {canStatus && (
+                            <td className="space-x-1">
+                              <button disabled={bulkBusy} onClick={()=>bulkUpdateGroupStatus(g,'APPROVED')} className="btn btn-success text-[10px]">Approve</button>
+                              <button disabled={bulkBusy} onClick={()=>bulkUpdateGroupStatus(g,'REJECTED')} className="btn btn-error-soft text-[10px]">Reject</button>
+                              <button disabled={bulkBusy} onClick={()=>bulkUpdateGroupStatus(g,'PENDING')} className="btn btn-outline text-[10px]">Pending</button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                      {!groupedLeaves.length && <tr><td colSpan={canStatus?7:6} className="text-center py-4 text-xs text-gray-500">No grouped leaves</td></tr>}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
