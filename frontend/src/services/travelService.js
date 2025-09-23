@@ -29,6 +29,13 @@ export const uploadClaimReceipts = async (id, files, category = 'Misc') => {
 };
 export const updateClaimItem = (claimId, itemId, data) => api.put(`/travel/claims/${claimId}/items/${itemId}`, data).then(r => r.data.claim);
 export const deleteClaimItem = (claimId, itemId) => api.delete(`/travel/claims/${claimId}/items/${itemId}`).then(r => r.data.claim);
+export const uploadClaimItemReceipts = async (claimId, itemId, files) => {
+  const fd = new FormData();
+  [...files].forEach(f => fd.append('files', f));
+  const r = await api.post(`/travel/claims/${claimId}/items/${itemId}/receipts`, fd);
+  return r.data.claim;
+};
+export const deleteClaimItemReceipt = (claimId, itemId, receiptId) => api.delete(`/travel/claims/${claimId}/items/${itemId}/receipts/${receiptId}`).then(r => r.data.claim);
 
 // Approvals
 export const getMyApprovals = () => api.get("/travel/approvals/my").then(r => r.data.steps);

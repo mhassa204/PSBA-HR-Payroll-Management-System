@@ -390,6 +390,29 @@ const travelClaimStorage = multer.diskStorage({
   }
 });
 
+// Travel Claim receipts storage (item-level, supports multiple receipts per item)
+const travelClaimItemStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const claimId = req.params.id || req.body.claim_id;
+      const itemId = req.params.itemId || req.body.item_id;
+      if (!claimId || !itemId) return cb(new Error('Missing claim or item id'));
+      const base = path.join(uploadDir, 'Travel', 'Claims', String(claimId), 'Items', String(itemId));
+      await fs.mkdir(base, { recursive: true });
+      cb(null, base);
+    } catch (e) { console.error(e); cb(e); }
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-z0-9_\-]/gi, '_').slice(0, 40);
+    const ts = Date.now();
+    const name = `${base}_${ts}${ext}`;
+    const rel = path.join('uploads', 'Travel', 'Claims', String(req.params.id || req.body.claim_id), 'Items', String(req.params.itemId || req.body.item_id), name).replace(/\\/g, '/');
+    file._savedRelPath = rel;
+    cb(null, name);
+  }
+});
+
 const fileFilter = (req, file, cb) => {
   try {
     const allowedImageTypes = /jpeg|jpg|png|gif|webp/;
@@ -433,6 +456,7 @@ const upload = multer({
 
 const uploadTravelRequest = multer({ storage: travelRequestStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
 const uploadTravelClaim = multer({ storage: travelClaimStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
+const uploadTravelClaimItem = multer({ storage: travelClaimItemStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
 
 // Export for use in routes and controllers
 module.exports = upload;
@@ -441,3 +465,4 @@ module.exports.storage = storage;
 module.exports.employmentStorage = employmentStorage;
 module.exports.uploadTravelRequest = uploadTravelRequest;
 module.exports.uploadTravelClaim = uploadTravelClaim;
+module.exports.uploadTravelClaimItem = uploadTravelClaimItem;

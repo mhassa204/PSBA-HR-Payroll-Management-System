@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTravelClaims, getTravelClaim, createTravelClaim, updateTravelClaim, submitTravelClaim, uploadClaimReceipts, updateClaimItem, deleteClaimItem } from '../../../services/travelService';
+import { getTravelClaims, getTravelClaim, createTravelClaim, updateTravelClaim, submitTravelClaim, /*uploadClaimReceipts,*/ updateClaimItem, deleteClaimItem, uploadClaimItemReceipts, deleteClaimItemReceipt } from '../../../services/travelService';
 import { useAuthStore } from '../../auth/authStore';
 
 const Card = ({ children, className = '' }) => (
@@ -21,7 +21,6 @@ const Input = (props) => (
 
 export default function TravelClaimsPage() {
   const can = useAuthStore(s => s.can);
-  // Compute API origin once for building absolute /uploads URLs
   const apiOrigin = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
 
   const [list, setList] = useState([]);
@@ -45,15 +44,38 @@ export default function TravelClaimsPage() {
 
   const addItem = () => {
     if (!item.date || !item.category || !item.amount) return;
-    setForm(prev => ({ ...prev, items: [...prev.items, item] }));
+    setForm(prev => ({ ...prev, items: [...prev.items, { ...item, attachments: [] }] }));
     setItem({ date: '', category: 'TA', description: '', amount: '' });
+  };
+
+  const addDraftAttachments = (idx, files) => {
+    const arr = Array.from(files || []);
+    setForm(prev => ({
+      ...prev,
+      items: prev.items.map((it, i) => i === idx ? { ...it, attachments: [...(it.attachments||[]), ...arr] } : it)
+    }));
+  };
+
+  const removeDraftAttachment = (idx, fIdx) => {
+    setForm(prev => ({
+      ...prev,
+      items: prev.items.map((it, i) => i === idx ? { ...it, attachments: (it.attachments||[]).filter((_, j) => j !== fIdx) } : it)
+    }));
   };
 
   const onChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   const onCreate = async () => {
-    const payload = { notes: form.notes, items: form.items.map(i => ({ ...i, amount: parseFloat(i.amount || 0) })) };
-    await createTravelClaim(payload);
+    const payload = { notes: form.notes, items: form.items.map(i => ({ date: i.date, category: i.category, description: i.description, amount: parseFloat(i.amount || 0) })) };
+    const created = await createTravelClaim(payload);
+    // Upload draft attachments mapped by item order
+    const uploads = [];
+    form.items.forEach((it, idx) => {
+      if (it.attachments && it.attachments.length && created?.items?.[idx]?.id) {
+        uploads.push(uploadClaimItemReceipts(created.id, created.items[idx].id, it.attachments));
+      }
+    });
+    if (uploads.length) await Promise.all(uploads);
     setForm({ notes: '', items: [] });
     await load();
   };
@@ -132,12 +154,39 @@ export default function TravelClaimsPage() {
                 {form.items.length > 0 && (
                   <div className="rounded-lg border border-slate-200 divide-y">
                     {form.items.map((i, idx) => (
-                      <div key={idx} className="p-2 text-sm flex items-center justify-between">
-                        <div>
-                          <div className="font-medium text-slate-800">{i.category} · {i.amount}</div>
-                          <div className="text-slate-500">{i.date} · {i.description || '—'}</div>
+                      <div key={idx} className="p-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-slate-800">{i.category} · {i.amount}</div>
+                            <div className="text-slate-500">{i.date} · {i.description || '—'}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="px-2 py-1 rounded bg-slate-100 border cursor-pointer text-xs">Upload Receipts
+                              <input type="file" multiple className="hidden" onChange={(e)=>{ if(e.target.files?.length){ addDraftAttachments(idx, e.target.files); e.target.value=''; } }} />
+                            </label>
+                            <button className="text-red-600 hover:underline" onClick={()=>setForm(prev=>({...prev,items: prev.items.filter((_,j)=>j!==idx)}))}>Remove</button>
+                          </div>
                         </div>
-                        <button className="text-red-600 hover:underline" onClick={()=>setForm(prev=>({...prev,items: prev.items.filter((_,j)=>j!==idx)}))}>Remove</button>
+                        {(i.attachments && i.attachments.length > 0) && (
+                          <div className="mt-2 flex gap-2 flex-wrap">
+                            {i.attachments.map((f, fIdx) => {
+                              const url = URL.createObjectURL(f);
+                              const isImg = f.type?.startsWith('image/');
+                              return (
+                                <div key={fIdx} className="relative">
+                                  {isImg ? (
+                                    <a href={url} target="_blank" rel="noreferrer">
+                                      <img alt="draft" className="h-14 w-14 object-cover rounded border" src={url} />
+                                    </a>
+                                  ) : (
+                                    <a className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white text-sky-700 hover:underline" href={url} target="_blank" rel="noreferrer">View {f.name}</a>
+                                  )}
+                                  <button title="Remove" onClick={()=>removeDraftAttachment(idx, fIdx)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-5 w-5 text-xs">×</button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ))}
                     <div className="p-2 text-right text-sm font-medium">Total: {sum(form.items)}</div>
@@ -169,12 +218,7 @@ export default function TravelClaimsPage() {
                 {can('travel.claim.submit') && r.status === 'DRAFT' && (
                   <button onClick={() => onSubmit(r.id)} className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white">Submit</button>
                 )}
-                {can('travel.claim.update') && (
-                  <label className="px-3 py-1 rounded-md bg-slate-200 text-slate-700 cursor-pointer">
-                    Upload Receipts
-                    <input type="file" multiple className="hidden" onChange={async (e)=>{ if(e.target.files?.length){ await uploadClaimReceipts(r.id, e.target.files); e.target.value=''; await load(); } }} />
-                  </label>
-                )}
+                {/* Removed general Upload Receipts button */}
               </div>
             </div>
           ))}
@@ -208,16 +252,11 @@ export default function TravelClaimsPage() {
                   <div className="pt-2">
                     <div className="flex items-center justify-between">
                       <div className="font-medium text-slate-800">Items</div>
-                      {can('travel.claim.update') && (
-                        <label className="px-3 py-1 rounded-md bg-slate-200 text-slate-700 cursor-pointer">
-                          Upload Receipts
-                          <input type="file" multiple className="hidden" onChange={async (e)=>{ if(e.target.files?.length){ await onUpload(e.target.files); e.target.value=''; } }} />
-                        </label>
-                      )}
+                      {/* Removed general Upload Receipts in modal header */}
                     </div>
                     <div className="mt-2 rounded-lg border border-slate-200 divide-y">
                       {(selected.items||[]).length === 0 && <div className="p-3 text-sm text-slate-500">No items</div>}
-                      {(selected.items||[]).map(it => (
+                      {(selected.items||[]).map((it, idx) => (
                         <div key={it.id} className="p-3 grid grid-cols-12 gap-3 items-center text-sm">
                           <div className="col-span-3">
                             <div className="text-slate-500">Date</div>
@@ -253,6 +292,33 @@ export default function TravelClaimsPage() {
                             {can('travel.claim.update') && (
                               <button className="text-red-600 hover:underline" onClick={()=>onDeleteItem(it.id)}>Delete</button>
                             )}
+                          </div>
+                          <div className="col-span-3">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium text-slate-800">Receipts</div>
+                              {can('travel.claim.update') && (
+                                <label className="px-2 py-1 rounded bg-emerald-600 text-white cursor-pointer text-xs">Add Receipts
+                                  <input type="file" multiple className="hidden" onChange={async (e)=>{ if(e.target.files?.length){ const claim = await uploadClaimItemReceipts(selected.id, it.id, e.target.files); setSelected(claim); e.target.value=''; } }} />
+                                </label>
+                              )}
+                            </div>
+                            <div className="mt-1 flex gap-3 flex-wrap">
+                              {(it.receipts||[]).length === 0 && <span className="text-slate-500">No receipts</span>}
+                              {(it.receipts||[]).map(r => (
+                                <div key={r.id} className="relative">
+                                  {r.mime_type && r.mime_type.startsWith('image/') ? (
+                                    <a href={r.url} target="_blank" rel="noreferrer" className="block">
+                                      <img alt="receipt" className="h-14 w-14 object-cover rounded border" src={r.url} />
+                                    </a>
+                                  ) : (
+                                    <a className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white text-sky-700 hover:underline" href={r.url} target="_blank" rel="noreferrer">View</a>
+                                  )}
+                                  {can('travel.claim.update') && (
+                                    <button title="Remove" onClick={async ()=>{ const claim = await deleteClaimItemReceipt(selected.id, it.id, r.id); setSelected(claim); }} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-5 w-5 text-xs">×</button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       ))}

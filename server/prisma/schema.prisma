@@ -693,8 +693,23 @@ model TravelClaimItem {
   file_size     Int?
   createdAt     DateTime     @default(now())
   claim         TravelClaim  @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  // New: multiple receipts per item
+  receipts      TravelClaimReceipt[]
 
   @@index([claim_id])
+}
+
+model TravelClaimReceipt {
+  id            Int              @id @default(autoincrement())
+  item_id       Int
+  file_path     String
+  document_name String?
+  mime_type     String?
+  file_size     Int?
+  createdAt     DateTime         @default(now())
+  item          TravelClaimItem  @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@index([item_id])
 }
 
 model WorkflowDefinition {

@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 const upload = require('../config/multer');
 const { isAuthenticated, authorize, authorizeAny } = require('../middleware/auth');
 const workflowService = require('../services/workflowService');
-const { uploadTravelRequest, uploadTravelClaim } = require('../config/multer');
+const { uploadTravelRequest, uploadTravelClaim, uploadTravelClaimItem } = require('../config/multer');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -73,7 +73,7 @@ router.get('/requests/:id', isAuthenticated, authorize('travel.read'), async (re
   const row = await prisma.travelRequest.findUnique({ where: { id }, include: { documents: true } });
   if (!row || row.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
   const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
-  const withUrls = { ...row, documents: (row.documents||[]).map(d => ({ ...d, url: toUrl(d.file_path) })) };
+  const withUrls = { ...row, estimated_cost: row.estimated_cost ?? 0, documents: (row.documents||[]).map(d => ({ ...d, url: toUrl(d.file_path) })) };
   res.json({ success: true, request: withUrls });
 });
 
@@ -102,9 +102,9 @@ router.delete('/requests/:id/documents/:docId', isAuthenticated, authorize('trav
 
 // Travel Claims CRUD
 router.get('/claims', isAuthenticated, authorize('travel.claim.read'), async (req, res) => {
-  const list = await prisma.travelClaim.findMany({ where: { is_deleted: false }, orderBy: { createdAt: 'desc' }, include: { items: true } });
+  const list = await prisma.travelClaim.findMany({ where: { is_deleted: false }, orderBy: { createdAt: 'desc' }, include: { items: { include: { receipts: true } } } });
   const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
-  const withUrls = list.map(c => ({ ...c, items: (c.items||[]).map(i => ({ ...i, url: toUrl(i.receipt_path) })) }));
+  const withUrls = list.map(c => ({ ...c, items: (c.items||[]).map(i => ({ ...i, url: i.receipt_path ? toUrl(i.receipt_path) : null, receipts: (i.receipts||[]).map(r => ({ ...r, url: toUrl(r.file_path) })) })) }));
   res.json({ success: true, claims: withUrls });
 });
 
@@ -113,13 +113,18 @@ router.post('/claims', isAuthenticated, authorize('travel.claim.create'), async 
   const employee_id = Number(data.employee_id || req.session.user?.employee_id);
   const items = Array.isArray(data.items) ? data.items : [];
   const created = await prisma.travelClaim.create({ data: { employee_id, travel_request_id: data.travel_request_id ? Number(data.travel_request_id) : null, notes: data.notes || null } });
-  if (items.length) {
-    await prisma.travelClaimItem.createMany({ data: items.map(it => ({ claim_id: created.id, date: new Date(it.date), category: it.category, description: it.description || null, amount: Number(it.amount||0), receipt_path: it.receipt_path || null })) });
-    const total = items.reduce((sum, it) => sum + Number(it.amount || 0), 0);
-    await prisma.travelClaim.update({ where: { id: created.id }, data: { total_claimed: total } });
+  let total = 0;
+  const createdItems = [];
+  for (const it of items) {
+    const newItem = await prisma.travelClaimItem.create({ data: { claim_id: created.id, date: new Date(it.date), category: it.category, description: it.description || null, amount: Number(it.amount||0), receipt_path: it.receipt_path || null, mime_type: it.mime_type || null, file_size: it.file_size || null } });
+    createdItems.push(newItem);
+    total += Number(it.amount || 0);
   }
-  const full = await prisma.travelClaim.findUnique({ where: { id: created.id }, include: { items: true } });
-  res.json({ success: true, claim: full });
+  await prisma.travelClaim.update({ where: { id: created.id }, data: { total_claimed: total } });
+  const full = await prisma.travelClaim.findUnique({ where: { id: created.id }, include: { items: { include: { receipts: true } } } });
+  const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
+  const mapped = { ...full, items: (full.items||[]).map(it => ({ ...it, url: it.receipt_path ? toUrl(it.receipt_path) : null, receipts: (it.receipts||[]).map(r => ({ ...r, url: toUrl(r.file_path) })) })) };
+  res.json({ success: true, claim: mapped });
 });
 
 router.put('/claims/:id', isAuthenticated, authorize('travel.claim.update'), async (req, res) => {
@@ -153,10 +158,10 @@ router.post('/claims/:id/submit', isAuthenticated, authorize('travel.claim.submi
 
 router.get('/claims/:id', isAuthenticated, authorize('travel.claim.read'), async (req, res) => {
   const id = Number(req.params.id);
-  const row = await prisma.travelClaim.findUnique({ where: { id }, include: { items: true } });
+  const row = await prisma.travelClaim.findUnique({ where: { id }, include: { items: { include: { receipts: true } } } });
   if (!row || row.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
   const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
-  const withUrls = { ...row, items: (row.items||[]).map(i => ({ ...i, url: toUrl(i.receipt_path) })) };
+  const withUrls = { ...row, items: (row.items||[]).map(i => ({ ...i, url: i.receipt_path ? toUrl(i.receipt_path) : null, receipts: (i.receipts||[]).map(r => ({ ...r, url: toUrl(r.file_path) })) })) };
   res.json({ success: true, claim: withUrls });
 });
 
@@ -222,6 +227,40 @@ router.post('/claims/:id/receipts', isAuthenticated, authorize('travel.claim.upd
   await prisma.travelClaim.update({ where: { id }, data: { total_claimed: agg._sum.amount || 0 } });
   const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
   res.json({ success: true, items: items.map(i => ({ ...i, url: toUrl(i.receipt_path) })) });
+});
+
+// Upload receipts specifically for a claim item
+router.post('/claims/:id/items/:itemId/receipts', isAuthenticated, authorize('travel.claim.update'), uploadTravelClaimItem.array('files', 10), async (req, res) => {
+  const claimId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+  if (!req.files?.length) return res.status(400).json({ success: false, error: 'No files uploaded' });
+  const items = await prisma.$transaction(
+    req.files.map(f => prisma.travelClaimReceipt.create({ data: { item_id: itemId, file_path: f._savedRelPath || '', document_name: f.originalname, mime_type: f.mimetype, file_size: f.size } }))
+  );
+  const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
+  const recs = items.map(i => ({ ...i, url: toUrl(i.file_path) }));
+  // return updated claim
+  const full = await prisma.travelClaim.findUnique({ where: { id: claimId }, include: { items: { include: { receipts: true } } } });
+  const mapped = { ...full, items: (full.items||[]).map(it => ({ ...it, url: it.receipt_path ? toUrl(it.receipt_path) : null, receipts: (it.receipts||[]).map(r => ({ ...r, url: toUrl(r.file_path) })) })) };
+  res.json({ success: true, claim: mapped, receipts: recs });
+});
+
+// Delete a specific receipt from a claim item
+router.delete('/claims/:id/items/:itemId/receipts/:receiptId', isAuthenticated, authorize('travel.claim.update'), async (req, res) => {
+  const claimId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+  const receiptId = Number(req.params.receiptId);
+  const receipt = await prisma.travelClaimReceipt.findUnique({ where: { id: receiptId } });
+  if (!receipt || receipt.item_id !== itemId) return res.status(404).json({ success: false, error: 'Receipt not found' });
+  try {
+    const abs = path.resolve(__dirname, '../../', receipt.file_path);
+    await fs.unlink(abs).catch(()=>{});
+  } catch(_) {}
+  await prisma.travelClaimReceipt.delete({ where: { id: receiptId } });
+  const full = await prisma.travelClaim.findUnique({ where: { id: claimId }, include: { items: { include: { receipts: true } } } });
+  const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
+  const mapped = { ...full, items: (full.items||[]).map(it => ({ ...it, url: it.receipt_path ? toUrl(it.receipt_path) : null, receipts: (it.receipts||[]).map(r => ({ ...r, url: toUrl(r.file_path) })) })) };
+  res.json({ success: true, claim: mapped });
 });
 
 // Workflow Settings: read definition

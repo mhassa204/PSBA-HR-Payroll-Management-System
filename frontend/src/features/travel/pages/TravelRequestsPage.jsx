@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTravelRequests, getTravelRequest, createTravelRequest, updateTravelRequest, submitTravelRequest } from '../../../services/travelService';
-import { uploadRequestDocuments, listRequestDocuments, deleteRequestDocument } from '../../../services/travelService';
+import { getTravelRequests, getTravelRequest, createTravelRequest, updateTravelRequest, submitTravelRequest, uploadRequestDocuments, listRequestDocuments, deleteRequestDocument } from '../../../services/travelService';
 import { useAuthStore } from '../../auth/authStore';
 
 const Card = ({ children, className = '' }) => (
@@ -29,12 +28,10 @@ export default function TravelRequestsPage() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ purpose: '', destination: '', departure_date: '', return_date: '', transport_mode: '', estimated_cost: '' });
-
   // detail state
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [docs, setDocs] = useState([]);
-  const [docsLoading, setDocsLoading] = useState(false);
+  const apiOrigin = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
 
   const load = async () => {
     setLoading(true);
@@ -59,31 +56,23 @@ export default function TravelRequestsPage() {
     await load();
   };
 
-  const openDetail = async (r) => {
+  const openDetail = async (id) => {
     setOpen(true);
     setSelected(null);
-    setDocs([]);
-    setDocsLoading(true);
-    try {
-      const full = await getTravelRequest(r.id);
-      setSelected(full);
-      // server includes documents; fallback to list API
-      setDocs(full.documents || await listRequestDocuments(r.id));
-    } finally { setDocsLoading(false); }
+    const full = await getTravelRequest(id);
+    setSelected(full);
   };
 
-  const onDeleteDoc = async (docId) => {
-    if (!selected) return;
-    await deleteRequestDocument(selected.id, docId);
-    const refreshed = await listRequestDocuments(selected.id);
-    setDocs(refreshed);
+  const onUpload = async (id, files) => {
+    await uploadRequestDocuments(id, files);
+    const full = await getTravelRequest(id);
+    setSelected(full);
   };
 
-  const onUploadDocs = async (files) => {
-    if (!selected || !files?.length) return;
-    await uploadRequestDocuments(selected.id, files);
-    const refreshed = await listRequestDocuments(selected.id);
-    setDocs(refreshed);
+  const onDeleteDoc = async (reqId, docId) => {
+    await deleteRequestDocument(reqId, docId);
+    const full = await getTravelRequest(reqId);
+    setSelected(full);
   };
 
   return (
@@ -144,8 +133,7 @@ export default function TravelRequestsPage() {
                 <div className="text-slate-500">{r.departure_date?.slice(0,10)} to {r.return_date?.slice(0,10)} · {r.transport_mode || '—'}</div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded-full text-xs ${r.status==='PENDING_APPROVAL' ? 'bg-amber-100 text-amber-700' : r.status==='APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>{r.status}</span>
-                <button onClick={() => openDetail(r)} className="px-3 py-1 rounded-md bg-slate-100 text-slate-700 border">View</button>
+                <button onClick={()=>openDetail(r.id)} className="px-3 py-1 rounded-md bg-slate-100 text-slate-700 border">View</button>
                 {can('travel.submit') && r.status === 'DRAFT' && (
                   <button onClick={() => onSubmit(r.id)} className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white">Submit</button>
                 )}
@@ -161,20 +149,19 @@ export default function TravelRequestsPage() {
         </div>
       </Card>
 
-      {/* Detail modal */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-slate-900/50" onClick={()=>setOpen(false)} />
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4">
             <div className="flex items-center justify-between p-4 border-b">
-              <div className="font-semibold text-slate-800">Request Details</div>
+              <div className="font-semibold text-slate-800">Travel Request Details</div>
               <button onClick={()=>setOpen(false)} className="text-slate-500 hover:text-slate-700">✕</button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 text-sm">
               {!selected && <div className="text-slate-500">Loading...</div>}
               {selected && (
                 <>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <div className="text-slate-500">Purpose</div>
                       <div className="font-medium text-slate-800">{selected.purpose || '—'}</div>
@@ -185,11 +172,11 @@ export default function TravelRequestsPage() {
                     </div>
                     <div>
                       <div className="text-slate-500">Dates</div>
-                      <div className="font-medium text-slate-800">{selected.departure_date?.slice(0,10)} → {selected.return_date?.slice(0,10)}</div>
+                      <div className="font-medium text-slate-800">{String(selected.departure_date||'').slice(0,10)} → {String(selected.return_date||'').slice(0,10)}</div>
                     </div>
                     <div>
-                      <div className="text-slate-500">Transport</div>
-                      <div className="font-medium text-slate-800">{selected.transport_mode || '—'}</div>
+                      <div className="text-slate-500">Estimated Cost</div>
+                      <div className="font-medium text-slate-800">{Number(selected.estimated_cost||0)}</div>
                     </div>
                   </div>
 
@@ -199,18 +186,20 @@ export default function TravelRequestsPage() {
                       {can('travel.update') && (
                         <label className="px-3 py-1 rounded-md bg-slate-200 text-slate-700 cursor-pointer">
                           Upload
-                          <input type="file" multiple className="hidden" onChange={async (e)=>{ if(e.target.files?.length){ await onUploadDocs(e.target.files); e.target.value=''; } }} />
+                          <input type="file" multiple className="hidden" onChange={async (e)=>{ if(e.target.files?.length){ await onUpload(selected.id, e.target.files); e.target.value=''; } }} />
                         </label>
                       )}
                     </div>
                     <div className="mt-2 rounded-lg border border-slate-200 divide-y">
-                      {docsLoading && <div className="p-3 text-sm text-slate-500">Loading...</div>}
-                      {!docsLoading && docs.length === 0 && <div className="p-3 text-sm text-slate-500">No documents</div>}
-                      {!docsLoading && docs.map(d => (
-                        <div key={d.id} className="p-3 flex items-center justify-between text-sm">
-                          <a className="text-sky-700 hover:underline" href={`/${d.file_path}`} target="_blank" rel="noreferrer">{d.document_name || d.file_path?.split('/').pop()}</a>
+                      {(selected.documents||[]).length === 0 && <div className="p-3 text-slate-500">No documents</div>}
+                      {(selected.documents||[]).map(d => (
+                        <div key={d.id} className="p-3 flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-slate-800">{d.document_name || 'Document'}</div>
+                            <a className="text-sky-700 hover:underline" href={d.url || `${apiOrigin}/${String(d.file_path).replace(/^\//,'')}`} target="_blank" rel="noreferrer">View</a>
+                          </div>
                           {can('travel.update') && (
-                            <button className="text-red-600 hover:underline" onClick={()=>onDeleteDoc(d.id)}>Delete</button>
+                            <button className="text-red-600 hover:underline" onClick={()=>onDeleteDoc(selected.id, d.id)}>Delete</button>
                           )}
                         </div>
                       ))}
