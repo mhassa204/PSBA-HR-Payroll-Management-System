@@ -360,6 +360,10 @@ async function main() {
     'system.database.read','system.security.read','system.security.update','system.themes.read','system.themes.update',
     // Admin utilities
     'admin.tools',
+    // Travel module
+    'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.approval',
+    'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.verify','travel.claim.approval','travel.claim.settle',
+    'travel.settings.read','travel.settings.update',
     // Other domain actions surfaced in UI
     'reports.read','audit.read','requests.approve','profile.read','profile.update'
   ];
@@ -380,6 +384,46 @@ async function main() {
     )
   );
 
+  // Seed default Travel Workflows (dynamic, no hardcoded designations)
+  console.log('🧭 Seeding travel workflows...');
+  // travel.request: Reporting Officer -> Users with travel.approval
+  const trDef = await prisma.workflowDefinition.upsert({
+    where: { key: 'travel.request' },
+    update: {},
+    create: { key: 'travel.request', name: 'Travel Request Approval', is_active: true }
+  });
+  // Steps
+  const trSteps = [
+    { order: 1, name: 'Immediate Incharge', approval_mode: 'ALL', dynamic_assignees: [{ type: 'REPORTING_OFFICER' }] },
+    { order: 2, name: 'Final Approval', approval_mode: 'ANY', dynamic_assignees: [{ type: 'PERMISSION', value: 'travel.approval' }] }
+  ];
+  for (const s of trSteps) {
+    await prisma.workflowStepDefinition.upsert({
+      where: { wfdef_order_unique: { workflow_definition_id: trDef.id, order: s.order } },
+      update: { name: s.name, approval_mode: s.approval_mode, dynamic_assignees: s.dynamic_assignees },
+      create: { workflow_definition_id: trDef.id, order: s.order, name: s.name, approval_mode: s.approval_mode, dynamic_assignees: s.dynamic_assignees }
+    });
+  }
+
+  // travel.claim: Reporting Officer -> Finance Verify (ANY) -> Finance Approve (ALL)
+  const tcDef = await prisma.workflowDefinition.upsert({
+    where: { key: 'travel.claim' },
+    update: {},
+    create: { key: 'travel.claim', name: 'Travel Claim Approval', is_active: true }
+  });
+  const tcSteps = [
+    { order: 1, name: 'Immediate Incharge', approval_mode: 'ALL', dynamic_assignees: [{ type: 'REPORTING_OFFICER' }] },
+    { order: 2, name: 'Finance Review', approval_mode: 'ANY', dynamic_assignees: [{ type: 'PERMISSION', value: 'travel.claim.verify' }] },
+    { order: 3, name: 'Finance Approval', approval_mode: 'ALL', dynamic_assignees: [{ type: 'PERMISSION', value: 'travel.claim.approval' }] }
+  ];
+  for (const s of tcSteps) {
+    await prisma.workflowStepDefinition.upsert({
+      where: { wfdef_order_unique: { workflow_definition_id: tcDef.id, order: s.order } },
+      update: { name: s.name, approval_mode: s.approval_mode, dynamic_assignees: s.dynamic_assignees },
+      create: { workflow_definition_id: tcDef.id, order: s.order, name: s.name, approval_mode: s.approval_mode, dynamic_assignees: s.dynamic_assignees }
+    });
+  }
+
   // Link permissions to roles (skip Super Admin explicit perms)
   for (const role of createdRoles) {
     const orig = roles.find(r => r.name === role.name);
@@ -392,13 +436,24 @@ async function main() {
 
     // Ensure HR Admin gets attendance.map and full leave module permissions
     if (orig.name === 'HR Admin') {
-      const extraKeys = ['attendance.map','leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leaves.apply','leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete','leave-types.read','leave-types.create','leave-types.update','leave-types.delete'];
+      const extraKeys = [
+        'attendance.map','leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leaves.apply','leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete','leave-types.read','leave-types.create','leave-types.update','leave-types.delete',
+        // Travel module full access for HR Admin including approvals and settings
+        'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.approval',
+        'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.verify','travel.claim.approval','travel.claim.settle',
+        'travel.settings.read','travel.settings.update'
+      ];
       const extraPerms = await prisma.permission.findMany({ where: { key: { in: extraKeys } } });
       for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
     // Managers: allow leaves.apply + minimal read to view own team leaves list
     if (orig.name === 'Manager') {
-      const extraPerms = await prisma.permission.findMany({ where: { key: { in: ['leaves.apply','leaves.read'] } } });
+      const extraPerms = await prisma.permission.findMany({ where: { key: { in: [
+        'leaves.apply','leaves.read',
+        // Travel basics for managers (create/submit, no approvals)
+        'travel.read','travel.create','travel.update','travel.submit','travel.status',
+        'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.submit','travel.claim.status'
+      ] } } });
       for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
 

@@ -28,6 +28,7 @@ const leaveBankRoutes = require("./routes/leaveBankRoutes");
 const districtRoutes = require("./routes/districtRoutes");
 const cityRoutes = require("./routes/cityRoutes");
 const educationLevelRoutes = require("./routes/educationLevelRoutes");
+const travelRoutes = require("./routes/travelRoutes");
 
 const app = express(); 
 const PORT = process.env.PORT || 3000;
@@ -44,6 +45,8 @@ if (!fs.existsSync(uploadDir)) {
 
 // Serve uploads folder
 app.use("/uploads", express.static(uploadDir));
+// Also serve under /api/uploads for frontends that use relative API base (e.g. Vite dev proxy)
+app.use("/api/uploads", express.static(uploadDir));
 
 // CORS config
 const corsOptions = {
@@ -92,6 +95,7 @@ app.use("/api/leave-banks", leaveBankRoutes);
 app.use("/api/districts", districtRoutes);
 app.use("/api/cities", cityRoutes);
 app.use("/api/education-levels", educationLevelRoutes);
+app.use("/api/travel", travelRoutes);
 const { isAuthenticated } = require("./middleware/auth");
 app.use("/api/admin", isAuthenticated, adminRoutes);
 

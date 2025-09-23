@@ -129,6 +129,14 @@ const createEmploymentDirectory = async (baseDir, fullName, cnic) => {
   }
 };
 
+// Helper: create Travel directories
+const createTravelDirectory = async (baseDir, kind, id) => {
+  const root = path.join(baseDir, 'Travel');
+  const folder = kind === 'request' ? path.join(root, 'Requests', String(id)) : path.join(root, 'Claims', String(id));
+  await fs.mkdir(folder, { recursive: true });
+  return folder;
+};
+
 // Absolute upload path
 const uploadDir = path.join(__dirname, "../../uploads");
 
@@ -339,6 +347,49 @@ const employmentStorage = multer.diskStorage({
   },
 });
 
+// Travel Request documents storage
+const travelRequestStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const id = req.params.id || req.body.request_id;
+      if (!id) return cb(new Error('Missing request id'));
+      const dest = await createTravelDirectory(uploadDir, 'request', id);
+      cb(null, dest);
+    } catch (e) { console.error(e); cb(e); }
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-z0-9_\-]/gi, '_').slice(0, 40);
+    const ts = Date.now();
+    const name = `${base}_${ts}${ext}`;
+    // save relative path for controllers
+    const rel = path.join('uploads', 'Travel', 'Requests', String(req.params.id || req.body.request_id), name).replace(/\\/g, '/');
+    file._savedRelPath = rel;
+    cb(null, name);
+  }
+});
+
+// Travel Claim receipts storage
+const travelClaimStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const id = req.params.id || req.body.claim_id;
+      if (!id) return cb(new Error('Missing claim id'));
+      const dest = await createTravelDirectory(uploadDir, 'claim', id);
+      cb(null, dest);
+    } catch (e) { console.error(e); cb(e); }
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-z0-9_\-]/gi, '_').slice(0, 40);
+    const ts = Date.now();
+    const name = `${base}_${ts}${ext}`;
+    const rel = path.join('uploads', 'Travel', 'Claims', String(req.params.id || req.body.claim_id), name).replace(/\\/g, '/');
+    file._savedRelPath = rel;
+    cb(null, name);
+  }
+});
+
 const fileFilter = (req, file, cb) => {
   try {
     const allowedImageTypes = /jpeg|jpg|png|gif|webp/;
@@ -380,8 +431,13 @@ const upload = multer({
   fileFilter,
 });
 
+const uploadTravelRequest = multer({ storage: travelRequestStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
+const uploadTravelClaim = multer({ storage: travelClaimStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
+
 // Export for use in routes and controllers
 module.exports = upload;
 module.exports.DOCUMENT_TYPES = DOCUMENT_TYPES;
 module.exports.storage = storage;
 module.exports.employmentStorage = employmentStorage;
+module.exports.uploadTravelRequest = uploadTravelRequest;
+module.exports.uploadTravelClaim = uploadTravelClaim;

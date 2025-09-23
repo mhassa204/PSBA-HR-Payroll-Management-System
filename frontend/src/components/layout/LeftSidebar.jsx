@@ -59,6 +59,12 @@ const CalendarIcon = () => (
   </svg>
 );
 
+const PlaneIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.5 21l-1-4-5-3v-2l5-3 1-4 8.5 7-8.5 7z" />
+  </svg>
+);
+
 /**
  * Futuristic Left Sidebar Navigation
  * 
@@ -199,6 +205,20 @@ const LeftSidebar = () => {
         { name: 'Districts', href: '/settings/districts', icon: ViewColumnsIcon, show: () => can('districts.read') },
         { name: 'Cities', href: '/settings/cities', icon: ViewColumnsIcon, show: () => can('cities.read') },
         { name: 'Education Levels', href: '/settings/education-levels', icon: ViewColumnsIcon, show: () => can('education-levels.read') }
+      ]
+    },
+    {
+      name: 'Travel',
+      href: '/travel',
+      icon: PlaneIcon,
+      description: 'TADA & Approvals',
+      color: 'bg-fuchsia-600',
+      show: () => can('travel.read') || can('travel.claim.read') || can('travel.approval') || can('travel.claim.verify') || can('travel.claim.approval'),
+      children: [
+        { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => can('travel.read') },
+        { name: 'Claims', href: '/travel/claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') },
+        { name: 'My Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => can('travel.approval') || can('travel.claim.verify') || can('travel.claim.approval') },
+        { name: 'Settings', href: '/travel/settings', icon: ViewColumnsIcon, show: () => can('travel.settings.read') }
       ]
     }
   ];
