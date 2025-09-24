@@ -101,7 +101,7 @@ async function main() {
 
   // Seed Districts
   console.log('🗺️ Seeding districts...');
-  const districtNames = ['Lahore', 'Karachi', 'Islamabad', 'Peshawar'];
+  const districtNames = ['Lahore', 'Faisalabad', 'Jhang', 'Layyah'];
   createdDistricts = [];
   for (const name of districtNames) {
     const d = await prisma.district.create({ data: { name, is_active: true, is_deleted: false } });
@@ -112,9 +112,9 @@ async function main() {
   console.log('🏙️ Seeding cities...');
   const citySeeds = [
     { name: 'Lahore', district: 'Lahore' },
-    { name: 'Karachi', district: 'Karachi' },
-    { name: 'Islamabad', district: 'Islamabad' },
-    { name: 'Peshawar', district: 'Peshawar' }
+    { name: 'Faisalabad', district: 'Faisalabad' },
+    { name: 'Jhang', district: 'Jhang' },
+    { name: 'Layyah', district: 'Layyah' }
   ];
   createdCities = [];
   for (const c of citySeeds) {
@@ -147,7 +147,20 @@ async function main() {
     { name: "Administration", code: "ADMIN", description: "Administrative Services" },
     { name: "Finance", code: "FIN", description: "Finance and Accounts" },
     { name: "Legal", code: "LEGAL", description: "Legal Affairs" },
-    { name: "Operations", code: "OPS", description: "Operations Management" }
+    { name: "Operations", code: "OPS", description: "Operations Management" },
+    // New: Authority umbrella and specific functional departments as per org chart
+    { name: "Authority", code: "AUTH", description: "Authority Leadership (DG/AD)" },
+    { name: "Audit, Compliance & Control", code: "AUD", description: "Audit, Compliance & Control" },
+    { name: "Projects, Planning & Initiatives", code: "PPI", description: "Projects, Planning & Initiatives" },
+    { name: "Software Development & Operations", code: "SDO", description: "Software Development & Operations" },
+    { name: "Structural Design", code: "STRUCT", description: "Structural Design" },
+    { name: "Architecture", code: "ARCH", description: "Architecture" },
+    { name: "Ops & Revenue – Central/North", code: "OPS-CN", description: "Operations & Revenue – Central/North" },
+    { name: "Establishment", code: "EST", description: "Establishment" },
+    { name: "Security & Surveillance", code: "SEC", description: "Security & Surveillance" },
+    { name: "Budget, Finance & Taxation", code: "BFT", description: "Budget, Finance & Taxation" },
+    { name: "Accounts, Payroll & Reconciliation", code: "APR", description: "Accounts, Payroll & Reconciliation" },
+    { name: "HQ Admin / Operations", code: "HQOPS", description: "HQ Admin / Operations" }
   ];
 
   console.log('📁 Seeding departments...');
@@ -202,7 +215,14 @@ async function main() {
     // Operations hierarchy
     { title: "Operations Officer", department_name: "Operations", level: 1 },
     { title: "Senior Operations Officer", department_name: "Operations", level: 2 },
-    { title: "Operations Manager", department_name: "Operations", level: 3 }
+    { title: "Operations Manager", department_name: "Operations", level: 3 },
+
+    // New leadership and specialized roles
+    { title: "Director General", department_name: "Authority", level: 19 },
+    { title: "Additional Director", department_name: "Authority", level: 18 },
+    { title: "Sr. Engineer, Civil", department_name: "Engineering", level: 18 },
+    { title: "Structural Design Engineer", department_name: "Structural Design", level: 17 },
+    { title: "Architect", department_name: "Architecture", level: 17 }
   ];
 
   console.log('👔 Seeding designations...');
@@ -223,6 +243,18 @@ async function main() {
     }
   }
 
+  // Ensure Assistant Director designation exists for all departments (level 17)
+  for (const dept of createdDepartments) {
+    const exists = createdDesignations.find(d => d.title === 'Assistant Director' && d.department_id === dept.id);
+    if (!exists) {
+      const ad = await prisma.designation.create({
+        data: { title: 'Assistant Director', department_id: dept.id, level: 17, is_deleted: false }
+      });
+      createdDesignations.push(ad);
+      console.log(`✅ Created Designation: Assistant Director (${dept.name})`);
+    }
+  }
+
   // Seed role tags
   const roleTags = [
     { name: "Software Engineer", description: "Software development and programming", category: "Technical" },
@@ -240,29 +272,15 @@ async function main() {
   console.log('🏷️ Seeding role tags...');
   const createdRoleTags = [];
   for (const tag of roleTags) {
-    const roleTag = await prisma.roleTag.create({
-      data: {
-        ...tag,
-        is_deleted: false
-      }
-    });
+    const roleTag = await prisma.roleTag.create({ data: { ...tag, is_deleted: false } });
     console.log(`✅ Created Role Tag: ${roleTag.name} (${roleTag.category})`);
     createdRoleTags.push(roleTag);
   }
 
   // Seed roles
   const roles = [
-    { 
-      name: "Super Admin", 
-      type: "system", 
-      allowed_actions: ["*"], 
-      enabled: true, 
-      fields: ["*"] 
-    },
-    { 
-      name: "HR Admin", 
-      type: "system", 
-      allowed_actions: [
+    { name: "Super Admin", type: "system", allowed_actions: ["*"], enabled: true, fields: ["*"] },
+    { name: "HR Admin", type: "system", allowed_actions: [
         "employees.read","employees.create","employees.update","employees.delete",
         "employment.read","employment.create","employment.update","employment.delete",
         "employment.salary.read","employment.salary.create","employment.salary.update","employment.salary.delete",
@@ -282,59 +300,27 @@ async function main() {
         "users.read","users.manage",
         "audit.read",
         "roster.read","roster.create","roster.update","roster.delete","roster.status"
-      ], 
-      enabled: true, 
-      fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] 
-    },
-    { 
-      name: "HR Officer", 
-      type: "custom", 
-      allowed_actions: ["employees.read","employees.create","employees.update","reports.read"], 
-      enabled: true, 
-      fields: ["employee_personal", "employee_employment"] 
-    },
-    { 
-      name: "Manager", 
-      type: "custom", 
-      allowed_actions: ["employees.read","reports.read","requests.approve","roster.read","roster.create","roster.update"], 
-      enabled: true, 
-      fields: ["employee_basic", "employee_employment"] 
-    },
-    { 
-      name: "Employee", 
-      type: "custom", 
-      allowed_actions: ["profile.read","profile.update"], 
-      enabled: true, 
-      fields: ["own_personal", "own_employment"] 
-    }
+      ], enabled: true, fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] },
+    { name: "HR Officer", type: "custom", allowed_actions: ["employees.read","employees.create","employees.update","reports.read"], enabled: true, fields: ["employee_personal", "employee_employment"] },
+    { name: "Manager", type: "custom", allowed_actions: ["employees.read","reports.read","requests.approve","roster.read","roster.create","roster.update"], enabled: true, fields: ["employee_basic", "employee_employment"] },
+    { name: "Employee", type: "custom", allowed_actions: ["profile.read","profile.update"], enabled: true, fields: ["own_personal", "own_employment"] }
   ];
 
   console.log('🛡️ Seeding roles...');
   const createdRoles = [];
   for (const role of roles) {
-    const createdRole = await prisma.role.create({
-      data: {
-        name: role.name,
-        type: role.type,
-        enabled: role.enabled,
-        fields: role.fields || [],
-        is_deleted: false
-      }
-    });
+    const createdRole = await prisma.role.create({ data: { name: role.name, type: role.type, enabled: role.enabled, fields: role.fields || [], is_deleted: false } });
     console.log(`✅ Created Role: ${createdRole.name} (${createdRole.type})`);
     createdRoles.push(createdRole);
   }
 
-  // Build a comprehensive permission catalog covering all route actions + domain actions
+  // Permissions catalog (routes + domain actions)
   const ROUTE_PERMISSION_KEYS = [
-    // Employees
     'employees.read','employees.create','employees.update','employees.delete',
-    // Employment & sub-resources
     'employment.read','employment.create','employment.update','employment.delete',
     'employment.salary.create','employment.salary.update','employment.salary.delete',
     'employment.location.create','employment.location.update','employment.location.delete',
     'employment.contract.create','employment.contract.update','employment.contract.delete',
-    // Master data
     'departments.read','departments.create','departments.update','departments.delete',
     'designations.read','designations.create','designations.update','designations.delete',
     'districts.read','districts.create','districts.update','districts.delete',
@@ -343,32 +329,23 @@ async function main() {
     'role-tags.read','role-tags.create','role-tags.update','role-tags.delete',
     'scale-grades.read','scale-grades.create','scale-grades.update','scale-grades.delete',
     'locations.read','locations.create','locations.update','locations.delete',
-    // Devices & Attendance
     'devices.read','devices.create','devices.update','devices.delete',
     'attendance.read','attendance.fetch','attendance.map',
-    // Roster
     'roster.read','roster.create','roster.update','roster.delete','roster.status',
-    // Leaves & Leave banks/types
     'leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leaves.apply',
     'leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete',
     'leave-types.read','leave-types.create','leave-types.update','leave-types.delete',
-    // Users / Roles / Permissions
     'users.read','users.manage',
     'roles.read','roles.manage',
     'permissions.read','permissions.manage',
-    // System settings
     'system.database.read','system.security.read','system.security.update','system.themes.read','system.themes.update',
-    // Admin utilities
     'admin.tools',
-    // Travel module
     'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.approval',
     'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.verify','travel.claim.approval','travel.claim.settle',
     'travel.settings.read','travel.settings.update',
-    // Other domain actions surfaced in UI
     'reports.read','audit.read','requests.approve','profile.read','profile.update'
   ];
 
-  // Upsert ALL permissions (routes + those referenced by roles)
   console.log('🔑 Seeding permissions catalog...');
   const ALL_PERMISSION_KEYS = Array.from(new Set([
     ...ROUTE_PERMISSION_KEYS,
@@ -384,15 +361,9 @@ async function main() {
     )
   );
 
-  // Seed default Travel Workflows (dynamic, no hardcoded designations)
+  // Seed default Travel Workflows
   console.log('🧭 Seeding travel workflows...');
-  // travel.request: Reporting Officer -> Users with travel.approval
-  const trDef = await prisma.workflowDefinition.upsert({
-    where: { key: 'travel.request' },
-    update: {},
-    create: { key: 'travel.request', name: 'Travel Request Approval', is_active: true }
-  });
-  // Steps
+  const trDef = await prisma.workflowDefinition.upsert({ where: { key: 'travel.request' }, update: {}, create: { key: 'travel.request', name: 'Travel Request Approval', is_active: true } });
   const trSteps = [
     { order: 1, name: 'Immediate Incharge', approval_mode: 'ALL', dynamic_assignees: [{ type: 'REPORTING_OFFICER' }] },
     { order: 2, name: 'Final Approval', approval_mode: 'ANY', dynamic_assignees: [{ type: 'PERMISSION', value: 'travel.approval' }] }
@@ -405,12 +376,7 @@ async function main() {
     });
   }
 
-  // travel.claim: Reporting Officer -> Finance Verify (ANY) -> Finance Approve (ALL)
-  const tcDef = await prisma.workflowDefinition.upsert({
-    where: { key: 'travel.claim' },
-    update: {},
-    create: { key: 'travel.claim', name: 'Travel Claim Approval', is_active: true }
-  });
+  const tcDef = await prisma.workflowDefinition.upsert({ where: { key: 'travel.claim' }, update: {}, create: { key: 'travel.claim', name: 'Travel Claim Approval', is_active: true } });
   const tcSteps = [
     { order: 1, name: 'Immediate Incharge', approval_mode: 'ALL', dynamic_assignees: [{ type: 'REPORTING_OFFICER' }] },
     { order: 2, name: 'Finance Review', approval_mode: 'ANY', dynamic_assignees: [{ type: 'PERMISSION', value: 'travel.claim.verify' }] },
@@ -428,17 +394,14 @@ async function main() {
   for (const role of createdRoles) {
     const orig = roles.find(r => r.name === role.name);
     if (!orig) continue;
-    if (orig.allowed_actions.includes('*')) continue; // Super Admin bypass
+    if (orig.allowed_actions.includes('*')) continue;
 
-    // Base permissions from role.allowed_actions
     const basePerms = await prisma.permission.findMany({ where: { key: { in: orig.allowed_actions.filter(k => k !== '*') } } });
     const permsToCreate = basePerms.map(p => ({ permission_id: p.id }));
 
-    // Ensure HR Admin gets attendance.map and full leave module permissions
     if (orig.name === 'HR Admin') {
       const extraKeys = [
         'attendance.map','leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leaves.apply','leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete','leave-types.read','leave-types.create','leave-types.update','leave-types.delete',
-        // Travel module full access for HR Admin including approvals and settings
         'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.approval',
         'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.verify','travel.claim.approval','travel.claim.settle',
         'travel.settings.read','travel.settings.update'
@@ -446,11 +409,9 @@ async function main() {
       const extraPerms = await prisma.permission.findMany({ where: { key: { in: extraKeys } } });
       for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
-    // Managers: allow leaves.apply + minimal read to view own team leaves list
     if (orig.name === 'Manager') {
       const extraPerms = await prisma.permission.findMany({ where: { key: { in: [
         'leaves.apply','leaves.read',
-        // Travel basics for managers (create/submit, no approvals)
         'travel.read','travel.create','travel.update','travel.submit','travel.status',
         'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.submit','travel.claim.status'
       ] } } });
@@ -479,176 +440,82 @@ async function main() {
   console.log('📊 Seeding scale grades...');
   const createdScaleGrades = [];
   for (const grade of scaleGrades) {
-    const scaleGrade = await prisma.scaleGrade.create({
-      data: {
-        ...grade,
-        is_deleted: false
-      }
-    });
+    const scaleGrade = await prisma.scaleGrade.create({ data: { ...grade, is_deleted: false } });
     console.log(`✅ Created Scale Grade: ${scaleGrade.name} (${scaleGrade.category})`);
     createdScaleGrades.push(scaleGrade);
   }
 
   // Seed employees
   const employees = [
-    {
-      employee_id: "EMP2024001",
-      full_name: "Ahmed Ali Khan",
-      father_husband_name: "Muhammad Ali Khan",
-      relationship_type: "father",
-      mother_name: "Fatima Khan",
-      cnic: "35202-1234567-1",
-      cnic_issue_date: new Date("2015-01-15"),
-      cnic_expire_date: new Date("2030-01-15"),
-      date_of_birth: new Date("1985-03-20"),
-      gender: "Male",
-      marital_status: "Married",
-      nationality: "Pakistani",
-      religion: "Islam",
-      blood_group: "B+",
-      domicile_district: "Lahore",
-      mobile_number: "+92-300-1234567",
-      whatsapp_number: "+92-300-1234567",
-      email: "ahmed.ali@example.com",
-      present_address: "House 123, Block A, Johar Town, Lahore",
-      permanent_address: "Village Chak 45, Tehsil Kasur, District Kasur",
-      district: "Lahore",
-      city: "Lahore",
-      status: "Active",
-      is_deleted: false
-    },
-    {
-      employee_id: "EMP2024002",
-      full_name: "Fatima Sheikh",
-      father_husband_name: "Abdul Rahman Sheikh",
-      relationship_type: "father",
-      mother_name: "Khadija Sheikh",
-      cnic: "35202-2345678-2",
-      cnic_issue_date: new Date("2016-05-20"),
-      cnic_expire_date: new Date("2031-05-20"),
-      date_of_birth: new Date("1990-07-15"),
-      gender: "Female",
-      marital_status: "Single",
-      nationality: "Pakistani",
-      religion: "Islam",
-      blood_group: "A+",
-      domicile_district: "Karachi",
-      mobile_number: "+92-301-2345678",
-      whatsapp_number: "+92-301-2345678",
-      email: "fatima.sheikh@example.com",
-      present_address: "Flat 45, Block B, Gulshan-e-Iqbal, Karachi",
-      permanent_address: "House 67, Nazimabad, Karachi",
-      district: "Karachi",
-      city: "Karachi",
-      has_disability: true,
-      disability_type: "Visual",
-      disability_description: "Partial vision impairment",
-      status: "Active",
-      is_deleted: false
-    },
-    {
-      employee_id: "EMP2024003",
-      full_name: "Muhammad Hassan",
-      father_husband_name: "Ali Hassan",
-      relationship_type: "father",
-      cnic: "35202-3456789-3",
-      date_of_birth: new Date("1988-12-10"),
-      gender: "Male",
-      marital_status: "Married",
-      nationality: "Pakistani",
-      religion: "Islam",
-      mobile_number: "+92-302-3456789",
-      email: "hassan.muhammad@example.com",
-      present_address: "House 89, Model Town, Lahore",
-      permanent_address: "House 89, Model Town, Lahore",
-      same_address: true,
-      district: "Lahore",
-      city: "Lahore",
-      status: "Active",
-      is_deleted: false
-    },
-    {
-      employee_id: "EMP2024004",
-      full_name: "Ayesha Malik",
-      father_husband_name: "Malik Ahmed",
-      relationship_type: "father",
-      cnic: "35202-4567890-4",
-      date_of_birth: new Date("1992-04-25"),
-      gender: "Female",
-      marital_status: "Single",
-      nationality: "Pakistani",
-      religion: "Islam",
-      blood_group: "O+",
-      domicile_district: "Islamabad",
-      mobile_number: "+92-303-4567890",
-      email: "ayesha.malik@example.com",
-      present_address: "Apartment 12, Blue Area, Islamabad",
-      permanent_address: "House 34, Sector F-7, Islamabad",
-      district: "Islamabad",
-      city: "Islamabad",
-      status: "Active",
-      is_deleted: false
-    },
-    {
-      employee_id: "EMP2024005",
-      full_name: "Usman Khan",
-      father_husband_name: "Khan Saeed",
-      relationship_type: "father",
-      cnic: "35202-5678901-5",
-      date_of_birth: new Date("1987-09-18"),
-      gender: "Male",
-      marital_status: "Married",
-      nationality: "Pakistani",
-      religion: "Islam",
-      blood_group: "AB+",
-      domicile_district: "Peshawar",
-      mobile_number: "+92-304-5678901",
-      email: "usman.khan@example.com",
-      present_address: "House 56, University Town, Peshawar",
-      permanent_address: "House 56, University Town, Peshawar",
-      same_address: true,
-      district: "Peshawar",
-      city: "Peshawar",
-      status: "Active",
-      is_deleted: false
-    }
+    // Leadership
+    { employee_id: "EMPDG001", full_name: "Naveed Rafaqat Ahmad", father_husband_name: "Rafaqat Ahmad", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345671", cnic_issue_date: new Date("2012-03-15"), cnic_expire_date: new Date("2032-03-14"), date_of_birth: new Date("1972-11-05"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", blood_group: "A+", domicile_district: "Lahore", mobile_number: "03001234567", whatsapp_number: "03001234567", email: "naveed.ahmad@psba.gop.pk", present_address: "Gulberg III, Lahore", permanent_address: "Gulberg III, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPAD001", full_name: "Farhan Dilawar Sheikh", father_husband_name: "Dilawar Sheikh", relationship_type: "father", mother_name: "Sania", cnic: "3520212345689", cnic_issue_date: new Date("2015-05-20"), cnic_expire_date: new Date("2035-05-19"), date_of_birth: new Date("1980-02-12"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", blood_group: "B+", domicile_district: "Lahore", mobile_number: "03011234567", whatsapp_number: "03011234567", email: "farhan.sheikh@psba.gop.pk", present_address: "Johar Town, Lahore", permanent_address: "Johar Town, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPAD002", full_name: "Roshan Zameer", father_husband_name: "Zameer Ahmed", relationship_type: "father", mother_name: "Nusrat", cnic: "3520212345697", cnic_issue_date: new Date("2015-07-10"), cnic_expire_date: new Date("2035-07-09"), date_of_birth: new Date("1981-08-21"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", blood_group: "O+", domicile_district: "Lahore", mobile_number: "03021234567", whatsapp_number: "03021234567", email: "roshan.zameer@psba.gop.pk", present_address: "DHA, Lahore", permanent_address: "DHA, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPAD003", full_name: "Sadam Hussain", father_husband_name: "Hussain Ahmed", relationship_type: "father", mother_name: "Shazia", cnic: "3520212345701", cnic_issue_date: new Date("2016-01-18"), cnic_expire_date: new Date("2036-01-17"), date_of_birth: new Date("1982-03-09"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", blood_group: "AB+", domicile_district: "Lahore", mobile_number: "03031234567", whatsapp_number: "03031234567", email: "sadam.hussain@psba.gop.pk", present_address: "Model Town, Lahore", permanent_address: "Model Town, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPSE001", full_name: "Asad Abbas", father_husband_name: "Abbas Ali", relationship_type: "father", mother_name: "Razia", cnic: "3520212345719", cnic_issue_date: new Date("2014-09-01"), cnic_expire_date: new Date("2034-08-31"), date_of_birth: new Date("1979-06-14"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", blood_group: "B+", domicile_district: "Lahore", mobile_number: "03041234567", whatsapp_number: "03041234567", email: "asad.abbas@psba.gop.pk", present_address: "Garden Town, Lahore", permanent_address: "Garden Town, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+
+    // Assistant Directors under Farhan
+    { employee_id: "EMPADF001", full_name: "Moeen Chishti", father_husband_name: "Chishti Ahmed", relationship_type: "father", cnic: "3520212345727", cnic_issue_date: new Date("2018-04-10"), cnic_expire_date: new Date("2038-04-09"), date_of_birth: new Date("1990-10-10"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03051234567", whatsapp_number: "03051234567", email: "moeen.chishti@psba.gop.pk", present_address: "Township, Lahore", permanent_address: "Township, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+
+    // Assistant Directors under Roshan
+    { employee_id: "EMPADR001", full_name: "Rizwan Haider Shah", father_husband_name: "Haider Shah", relationship_type: "father", mother_name: "Nusrat", cnic: "3520212345735", cnic_issue_date: new Date("2017-07-21"), cnic_expire_date: new Date("2037-07-20"), date_of_birth: new Date("1991-01-22"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03061234567", whatsapp_number: "03061234567", email: "rizwan.shah@psba.gop.pk", present_address: "Gulshan-e-Ravi, Lahore", permanent_address: "Gulshan-e-Ravi, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADR002", full_name: "Muhammad Ahmad", father_husband_name: "Muhammad Akram", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345743", cnic_issue_date: new Date("2017-05-02"), cnic_expire_date: new Date("2037-05-01"), date_of_birth: new Date("1992-02-15"), gender: "Male", marital_status: "Single", nationality: "Pakistani", religion: "Islam", mobile_number: "03071234567", whatsapp_number: "03071234567", email: "m.ahmad@psba.gop.pk", present_address: "Allama Iqbal Town, Lahore", permanent_address: "Allama Iqbal Town, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADR003", full_name: "Muhammad Ali Hassan", father_husband_name: "Ali Hassan", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345750", cnic_issue_date: new Date("2016-11-11"), cnic_expire_date: new Date("2036-11-10"), date_of_birth: new Date("1992-09-09"), gender: "Male", marital_status: "Single", nationality: "Pakistani", religion: "Islam", mobile_number: "03081234567", whatsapp_number: "03081234567", email: "m.ali.hassan@psba.gop.pk", present_address: "Wapda Town, Lahore", permanent_address: "Wapda Town, Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADR004", full_name: "Barkat Ali Laghari", father_husband_name: "Ali Laghari", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345768", cnic_issue_date: new Date("2018-08-18"), cnic_expire_date: new Date("2038-08-17"), date_of_birth: new Date("1993-03-03"), gender: "Male", marital_status: "Single", nationality: "Pakistani", religion: "Islam", mobile_number: "03091234567", whatsapp_number: "03091234567", email: "barkat.laghari@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADR005", full_name: "Muhammad Amir", father_husband_name: "Amir Khan", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345776", cnic_issue_date: new Date("2018-12-01"), cnic_expire_date: new Date("2038-11-30"), date_of_birth: new Date("1993-12-12"), gender: "Male", marital_status: "Single", nationality: "Pakistani", religion: "Islam", mobile_number: "03101234567", whatsapp_number: "03101234567", email: "m.amir@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+
+    // Assistant Directors under Sadam
+    { employee_id: "EMPADS001", full_name: "Usman Badar", father_husband_name: "Badar Hussain", relationship_type: "father", mother_name: "Razia", cnic: "3520212345784", cnic_issue_date: new Date("2019-03-25"), cnic_expire_date: new Date("2039-03-24"), date_of_birth: new Date("1991-07-07"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03111234567", whatsapp_number: "03111234567", email: "usman.badar@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+
+    // Assistant Directors reporting to DG
+    { employee_id: "EMPADG001", full_name: "Maria Iqbal", father_husband_name: "Iqbal Ahmed", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345792", cnic_issue_date: new Date("2016-06-06"), cnic_expire_date: new Date("2036-06-05"), date_of_birth: new Date("1990-04-18"), gender: "Female", marital_status: "Single", nationality: "Pakistani", religion: "Islam", mobile_number: "03121234567", whatsapp_number: "03121234567", email: "maria.iqbal@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADG002", full_name: "Rab Nawaz Baloch", father_husband_name: "Nawaz Baloch", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345806", cnic_issue_date: new Date("2016-04-14"), cnic_expire_date: new Date("2036-04-13"), date_of_birth: new Date("1989-05-28"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03131234567", whatsapp_number: "03131234567", email: "rab.baloch@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADG003", full_name: "Asim Shahbaz", father_husband_name: "Shahbaz Ahmed", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345814", cnic_issue_date: new Date("2016-02-20"), cnic_expire_date: new Date("2036-02-19"), date_of_birth: new Date("1989-08-08"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03141234567", whatsapp_number: "03141234567", email: "asim.shahbaz@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADG004", full_name: "Muhammad Iqbal", father_husband_name: "Muhammad Saleem", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345822", cnic_issue_date: new Date("2017-01-01"), cnic_expire_date: new Date("2037-12-31"), date_of_birth: new Date("1990-10-01"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03151234567", whatsapp_number: "03151234567", email: "m.iqbal@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADG005", full_name: "Kashif Rasheed", father_husband_name: "Rasheed Ahmed", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345830", cnic_issue_date: new Date("2017-05-05"), cnic_expire_date: new Date("2037-05-04"), date_of_birth: new Date("1991-11-11"), gender: "Male", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03161234567", whatsapp_number: "03161234567", email: "kashif.rasheed@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPADG006", full_name: "Muhammad Ali", father_husband_name: "Muhammad Rafiq", relationship_type: "father", mother_name: "Khadija", cnic: "3520212345849", cnic_issue_date: new Date("2017-09-09"), cnic_expire_date: new Date("2037-09-08"), date_of_birth: new Date("1992-12-20"), gender: "Male", marital_status: "Single", nationality: "Pakistani", religion: "Islam", mobile_number: "03171234567", whatsapp_number: "03171234567", email: "m.ali@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false }
   ];
 
   console.log('👥 Seeding employees...');
   const createdEmployees = [];
   for (const emp of employees) {
-    // Map normalized district/city IDs if available
     const dist = createdDistricts.find((d) => d.name === emp.district);
     const city = createdCities.find((c) => c.name === emp.city && (!dist || c.district_id === dist.id))
               || createdCities.find((c) => c.name === emp.city);
-    const employee = await prisma.employee.create({ data: { ...emp, district_id: dist?.id || null, city_id: city?.id || null } });
+
+    // Normalize CNIC and mobile formats
+    const cnic = String(emp.cnic || '').replace(/\D/g, '').slice(-13);
+    const normalizeMobile = (v) => {
+      let num = String(v || '').replace(/\D/g, '');
+      // strip leading country code 92 if present
+      if (num.startsWith('92')) num = num.slice(2);
+      if (num.length === 10) num = '0' + num;
+      if (num.length > 11) num = num.slice(-11);
+      return num;
+    };
+    const mobile = normalizeMobile(emp.mobile_number);
+    const whatsapp = normalizeMobile(emp.whatsapp_number ?? emp.mobile_number);
+
+    const employee = await prisma.employee.create({ 
+      data: { 
+        ...emp, 
+        cnic,
+        mobile_number: mobile,
+        whatsapp_number: whatsapp,
+        district_id: dist?.id || null, 
+        city_id: city?.id || null 
+      } 
+    });
     console.log(`✅ Created Employee: ${employee.full_name} (${employee.employee_id})`);
     createdEmployees.push(employee);
   }
 
-  // Seed users
+  // Seed users (mapped by full_name for stability)
+  const findEmpId = (name) => createdEmployees.find(e => e.full_name === name)?.id;
   const users = [
-    {
-      email: "admin@psba.com",
-      password: encrypt("admin123"),
-      role_id: createdRoles[0].id, // Super Admin
-      employee_id: createdEmployees[0].id, // Ahmed Ali Khan
-      is_deleted: false
-    },
-    {
-      email: "hr@psba.com",
-      password: encrypt("hr123"),
-      role_id: createdRoles[1].id, // HR Admin
-      employee_id: createdEmployees[1].id, // Fatima Sheikh
-      is_deleted: false
-    },
-    {
-      email: "officer@psba.com",
-      password: encrypt("officer123"),
-      role_id: createdRoles[2].id, // HR Officer
-      employee_id: createdEmployees[2].id, // Muhammad Hassan
-      is_deleted: false
-    }
+    { email: "admin@psba.gop.pk", password: encrypt("admin123"), role_id: createdRoles[0].id, employee_id: findEmpId("Muhammad Ali Hassan"), is_deleted: false },
+    { email: "hr@psba.gop.pk", password: encrypt("hr123"), role_id: createdRoles[1].id, employee_id: findEmpId("Maria Iqbal"), is_deleted: false },
+    { email: "officer@psba.gop.pk", password: encrypt("officer123"), role_id: createdRoles[2].id, employee_id: findEmpId("Muhammad Ahmad"), is_deleted: false }
   ];
 
   console.log('👤 Seeding users...');
@@ -663,47 +530,56 @@ async function main() {
   console.log('📍 Seeding master locations...');
   const masterLocations = [
     {
-      name: 'Lahore Head Office',
+      name: 'Head Quarter',
       type: 'HEAD_OFFICE',
       district: 'Lahore',
       city: 'Lahore',
-      full_address: 'Main Office Building, Gulberg III, Lahore',
+      full_address: 'Johar Town Phase 1, Lahore',
       is_active: true,
       manager_user_id: createdUsers[0]?.id || null
     },
     {
-      name: 'Karachi Regional Office',
-      type: 'HEAD_OFFICE',
-      district: 'Karachi',
-      city: 'Karachi',
-      full_address: 'Regional Office, Shahrah-e-Faisal, Karachi',
-      is_active: true,
-      manager_user_id: createdUsers[1]?.id || null
-    },
-    {
-      name: 'Liberty Market Bazaar',
+      name: 'Sahulat Bazaar Mian Plaza',
       type: 'BAZAAR',
       district: 'Lahore',
       city: 'Lahore',
-      full_address: 'Liberty Market, Gulberg III, Lahore',
+      full_address: 'Mian Plaza, Johar Town, Lahore',
       is_active: true,
       manager_user_id: null
     },
     {
-      name: 'Anarkali Bazaar',
+      name: 'Sahulat Bazaar Township Bazaar',
       type: 'BAZAAR',
       district: 'Lahore',
       city: 'Lahore',
-      full_address: 'Anarkali Bazar, Near Mall Road, Lahore',
+      full_address: 'Township, Lahore',
       is_active: true,
       manager_user_id: null
     },
     {
-      name: 'Saddar Bazaar Karachi',
+      name: 'Sahulat Bazaar Jhang',
       type: 'BAZAAR',
-      district: 'Karachi',
-      city: 'Karachi',
-      full_address: 'Saddar Bazaar, M. A. Jinnah Road, Karachi',
+      district: 'Jhang',
+      city: 'Jhang',
+      full_address: 'Jhang City',
+      is_active: true,
+      manager_user_id: null
+    },
+    {
+      name: 'Sahulat Bazaar Faisalabad',
+      type: 'BAZAAR',
+      district: 'Faisalabad',
+      city: 'Faisalabad',
+      full_address: 'Faisalabad City',
+      is_active: true,
+      manager_user_id: null
+    },
+    {
+      name: 'Sahulat Bazaar Layyah',
+      type: 'BAZAAR',
+      district: 'Layyah',
+      city: 'Layyah',
+      full_address: 'Layyah City',
       is_active: true,
       manager_user_id: null
     }
@@ -832,101 +708,44 @@ async function main() {
   const findLocationId = (name) => createdLocations.find(l => l.name === name)?.id || null;
 
   // Seed employment records (now referencing main Location via location_id)
+  // Replace with org chart mapping
+  const deptId = (n) => createdDepartments.find(d => d.name === n)?.id;
+  const desigId = (title, deptName) => {
+    const did = deptId(deptName);
+    return createdDesignations.find(d => d.title === title && d.department_id === did)?.id;
+  };
+  const empId = (name) => createdEmployees.find(e => e.full_name === name)?.id;
+
   const employmentRecords = [
-    {
-      employee_id: createdEmployees[0].id,
-      organization: "MBWO",
-      department_id: createdDepartments.find(d => d.name === "Engineering").id,
-      designation_id: createdDesignations.find(d => d.title === "Senior Engineer").id,
-      employment_type: "Regular",
-      effective_from: new Date("2020-01-15"),
-      role_tag_id: createdRoleTags.find(rt => rt.name === "Software Engineer").id,
-      office_location: "Lahore Head Office",
-      remarks: "Promoted to Senior Engineer after excellent performance",
-      scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-17").id,
-      employment_status: "active",
-      is_current: true,
-      filer_status: "filer",
-      filer_active_status: "active",
-      location_id: findLocationId('Lahore Head Office'),
-      is_deleted: false
-    },
-    {
-      employee_id: createdEmployees[1].id,
-      organization: "PMBMC",
-      department_id: createdDepartments.find(d => d.name === "IT").id,
-      designation_id: createdDesignations.find(d => d.title === "Senior Software Developer").id,
-      employment_type: "Contract",
-      effective_from: new Date("2021-03-01"),
-      effective_till: new Date("2024-02-29"),
-      role_tag_id: createdRoleTags.find(rt => rt.name === "Software Engineer").id,
-      office_location: "Karachi Regional Office",
-      is_on_probation: false,
-      remarks: "Contract employee with excellent technical skills",
-      scale_grade_id: createdScaleGrades.find(sg => sg.name === "Grade-A").id,
-      employment_status: "active",
-      is_current: true,
-      filer_status: "non_filer",
-      location_id: findLocationId('Karachi Regional Office'),
-      is_deleted: false
-    },
-    {
-      employee_id: createdEmployees[2].id,
-      organization: "PSBA",
-      department_id: createdDepartments.find(d => d.name === "Operations").id,
-      designation_id: createdDesignations.find(d => d.title === "Operations Manager").id,
-      employment_type: "Regular",
-      effective_from: new Date("2022-06-01"),
-      role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
-      office_location: "Lahore Head Office",
-      is_on_probation: true,
-      probation_end_date: new Date("2024-06-01"),
-      remarks: "Currently on probation period",
-      scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-18").id,
-      employment_status: "active",
-      is_current: true,
-      filer_status: "filer",
-      filer_active_status: "active",
-      location_id: findLocationId('Lahore Head Office'),
-      is_deleted: false
-    },
-    // New: Employees reporting to HR Admin (createdEmployees[1]) for Duty Roster testing
-    {
-      employee_id: createdEmployees[3].id, // Ayesha Malik
-      organization: "PSBA",
-      department_id: createdDepartments.find(d => d.name === "Operations").id,
-      designation_id: createdDesignations.find(d => d.title === "Operations Officer").id,
-      employment_type: "Regular",
-      effective_from: new Date("2023-01-01"),
-      role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
-      office_location: "Karachi Regional Office",
-      remarks: "Reports to HR Admin",
-      scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-17").id,
-      employment_status: "active",
-      is_current: true,
-      filer_status: "non_filer",
-      reporting_officer_id: String(createdEmployees[1].id),
-      location_id: findLocationId('Saddar Bazaar Karachi'),
-      is_deleted: false
-    },
-    {
-      employee_id: createdEmployees[4].id, // Usman Khan
-      organization: "PSBA",
-      department_id: createdDepartments.find(d => d.name === "Operations").id,
-      designation_id: createdDesignations.find(d => d.title === "Operations Officer").id,
-      employment_type: "Regular",
-      effective_from: new Date("2023-02-01"),
-      role_tag_id: createdRoleTags.find(rt => rt.name === "Project Manager").id,
-      office_location: "Karachi Regional Office",
-      remarks: "Reports to HR Admin",
-      scale_grade_id: createdScaleGrades.find(sg => sg.name === "BPS-17").id,
-      employment_status: "active",
-      is_current: true,
-      filer_status: "non_filer",
-      reporting_officer_id: String(createdEmployees[1].id),
-      location_id: findLocationId('Saddar Bazaar Karachi'),
-      is_deleted: false
-    }
+    // DG
+    { employee_id: empId('Naveed Rafaqat Ahmad'), organization: 'PSBA', department_id: deptId('Authority'), designation_id: desigId('Director General', 'Authority'), employment_type: 'Regular', effective_from: new Date('2019-01-01'), office_location: 'Head Quarter', remarks: 'Head of Authority', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-19').id, employment_status: 'active', is_current: true, filer_status: 'filer', location_id: findLocationId('Head Quarter'), is_deleted: false },
+    // Additional Directors reporting to DG
+    { employee_id: empId('Farhan Dilawar Sheikh'), organization: 'PSBA', department_id: deptId('Authority'), designation_id: desigId('Additional Director', 'Authority'), employment_type: 'Regular', effective_from: new Date('2020-01-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-18').id, employment_status: 'active', is_current: true, filer_status: 'filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Roshan Zameer'), organization: 'PSBA', department_id: deptId('Authority'), designation_id: desigId('Additional Director', 'Authority'), employment_type: 'Regular', effective_from: new Date('2020-01-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-18').id, employment_status: 'active', is_current: true, filer_status: 'filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Sadam Hussain'), organization: 'PSBA', department_id: deptId('Authority'), designation_id: desigId('Additional Director', 'Authority'), employment_type: 'Regular', effective_from: new Date('2020-01-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-18').id, employment_status: 'active', is_current: true, filer_status: 'filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    // Senior Head (Sr. Engineer, Civil) reporting to DG
+    { employee_id: empId('Asad Abbas'), organization: 'PSBA', department_id: deptId('Engineering'), designation_id: desigId('Sr. Engineer, Civil', 'Engineering'), employment_type: 'Regular', effective_from: new Date('2019-06-01'), office_location: 'Head Quarter', remarks: 'Sr. Engineer (Civil), reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-18').id, employment_status: 'active', is_current: true, filer_status: 'filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+
+    // Under Farhan
+    { employee_id: empId('Moeen Chishti'), organization: 'PSBA', department_id: deptId('Audit, Compliance & Control'), designation_id: desigId('Assistant Director', 'Audit, Compliance & Control'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to Additional Director Farhan Dilawar Sheikh', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Farhan Dilawar Sheikh')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+
+    // Under Roshan
+    { employee_id: empId('Rizwan Haider Shah'), organization: 'PSBA', department_id: deptId('Projects, Planning & Initiatives'), designation_id: desigId('Assistant Director', 'Projects, Planning & Initiatives'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to Additional Director Roshan Zameer', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Roshan Zameer')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Muhammad Ahmad'), organization: 'PSBA', department_id: deptId('IT'), designation_id: desigId('Assistant Director', 'IT'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to Additional Director Roshan Zameer', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Roshan Zameer')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Muhammad Ali Hassan'), organization: 'PSBA', department_id: deptId('Software Development & Operations'), designation_id: desigId('Assistant Director', 'Software Development & Operations'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to Additional Director Roshan Zameer', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Roshan Zameer')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Barkat Ali Laghari'), organization: 'PSBA', department_id: deptId('Structural Design'), designation_id: desigId('Structural Design Engineer', 'Structural Design'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to Additional Director Roshan Zameer', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Roshan Zameer')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Muhammad Amir'), organization: 'PSBA', department_id: deptId('Architecture'), designation_id: desigId('Architect', 'Architecture'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to Additional Director Roshan Zameer', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Roshan Zameer')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+
+    // Under Sadam
+    { employee_id: empId('Usman Badar'), organization: 'PSBA', department_id: deptId('Ops & Revenue – Central/North'), designation_id: desigId('Assistant Director', 'Ops & Revenue – Central/North'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to Additional Director Sadam Hussain', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Sadam Hussain')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+
+    // Reporting to DG directly
+    { employee_id: empId('Maria Iqbal'), organization: 'PSBA', department_id: deptId('Establishment'), designation_id: desigId('Assistant Director', 'Establishment'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Rab Nawaz Baloch'), organization: 'PSBA', department_id: deptId('Legal'), designation_id: desigId('Assistant Director', 'Legal'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Asim Shahbaz'), organization: 'PSBA', department_id: deptId('Security & Surveillance'), designation_id: desigId('Assistant Director', 'Security & Surveillance'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Muhammad Iqbal'), organization: 'PSBA', department_id: deptId('Budget, Finance & Taxation'), designation_id: desigId('Assistant Director', 'Budget, Finance & Taxation'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Kashif Rasheed'), organization: 'PSBA', department_id: deptId('Accounts, Payroll & Reconciliation'), designation_id: desigId('Assistant Director', 'Accounts, Payroll & Reconciliation'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Muhammad Ali'), organization: 'PSBA', department_id: deptId('HQ Admin / Operations'), designation_id: desigId('Assistant Director', 'HQ Admin / Operations'), employment_type: 'Regular', effective_from: new Date('2021-03-01'), office_location: 'Head Quarter', remarks: 'Reports to DG', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'BPS-17').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false }
   ];
 
   console.log('💼 Seeding employment records...');

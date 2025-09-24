@@ -75,7 +75,7 @@ export function LoginForm({ className, ...props }) {
                 <p className="text-red-500 text-sm text-center -mt-2">{error}</p>
               )}
 
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full text-white" disabled={loading}>
                 {loading ? "Logging in..." : "Login"}
               </Button>
             </div>

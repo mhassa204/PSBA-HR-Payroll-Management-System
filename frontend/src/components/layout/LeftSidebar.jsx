@@ -2,6 +2,8 @@ import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../features/auth/authStore';
 import '../../styles/sidebar.css';
+import ProfilePicture from '../ui/ProfilePicture';
+import axios from '../../lib/axios';
 
 // Simple SVG Icon Components
 const HomeIcon = () => (
@@ -85,6 +87,31 @@ const LeftSidebar = () => {
   const user = useAuthStore((s) => s.user);
   const [expandedItems, setExpandedItems] = useState(new Set());
   const STORAGE_KEY = 'leftSidebar.expandedItems';
+
+  // Fetch current user's employee record (for avatar)
+  const [employee, setEmployee] = useState(null);
+  const [empLoading, setEmpLoading] = useState(false);
+  useEffect(() => {
+    let isMounted = true;
+    const loadEmployee = async () => {
+      if (!user?.employee_id) {
+        if (isMounted) setEmployee(null);
+        return;
+      }
+      try {
+        setEmpLoading(true);
+        const res = await axios.get(`/employees/${user.employee_id}`);
+        if (isMounted) setEmployee(res.data?.employee || null);
+      } catch (e) {
+        // Silently ignore (no permission or not found); fallback avatar will show
+        if (isMounted) setEmployee(null);
+      } finally {
+        if (isMounted) setEmpLoading(false);
+      }
+    };
+    loadEmployee();
+    return () => { isMounted = false; };
+  }, [user?.employee_id]);
 
   // Rehydrate expanded state from storage before paint to avoid flicker
   useLayoutEffect(() => {
@@ -381,11 +408,21 @@ const LeftSidebar = () => {
         <div className="p-4 border-t border-slate-600">
           <div className="bg-slate-700 rounded-lg p-4 mb-4">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
-                <UserIcon className="w-5 h-5 text-white" />
-              </div>
+              {/* Show employee profile picture if available; otherwise placeholder icon */}
+              {employee ? (
+                <ProfilePicture
+                  employee={employee}
+                  size="md"
+                  className="shadow"
+                  onClick={() => navigate('/profile')}
+                />
+              ) : (
+                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
+                  <UserIcon className="w-5 h-5 text-white" />
+                </div>
+              )}
               <div>
-                <p className="text-sm font-medium text-white">{user?.email || 'User'}</p>
+                <p className="text-sm font-medium text-white">{employee?.full_name || user?.email || 'User'}</p>
                 <p className="text-xs text-slate-300">{user?.role?.name || ''}</p>
               </div>
             </div>
