@@ -2,11 +2,14 @@ import api from "../lib/axios";
 
 // Travel Requests
 export const getTravelRequests = () => api.get("/travel/requests").then(r => r.data.requests);
+export const getMyTravelRequests = () => api.get("/travel/requests/mine").then(r => r.data.requests);
 export const getTravelRequest = (id) => api.get(`/travel/requests/${id}`).then(r => r.data.request);
 export const createTravelRequest = (payload) => api.post("/travel/requests", payload).then(r => r.data.request);
 export const updateTravelRequest = (id, payload) => api.put(`/travel/requests/${id}`, payload).then(r => r.data.request);
 export const deleteTravelRequest = (id) => api.delete(`/travel/requests/${id}`).then(r => r.data);
 export const getTravelReportees = () => api.get('/travel/employees/reportees').then(r => r.data.employees);
+export const decideTravelRequest = (id, action) => api.post(`/travel/requests/${id}/decision`, { action }).then(r => r.data.request);
+export const getPendingTravelApprovals = () => api.get('/travel/requests/pending-approvals').then(r => r.data.requests);
 
 // Travel Claims
 export const getTravelClaims = () => api.get("/travel/claims").then(r => r.data.claims);

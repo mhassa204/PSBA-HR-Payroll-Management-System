@@ -240,9 +240,11 @@ const LeftSidebar = () => {
       icon: PlaneIcon,
       description: 'TADA',
       color: 'bg-fuchsia-600',
-      show: () => can('travel.read') || can('travel.claim.read'),
+      show: () => can('travel.read') || can('travel.claim.read') || can('travel.manage'),
       children: [
         { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => can('travel.read') },
+        { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => can('travel.manage') },
+        { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => can('travel.read') },
         { name: 'Claims', href: '/travel/claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') }
       ]
     }

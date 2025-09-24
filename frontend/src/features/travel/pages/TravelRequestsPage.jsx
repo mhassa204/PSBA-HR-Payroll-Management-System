@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getTravelRequests, getTravelRequest, createTravelRequest, getTravelReportees } from '../../../services/travelService';
+import { getMyTravelRequests, getTravelRequest, createTravelRequest, getTravelReportees, decideTravelRequest } from '../../../services/travelService';
 import SearchableSelect from '../../../components/ui/SearchableSelect';
 import { useAuthStore } from '../../auth/authStore';
 
@@ -35,7 +35,7 @@ export default function TravelRequestsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await getTravelRequests();
+      const data = await getMyTravelRequests();
       setList(data);
     } finally { setLoading(false); }
   };
@@ -159,7 +159,7 @@ export default function TravelRequestsPage() {
       )}
 
       <Card>
-        <Header title="All TADA Requests" />
+        <Header title="My TADA Requests" />
         <div className="divide-y">
           {loading && <div className="p-4 text-slate-500">Loading...</div>}
           {!loading && list.length === 0 && <div className="p-6 text-slate-500">No requests found</div>}
@@ -228,6 +228,16 @@ export default function TravelRequestsPage() {
                           : '—'}
                       </div>
                     </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700">Status: {selected.status}</span>
+                    {selected.status === 'CREATED' && (
+                      <>
+                        <button onClick={async()=>{ try { const r = await decideTravelRequest(selected.id, 'APPROVE'); setSelected(r); await load(); } catch(e){ alert(e.response?.data?.error||'Action failed'); } }} className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white">Approve</button>
+                        <button onClick={async()=>{ try { const r = await decideTravelRequest(selected.id, 'REJECT'); setSelected(r); await load(); } catch(e){ alert(e.response?.data?.error||'Action failed'); } }} className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white">Reject</button>
+                      </>
+                    )}
                   </div>
 
                   <div className="pt-2">

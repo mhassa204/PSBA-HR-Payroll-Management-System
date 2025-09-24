@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { isAuthenticated, authorize } = require('../middleware/auth');
+const { isAuthenticated, authorize, authorizeAny } = require('../middleware/auth');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -44,9 +44,24 @@ router.get('/employees/reportees', isAuthenticated, authorize('travel.read'), as
 });
 
 // Travel Requests CRUD (simplified fields)
-router.get('/requests', isAuthenticated, authorize('travel.read'), async (req, res) => {
+router.get('/requests', isAuthenticated, authorize('travel.manage'), async (req, res) => {
   const list = await prisma.travelRequest.findMany({
     where: { is_deleted: false },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      attendees: { include: { employee: true } },
+      statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
+    }
+  });
+  res.json({ success: true, requests: list });
+});
+
+// List only current user's own requests
+router.get('/requests/mine', isAuthenticated, authorize('travel.read'), async (req, res) => {
+  const applicant_id = Number(req.session.user?.employee_id);
+  if (!applicant_id) return res.json({ success: true, requests: [] });
+  const list = await prisma.travelRequest.findMany({
+    where: { is_deleted: false, applicant_id },
     orderBy: { createdAt: 'desc' },
     include: {
       attendees: { include: { employee: true } },
@@ -99,9 +114,16 @@ router.post('/requests', isAuthenticated, authorize('travel.create'), async (req
   res.json({ success: true, request: full });
 });
 
-router.put('/requests/:id', isAuthenticated, authorize('travel.update'), async (req, res) => {
+router.put('/requests/:id', isAuthenticated, authorizeAny(['travel.manage','travel.update']), async (req, res) => {
   const id = Number(req.params.id);
   const data = req.body || {};
+  // scope: if lacks manage, must be applicant
+  const hasManage = (req.session.user?.permissions || []).includes('travel.manage') || req.session.user?.role?.name === 'Super Admin' || (req.session.user?.permissions||[]).includes('*');
+  if (!hasManage) {
+    const existing = await prisma.travelRequest.findUnique({ where: { id } });
+    if (!existing || existing.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
+    if (existing.applicant_id !== Number(req.session.user?.employee_id)) return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
   const updateData = {};
   if ('purpose' in data) updateData.purpose = data.purpose || null;
   if ('destination' in data) updateData.destination = data.destination || null;
@@ -136,19 +158,32 @@ router.put('/requests/:id', isAuthenticated, authorize('travel.update'), async (
   res.json({ success: true, request: full });
 });
 
-router.delete('/requests/:id', isAuthenticated, authorize('travel.delete'), async (req, res) => {
+router.delete('/requests/:id', isAuthenticated, authorizeAny(['travel.manage','travel.delete']), async (req, res) => {
   const id = Number(req.params.id);
   const row = await prisma.travelRequest.findUnique({ where: { id } });
   if (!row || row.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
+  // scope: if lacks manage, only applicant can delete
+  const hasManage = (req.session.user?.permissions || []).includes('travel.manage') || req.session.user?.role?.name === 'Super Admin' || (req.session.user?.permissions||[]).includes('*');
+  if (!hasManage && row.applicant_id !== Number(req.session.user?.employee_id)) {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
   if (row.status !== 'CREATED') return res.status(400).json({ success: false, error: 'Only CREATED requests can be deleted' });
   await prisma.travelRequest.update({ where: { id }, data: { is_deleted: true } });
   res.json({ success: true });
 });
 
-router.get('/requests/:id', isAuthenticated, authorize('travel.read'), async (req, res) => {
+router.get('/requests/:id', isAuthenticated, authorizeAny(['travel.manage','travel.read']), async (req, res) => {
   const id = Number(req.params.id);
   const row = await prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
   if (!row || row.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
+  // Scope check: if user lacks travel.manage, they must be the applicant or an attendee
+  const hasManage = (req.session.user?.permissions || []).includes('travel.manage') || req.session.user?.role?.name === 'Super Admin' || (req.session.user?.permissions||[]).includes('*');
+  if (!hasManage) {
+    const me = Number(req.session.user?.employee_id);
+    const isApplicant = row.applicant_id === me;
+    const isAttendee = (row.attendees || []).some(a => a.employee_id === me);
+    if (!isApplicant && !isAttendee) return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
   res.json({ success: true, request: row });
 });
 
@@ -294,6 +329,97 @@ router.delete('/claims/:id/items/:itemId/receipts/:receiptId', isAuthenticated, 
   const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
   const mapped = { ...full, items: (full.items||[]).map(it => ({ ...it, url: it.receipt_path ? toUrl(it.receipt_path) : null, receipts: (it.receipts||[]).map(r => ({ ...r, url: toUrl(r.file_path) })) })) };
   res.json({ success: true, claim: mapped });
+});
+
+// Approve/Reject a travel request based on location/role rules
+router.post('/requests/:id/decision', isAuthenticated, async (req, res) => {
+  const id = Number(req.params.id);
+  const action = String((req.body?.action || '')).toUpperCase(); // APPROVE | REJECT
+  if (!['APPROVE','REJECT'].includes(action)) return res.status(400).json({ success: false, error: 'Invalid action' });
+
+  const meEmpId = Number(req.session.user?.employee_id);
+  if (!meEmpId) return res.status(400).json({ success: false, error: 'User not linked to employee' });
+
+  const request = await prisma.travelRequest.findUnique({ where: { id }, include: { attendees: true } });
+  if (!request || request.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
+  if (request.status !== 'CREATED') return res.status(400).json({ success: false, error: 'Only CREATED requests can be decided' });
+
+  // Applicant current employment with location
+  const applicantEmployment = await prisma.employment.findFirst({
+    where: { employee_id: request.applicant_id, is_current: true, is_deleted: false },
+    include: { location: true }
+  });
+  const applicantLocType = applicantEmployment?.location?.type || 'HEAD_OFFICE';
+
+  // Approver current employment with dept/designation
+  const approverEmployment = await prisma.employment.findFirst({
+    where: { employee_id: meEmpId, is_current: true, is_deleted: false },
+    include: { department: true, designation: true }
+  });
+  const deptName = approverEmployment?.department?.name || '';
+  const desigTitle = approverEmployment?.designation?.title || '';
+
+  const isOps = /operations/i.test(deptName);
+  const isDG = /^director\s+general$/i.test(desigTitle);
+
+  // Authorization rules
+  if (applicantLocType === 'BAZAAR') {
+    if (!isOps) return res.status(403).json({ success: false, error: 'Only Operations can approve/reject bazaar requests' });
+  } else {
+    // HEAD_OFFICE (or default)
+    if (!isDG) return res.status(403).json({ success: false, error: 'Only Director General can approve/reject head office requests' });
+  }
+
+  const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+  await prisma.travelRequest.update({ where: { id }, data: { status: newStatus } });
+  await prisma.travelRequestStatusEntry.create({ data: { request_id: id, action: newStatus, actor_employee_id: meEmpId } });
+
+  const full = await prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+  res.json({ success: true, request: full });
+});
+
+// List pending approvals eligible for current user
+router.get('/requests/pending-approvals', isAuthenticated, authorize('travel.read'), async (req, res) => {
+  const meEmpId = Number(req.session.user?.employee_id);
+  if (!meEmpId) return res.json({ success: true, requests: [] });
+
+  // Determine approver role (Ops or DG)
+  const approverEmployment = await prisma.employment.findFirst({
+    where: { employee_id: meEmpId, is_current: true, is_deleted: false },
+    include: { department: true, designation: true }
+  });
+  const deptName = approverEmployment?.department?.name || '';
+  const desigTitle = approverEmployment?.designation?.title || '';
+  const isOps = /operations/i.test(deptName);
+  const isDG = /^director\s+general$/i.test(desigTitle);
+
+  const allowedTypes = [];
+  if (isOps) allowedTypes.push('BAZAAR');
+  if (isDG) allowedTypes.push('HEAD_OFFICE');
+  if (allowedTypes.length === 0) return res.json({ success: true, requests: [] });
+
+  const list = await prisma.travelRequest.findMany({
+    where: {
+      is_deleted: false,
+      status: 'CREATED',
+      applicant: {
+        employmentRecords: {
+          some: {
+            is_current: true,
+            is_deleted: false,
+            location: { is: { type: { in: allowedTypes } } }
+          }
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      attendees: { include: { employee: true } },
+      statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
+    }
+  });
+
+  res.json({ success: true, requests: list });
 });
 
 module.exports = router;

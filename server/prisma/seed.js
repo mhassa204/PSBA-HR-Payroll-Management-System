@@ -340,7 +340,7 @@ async function main() {
     'permissions.read','permissions.manage',
     'system.database.read','system.security.read','system.security.update','system.themes.read','system.themes.update',
     'admin.tools',
-    'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status',
+    'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.manage',
     'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.settle',
     'reports.read','audit.read','requests.approve','profile.read','profile.update'
   ];
@@ -372,7 +372,7 @@ async function main() {
     if (orig.name === 'HR Admin') {
       const extraKeys = [
         'attendance.map','leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leaves.apply','leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete','leave-types.read','leave-types.create','leave-types.update','leave-types.delete',
-        'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status',
+        'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.manage',
         'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.settle'
       ];
       const extraPerms = await prisma.permission.findMany({ where: { key: { in: extraKeys } } });

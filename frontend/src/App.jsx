@@ -50,6 +50,8 @@ import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
 import LeaveApply from './features/attendance/pages/LeaveApply';
 import TravelRequestsPage from "./features/travel/pages/TravelRequestsPage";
 import TravelClaimsPage from "./features/travel/pages/TravelClaimsPage";
+import ManageTravelRequests from "./features/travel/pages/ManageTravelRequests";
+import TravelApprovalsPage from "./features/travel/pages/TravelApprovalsPage";
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -421,6 +423,22 @@ function App() {
               element={
                 <PrivateRoute permissions={["travel.read"]}>
                   <TravelRequestsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="travel/manage"
+              element={
+                <PrivateRoute permissions={["travel.manage"]}>
+                  <ManageTravelRequests />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="travel/approvals"
+              element={
+                <PrivateRoute permissions={["travel.read"]}>
+                  <TravelApprovalsPage />
                 </PrivateRoute>
               }
             />
