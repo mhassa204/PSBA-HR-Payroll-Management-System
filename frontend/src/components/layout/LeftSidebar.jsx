@@ -238,14 +238,12 @@ const LeftSidebar = () => {
       name: 'Travel',
       href: '/travel',
       icon: PlaneIcon,
-      description: 'TADA & Approvals',
+      description: 'TADA',
       color: 'bg-fuchsia-600',
-      show: () => can('travel.read') || can('travel.claim.read') || can('travel.approval') || can('travel.claim.verify') || can('travel.claim.approval'),
+      show: () => can('travel.read') || can('travel.claim.read'),
       children: [
         { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => can('travel.read') },
-        { name: 'Claims', href: '/travel/claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') },
-        { name: 'My Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => can('travel.approval') || can('travel.claim.verify') || can('travel.claim.approval') },
-        { name: 'Settings', href: '/travel/settings', icon: ViewColumnsIcon, show: () => can('travel.settings.read') }
+        { name: 'Claims', href: '/travel/claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') }
       ]
     }
   ];

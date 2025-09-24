@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { getTravelClaims, getTravelClaim, createTravelClaim, updateTravelClaim, submitTravelClaim, /*uploadClaimReceipts,*/ updateClaimItem, deleteClaimItem, uploadClaimItemReceipts, deleteClaimItemReceipt } from '../../../services/travelService';
+import React, { useEffect, useMemo, useState } from 'react';
+import { getTravelClaims, getTravelClaim, createTravelClaim, updateTravelClaim, /*uploadClaimReceipts,*/ updateClaimItem, deleteClaimItem, uploadClaimItemReceipts, deleteClaimItemReceipt } from '../../../services/travelService';
 import { useAuthStore } from '../../auth/authStore';
 
 const Card = ({ children, className = '' }) => (
@@ -77,11 +77,6 @@ export default function TravelClaimsPage() {
     });
     if (uploads.length) await Promise.all(uploads);
     setForm({ notes: '', items: [] });
-    await load();
-  };
-
-  const onSubmit = async (id) => {
-    await submitTravelClaim(id);
     await load();
   };
 
@@ -215,10 +210,7 @@ export default function TravelClaimsPage() {
               <div className="flex items-center gap-2">
                 <span className={`px-2 py-1 rounded-full text-xs ${r.status==='PENDING_APPROVAL' ? 'bg-amber-100 text-amber-700' : r.status==='APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>{r.status}</span>
                 <button onClick={() => openDetail(r)} className="px-3 py-1 rounded-md bg-slate-100 text-slate-700 border">View</button>
-                {can('travel.claim.submit') && r.status === 'DRAFT' && (
-                  <button onClick={() => onSubmit(r.id)} className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white">Submit</button>
-                )}
-                {/* Removed general Upload Receipts button */}
+                {/* Removed submit button since approvals/workflow removed */}
               </div>
             </div>
           ))}

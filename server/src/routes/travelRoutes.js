@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { isAuthenticated, authorize, authorizeAny } = require('../middleware/auth');
+const { isAuthenticated, authorize } = require('../middleware/auth');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -14,7 +14,6 @@ function computeTotalDays(departureDate, departureTime, expectedReturnDate) {
     if (!Number.isNaN(Number(hh))) dep.setHours(Number(hh), Number(mm||0), 0, 0);
   }
   const ret = new Date(expectedReturnDate);
-  // Normalize midnight end
   const ms = ret.getTime() - dep.getTime();
   const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
   return Math.max(1, days);
@@ -290,43 +289,6 @@ router.delete('/claims/:id/items/:itemId/receipts/:receiptId', isAuthenticated, 
   const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
   const mapped = { ...full, items: (full.items||[]).map(it => ({ ...it, url: it.receipt_path ? toUrl(it.receipt_path) : null, receipts: (it.receipts||[]).map(r => ({ ...r, url: toUrl(r.file_path) })) })) };
   res.json({ success: true, claim: mapped });
-});
-
-// Workflow Settings: read definition
-router.get('/settings/workflows/:key', isAuthenticated, authorize('travel.settings.read'), async (req, res) => {
-  const key = req.params.key;
-  const def = await prisma.workflowDefinition.findUnique({ where: { key }, include: { steps: { orderBy: { order: 'asc' } } } });
-  if (!def) return res.status(404).json({ success: false, error: 'Workflow not found' });
-  res.json({ success: true, workflow: def });
-});
-
-// Workflow Settings: update definition steps wholesale (replace)
-router.put('/settings/workflows/:key', isAuthenticated, authorize('travel.settings.update'), async (req, res) => {
-  const key = req.params.key;
-  const { name, is_active, steps } = req.body || {};
-  const def = await prisma.workflowDefinition.upsert({ where: { key }, update: { name, is_active }, create: { key, name: name || key, is_active: !!is_active } });
-  if (Array.isArray(steps)) {
-    await prisma.workflowStepDefinition.deleteMany({ where: { workflow_definition_id: def.id } });
-    for (const s of steps) {
-      await prisma.workflowStepDefinition.create({ data: { workflow_definition_id: def.id, order: Number(s.order), name: s.name, approval_mode: s.approval_mode || 'ALL', required_count: s.required_count || null, dynamic_assignees: s.dynamic_assignees || [] } });
-    }
-  }
-  const full = await prisma.workflowDefinition.findUnique({ where: { key }, include: { steps: { orderBy: { order: 'asc' } } } });
-  res.json({ success: true, workflow: full });
-});
-
-// Approvals
-router.get('/approvals/my', isAuthenticated, authorizeAny(['travel.approval','travel.claim.verify','travel.claim.approval']), async (req, res) => {
-  const userId = req.session.user.id;
-  const steps = await workflowService.getPendingForUser(userId);
-  res.json({ success: true, steps });
-});
-
-router.post('/approvals/:instanceId/act', isAuthenticated, authorizeAny(['travel.approval','travel.claim.verify','travel.claim.approval']), async (req, res) => {
-  const instanceId = Number(req.params.instanceId);
-  const { decision, comment } = req.body || {};
-  const result = await workflowService.actOnInstance(instanceId, req.session.user.id, decision, comment);
-  res.json({ success: true, result });
 });
 
 module.exports = router;

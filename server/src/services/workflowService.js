@@ -176,4 +176,4 @@ class WorkflowService {
   }
 }
 
-module.exports = new WorkflowService();
+module.exports = {};

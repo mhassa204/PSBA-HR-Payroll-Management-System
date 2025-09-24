@@ -199,7 +199,13 @@ export default function TravelRequestsPage() {
                     </div>
                     <div>
                       <div className="text-slate-500">Employees</div>
-                      <div className="font-medium text-slate-800">{(selected.attendees||[]).map(a => `${a.employee.full_name} — ${a.employee.cnic || 'N/A'}`).join(', ') || '—'}</div>
+                      <div className="font-medium text-slate-800 space-y-1">
+                        {(selected.attendees||[]).length
+                          ? (selected.attendees||[]).map(a => (
+                              <div key={a.id}>{a.employee.full_name} — {a.employee.cnic || 'N/A'}</div>
+                            ))
+                          : '—'}
+                      </div>
                     </div>
                   </div>
 

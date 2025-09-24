@@ -338,7 +338,6 @@ model User {
   createdRosters DutyRoster[]
   // Back-relation: leave banks created by this user
   createdLeaveBanks LeaveBank[]
-  approvals         Approval[] @relation("UserApprovals")
 }
 
 model Session {
@@ -577,7 +576,7 @@ model LeaveBankAllocation {
   @@index([leave_type_id])
 }
 
-// ===== Travel Module & Generic Workflow Engine =====
+// ===== Travel Module =====
 
 enum TravelClaimStatus {
   DRAFT
@@ -588,32 +587,6 @@ enum TravelClaimStatus {
   REJECTED
   PARTIALLY_SETTLED
   SETTLED
-}
-
-enum WorkflowInstanceStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CANCELLED
-}
-
-enum WorkflowStepStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  SKIPPED
-}
-
-enum ApprovalDecision {
-  APPROVE
-  REJECT
-  RETURN
-}
-
-enum ApprovalMode {
-  ALL
-  ANY
-  QUORUM
 }
 
 model TravelRequest {
@@ -716,77 +689,4 @@ model TravelRequestStatusEntry {
 
   @@index([request_id])
   @@index([actor_employee_id])
-}
-
-model WorkflowDefinition {
-  id          Int       @id @default(autoincrement())
-  key         String    @unique // e.g., "travel.request", "travel.claim"
-  name        String
-  is_active   Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  steps       WorkflowStepDefinition[]
-}
-
-model WorkflowStepDefinition {
-  id                     Int                 @id @default(autoincrement())
-  workflow_definition_id Int
-  order                  Int
-  name                   String
-  approval_mode          ApprovalMode        @default(ALL)
-  required_count         Int?                // used for QUORUM
-  dynamic_assignees      Json                // [{type:'REPORTING_OFFICER'},{type:'PERMISSION',value:'travel.approval'}]
-  conditions             Json?               // optional conditions like thresholds
-  definition             WorkflowDefinition  @relation(fields: [workflow_definition_id], references: [id], onDelete: Cascade)
-  step_instances     WorkflowStepInstance[]
-
-  @@index([workflow_definition_id])
-  @@unique([workflow_definition_id, order], name: "wfdef_order_unique")
-}
-
-model WorkflowInstance {
-  id                 Int                     @id @default(autoincrement())
-  target_type        String                  // 'TravelRequest' | 'TravelClaim' | ...
-  target_id          Int
-  status             WorkflowInstanceStatus  @default(PENDING)
-  current_step_order Int?                    // null when finished
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime               @updatedAt
-  step_instances     WorkflowStepInstance[]
-
-  @@index([target_type, target_id])
-}
-
-model WorkflowStepInstance {
-  id                 Int                @id @default(autoincrement())
-  instance_id        Int
-  step_def_id        Int
-  order              Int
-  status             WorkflowStepStatus @default(PENDING)
-  approval_mode      ApprovalMode       @default(ALL)
-  required_count     Int?
-  approved_count     Int?               @default(0)
-  assignees          Json               // resolved user ids at runtime
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  instance           WorkflowInstance   @relation(fields: [instance_id], references: [id], onDelete: Cascade)
-  step_definition    WorkflowStepDefinition @relation(fields: [step_def_id], references: [id])
-  approvals          Approval[]
-
-  @@index([instance_id])
-  @@index([step_def_id])
-}
-
-model Approval {
-  id               Int               @id @default(autoincrement())
-  step_instance_id Int
-  approver_user_id Int
-  decision         ApprovalDecision
-  comment          String?
-  decided_at       DateTime          @default(now())
-  step_instance    WorkflowStepInstance @relation(fields: [step_instance_id], references: [id], onDelete: Cascade)
-  approver         User              @relation(name: "UserApprovals", fields: [approver_user_id], references: [id])
-
-  @@index([step_instance_id])
-  @@index([approver_user_id])
 }
