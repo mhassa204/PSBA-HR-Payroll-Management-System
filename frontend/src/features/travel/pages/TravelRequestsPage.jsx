@@ -24,7 +24,7 @@ export default function TravelRequestsPage() {
   const can = useAuthStore(s => s.can);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ purpose: '', departure_date: '', departure_time: '', expected_return_date: '', total_days: '' });
+  const [form, setForm] = useState({ purpose: '', destination: '', departure_date: '', departure_time: '', expected_return_date: '', total_days: '' });
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]); // array of ids
 
@@ -69,6 +69,7 @@ export default function TravelRequestsPage() {
   const onCreate = async () => {
     const payload = {
       purpose: form.purpose || null,
+      destination: form.destination || null,
       departure_date: form.departure_date,
       departure_time: form.departure_time || null,
       expected_return_date: form.expected_return_date,
@@ -76,7 +77,7 @@ export default function TravelRequestsPage() {
       employee_ids: selectedEmployees,
     };
     await createTravelRequest(payload);
-    setForm({ purpose: '', departure_date: '', departure_time: '', expected_return_date: '', total_days: '' });
+    setForm({ purpose: '', destination: '', departure_date: '', departure_time: '', expected_return_date: '', total_days: '' });
     setSelectedEmployees([]);
     await load();
   };
@@ -86,6 +87,14 @@ export default function TravelRequestsPage() {
     setSelected(null);
     const full = await getTravelRequest(id);
     setSelected(full);
+  };
+
+  const onDelete = async (id) => {
+    if (!window.confirm('Delete this request?')) return;
+    try {
+      await (await import('../../../services/travelService')).deleteTravelRequest(id);
+      await load();
+    } catch (e) { console.error(e); }
   };
 
   return (
@@ -135,6 +144,10 @@ export default function TravelRequestsPage() {
               <Input name="purpose" value={form.purpose} onChange={onChange} placeholder="e.g., Market visit" />
             </div>
             <div>
+              <label className="text-sm text-slate-600">Destination</label>
+              <Input name="destination" value={form.destination} onChange={onChange} placeholder="e.g., Lahore, Karachi" />
+            </div>
+            <div>
               <label className="text-sm text-slate-600">Total Days of Travel</label>
               <Input name="total_days" value={previewDays} readOnly placeholder="Auto-calculated" />
             </div>
@@ -154,10 +167,14 @@ export default function TravelRequestsPage() {
             <div key={r.id} className="p-4 flex items-center justify-between text-sm">
               <div>
                 <div className="font-medium text-slate-800">{r.purpose || '—'}</div>
-                <div className="text-slate-500">{String(r.departure_date).slice(0,10)} {r.departure_time ? `at ${r.departure_time}`:''} → {String(r.expected_return_date).slice(0,10)} · {r.total_days ? `${r.total_days} day(s)` : '—'}</div>
+                <div className="text-slate-500">{r.destination ? `${r.destination} · ` : ''}{String(r.departure_date).slice(0,10)} {r.departure_time ? `at ${r.departure_time}`:''} → {String(r.expected_return_date).slice(0,10)} · {r.total_days ? `${r.total_days} day(s)` : '—'}</div>
               </div>
               <div className="flex items-center gap-2">
+                <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700">{r.status || 'CREATED'}</span>
                 <button onClick={()=>openDetail(r.id)} className="px-3 py-1 rounded-md bg-slate-100 text-slate-700 border">View</button>
+                {r.status === 'CREATED' && (
+                  <button onClick={()=>onDelete(r.id)} className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white">Delete</button>
+                )}
               </div>
             </div>
           ))}
@@ -184,6 +201,10 @@ export default function TravelRequestsPage() {
                     <div>
                       <div className="text-slate-500">Purpose</div>
                       <div className="font-medium text-slate-800">{selected.purpose || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500">Destination</div>
+                      <div className="font-medium text-slate-800">{selected.destination || '—'}</div>
                     </div>
                     <div>
                       <div className="text-slate-500">Departure</div>

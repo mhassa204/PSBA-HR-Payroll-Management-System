@@ -589,6 +589,13 @@ enum TravelClaimStatus {
   SETTLED
 }
 
+enum TravelRequestStatus {
+  CREATED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 model TravelRequest {
   id                   Int                        @id @default(autoincrement())
   applicant_id         Int
@@ -597,10 +604,12 @@ model TravelRequest {
   departure_time       String?
   expected_return_date DateTime
   purpose              String?
+  destination          String?
   total_days           Int?
   createdAt            DateTime                   @default(now())
   updatedAt            DateTime                   @updatedAt
   is_deleted           Boolean                    @default(false)
+  status               TravelRequestStatus       @default(CREATED)
 
   applicant            Employee                   @relation(fields: [applicant_id], references: [id])
   attendees            TravelRequestEmployee[]

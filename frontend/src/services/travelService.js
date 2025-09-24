@@ -5,6 +5,7 @@ export const getTravelRequests = () => api.get("/travel/requests").then(r => r.d
 export const getTravelRequest = (id) => api.get(`/travel/requests/${id}`).then(r => r.data.request);
 export const createTravelRequest = (payload) => api.post("/travel/requests", payload).then(r => r.data.request);
 export const updateTravelRequest = (id, payload) => api.put(`/travel/requests/${id}`, payload).then(r => r.data.request);
+export const deleteTravelRequest = (id) => api.delete(`/travel/requests/${id}`).then(r => r.data);
 export const getTravelReportees = () => api.get('/travel/employees/reportees').then(r => r.data.employees);
 
 // Travel Claims
@@ -27,3 +28,4 @@ export const uploadClaimItemReceipts = async (claimId, itemId, files) => {
   return r.data.claim;
 };
 export const deleteClaimItemReceipt = (claimId, itemId, receiptId) => api.delete(`/travel/claims/${claimId}/items/${itemId}/receipts/${receiptId}`).then(r => r.data.claim);
+// Removed approvals APIs and submit

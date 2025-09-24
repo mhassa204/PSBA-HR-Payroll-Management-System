@@ -80,8 +80,9 @@ router.post('/requests', isAuthenticated, authorize('travel.create'), async (req
       departure_time: data.departure_time || null,
       expected_return_date: new Date(data.expected_return_date),
       purpose: data.purpose || null,
+      destination: data.destination || null,
       total_days: computedDays,
-      // submission_date auto-defaults via Prisma
+      status: 'CREATED',
     }
   });
 
@@ -103,6 +104,7 @@ router.put('/requests/:id', isAuthenticated, authorize('travel.update'), async (
   const data = req.body || {};
   const updateData = {};
   if ('purpose' in data) updateData.purpose = data.purpose || null;
+  if ('destination' in data) updateData.destination = data.destination || null;
   if ('departure_date' in data && data.departure_date) updateData.departure_date = new Date(data.departure_date);
   if ('departure_time' in data) updateData.departure_time = data.departure_time || null;
   if ('expected_return_date' in data && data.expected_return_date) updateData.expected_return_date = new Date(data.expected_return_date);
@@ -136,6 +138,9 @@ router.put('/requests/:id', isAuthenticated, authorize('travel.update'), async (
 
 router.delete('/requests/:id', isAuthenticated, authorize('travel.delete'), async (req, res) => {
   const id = Number(req.params.id);
+  const row = await prisma.travelRequest.findUnique({ where: { id } });
+  if (!row || row.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
+  if (row.status !== 'CREATED') return res.status(400).json({ success: false, error: 'Only CREATED requests can be deleted' });
   await prisma.travelRequest.update({ where: { id }, data: { is_deleted: true } });
   res.json({ success: true });
 });
