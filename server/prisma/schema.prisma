@@ -62,6 +62,9 @@ model Employee {
   // Travel back-relations
   travelRequests          TravelRequest[]
   travelClaims            TravelClaim[]
+  // New back-relations for travel request attendees and status actions
+  travelRequestAttendees  TravelRequestEmployee[]
+  travelRequestStatusActions TravelRequestStatusEntry[]
 }
 
 model Department {
@@ -576,16 +579,6 @@ model LeaveBankAllocation {
 
 // ===== Travel Module & Generic Workflow Engine =====
 
-enum TravelRequestStatus {
-  DRAFT
-  SUBMITTED
-  PENDING_APPROVAL
-  APPROVED
-  REJECTED
-  RETURNED
-  CANCELLED
-}
-
 enum TravelClaimStatus {
   DRAFT
   SUBMITTED
@@ -624,40 +617,26 @@ enum ApprovalMode {
 }
 
 model TravelRequest {
-  id              Int                  @id @default(autoincrement())
-  applicant_id    Int
-  purpose         String?
-  destination     String?
-  departure_date  DateTime?
-  departure_time  String?
-  return_date     DateTime?
-  return_time     String?
-  total_days      Int?
-  transport_mode  String?
-  estimated_cost  Float?               @default(0)
-  cost_center     String?
-  status          TravelRequestStatus  @default(DRAFT)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  is_deleted      Boolean              @default(false)
-  applicant       Employee             @relation(fields: [applicant_id], references: [id])
-  claims          TravelClaim[]
-  documents       TravelRequestDocument[]
-  
+  id                   Int                        @id @default(autoincrement())
+  applicant_id         Int
+  submission_date      DateTime                   @default(now())
+  departure_date       DateTime
+  departure_time       String?
+  expected_return_date DateTime
+  purpose              String?
+  total_days           Int?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  is_deleted           Boolean                    @default(false)
+
+  applicant            Employee                   @relation(fields: [applicant_id], references: [id])
+  attendees            TravelRequestEmployee[]
+  statusEntries        TravelRequestStatusEntry[]
+
+  // Keep relation for claims if used elsewhere
+  claims               TravelClaim[]
+
   @@index([applicant_id])
-}
-
-model TravelRequestDocument {
-  id            Int            @id @default(autoincrement())
-  request_id    Int
-  file_path     String
-  document_name String?
-  mime_type     String?
-  file_size     Int?
-  createdAt     DateTime       @default(now())
-  request       TravelRequest  @relation(fields: [request_id], references: [id], onDelete: Cascade)
-
-  @@index([request_id])
 }
 
 model TravelClaim {
@@ -710,6 +689,33 @@ model TravelClaimReceipt {
   item          TravelClaimItem  @relation(fields: [item_id], references: [id], onDelete: Cascade)
 
   @@index([item_id])
+}
+
+// New: many-to-many attendees for a travel request
+model TravelRequestEmployee {
+  id          Int         @id @default(autoincrement())
+  request_id  Int
+  employee_id Int
+  request     TravelRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  employee    Employee     @relation(fields: [employee_id], references: [id])
+
+  @@unique([request_id, employee_id], name: "request_employee_unique")
+  @@index([employee_id])
+}
+
+// New: status history entries for travel request
+model TravelRequestStatusEntry {
+  id                 Int       @id @default(autoincrement())
+  request_id         Int
+  action             String    // e.g., CREATED, APPROVED
+  actor_employee_id  Int
+  createdAt          DateTime  @default(now())
+
+  request            TravelRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  actor              Employee      @relation(fields: [actor_employee_id], references: [id])
+
+  @@index([request_id])
+  @@index([actor_employee_id])
 }
 
 model WorkflowDefinition {

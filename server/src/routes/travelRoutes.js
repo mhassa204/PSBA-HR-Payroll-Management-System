@@ -2,37 +2,101 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const upload = require('../config/multer');
 const { isAuthenticated, authorize, authorizeAny } = require('../middleware/auth');
-const workflowService = require('../services/workflowService');
-const { uploadTravelRequest, uploadTravelClaim, uploadTravelClaimItem } = require('../config/multer');
 const fs = require('fs').promises;
 const path = require('path');
 
-// Travel Requests CRUD
+// Utility: compute total days between date-time and expected return date using server timezone
+function computeTotalDays(departureDate, departureTime, expectedReturnDate) {
+  const dep = new Date(departureDate);
+  if (departureTime) {
+    const [hh, mm] = String(departureTime).split(':');
+    if (!Number.isNaN(Number(hh))) dep.setHours(Number(hh), Number(mm||0), 0, 0);
+  }
+  const ret = new Date(expectedReturnDate);
+  // Normalize midnight end
+  const ms = ret.getTime() - dep.getTime();
+  const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
+  return Math.max(1, days);
+}
+
+// Return reportees + self for logged-in user (for employee selector)
+router.get('/employees/reportees', isAuthenticated, authorize('travel.read'), async (req, res) => {
+  const currentEmpId = req.session.user?.employee_id;
+  if (!currentEmpId) return res.json({ success: true, employees: [] });
+
+  // Fetch self
+  const self = await prisma.employee.findUnique({ where: { id: Number(currentEmpId) } });
+
+  // reporting_officer_id stores the numeric employee id as string in Employment
+  const officerKey = String(currentEmpId);
+  const employments = await prisma.employment.findMany({
+    where: { is_deleted: false, is_current: true, reporting_officer_id: officerKey },
+    include: { employee: true }
+  });
+  const reportees = employments.map(e => e.employee).filter(Boolean);
+
+  // Ensure unique and include self
+  const map = new Map();
+  for (const e of reportees) if (e) map.set(e.id, e);
+  if (self) map.set(self.id, self);
+  const employees = Array.from(map.values()).map(e => ({ id: e.id, full_name: e.full_name, cnic: e.cnic || '' }));
+  res.json({ success: true, employees });
+});
+
+// Travel Requests CRUD (simplified fields)
 router.get('/requests', isAuthenticated, authorize('travel.read'), async (req, res) => {
-  const list = await prisma.travelRequest.findMany({ where: { is_deleted: false }, orderBy: { createdAt: 'desc' } });
+  const list = await prisma.travelRequest.findMany({
+    where: { is_deleted: false },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      attendees: { include: { employee: true } },
+      statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
+    }
+  });
   res.json({ success: true, requests: list });
 });
 
 router.post('/requests', isAuthenticated, authorize('travel.create'), async (req, res) => {
   const data = req.body || {};
-  const applicant_id = Number(data.applicant_id || req.session.user?.employee_id);
-  const payload = {
-    purpose: data.purpose || null,
-    destination: data.destination || null,
-    departure_date: data.departure_date ? new Date(data.departure_date) : null,
-    departure_time: data.departure_time || null,
-    return_date: data.return_date ? new Date(data.return_date) : null,
-    return_time: data.return_time || null,
-    total_days: data.total_days != null && data.total_days !== '' ? Number(data.total_days) : null,
-    transport_mode: data.transport_mode || null,
-    estimated_cost: data.estimated_cost != null && data.estimated_cost !== '' ? Number(data.estimated_cost) : null,
-    cost_center: data.cost_center || null,
-    applicant_id,
-  };
-  const created = await prisma.travelRequest.create({ data: payload });
-  res.json({ success: true, request: created });
+  const applicant_id = Number(req.session.user?.employee_id);
+  if (!applicant_id) return res.status(400).json({ success: false, error: 'Applicant not linked to user' });
+
+  // required fields
+  if (!data.departure_date) return res.status(400).json({ success: false, error: 'departure_date is required' });
+  if (!data.expected_return_date) return res.status(400).json({ success: false, error: 'expected_return_date is required' });
+
+  // Validate total_days if provided
+  const computedDays = computeTotalDays(data.departure_date, data.departure_time, data.expected_return_date);
+  if (data.total_days != null && data.total_days !== '' && Number(data.total_days) !== computedDays) {
+    return res.status(400).json({ success: false, error: `total_days (${data.total_days}) does not match date range (${computedDays})` });
+  }
+
+  const attendeeIds = Array.isArray(data.employee_ids) ? data.employee_ids.map(Number).filter(Boolean) : [];
+
+  const created = await prisma.travelRequest.create({
+    data: {
+      applicant_id,
+      departure_date: new Date(data.departure_date),
+      departure_time: data.departure_time || null,
+      expected_return_date: new Date(data.expected_return_date),
+      purpose: data.purpose || null,
+      total_days: computedDays,
+      // submission_date auto-defaults via Prisma
+    }
+  });
+
+  if (attendeeIds.length) {
+    await prisma.travelRequestEmployee.createMany({ data: attendeeIds.map(eid => ({ request_id: created.id, employee_id: eid })) });
+  }
+
+  // Status history: CREATED
+  await prisma.travelRequestStatusEntry.create({
+    data: { request_id: created.id, action: 'CREATED', actor_employee_id: applicant_id }
+  });
+
+  const full = await prisma.travelRequest.findUnique({ where: { id: created.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+  res.json({ success: true, request: full });
 });
 
 router.put('/requests/:id', isAuthenticated, authorize('travel.update'), async (req, res) => {
@@ -40,18 +104,35 @@ router.put('/requests/:id', isAuthenticated, authorize('travel.update'), async (
   const data = req.body || {};
   const updateData = {};
   if ('purpose' in data) updateData.purpose = data.purpose || null;
-  if ('destination' in data) updateData.destination = data.destination || null;
-  if ('departure_date' in data) updateData.departure_date = data.departure_date ? new Date(data.departure_date) : null;
+  if ('departure_date' in data && data.departure_date) updateData.departure_date = new Date(data.departure_date);
   if ('departure_time' in data) updateData.departure_time = data.departure_time || null;
-  if ('return_date' in data) updateData.return_date = data.return_date ? new Date(data.return_date) : null;
-  if ('return_time' in data) updateData.return_time = data.return_time || null;
-  if ('total_days' in data) updateData.total_days = data.total_days != null && data.total_days !== '' ? Number(data.total_days) : null;
-  if ('transport_mode' in data) updateData.transport_mode = data.transport_mode || null;
-  if ('estimated_cost' in data) updateData.estimated_cost = data.estimated_cost != null && data.estimated_cost !== '' ? Number(data.estimated_cost) : null;
-  if ('cost_center' in data) updateData.cost_center = data.cost_center || null;
+  if ('expected_return_date' in data && data.expected_return_date) updateData.expected_return_date = new Date(data.expected_return_date);
+
+  // Recompute total_days if dates/time provided, else keep existing
+  const existing = await prisma.travelRequest.findUnique({ where: { id } });
+  if (!existing || existing.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
+  const depDate = updateData.departure_date || existing.departure_date;
+  const depTime = ('departure_time' in updateData) ? updateData.departure_time : existing.departure_time;
+  const retDate = updateData.expected_return_date || existing.expected_return_date;
+  const computedDays = computeTotalDays(depDate, depTime, retDate);
+  if (data.total_days != null && data.total_days !== '' && Number(data.total_days) !== computedDays) {
+    return res.status(400).json({ success: false, error: `total_days (${data.total_days}) does not match date range (${computedDays})` });
+  }
+  updateData.total_days = computedDays;
 
   const updated = await prisma.travelRequest.update({ where: { id }, data: updateData });
-  res.json({ success: true, request: updated });
+
+  // Update attendees if provided
+  if (Array.isArray(data.employee_ids)) {
+    await prisma.travelRequestEmployee.deleteMany({ where: { request_id: id } });
+    const attendeeIds = data.employee_ids.map(Number).filter(Boolean);
+    if (attendeeIds.length) {
+      await prisma.travelRequestEmployee.createMany({ data: attendeeIds.map(eid => ({ request_id: id, employee_id: eid })) });
+    }
+  }
+
+  const full = await prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+  res.json({ success: true, request: full });
 });
 
 router.delete('/requests/:id', isAuthenticated, authorize('travel.delete'), async (req, res) => {
@@ -60,47 +141,14 @@ router.delete('/requests/:id', isAuthenticated, authorize('travel.delete'), asyn
   res.json({ success: true });
 });
 
-router.post('/requests/:id/submit', isAuthenticated, authorize('travel.submit'), async (req, res) => {
-  const id = Number(req.params.id);
-  const reqRow = await prisma.travelRequest.update({ where: { id }, data: { status: 'SUBMITTED' } });
-  const inst = await workflowService.createInstanceFor('TravelRequest', id, 'travel.request');
-  await prisma.travelRequest.update({ where: { id }, data: { status: 'PENDING_APPROVAL' } });
-  res.json({ success: true, request: await prisma.travelRequest.findUnique({ where: { id } }), workflow: inst });
-});
-
 router.get('/requests/:id', isAuthenticated, authorize('travel.read'), async (req, res) => {
   const id = Number(req.params.id);
-  const row = await prisma.travelRequest.findUnique({ where: { id }, include: { documents: true } });
+  const row = await prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
   if (!row || row.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
-  const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
-  const withUrls = { ...row, estimated_cost: row.estimated_cost ?? 0, documents: (row.documents||[]).map(d => ({ ...d, url: toUrl(d.file_path) })) };
-  res.json({ success: true, request: withUrls });
+  res.json({ success: true, request: row });
 });
 
-// List documents for a request
-router.get('/requests/:id/documents', isAuthenticated, authorize('travel.read'), async (req, res) => {
-  const id = Number(req.params.id);
-  const docs = await prisma.travelRequestDocument.findMany({ where: { request_id: id } });
-  const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
-  res.json({ success: true, documents: docs.map(d => ({ ...d, url: toUrl(d.file_path) })) });
-});
-
-// Delete a document for a request
-router.delete('/requests/:id/documents/:docId', isAuthenticated, authorize('travel.update'), async (req, res) => {
-  const id = Number(req.params.id);
-  const docId = Number(req.params.docId);
-  const doc = await prisma.travelRequestDocument.findUnique({ where: { id: docId } });
-  if (!doc || doc.request_id !== id) return res.status(404).json({ success: false, error: 'Document not found' });
-  // best-effort file delete
-  try {
-    const abs = path.resolve(__dirname, '../../', doc.file_path);
-    await fs.unlink(abs).catch(()=>{});
-  } catch (_) {}
-  await prisma.travelRequestDocument.delete({ where: { id: docId } });
-  res.json({ success: true });
-});
-
-// Travel Claims CRUD
+// Travel Claims CRUD (unchanged)
 router.get('/claims', isAuthenticated, authorize('travel.claim.read'), async (req, res) => {
   const list = await prisma.travelClaim.findMany({ where: { is_deleted: false }, orderBy: { createdAt: 'desc' }, include: { items: { include: { receipts: true } } } });
   const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
@@ -146,14 +194,6 @@ router.delete('/claims/:id', isAuthenticated, authorize('travel.claim.delete'), 
   const id = Number(req.params.id);
   await prisma.travelClaim.update({ where: { id }, data: { is_deleted: true } });
   res.json({ success: true });
-});
-
-router.post('/claims/:id/submit', isAuthenticated, authorize('travel.claim.submit'), async (req, res) => {
-  const id = Number(req.params.id);
-  await prisma.travelClaim.update({ where: { id }, data: { status: 'SUBMITTED' } });
-  const inst = await workflowService.createInstanceFor('TravelClaim', id, 'travel.claim');
-  await prisma.travelClaim.update({ where: { id }, data: { status: 'PENDING_APPROVAL' } });
-  res.json({ success: true, claim: await prisma.travelClaim.findUnique({ where: { id }, include: { items: true } }), workflow: inst });
 });
 
 router.get('/claims/:id', isAuthenticated, authorize('travel.claim.read'), async (req, res) => {
@@ -203,18 +243,8 @@ router.delete('/claims/:id/items/:itemId', isAuthenticated, authorize('travel.cl
   res.json({ success: true, claim: full });
 });
 
-// Upload documents for a travel request
-router.post('/requests/:id/documents', isAuthenticated, authorize('travel.update'), uploadTravelRequest.array('files', 10), async (req, res) => {
-  const id = Number(req.params.id);
-  if (!req.files?.length) return res.status(400).json({ success: false, error: 'No files uploaded' });
-  const created = await prisma.$transaction(
-    req.files.map(f => prisma.travelRequestDocument.create({ data: { request_id: id, file_path: f._savedRelPath || '', document_name: f.originalname, mime_type: f.mimetype, file_size: f.size } }))
-  );
-  const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
-  res.json({ success: true, documents: created.map(d => ({ ...d, url: toUrl(d.file_path) })) });
-});
-
 // Upload receipts for a claim as new items (category based on query or default Misc)
+const { uploadTravelClaim, uploadTravelClaimItem } = require('../config/multer');
 router.post('/claims/:id/receipts', isAuthenticated, authorize('travel.claim.update'), uploadTravelClaim.array('files', 10), async (req, res) => {
   const id = Number(req.params.id);
   const category = (req.query.category || 'Misc').toString();
@@ -234,15 +264,14 @@ router.post('/claims/:id/items/:itemId/receipts', isAuthenticated, authorize('tr
   const claimId = Number(req.params.id);
   const itemId = Number(req.params.itemId);
   if (!req.files?.length) return res.status(400).json({ success: false, error: 'No files uploaded' });
-  const items = await prisma.$transaction(
+  await prisma.$transaction(
     req.files.map(f => prisma.travelClaimReceipt.create({ data: { item_id: itemId, file_path: f._savedRelPath || '', document_name: f.originalname, mime_type: f.mimetype, file_size: f.size } }))
   );
-  const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
-  const recs = items.map(i => ({ ...i, url: toUrl(i.file_path) }));
   // return updated claim
   const full = await prisma.travelClaim.findUnique({ where: { id: claimId }, include: { items: { include: { receipts: true } } } });
+  const toUrl = (p) => (p ? `${req.protocol}://${req.get('host')}/${String(p).replace(/^\//,'')}` : null);
   const mapped = { ...full, items: (full.items||[]).map(it => ({ ...it, url: it.receipt_path ? toUrl(it.receipt_path) : null, receipts: (it.receipts||[]).map(r => ({ ...r, url: toUrl(r.file_path) })) })) };
-  res.json({ success: true, claim: mapped, receipts: recs });
+  res.json({ success: true, claim: mapped });
 });
 
 // Delete a specific receipt from a claim item
