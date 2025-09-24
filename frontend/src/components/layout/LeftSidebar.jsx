@@ -4,6 +4,7 @@ import { useAuthStore } from '../../features/auth/authStore';
 import '../../styles/sidebar.css';
 import ProfilePicture from '../ui/ProfilePicture';
 import axios from '../../lib/axios';
+import { getTravelCapabilities } from '../../services/travelService';
 
 // Simple SVG Icon Components
 const HomeIcon = () => (
@@ -87,6 +88,7 @@ const LeftSidebar = () => {
   const user = useAuthStore((s) => s.user);
   const [expandedItems, setExpandedItems] = useState(new Set());
   const STORAGE_KEY = 'leftSidebar.expandedItems';
+  const [travelCaps, setTravelCaps] = useState({ canCreateOrOwn: false, canViewAll: false, isOps: false, isHR: false, isDG: false });
 
   // Fetch current user's employee record (for avatar)
   const [employee, setEmployee] = useState(null);
@@ -127,6 +129,13 @@ const LeftSidebar = () => {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(expandedItems)));
   }, [expandedItems]);
+
+  // Fetch travel capabilities
+  useEffect(() => {
+    (async () => {
+      try { const caps = await getTravelCapabilities(); setTravelCaps(caps || {}); } catch(_) {}
+    })();
+  }, []);
 
   const navigation = [
     { 
@@ -240,11 +249,11 @@ const LeftSidebar = () => {
       icon: PlaneIcon,
       description: 'TADA',
       color: 'bg-fuchsia-600',
-      show: () => can('travel.read') || can('travel.claim.read') || can('travel.manage'),
+      show: () => (travelCaps.canCreateOrOwn || travelCaps.canViewAll || can('travel.claim.read')),
       children: [
-        { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => can('travel.read') },
-        { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => can('travel.manage') },
-        { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => can('travel.read') },
+        { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => travelCaps.canCreateOrOwn },
+        { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => travelCaps.canViewAll },
+        { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG) },
         { name: 'Claims', href: '/travel/claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') }
       ]
     }

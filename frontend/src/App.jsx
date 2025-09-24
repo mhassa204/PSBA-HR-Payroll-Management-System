@@ -429,7 +429,7 @@ function App() {
             <Route
               path="travel/manage"
               element={
-                <PrivateRoute permissions={["travel.manage"]}>
+                <PrivateRoute permissions={["travel.read"]}>
                   <ManageTravelRequests />
                 </PrivateRoute>
               }

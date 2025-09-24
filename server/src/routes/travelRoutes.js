@@ -19,11 +19,36 @@ function computeTotalDays(departureDate, departureTime, expectedReturnDate) {
   return Math.max(1, days);
 }
 
-// Return reportees + self for logged-in user (for employee selector)
-router.get('/employees/reportees', isAuthenticated, authorize('travel.read'), async (req, res) => {
-  const currentEmpId = req.session.user?.employee_id;
-  if (!currentEmpId) return res.json({ success: true, employees: [] });
+// RBAC helpers for travel (department/grade/location based)
+async function getAuthContext(req) {
+  const meUserId = Number(req.session.user?.id || req.session.user?.user_id || req.session.user?.uid);
+  const meEmpId = Number(req.session.user?.employee_id);
+  const employment = meEmpId ? await prisma.employment.findFirst({
+    where: { employee_id: meEmpId, is_current: true, is_deleted: false },
+    include: { department: true, designation: true, location: true, scale_grade: true }
+  }) : null;
+  const deptName = employment?.department?.name || '';
+  const desigTitle = employment?.designation?.title || '';
+  const locType = employment?.location?.type || 'HEAD_OFFICE';
+  const scaleLevel = Number(employment?.scale_grade?.level || 0);
+  const isOps = /operations/i.test(deptName);
+  const isHR = /^hr$/i.test(deptName) || /human\s*resources/i.test(deptName);
+  const isDG = /^director\s+general$/i.test(desigTitle);
+  const managesAnyLocation = meUserId ? !!(await prisma.location.findFirst({ where: { manager_user_id: meUserId, is_deleted: false, is_active: true }, select: { id: true } })) : false;
+  const isBps17Plus = scaleLevel >= 17;
+  const canCreateOrOwn = (locType === 'BAZAAR') ? managesAnyLocation : (locType === 'HEAD_OFFICE' ? isBps17Plus : false);
+  const canViewAll = (isHR || isOps || isDG);
+  return { meEmpId, meUserId, employment, deptName, desigTitle, locType, scaleLevel, isOps, isHR, isDG, managesAnyLocation, isBps17Plus, canCreateOrOwn, canViewAll };
+}
 
+// Return reportees + self for logged-in user (for employee selector)
+router.get('/employees/reportees', isAuthenticated, async (req, res) => {
+  const ctx = await getAuthContext(req);
+  if (!ctx.meEmpId) return res.json({ success: true, employees: [] });
+  // Restrict access to those allowed to create/own requests
+  if (!ctx.canCreateOrOwn) return res.status(403).json({ success: false, error: 'Forbidden' });
+
+  const currentEmpId = ctx.meEmpId;
   // Fetch self
   const self = await prisma.employee.findUnique({ where: { id: Number(currentEmpId) } });
 
@@ -44,7 +69,9 @@ router.get('/employees/reportees', isAuthenticated, authorize('travel.read'), as
 });
 
 // Travel Requests CRUD (simplified fields)
-router.get('/requests', isAuthenticated, authorize('travel.manage'), async (req, res) => {
+router.get('/requests', isAuthenticated, async (req, res) => {
+  const ctx = await getAuthContext(req);
+  if (!ctx.canViewAll) return res.status(403).json({ success: false, error: 'Forbidden' });
   const list = await prisma.travelRequest.findMany({
     where: { is_deleted: false },
     orderBy: { createdAt: 'desc' },
@@ -56,10 +83,12 @@ router.get('/requests', isAuthenticated, authorize('travel.manage'), async (req,
   res.json({ success: true, requests: list });
 });
 
-// List only current user's own requests
-router.get('/requests/mine', isAuthenticated, authorize('travel.read'), async (req, res) => {
-  const applicant_id = Number(req.session.user?.employee_id);
-  if (!applicant_id) return res.json({ success: true, requests: [] });
+// List only current user's own requests (allowed based on location/grade rules)
+router.get('/requests/mine', isAuthenticated, async (req, res) => {
+  const ctx = await getAuthContext(req);
+  if (!ctx.meEmpId) return res.json({ success: true, requests: [] });
+  if (!ctx.canCreateOrOwn) return res.status(403).json({ success: false, error: 'Forbidden' });
+  const applicant_id = ctx.meEmpId;
   const list = await prisma.travelRequest.findMany({
     where: { is_deleted: false, applicant_id },
     orderBy: { createdAt: 'desc' },
@@ -71,10 +100,11 @@ router.get('/requests/mine', isAuthenticated, authorize('travel.read'), async (r
   res.json({ success: true, requests: list });
 });
 
-router.post('/requests', isAuthenticated, authorize('travel.create'), async (req, res) => {
+router.post('/requests', isAuthenticated, async (req, res) => {
+  const ctx = await getAuthContext(req);
+  if (!ctx.meEmpId) return res.status(400).json({ success: false, error: 'Applicant not linked to user' });
+  if (!ctx.canCreateOrOwn) return res.status(403).json({ success: false, error: 'Forbidden' });
   const data = req.body || {};
-  const applicant_id = Number(req.session.user?.employee_id);
-  if (!applicant_id) return res.status(400).json({ success: false, error: 'Applicant not linked to user' });
 
   // required fields
   if (!data.departure_date) return res.status(400).json({ success: false, error: 'departure_date is required' });
@@ -90,7 +120,7 @@ router.post('/requests', isAuthenticated, authorize('travel.create'), async (req
 
   const created = await prisma.travelRequest.create({
     data: {
-      applicant_id,
+      applicant_id: ctx.meEmpId,
       departure_date: new Date(data.departure_date),
       departure_time: data.departure_time || null,
       expected_return_date: new Date(data.expected_return_date),
@@ -107,7 +137,7 @@ router.post('/requests', isAuthenticated, authorize('travel.create'), async (req
 
   // Status history: CREATED
   await prisma.travelRequestStatusEntry.create({
-    data: { request_id: created.id, action: 'CREATED', actor_employee_id: applicant_id }
+    data: { request_id: created.id, action: 'CREATED', actor_employee_id: ctx.meEmpId }
   });
 
   const full = await prisma.travelRequest.findUnique({ where: { id: created.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
@@ -172,14 +202,14 @@ router.delete('/requests/:id', isAuthenticated, authorizeAny(['travel.manage','t
   res.json({ success: true });
 });
 
-router.get('/requests/:id', isAuthenticated, authorizeAny(['travel.manage','travel.read']), async (req, res) => {
+router.get('/requests/:id', isAuthenticated, async (req, res) => {
+  const ctx = await getAuthContext(req);
   const id = Number(req.params.id);
   const row = await prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
   if (!row || row.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
-  // Scope check: if user lacks travel.manage, they must be the applicant or an attendee
-  const hasManage = (req.session.user?.permissions || []).includes('travel.manage') || req.session.user?.role?.name === 'Super Admin' || (req.session.user?.permissions||[]).includes('*');
-  if (!hasManage) {
-    const me = Number(req.session.user?.employee_id);
+  // Manage viewers (HR/Ops/DG) can view any; otherwise must be applicant or attendee
+  if (!ctx.canViewAll) {
+    const me = ctx.meEmpId;
     const isApplicant = row.applicant_id === me;
     const isAttendee = (row.attendees || []).some(a => a.employee_id === me);
     if (!isApplicant && !isAttendee) return res.status(403).json({ success: false, error: 'Forbidden' });
@@ -379,7 +409,7 @@ router.post('/requests/:id/decision', isAuthenticated, async (req, res) => {
 });
 
 // List pending approvals eligible for current user
-router.get('/requests/pending-approvals', isAuthenticated, authorize('travel.read'), async (req, res) => {
+router.get('/requests/pending-approvals', isAuthenticated, async (req, res) => {
   const meEmpId = Number(req.session.user?.employee_id);
   if (!meEmpId) return res.json({ success: true, requests: [] });
 
@@ -420,6 +450,20 @@ router.get('/requests/pending-approvals', isAuthenticated, authorize('travel.rea
   });
 
   res.json({ success: true, requests: list });
+});
+
+// Capabilities for current user (frontend can use this to gate UI)
+router.get('/me/capabilities', isAuthenticated, async (req, res) => {
+  const ctx = await getAuthContext(req);
+  res.json({ success: true, capabilities: {
+    canCreateOrOwn: ctx.canCreateOrOwn,
+    canViewAll: ctx.canViewAll,
+    isOps: ctx.isOps,
+    isHR: ctx.isHR,
+    isDG: ctx.isDG,
+    locType: ctx.locType,
+    isBps17Plus: ctx.isBps17Plus,
+  }});
 });
 
 module.exports = router;
