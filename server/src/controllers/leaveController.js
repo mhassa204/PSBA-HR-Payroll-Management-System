@@ -40,7 +40,12 @@ module.exports = {
       if (!type) return res.status(400).json({ success:false, error:'type is required' });
       const result = await leaveService.createLeaves({ employeeId, type, remarks, date, start, end, dates });
       res.status(201).json({ success:true, ...result });
-    } catch(e){ res.status(500).json({ success:false, error:e.message }); }
+    } catch(e){
+      const clientErrors = ['Invalid start/end','Invalid date','Provide date or start/end or dates[]','No valid dates to insert'];
+      if (clientErrors.includes(e.message)) return res.status(400).json({ success:false, error:e.message });
+      console.error('Create leaves error:', e);
+      res.status(500).json({ success:false, error:e.message });
+    }
   },
   updateLeave: async (req, res) => {
     try { const id = Number(req.params.id); const { date, type, remarks } = req.body || {}; const data = {}; if (date) data.date = new Date(date); if (type) data.type=String(type); if (remarks!==undefined) data.remarks=remarks; const updated = await leaveService.updateLeave(id, data); res.json({ success:true, leave: updated }); }
