@@ -29,9 +29,11 @@ router.patch('/requests/:id/status', isAuthenticated, travelRequestController.up
 
 // Expense Claims
 router.get('/expense-claims/eligible', isAuthenticated, expenseClaimController.eligible);
+router.get('/expense-claims', isAuthenticated, authorizeAny(['travel.claim.read','travel.claim.create']), expenseClaimController.list);
 router.post('/expense-claims', isAuthenticated, authorizeAny(['travel.claim.create','travel.claim.read']), expenseClaimController.create);
 router.get('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.claim.read','travel.claim.create']), expenseClaimController.getOne);
 router.put('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.update);
+router.delete('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.delete);
 
 // Segments
 router.post('/expense-claims/:id/segments', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.addSegment);
@@ -41,5 +43,8 @@ router.delete('/expense-claims/:id/segments/:segmentId', isAuthenticated, author
 // Documents
 router.post('/expense-claims/:id/documents', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.uploadDocuments);
 router.delete('/expense-claims/:id/documents/:docId', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.deleteDocument);
+
+// Submit Expense Claim
+router.post('/expense-claims/:id/submit', isAuthenticated, authorizeAny(['travel.claim.submit','travel.claim.update','travel.claim.create']), expenseClaimController.submit);
 
 module.exports = router;

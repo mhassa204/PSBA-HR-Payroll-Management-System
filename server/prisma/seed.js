@@ -987,7 +987,65 @@ async function main() {
   await prisma.travelRequestStatusEntry.create({ data: { request_id: t4.id, action: 'CREATED', actor_employee_id: empByName('Bazaar Manager One') } });
   await prisma.travelRequestStatusEntry.create({ data: { request_id: t4.id, action: 'REJECTED', actor_employee_id: empByName('Muhammad Ali') } });
 
-  console.log('✅ Travel requests seeded:', { created: [t1.id, t2.id], approved: t3.id, rejected: t4.id });
+  // ✅ Insert sample approved travel request + expense claims (with segments & documents)
+  console.log('🧪 Seeding sample expense claim data...');
+  const sampleApplicantId = empByName('Muhammad Ahmad');
+  const sampleAttendeeId = empByName('Muhammad Ali Hassan');
+  if(sampleApplicantId && sampleAttendeeId){
+    const recentApprovedReq = await prisma.travelRequest.create({ data: {
+      applicant_id: sampleApplicantId,
+      departure_date: daysFromNow(-2),
+      departure_time: '07:45',
+      expected_return_date: daysFromNow(-1),
+      purpose: 'Field inspection for expense claim demo',
+      destination: 'Sheikhupura',
+      total_days: 1,
+      status: 'APPROVED'
+    }});
+    await prisma.travelRequestEmployee.createMany({ data: [
+      { request_id: recentApprovedReq.id, employee_id: sampleApplicantId },
+      { request_id: recentApprovedReq.id, employee_id: sampleAttendeeId }
+    ]});
+    await prisma.travelRequestStatusEntry.create({ data: { request_id: recentApprovedReq.id, action: 'CREATED', actor_employee_id: sampleApplicantId } });
+    await prisma.travelRequestStatusEntry.create({ data: { request_id: recentApprovedReq.id, action: 'APPROVED', actor_employee_id: empByName('Naveed Rafaqat Ahmad') } });
+
+    // Create claim for attendee (not applicant) to demonstrate multi-attendee scenario
+    const claim = await prisma.travelClaim.create({ data: {
+      employee_id: sampleAttendeeId,
+      travel_request_id: recentApprovedReq.id,
+      from_date: recentApprovedReq.departure_date,
+      to_date: recentApprovedReq.expected_return_date,
+      per_diem_days: 1,
+      per_diem_rate: 1500,
+      rate_per_km: 35,
+      toll_tax_total: 500,
+      status: 'DRAFT'
+    }});
+
+    // Segments
+    await prisma.travelClaimSegment.createMany({ data: [
+      { claim_id: claim.id, departure_from: 'Lahore', departure_to: 'Sheikhupura', depart_time: '07:45', arrive_time: '09:00', mode: 'Car', distance_km: 55 },
+      { claim_id: claim.id, departure_from: 'Sheikhupura', departure_to: 'Lahore', depart_time: '17:30', arrive_time: '18:40', mode: 'Car', distance_km: 55 }
+    ]});
+
+    // Documents (include mandatory REPORT and one FUEL)
+    await prisma.travelClaimDocument.createMany({ data: [
+      { claim_id: claim.id, category: 'REPORT', file_path: 'uploads/Travel/Claims/demo/report.pdf', mime_type: 'application/pdf', file_size: 12000 },
+      { claim_id: claim.id, category: 'FUEL', file_path: 'uploads/Travel/Claims/demo/fuel_receipt.jpg', mime_type: 'image/jpeg', file_size: 8000 }
+    ]});
+
+    // Recompute totals
+    const segs = await prisma.travelClaimSegment.findMany({ where: { claim_id: claim.id } });
+    const total_distance = segs.reduce((s,a)=> s + Number(a.distance_km||0),0);
+    const distance_amount = total_distance * 35;
+    const travel_total = distance_amount + 500;
+    const per_diem_amount = 1 * 1500;
+    const grand_total = travel_total + per_diem_amount;
+    await prisma.travelClaim.update({ where: { id: claim.id }, data: { total_distance_km: total_distance, distance_amount, travel_total, per_diem_amount, grand_total } });
+    console.log('✅ Sample expense claim seeded: Request', recentApprovedReq.id, 'Claim', claim.id);
+  } else {
+    console.log('⚠️ Skipped sample expense claim seeding (missing employees)');
+  }
 
   console.log('🎉 Database seeding completed successfully!');
   console.log(`📊 Summary:`);

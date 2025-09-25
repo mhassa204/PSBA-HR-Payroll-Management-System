@@ -9,6 +9,13 @@ module.exports = {
       res.json({ success: true, requests: list });
     } catch (e) { res.status(500).json({ success:false, error: e.message }); }
   },
+  list: async (req, res) => {
+    try {
+      const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
+      const claims = await service.listClaims(employee_id, isSuperAdmin);
+      res.json({ success: true, claims });
+    } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
   create: async (req, res) => {
     try {
       const { employee_id } = await service.getAuthContext(req);
@@ -49,5 +56,11 @@ module.exports = {
   }],
   deleteDocument: async (req, res) => {
     try { const { employee_id, isSuperAdmin } = await service.getAuthContext(req); const claim = await service.deleteDocument(req.params.id, req.params.docId, employee_id, isSuperAdmin); res.json({ success:true, claim }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+  delete: async (req, res) => {
+    try { const { employee_id, isSuperAdmin } = await service.getAuthContext(req); const result = await service.deleteClaim(req.params.id, employee_id, isSuperAdmin); res.json(result); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+  submit: async (req, res) => {
+    try { const { employee_id, isSuperAdmin } = await service.getAuthContext(req); const claim = await service.submitClaim(req.params.id, employee_id, isSuperAdmin); res.json({ success:true, claim }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
   }
 };

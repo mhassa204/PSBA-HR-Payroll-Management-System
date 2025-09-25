@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 
   getEligibleExpenseClaimRequests,
+  listExpenseClaims,
   createExpenseClaim,
   getExpenseClaim,
   updateExpenseClaim,
@@ -9,6 +10,8 @@ import {
   deleteExpenseClaimSegment,
   uploadExpenseClaimDocuments,
   deleteExpenseClaimDocument,
+  deleteExpenseClaim,
+  submitExpenseClaim,
   computeExpenseClaimTotals
 } from '../../../services/travelService';
 import { useAuthStore } from '../../auth/authStore';
@@ -19,12 +22,16 @@ const Select = (p) => <select {...p} className={`border rounded px-2 py-1 text-s
 export default function TravelExpenseClaimsPage(){
   const can = useAuthStore(s=>s.can);
   const [eligible, setEligible] = useState([]);
+  const [claims, setClaims] = useState([]);
   const [loadingEligible, setLoadingEligible] = useState(false);
+  const [loadingClaims, setLoadingClaims] = useState(false);
+  const [tab, setTab] = useState('eligible'); // eligible | existing
   const [step, setStep] = useState(1); // 1=list,2=select attendee,3=form
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [selectedAttendee, setSelectedAttendee] = useState(null);
   const [claim, setClaim] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [pendingCreationAttendee, setPendingCreationAttendee] = useState(null); // holds attendee until user confirms creation
 
   // Form core fields
   const [form, setForm] = useState({
@@ -41,21 +48,28 @@ export default function TravelExpenseClaimsPage(){
 
   const loadEligible = async () => {
     setLoadingEligible(true);
-    try { const rs = await getEligibleExpenseClaimRequests(); setEligible(rs); } finally { setLoadingEligible(false);} }
-  useEffect(()=>{ loadEligible(); },[]);
+    try { const rs = await getEligibleExpenseClaimRequests(); setEligible(rs); } finally { setLoadingEligible(false);} };
+  const loadClaims = async () => { setLoadingClaims(true); try { const rs = await listExpenseClaims(); setClaims(rs); } finally { setLoadingClaims(false);} };
+  useEffect(()=>{ loadEligible(); loadClaims(); },[]);
 
   const startClaim = (req) => { setSelectedRequest(req); setStep(2);} ;
-  const chooseAttendee = (att) => { setSelectedAttendee(att); createClaim(reqId(), att.employee_id); };
+  const chooseAttendee = (att) => { setSelectedAttendee(att); setPendingCreationAttendee(att); };
   const reqId = () => selectedRequest?.id;
 
-  const createClaim = async (requestId, attendeeEmpId) => {
+  const confirmCreateClaim = async () => {
+    if(!pendingCreationAttendee || !selectedRequest) return;
     try {
       setSaving(true);
-      const c = await createExpenseClaim({ travel_request_id: requestId, employee_id: attendeeEmpId });
+      const c = await createExpenseClaim({ travel_request_id: selectedRequest.id, employee_id: pendingCreationAttendee.employee_id });
       setClaim(c);
       setForm(prev => ({...prev, from_date: c.from_date?.slice(0,10)||'', to_date: c.to_date?.slice(0,10)||'' }));
       setStep(3);
-    } finally { setSaving(false);} }
+      setPendingCreationAttendee(null);
+      loadEligible();
+      loadClaims();
+    } finally { setSaving(false);} };
+
+  const cancelCreateFlow = () => { setPendingCreationAttendee(null); setSelectedAttendee(null); };
 
   const refreshClaim = async () => { if(!claim) return; const full = await getExpenseClaim(claim.id); setClaim(full); };
 
@@ -74,16 +88,23 @@ export default function TravelExpenseClaimsPage(){
       };
       const updated = await updateExpenseClaim(claim.id, payload);
       setClaim(updated);
+      loadClaims();
     } finally { setSaving(false);} };
 
-  const addSegment = async (seg) => { if(!claim) return; const updated = await addExpenseClaimSegment(claim.id, seg); setClaim(updated); };
-  const updateSegmentRow = async (seg) => { if(!claim) return; const updated = await updateExpenseClaimSegment(claim.id, seg.id, seg); setClaim(updated); };
-  const removeSegment = async (id) => { if(!claim) return; const updated = await deleteExpenseClaimSegment(claim.id, id); setClaim(updated); };
+  const handleDeleteClaim = async () => {
+    if(!claim) return;
+    if(!window.confirm('Delete this claim?')) return;
+    try { await deleteExpenseClaim(claim.id); setClaim(null); setStep(1); setSelectedRequest(null); setSelectedAttendee(null); loadEligible(); loadClaims(); } catch(e){ alert(e.message); }
+  };
+
+  const addSegment = async (seg) => { if(!claim) return; const updated = await addExpenseClaimSegment(claim.id, seg); setClaim(updated); loadClaims(); };
+  const updateSegmentRow = async (seg) => { if(!claim) return; const updated = await updateExpenseClaimSegment(claim.id, seg.id, seg); setClaim(updated); loadClaims(); };
+  const removeSegment = async (id) => { if(!claim) return; const updated = await deleteExpenseClaimSegment(claim.id, id); setClaim(updated); loadClaims(); };
 
   const totals = computeExpenseClaimTotals(claim||{...form, total_distance_km: (claim?.segments||[]).reduce((s,a)=>s+Number(a.distance_km||0),0) });
 
-  const handleDocUpload = async (category, files) => { if(!claim||!files?.length) return; const updated = await uploadExpenseClaimDocuments(claim.id, category, files); setClaim(updated); };
-  const handleDocDelete = async (docId) => { if(!claim) return; const updated = await deleteExpenseClaimDocument(claim.id, docId); setClaim(updated); };
+  const handleDocUpload = async (category, files) => { if(!claim||!files?.length) return; const updated = await uploadExpenseClaimDocuments(claim.id, category, files); setClaim(updated); loadClaims(); };
+  const handleDocDelete = async (docId) => { if(!claim) return; const updated = await deleteExpenseClaimDocument(claim.id, docId); setClaim(updated); loadClaims(); };
 
   const attendeeAlreadyClaimed = (req, empId) => (req.claims||[]).some(c=>c.employee_id===empId);
 
@@ -93,20 +114,51 @@ export default function TravelExpenseClaimsPage(){
 
       {step===1 && (
         <div className="bg-white rounded shadow border">
-          <div className="p-4 font-semibold border-b">Eligible Approved Requests (last 15 days)</div>
-          {loadingEligible && <div className="p-4 text-sm text-slate-500">Loading...</div>}
-          {!loadingEligible && eligible.length===0 && <div className="p-6 text-sm text-slate-500">No approved recent requests.</div>}
-          <div className="divide-y">
-          {eligible.map(r=> (
-            <div key={r.id} className="p-4 flex items-center justify-between text-sm">
-              <div>
-                <div className="font-medium text-slate-800">Request #{r.id} · {r.destination||'Destination'} · {r.status}</div>
-                <div className="text-slate-500">Departure {String(r.departure_date).slice(0,10)} → Return {String(r.expected_return_date).slice(0,10)}</div>
-              </div>
-              <button disabled={!can('travel.claim.create')} onClick={()=>startClaim(r)} className="px-3 py-2 rounded bg-sky-600 disabled:opacity-40 text-white">Claim Expense</button>
-            </div>
-          ))}
+          <div className="px-4 pt-4 flex gap-4 border-b text-sm font-medium">
+            <button className={tab==='eligible'? 'text-sky-600 border-b-2 border-sky-600 pb-2':'pb-2 text-slate-500'} onClick={()=>setTab('eligible')}>Create New (Eligible Requests)</button>
+            <button className={tab==='existing'? 'text-sky-600 border-b-2 border-sky-600 pb-2':'pb-2 text-slate-500'} onClick={()=>setTab('existing')}>Existing Claims</button>
           </div>
+          {tab==='eligible' && (
+            <>
+              <div className="p-4 font-semibold">Eligible Approved Requests (last 15 days)</div>
+              {loadingEligible && <div className="p-4 text-sm text-slate-500">Loading...</div>}
+              {!loadingEligible && eligible.length===0 && <div className="p-6 text-sm text-slate-500">No approved recent requests.</div>}
+              <div className="divide-y">
+              {eligible.map(r=> (
+                <div key={r.id} className="p-4 flex items-center justify-between text-sm">
+                  <div>
+                    <div className="font-medium text-slate-800">Request #{r.id} · {r.destination||'Destination'} · {r.status}</div>
+                    <div className="text-slate-500">Departure {String(r.departure_date).slice(0,10)} → Return {String(r.expected_return_date).slice(0,10)}</div>
+                  </div>
+                  <button disabled={!can('travel.claim.create')} onClick={()=>startClaim(r)} className="px-3 py-2 rounded bg-sky-600 disabled:opacity-40 text-white">Start</button>
+                </div>
+              ))}
+              </div>
+            </>
+          )}
+          {tab==='existing' && (
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold">Existing Claims</div>
+                <button onClick={loadClaims} className="text-xs text-sky-600">Refresh</button>
+              </div>
+              {loadingClaims && <div className="text-xs text-slate-500">Loading claims...</div>}
+              {!loadingClaims && claims.length===0 && <div className="text-xs text-slate-400">No claims yet.</div>}
+              <div className="divide-y">
+                {claims.map(c => (
+                  <div key={c.id} className="py-2 flex items-center justify-between text-xs">
+                    <div className="space-y-0.5">
+                      <div className="font-medium text-slate-700">Claim #{c.id} • Req #{c.travel_request_id} • Emp #{c.employee_id}</div>
+                      <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {c.grand_total||0}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> setClaim(full)); }} className="px-2 py-1 bg-slate-700 text-white rounded">Open</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -124,6 +176,15 @@ export default function TravelExpenseClaimsPage(){
               </button>
             ))}
           </div>
+          {pendingCreationAttendee && (
+            <div className="p-3 border rounded bg-sky-50 text-xs flex items-center justify-between">
+              <div>Proceed creating claim for employee #{pendingCreationAttendee.employee_id}?</div>
+              <div className="flex gap-2">
+                <button onClick={confirmCreateClaim} className="px-2 py-1 bg-emerald-600 text-white rounded">Yes</button>
+                <button onClick={cancelCreateFlow} className="px-2 py-1 bg-red-600 text-white rounded">No</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -131,7 +192,11 @@ export default function TravelExpenseClaimsPage(){
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="font-semibold">Expense Claim #{claim.id} (Request #{claim.travel_request_id})</div>
-            <button onClick={()=>{ setStep(1); setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); loadEligible(); }} className="text-slate-500 hover:underline text-sm">Close</button>
+            <div className="flex gap-3 items-center">
+              {claim.status==='DRAFT' && <button onClick={handleDeleteClaim} className="text-xs text-red-600 border border-red-600 rounded px-2 py-1">Delete</button>}
+              {claim.status==='DRAFT' && <button onClick={async ()=>{ if(!(claim.documents||[]).some(d=>d.category==='REPORT')) { alert('Upload REPORT before submitting'); return; } try { const updated = await submitExpenseClaim(claim.id); setClaim(updated); loadClaims(); alert('Submitted'); } catch(e){ alert(e.message); } }} className="text-xs text-sky-600 border border-sky-600 rounded px-2 py-1">Submit</button>}
+              <button onClick={()=>{ setStep(1); setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); loadEligible(); loadClaims(); }} className="text-slate-500 hover:underline text-sm">Close</button>
+            </div>
           </div>
 
           {/* Core Fields */}
@@ -193,8 +258,8 @@ export default function TravelExpenseClaimsPage(){
                     <tr key={idx} className="border-b">
                       <td className="p-1"><Input value={r.departure_from} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,departure_from:e.target.value}:x))} /></td>
                       <td className="p-1"><Input value={r.departure_to} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,departure_to:e.target.value}:x))} /></td>
-                      <td className="p-1"><Input value={r.depart_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,depart_time:e.target.value}:x))} placeholder="HH:MM" /></td>
-                      <td className="p-1"><Input value={r.arrive_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,arrive_time:e.target.value}:x))} placeholder="HH:MM" /></td>
+                      <td className="p-1"><Input type="time" value={r.depart_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,depart_time:e.target.value}:x))} /></td>
+                      <td className="p-1"><Input type="time" value={r.arrive_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,arrive_time:e.target.value}:x))} /></td>
                       <td className="p-1"><Input value={r.mode} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,mode:e.target.value}:x))} /></td>
                       <td className="p-1"><Input value={r.distance_km} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,distance_km:e.target.value}:x))} /></td>
                       <td className="p-1 text-right space-x-2">
@@ -207,8 +272,8 @@ export default function TravelExpenseClaimsPage(){
                     <tr key={seg.id} className="border-b bg-emerald-50/40">
                       <td className="p-1"><Input defaultValue={seg.departure_from} onBlur={e=>updateSegmentRow({...seg,departure_from:e.target.value})} /></td>
                       <td className="p-1"><Input defaultValue={seg.departure_to} onBlur={e=>updateSegmentRow({...seg,departure_to:e.target.value})} /></td>
-                      <td className="p-1"><Input defaultValue={seg.depart_time||''} onBlur={e=>updateSegmentRow({...seg,depart_time:e.target.value})} /></td>
-                      <td className="p-1"><Input defaultValue={seg.arrive_time||''} onBlur={e=>updateSegmentRow({...seg,arrive_time:e.target.value})} /></td>
+                      <td className="p-1"><Input type="time" defaultValue={seg.depart_time||''} onBlur={e=>updateSegmentRow({...seg,depart_time:e.target.value})} /></td>
+                      <td className="p-1"><Input type="time" defaultValue={seg.arrive_time||''} onBlur={e=>updateSegmentRow({...seg,arrive_time:e.target.value})} /></td>
                       <td className="p-1"><Input defaultValue={seg.mode||''} onBlur={e=>updateSegmentRow({...seg,mode:e.target.value})} /></td>
                       <td className="p-1"><Input defaultValue={seg.distance_km||''} onBlur={e=>updateSegmentRow({...seg,distance_km:Number(e.target.value||0)})} /></td>
                       <td className="p-1 text-right space-x-2">

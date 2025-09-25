@@ -16,12 +16,15 @@ export const updateTravelRequestStatus = (id, status) => api.patch(`/travel/requ
 // ================= New Travel Expense Claims (replaces legacy item-based claims) =================
 // Eligible approved travel requests (last 15 days) for which current user can file claims
 export const getEligibleExpenseClaimRequests = () => api.get('/travel/expense-claims/eligible').then(r => r.data.requests);
+// List existing claims accessible to user
+export const listExpenseClaims = () => api.get('/travel/expense-claims').then(r => r.data.claims);
 
 // Create a claim (one per travel_request + attendee employee)
 export const createExpenseClaim = (payload) => api.post('/travel/expense-claims', payload).then(r => r.data.claim);
-// Fetch / update claim
+// Fetch / update / delete claim
 export const getExpenseClaim = (id) => api.get(`/travel/expense-claims/${id}`).then(r => r.data.claim);
 export const updateExpenseClaim = (id, payload) => api.put(`/travel/expense-claims/${id}`, payload).then(r => r.data.claim);
+export const deleteExpenseClaim = (id) => api.delete(`/travel/expense-claims/${id}`).then(r => r.data);
 
 // Segments CRUD
 export const addExpenseClaimSegment = (claimId, payload) => api.post(`/travel/expense-claims/${claimId}/segments`, payload).then(r => r.data.claim);
@@ -51,6 +54,8 @@ export const computeExpenseClaimTotals = (claim) => {
   const G = +(E + F).toFixed(2);
   return { A, B, C, D, E, F, G };
 };
+
+export const submitExpenseClaim = (id) => api.post(`/travel/expense-claims/${id}/submit`).then(r => r.data.claim);
 
 // ===== Legacy Travel Claims API (deprecated) stubs to prevent import errors =====
 // These map to no-ops so old components no longer break the build. Remove old pages to clean up.
