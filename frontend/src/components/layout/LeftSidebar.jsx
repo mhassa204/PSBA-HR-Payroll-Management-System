@@ -204,7 +204,7 @@ const LeftSidebar = () => {
     },
     {
       name: 'Leave',
-      href: '/leave',
+      href: '/attendance/leave', // changed base so we can exclude it from Attendance active logic
       icon: CalendarIcon,
       description: 'Leave & Entitlements',
       color: 'bg-rose-600',
@@ -259,15 +259,23 @@ const LeftSidebar = () => {
     }
   ];
 
-  const isActive = (href) => {
-    if (href === '/dashboard') {
-      return location.pathname === '/dashboard' || location.pathname === '/';
-    }
-    return location.pathname.startsWith(href);
-  };
-
   const isChildActive = (children) => {
     return children?.some(child => location.pathname.startsWith(child.href));
+  };
+
+  const computeActive = (item) => {
+    const p = location.pathname;
+    if (item.name === 'Attendance') {
+      if (p.startsWith('/attendance/leave')) return false; // exclude leave section
+      return p === '/attendance' || p.startsWith('/attendance');
+    }
+    if (item.name === 'Leave') {
+      return p.startsWith('/attendance/leave');
+    }
+    if (item.href === '/dashboard') {
+      return p === '/dashboard' || p === '/';
+    }
+    return p.startsWith(item.href);
   };
 
   // Auto-expand any parent whose child is active
@@ -336,7 +344,7 @@ const LeftSidebar = () => {
         {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           {navigation.filter(item => item.show()).map((item) => {
-            const isItemActive = isActive(item.href) || isChildActive(item.children);
+            const isItemActive = computeActive(item) || isChildActive(item.children);
             const isExpanded = expandedItems.has(item.name);
             const visibleChildren = (item.children || []).filter(ch => (ch.show ? ch.show() : true));
             
