@@ -56,7 +56,7 @@ module.exports = {
     const existing = await prisma.travelClaim.findFirst({ where: { travel_request_id: request.id, employee_id: attendeeEmpId, is_deleted: false } });
     if(existing) throw new Error('Claim already exists');
     const rates = await getRatesForEmployee(attendeeEmpId);
-    const created = await prisma.travelClaim.create({ data: { travel_request_id: request.id, employee_id: attendeeEmpId, from_date: request.departure_date, to_date: request.expected_return_date, per_diem_days: request.total_days||0, rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate, toll_tax_total: 0 } });
+    const created = await prisma.travelClaim.create({ data: { travel_request_id: request.id, employee_id: attendeeEmpId, from_date: request.departure_date, to_date: request.expected_return_date, per_diem_days: 0, rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate, toll_tax_total: 0 } });
     return prisma.travelClaim.findUnique({ where: { id: created.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
   _canAccess(claim, employee_id, isSuperAdmin) {
@@ -70,6 +70,12 @@ module.exports = {
     const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { documents: true, segments: true, request: true, employee: true } });
     if(!claim || claim.is_deleted) return null;
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
+    // If draft and rates missing/zero, pull latest rates
+    if(claim.status === 'DRAFT' && (!claim.rate_per_km || !claim.per_diem_rate)) {
+      const rates = await getRatesForEmployee(claim.employee_id);
+      const upd = await prisma.travelClaim.update({ where: { id: claim.id }, data: { rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate } });
+      return prisma.travelClaim.findUnique({ where: { id: upd.id }, include: { documents: true, segments: true, request: true, employee: true } });
+    }
     return claim;
   },
   updateClaim: async (id, employee_id, isSuperAdmin, data) => {

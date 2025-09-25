@@ -841,6 +841,7 @@ async function main() {
       start_date: new Date("2020-01-15"),
       confirmation_status: "Confirmed",
      
+     
       confirmation_date: new Date("2020-07-15"),
       is_deleted: false
     },
@@ -1028,7 +1029,7 @@ async function main() {
       travel_request_id: recentApprovedReq.id,
       from_date: recentApprovedReq.departure_date,
       to_date: recentApprovedReq.expected_return_date,
-      per_diem_days: 1,
+      per_diem_days: 0,
       per_diem_rate: 1500,
       rate_per_km: 35,
       toll_tax_total: 500,

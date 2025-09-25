@@ -62,7 +62,7 @@ export default function TravelExpenseClaimsPage(){
       setSaving(true);
       const c = await createExpenseClaim({ travel_request_id: selectedRequest.id, employee_id: pendingCreationAttendee.employee_id });
       setClaim(c);
-      setForm(prev => ({...prev, from_date: c.from_date?.slice(0,10)||'', to_date: c.to_date?.slice(0,10)||'', rate_per_km: c.rate_per_km||0, per_diem_rate: c.per_diem_rate||0 }));
+      setForm(prev => ({...prev, from_date: c.from_date?.slice(0,10)||'', to_date: c.to_date?.slice(0,10)||'', rate_per_km: c.rate_per_km||0, per_diem_rate: c.per_diem_rate||0, per_diem_days: c.per_diem_days || '' }));
       setStep(3);
       setPendingCreationAttendee(null);
       loadEligible();
@@ -71,7 +71,19 @@ export default function TravelExpenseClaimsPage(){
 
   const cancelCreateFlow = () => { setPendingCreationAttendee(null); setSelectedAttendee(null); };
 
-  const refreshClaim = async () => { if(!claim) return; const full = await getExpenseClaim(claim.id); setClaim(full); setForm(f=>({...f, rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0 })); };
+  const refreshClaim = async () => { if(!claim) return; const full = await getExpenseClaim(claim.id); setClaim(full); setForm(f=>({...f, rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'' })); };
+
+  // Auto-sync rates into form if form empty but claim has values (when claim updates from backend recompute)
+  React.useEffect(()=>{
+    if(!claim) return;
+    setForm(f=>{
+      const patch = {};
+      if((f.rate_per_km==='' || Number(f.rate_per_km)===0) && claim.rate_per_km) patch.rate_per_km = claim.rate_per_km;
+      if((f.per_diem_rate==='' || Number(f.per_diem_rate)===0) && claim.per_diem_rate) patch.per_diem_rate = claim.per_diem_rate;
+      if((f.per_diem_days==='') && (claim.per_diem_days??'')!=='') patch.per_diem_days = claim.per_diem_days;
+      return Object.keys(patch).length? { ...f, ...patch }: f;
+    });
+  }, [claim?.id, claim?.rate_per_km, claim?.per_diem_rate, claim?.per_diem_days]);
 
   const persistCore = async () => {
     if(!claim) return;
@@ -81,9 +93,8 @@ export default function TravelExpenseClaimsPage(){
         from_date: form.from_date || null,
         to_date: form.to_date || null,
         overnight_stay: !!form.overnight_stay,
-        rate_per_km: Number(form.rate_per_km||0),
-        // remove manual per diem rate input usage
-        per_diem_rate: Number(form.per_diem_rate||0)
+        toll_tax_total: Number(form.toll_tax_total||0),
+        per_diem_days: Number(form.per_diem_days||0)
       };
       const updated = await updateExpenseClaim(claim.id, payload);
       setClaim(updated);
@@ -151,7 +162,7 @@ export default function TravelExpenseClaimsPage(){
                       <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {c.grand_total||0}</div>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> setClaim(full)); }} className="px-2 py-1 bg-slate-700 text-white rounded">Open</button>
+                      <button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> { setClaim(full); setForm(f=>({ ...f, from_date: full.from_date?.slice(0,10)||'', to_date: full.to_date?.slice(0,10)||'', rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'' })); }); }} className="px-2 py-1 bg-slate-700 text-white rounded">Open</button>
                     </div>
                   </div>
                 ))}
