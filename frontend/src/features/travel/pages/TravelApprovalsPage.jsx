@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getTravelRequest } from '../../../services/travelService';
+import { getTravelRequest, updateTravelRequestStatus } from '../../../services/travelService';
 import api from '../../../lib/axios';
-import { decideTravelRequest } from '../../../services/travelService';
 
 export default function TravelApprovalsPage() {
   const [list, setList] = useState([]);
@@ -26,20 +25,6 @@ export default function TravelApprovalsPage() {
     setSelected(full);
   };
 
-  const handleDecision = async (id, action) => {
-    if (!window.confirm(`Are you sure you want to ${action.toLowerCase()} this request?`)) return;
-    setSubmitting(true);
-    try {
-      await decideTravelRequest(id, action);
-      await load();
-      setOpen(false);
-    } catch (e) {
-      alert(e?.response?.data?.error || 'Failed to submit decision');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -62,8 +47,25 @@ export default function TravelApprovalsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={()=>openDetail(r.id)} className="px-3 py-1 rounded-md bg-slate-100 text-slate-700 border">View</button>
-                <button onClick={()=>handleDecision(r.id, 'APPROVE')} disabled={submitting} className="px-3 py-1 rounded-md bg-emerald-600 text-white disabled:opacity-50">Approve</button>
-                <button onClick={()=>handleDecision(r.id, 'REJECT')} disabled={submitting} className="px-3 py-1 rounded-md bg-rose-600 text-white disabled:opacity-50">Reject</button>
+                <select
+                  disabled={submitting}
+                  value={r.status}
+                  onChange={async (e)=>{
+                    const val = e.target.value;
+                    setSubmitting(true);
+                    try {
+                      await updateTravelRequestStatus(r.id, val);
+                      await load();
+                    } catch(err){
+                      alert(err?.response?.data?.error || 'Update failed');
+                    } finally { setSubmitting(false); }
+                  }}
+                  className="border rounded-md px-2 py-1 text-sm"
+                >
+                  <option value="CREATED">CREATED</option>
+                  <option value="APPROVED">APPROVED</option>
+                  <option value="REJECTED">REJECTED</option>
+                </select>
               </div>
             </div>
           ))}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getMyTravelRequests, getTravelRequest, createTravelRequest, getTravelReportees, decideTravelRequest } from '../../../services/travelService';
+import { getMyTravelRequests, getTravelRequest, createTravelRequest, getTravelReportees } from '../../../services/travelService';
 import SearchableSelect from '../../../components/ui/SearchableSelect';
 import { useAuthStore } from '../../auth/authStore';
 
@@ -232,11 +232,10 @@ export default function TravelRequestsPage() {
 
                   <div className="flex items-center gap-2 pt-2">
                     <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700">Status: {selected.status}</span>
-                    {selected.status === 'CREATED' && (
-                      <>
-                        <button onClick={async()=>{ try { const r = await decideTravelRequest(selected.id, 'APPROVE'); setSelected(r); await load(); } catch(e){ alert(e.response?.data?.error||'Action failed'); } }} className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white">Approve</button>
-                        <button onClick={async()=>{ try { const r = await decideTravelRequest(selected.id, 'REJECT'); setSelected(r); await load(); } catch(e){ alert(e.response?.data?.error||'Action failed'); } }} className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white">Reject</button>
-                      </>
+                    {false && selected.status === 'CREATED' && (
+                      <div className="flex items-center gap-2">
+                        {/* Decision buttons removed as per new requirements (handled via Manage/Approvals with dropdown) */}
+                      </div>
                     )}
                   </div>
 

@@ -11,6 +11,7 @@ export const getTravelReportees = () => api.get('/travel/employees/reportees').t
 export const decideTravelRequest = (id, action) => api.post(`/travel/requests/${id}/decision`, { action }).then(r => r.data.request);
 export const getPendingTravelApprovals = () => api.get('/travel/requests/pending-approvals').then(r => r.data.requests);
 export const getTravelCapabilities = () => api.get('/travel/me/capabilities').then(r => r.data.capabilities);
+export const updateTravelRequestStatus = (id, status) => api.patch(`/travel/requests/${id}/status`, { status }).then(r => r.data.request);
 
 // Travel Claims
 export const getTravelClaims = () => api.get("/travel/claims").then(r => r.data.claims);

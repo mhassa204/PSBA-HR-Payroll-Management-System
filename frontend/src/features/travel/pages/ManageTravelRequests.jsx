@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTravelRequests, getTravelRequest } from '../../../services/travelService';
+import { getTravelRequests, getTravelRequest, updateTravelRequestStatus, getTravelCapabilities } from '../../../services/travelService';
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>
@@ -18,6 +18,8 @@ export default function ManageTravelRequests() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [caps, setCaps] = useState({ isDG: false, isOps: false });
 
   const load = async () => {
     setLoading(true);
@@ -28,11 +30,40 @@ export default function ManageTravelRequests() {
   };
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    (async () => {
+      try { const c = await getTravelCapabilities(); setCaps(c || {}); } catch(_) {}
+    })();
+  }, []);
+
   const openDetail = async (id) => {
     setOpen(true);
     setSelected(null);
     const full = await getTravelRequest(id);
     setSelected(full);
+  };
+
+  const onDecision = async (id, action) => {
+    if (!window.confirm(`Are you sure you want to ${action.toLowerCase()} this request?`)) return;
+    setSubmitting(true);
+    try {
+      const updated = await updateTravelRequestStatus(id, action);
+      setSelected(updated);
+      await load();
+      setOpen(false);
+    } catch (e) {
+      alert(e?.response?.data?.error || 'Action failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const canDecide = (req) => {
+    if (!req) return false;
+    if (!(caps.isDG || caps.isOps)) return false; // HR excluded
+    // Ops only Bazaar, DG only Head Office (frontend soft check; backend enforces)
+    const applicantLocType = req.applicant_location_type || req.applicantLocType || req.applicant_location || req.applicantLocationType; // fallback if added later
+    return true; // backend final authority
   };
 
   return (
@@ -108,6 +139,35 @@ export default function ManageTravelRequests() {
                           : '—'}
                       </div>
                     </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700">Status: {selected.status}</span>
+                    {canDecide(selected) && (
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-slate-500">Status</label>
+                        <select
+                          disabled={submitting}
+                          value={selected.status}
+                          onChange={async (e)=>{
+                            const val = e.target.value;
+                            setSubmitting(true);
+                            try {
+                              const upd = await updateTravelRequestStatus(selected.id, val);
+                              setSelected(upd);
+                              await load();
+                            } catch(err){
+                              alert(err?.response?.data?.error || 'Update failed');
+                            } finally { setSubmitting(false); }
+                          }}
+                          className="border rounded-md px-2 py-1 text-sm"
+                        >
+                          <option value="CREATED">CREATED</option>
+                          <option value="APPROVED">APPROVED</option>
+                          <option value="REJECTED">REJECTED</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-2">
