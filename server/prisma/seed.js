@@ -17,8 +17,9 @@ async function main() {
 
   // First: purge Travel (TADA) module to avoid FK violations on Employee delete
   console.log('🧹 Purging Travel (TADA) data...');
-  await prisma.travelClaimReceipt.deleteMany({});
-  await prisma.travelClaimItem.deleteMany({});
+  // Updated for new expense claim schema (removed travelClaimItem & travelClaimReceipt)
+  await prisma.travelClaimDocument.deleteMany({});
+  await prisma.travelClaimSegment.deleteMany({});
   await prisma.travelClaim.deleteMany({});
   await prisma.travelRequestStatusEntry.deleteMany({});
   await prisma.travelRequestEmployee.deleteMany({});
@@ -494,6 +495,8 @@ async function main() {
     console.log(`✅ Created Employee: ${employee.full_name} (${employee.employee_id})`);
     createdEmployees.push(employee);
   }
+
+  // Expense Claim Test Data will be added after employees are created later
 
   // Seed users (mapped by full_name for stability)
   const findEmpId = (name) => createdEmployees.find(e => e.full_name === name)?.id;

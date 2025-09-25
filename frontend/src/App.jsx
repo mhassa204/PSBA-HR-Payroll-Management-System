@@ -52,6 +52,7 @@ import TravelRequestsPage from "./features/travel/pages/TravelRequestsPage";
 import TravelClaimsPage from "./features/travel/pages/TravelClaimsPage";
 import ManageTravelRequests from "./features/travel/pages/ManageTravelRequests";
 import TravelApprovalsPage from "./features/travel/pages/TravelApprovalsPage";
+import TravelExpenseClaimsPage from "./features/travel/pages/TravelExpenseClaimsPage";
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -443,10 +444,10 @@ function App() {
               }
             />
             <Route
-              path="travel/claims"
+              path="travel/expense-claims"
               element={
-                <PrivateRoute permissions={["travel.claim.read"]}>
-                  <TravelClaimsPage />
+                <PrivateRoute permissions={["travel.claim.create","travel.claim.read","travel.read"]}>
+                  <TravelExpenseClaimsPage />
                 </PrivateRoute>
               }
             />

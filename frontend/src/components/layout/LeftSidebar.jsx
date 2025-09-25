@@ -254,7 +254,7 @@ const LeftSidebar = () => {
         { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => travelCaps.canCreateOrOwn },
         { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => travelCaps.canViewAll },
         { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG) },
-        { name: 'Claims', href: '/travel/claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') }
+        { name: 'Expense Claims', href: '/travel/expense-claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') }
       ]
     }
   ];

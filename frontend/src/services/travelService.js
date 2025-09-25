@@ -13,24 +13,53 @@ export const getPendingTravelApprovals = () => api.get('/travel/requests/pending
 export const getTravelCapabilities = () => api.get('/travel/me/capabilities').then(r => r.data.capabilities);
 export const updateTravelRequestStatus = (id, status) => api.patch(`/travel/requests/${id}/status`, { status }).then(r => r.data.request);
 
-// Travel Claims
-export const getTravelClaims = () => api.get("/travel/claims").then(r => r.data.claims);
-export const getTravelClaim = (id) => api.get(`/travel/claims/${id}`).then(r => r.data.claim);
-export const createTravelClaim = (payload) => api.post("/travel/claims", payload).then(r => r.data.claim);
-export const updateTravelClaim = (id, payload) => api.put(`/travel/claims/${id}`, payload).then(r => r.data.claim);
-export const uploadClaimReceipts = async (id, files, category = 'Misc') => {
+// ================= New Travel Expense Claims (replaces legacy item-based claims) =================
+// Eligible approved travel requests (last 15 days) for which current user can file claims
+export const getEligibleExpenseClaimRequests = () => api.get('/travel/expense-claims/eligible').then(r => r.data.requests);
+
+// Create a claim (one per travel_request + attendee employee)
+export const createExpenseClaim = (payload) => api.post('/travel/expense-claims', payload).then(r => r.data.claim);
+// Fetch / update claim
+export const getExpenseClaim = (id) => api.get(`/travel/expense-claims/${id}`).then(r => r.data.claim);
+export const updateExpenseClaim = (id, payload) => api.put(`/travel/expense-claims/${id}`, payload).then(r => r.data.claim);
+
+// Segments CRUD
+export const addExpenseClaimSegment = (claimId, payload) => api.post(`/travel/expense-claims/${claimId}/segments`, payload).then(r => r.data.claim);
+export const updateExpenseClaimSegment = (claimId, segmentId, payload) => api.put(`/travel/expense-claims/${claimId}/segments/${segmentId}`, payload).then(r => r.data.claim);
+export const deleteExpenseClaimSegment = (claimId, segmentId) => api.delete(`/travel/expense-claims/${claimId}/segments/${segmentId}`).then(r => r.data.claim);
+
+// Documents (categories: FUEL, TOLL, TICKET, PICTURE, REPORT) - REPORT is single & mandatory
+export const uploadExpenseClaimDocuments = async (claimId, category, files) => {
   const fd = new FormData();
   [...files].forEach(f => fd.append('files', f));
-  const r = await api.post(`/travel/claims/${id}/receipts?category=${encodeURIComponent(category)}`, fd);
-  return r.data.items;
-};
-export const updateClaimItem = (claimId, itemId, data) => api.put(`/travel/claims/${claimId}/items/${itemId}`, data).then(r => r.data.claim);
-export const deleteClaimItem = (claimId, itemId) => api.delete(`/travel/claims/${claimId}/items/${itemId}`).then(r => r.data.claim);
-export const uploadClaimItemReceipts = async (claimId, itemId, files) => {
-  const fd = new FormData();
-  [...files].forEach(f => fd.append('files', f));
-  const r = await api.post(`/travel/claims/${claimId}/items/${itemId}/receipts`, fd);
+  const r = await api.post(`/travel/expense-claims/${claimId}/documents?category=${encodeURIComponent(category)}`, fd);
   return r.data.claim;
 };
-export const deleteClaimItemReceipt = (claimId, itemId, receiptId) => api.delete(`/travel/claims/${claimId}/items/${itemId}/receipts/${receiptId}`).then(r => r.data.claim);
-// Removed approvals APIs and submit
+export const deleteExpenseClaimDocument = (claimId, docId) => api.delete(`/travel/expense-claims/${claimId}/documents/${docId}`).then(r => r.data.claim);
+
+// Utility: compute totals client-side (mirrors backend logic) (A-G mapping)
+export const computeExpenseClaimTotals = (claim) => {
+  if (!claim) return {};
+  const A = Number(claim.total_distance_km || 0);
+  const B = Number(claim.rate_per_km || 0);
+  const C = +(A * B).toFixed(2);
+  const D = Number(claim.toll_tax_total || 0);
+  const E = +(C + D).toFixed(2);
+  const perDiemDays = Number(claim.per_diem_days || 0);
+  const perDiemRate = Number(claim.per_diem_rate || 0);
+  const F = +(perDiemDays * perDiemRate).toFixed(2);
+  const G = +(E + F).toFixed(2);
+  return { A, B, C, D, E, F, G };
+};
+
+// ===== Legacy Travel Claims API (deprecated) stubs to prevent import errors =====
+// These map to no-ops so old components no longer break the build. Remove old pages to clean up.
+export const getTravelClaims = async () => [];
+export const getTravelClaim = async () => null;
+export const createTravelClaim = async () => { throw new Error('Legacy travel claim API removed. Use new Expense Claims page.'); };
+export const updateTravelClaim = async () => { throw new Error('Legacy travel claim API removed.'); };
+export const updateClaimItem = async () => { throw new Error('Legacy travel claim items removed.'); };
+export const deleteClaimItem = async () => { throw new Error('Legacy travel claim items removed.'); };
+export const uploadClaimItemReceipts = async () => { throw new Error('Legacy travel claim receipts removed.'); };
+export const deleteClaimItemReceipt = async () => { throw new Error('Legacy travel claim receipts removed.'); };
+// ===============================================================================

@@ -413,6 +413,30 @@ const travelClaimItemStorage = multer.diskStorage({
   }
 });
 
+// New: Travel Expense Claim Documents storage by category
+const travelExpenseClaimDocStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const claimId = req.params.claimId || req.params.id || req.body.claim_id;
+      const category = (req.query.category || req.body.category || 'OTHER').toString().toUpperCase();
+      if (!claimId) return cb(new Error('Missing claim id'));
+      const catSafe = category.replace(/[^A-Z0-9_]/g,'');
+      const base = path.join(uploadDir, 'Travel', 'Claims', String(claimId), 'Documents', catSafe);
+      await fs.mkdir(base, { recursive: true });
+      cb(null, base);
+    } catch (e) { console.error(e); cb(e); }
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-z0-9_\-]/gi,'_').slice(0,40);
+    const ts = Date.now();
+    const name = `${base}_${ts}${ext}`;
+    const category = (req.query.category || req.body.category || 'OTHER').toString().toUpperCase();
+    file._savedRelPath = path.join('uploads','Travel','Claims', String(req.params.claimId || req.params.id || req.body.claim_id), 'Documents', category.replace(/[^A-Z0-9_]/g,''), name).replace(/\\/g,'/');
+    cb(null, name);
+  }
+});
+
 const fileFilter = (req, file, cb) => {
   try {
     const allowedImageTypes = /jpeg|jpg|png|gif|webp/;
@@ -457,6 +481,7 @@ const upload = multer({
 const uploadTravelRequest = multer({ storage: travelRequestStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
 const uploadTravelClaim = multer({ storage: travelClaimStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
 const uploadTravelClaimItem = multer({ storage: travelClaimItemStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
+const uploadTravelExpenseClaimDocs = multer({ storage: travelExpenseClaimDocStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter });
 
 // Export for use in routes and controllers
 module.exports = upload;
@@ -466,3 +491,4 @@ module.exports.employmentStorage = employmentStorage;
 module.exports.uploadTravelRequest = uploadTravelRequest;
 module.exports.uploadTravelClaim = uploadTravelClaim;
 module.exports.uploadTravelClaimItem = uploadTravelClaimItem;
+module.exports.uploadTravelExpenseClaimDocs = uploadTravelExpenseClaimDocs;

@@ -551,7 +551,7 @@ model LeaveBankDefault {
   leave_type_id  Int
   days           Int        @default(0)
   createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  updatedAt      DateTime   @default(now())
   bank           LeaveBank  @relation(fields: [leave_bank_id], references: [id], onDelete: Cascade)
   leaveType      LeaveType  @relation(fields: [leave_type_id], references: [id])
 
@@ -566,7 +566,7 @@ model LeaveBankAllocation {
   leave_type_id  Int
   days           Int        @default(0)
   createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  updatedAt      DateTime   @default(now())
   bank           LeaveBank  @relation(fields: [leave_bank_id], references: [id], onDelete: Cascade)
   employee       Employee   @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   leaveType      LeaveType  @relation(fields: [leave_type_id], references: [id])
@@ -594,6 +594,14 @@ enum TravelRequestStatus {
   APPROVED
   REJECTED
   CANCELLED
+}
+
+enum TravelClaimDocCategory {
+  FUEL
+  TOLL
+  TICKET
+  PICTURE
+  REPORT
 }
 
 model TravelRequest {
@@ -636,42 +644,55 @@ model TravelClaim {
   is_deleted         Boolean           @default(false)
   employee           Employee          @relation(fields: [employee_id], references: [id])
   request            TravelRequest?    @relation(fields: [travel_request_id], references: [id])
-  items              TravelClaimItem[]
+  // New single-row per diem + expense fields
+  from_date          DateTime?
+  to_date            DateTime?
+  overnight_stay     Boolean        @default(false)
+  total_distance_km  Float?         @default(0)
+  rate_per_km        Float?         @default(0)
+  distance_amount    Float?         @default(0) // C = A x B
+  toll_tax_total     Float?         @default(0) // D
+  travel_total       Float?         @default(0) // E = C + D
+  per_diem_days      Int?           @default(0)
+  per_diem_rate      Float?         @default(0)
+  per_diem_amount    Float?         @default(0) // F
+  grand_total        Float?         @default(0) // G = E + F
+  documents          TravelClaimDocument[]
+  segments           TravelClaimSegment[]
 
-  @@index([employee_id])
-  @@index([travel_request_id])
+  @@unique([travel_request_id, employee_id], name: "request_employee_claim_unique")
 }
 
-model TravelClaimItem {
-  id            Int          @id @default(autoincrement())
-  claim_id      Int
-  date          DateTime
-  category      String
-  description   String?
-  amount        Float        @default(0)
-  receipt_path  String?
-  mime_type     String?
-  file_size     Int?
-  createdAt     DateTime     @default(now())
-  claim         TravelClaim  @relation(fields: [claim_id], references: [id], onDelete: Cascade)
-  // New: multiple receipts per item
-  receipts      TravelClaimReceipt[]
-
+model TravelClaimSegment {
+  id             Int          @id @default(autoincrement())
+  claim_id       Int
+  departure_from String
+  departure_to   String
+  depart_time    String? // HH:MM
+  arrive_time    String?
+  mode           String?
+  distance_km    Float? @default(0)
+  createdAt      DateTime @default(now())
+  claim          TravelClaim @relation(fields: [claim_id], references: [id], onDelete: Cascade)
   @@index([claim_id])
 }
 
-model TravelClaimReceipt {
-  id            Int              @id @default(autoincrement())
-  item_id       Int
-  file_path     String
-  document_name String?
-  mime_type     String?
-  file_size     Int?
-  createdAt     DateTime         @default(now())
-  item          TravelClaimItem  @relation(fields: [item_id], references: [id], onDelete: Cascade)
-
-  @@index([item_id])
+model TravelClaimDocument {
+  id          Int                   @id @default(autoincrement())
+  claim_id    Int
+  category    TravelClaimDocCategory
+  file_path   String
+  mime_type   String?
+  file_size   Int?
+  createdAt   DateTime               @default(now())
+  claim       TravelClaim            @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  @@index([claim_id])
+  @@index([category])
 }
+
+// Removed duplicate re-definitions of TravelRequestStatus, TravelRequest, TravelClaim, TravelClaimSegment, TravelClaimDocument that were appended below.
+// The canonical definitions (with new expense claim fields) exist earlier in the file.
+// Duplicate block deleted to fix Prisma P1012 duplicate model/enum errors.
 
 // New: many-to-many attendees for a travel request
 model TravelRequestEmployee {
