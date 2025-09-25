@@ -67,7 +67,11 @@ module.exports = {
     return false;
   },
   getClaim: async (id, employee_id, isSuperAdmin) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { documents: true, segments: true, request: true, employee: true } });
+    const parsedId = Number(id);
+    if(!Number.isInteger(parsedId) || parsedId <= 0){
+      throw new Error('Invalid claim id');
+    }
+    const claim = await prisma.travelClaim.findUnique({ where: { id: parsedId }, include: { documents: true, segments: true, request: true, employee: true } });
     if(!claim || claim.is_deleted) return null;
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     // If draft and rates missing/zero, pull latest rates
@@ -170,13 +174,117 @@ module.exports = {
     return { success: true };
   },
   submitClaim: async (id, employee_id, isSuperAdmin) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { documents: true, request: true } });
+    // Refactored formatting to avoid any hidden characters / syntax issues
+    const claim = await prisma.travelClaim.findUnique({
+      where: { id: Number(id) },
+      include: {
+        documents: true,
+        request: {
+          include: {
+            applicant: {
+              include: {
+                employmentRecords: {
+                  where: { is_current: true, is_deleted: false },
+                  include: { location: true, designation: true, department: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
     if(!claim) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims can be submitted');
     const hasReport = claim.documents.some(d=>d.category==='REPORT');
     if(!hasReport) throw new Error('Report document required before submission');
     await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'SUBMITTED' } });
-    return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true } });
+    await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'SUBMITTED', actor_employee_id: employee_id } });
+    return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } }, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } } } });
+  },
+  listPendingApprovals: async (ctx) => {
+    // Determine which stage user can act on using permission-based flags
+    const stageFilters = [];
+    if(ctx.isOps || ctx.canApproveClaimOps){ stageFilters.push({ status: 'SUBMITTED', request: { applicant: { employmentRecords: { some: { is_current: true, location: { type: 'BAZAAR' } } } } } }); }
+    if(ctx.isDG || ctx.canApproveClaimDG){ stageFilters.push({ status: 'SUBMITTED', request: { applicant: { employmentRecords: { some: { is_current: true, location: { type: 'HEAD_OFFICE' } } } } } }); }
+    if(ctx.isHR){ stageFilters.push({ status: 'PENDING_APPROVAL', statusEntries: { some: { action: { in: ['OPS_APPROVED','DG_APPROVED'] } } } }); }
+    if(ctx.isAccountsApprover){
+      stageFilters.push({ status: 'VERIFIED', statusEntries: { some: { action: 'HR_APPROVED' } } });
+    }
+    if(stageFilters.length===0) return [];
+    const claims = await prisma.travelClaim.findMany({
+      where: { OR: stageFilters },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } },
+        request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true } } } } } },
+        documents: true,
+        segments: true,
+        statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } }
+      }
+    });
+    return claims;
+  },
+  decideClaim: async (id, actorEmpId, ctx, action, remarks) => {
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } }, statusEntries: { orderBy: { createdAt: 'asc' } }, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } });
+    if(!claim || claim.is_deleted) throw new Error('Not found');
+    const locType = claim.request?.applicant?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
+    const isAccounts = ctx.isAccountsApprover;
+    const nowStatus = claim.status;
+    const act = action.toUpperCase();
+    const next = {};
+
+    if(act==='APPROVE'){
+      if(nowStatus==='SUBMITTED'){
+        if(locType==='BAZAAR' && (ctx.isOps || ctx.canApproveClaimOps)){ next.status='PENDING_APPROVAL'; next.entry='OPS_APPROVED'; }
+        else if(locType==='HEAD_OFFICE' && (ctx.isDG || ctx.canApproveClaimDG)){ next.status='PENDING_APPROVAL'; next.entry='DG_APPROVED'; }
+        else throw new Error('Not authorized for first approval stage');
+      } else if(nowStatus==='PENDING_APPROVAL'){
+        if(ctx.isHR){ next.status='VERIFIED'; next.entry='HR_APPROVED'; }
+        else throw new Error('Not authorized for HR stage');
+      } else if(nowStatus==='VERIFIED'){
+        if(isAccounts){ next.status='APPROVED'; next.entry='ACCOUNTS_APPROVED'; }
+        else throw new Error('Not authorized for Accounts stage');
+      } else {
+        throw new Error('No further approvals allowed');
+      }
+      await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: next.status } });
+      await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: next.entry, actor_employee_id: actorEmpId, remarks: remarks||null } });
+    } else if(act==='REJECT'){
+      next.status='REJECTED';
+      next.entry = (nowStatus==='SUBMITTED'?(locType==='BAZAAR'?'OPS_REJECTED':'DG_REJECTED'):(nowStatus==='PENDING_APPROVAL'?'HR_REJECTED':'ACCOUNTS_REJECTED'));
+      await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: next.status } });
+      await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: next.entry, actor_employee_id: actorEmpId, remarks: remarks||null } });
+    } else if(act==='CLEAR'){
+      const entries = claim.statusEntries.slice().reverse();
+      const approvalsOrder = ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'];
+      const lastApproval = entries.find(e => approvalsOrder.includes(e.action));
+      if(!lastApproval) throw new Error('No approval to clear');
+      if(lastApproval.action==='OPS_APPROVED' || lastApproval.action==='DG_APPROVED'){
+        if(nowStatus!=='PENDING_APPROVAL') throw new Error('Cannot clear at this stage');
+        if(lastApproval.action==='OPS_APPROVED' && !(ctx.isOps || ctx.canApproveClaimOps)) throw new Error('Not authorized to clear OPS approval');
+        if(lastApproval.action==='DG_APPROVED' && !(ctx.isDG || ctx.canApproveClaimDG)) throw new Error('Not authorized to clear DG approval');
+        if(claim.statusEntries.some(e=>e.action==='HR_APPROVED')) throw new Error('Later approvals exist');
+        await prisma.travelClaimStatusEntry.delete({ where: { id: lastApproval.id } });
+        await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'SUBMITTED' } });
+      } else if(lastApproval.action==='HR_APPROVED'){
+        if(nowStatus!=='VERIFIED') throw new Error('Cannot clear HR approval now');
+        if(!ctx.isHR) throw new Error('Not authorized to clear HR approval');
+        if(claim.statusEntries.some(e=>e.action==='ACCOUNTS_APPROVED')) throw new Error('Later approvals exist');
+        await prisma.travelClaimStatusEntry.delete({ where: { id: lastApproval.id } });
+        await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'PENDING_APPROVAL' } });
+      } else if(lastApproval.action==='ACCOUNTS_APPROVED'){
+        if(nowStatus!=='APPROVED') throw new Error('Cannot clear Accounts approval now');
+        if(!isAccounts) throw new Error('Not authorized to clear Accounts approval');
+        await prisma.travelClaimStatusEntry.delete({ where: { id: lastApproval.id } });
+        await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'VERIFIED' } });
+      } else {
+        throw new Error('Unsupported approval clear');
+      }
+    } else {
+      throw new Error('Invalid action');
+    }
+
+    return prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { documents: true, segments: true, request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } }, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } } } });
   }
 };

@@ -11,6 +11,13 @@ async function main() {
   let createdDistricts = [];
   let createdCities = [];
   let createdEducationLevels = [];
+  let createdEmployees = [];
+  let createdUsers = [];
+  // NEW: track employments & placeholder arrays referenced in summary
+  let createdEmployments = [];
+  let salaryRecords = [];
+  let contractRecords = [];
+  let employmentDocuments = [];
 
   // Clear existing data using hard delete utility
   console.log('🧹 Cleaning existing data using hard delete...');
@@ -312,10 +319,13 @@ async function main() {
         "roster.read","roster.create","roster.update","roster.delete","roster.status",
         "travel.read","travel.create","travel.update","travel.delete","travel.submit","travel.cancel","travel.status","travel.manage",
         "travel.claim.read","travel.claim.create","travel.claim.update","travel.claim.delete","travel.claim.submit","travel.claim.status","travel.claim.settle",
-        "travel.rates.read","travel.rates.manage"
+        "travel.rates.read","travel.rates.manage",
+        // granular claim approval permissions
+        "travel.request.approve.ops","travel.request.approve.dg","travel.claim.approve.ops","travel.claim.approve.dg","travel.claim.approve.hr","travel.claim.approve.accounts"
       ], enabled: true, fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] },
-    { name: "HR Officer", type: "custom", allowed_actions: ["employees.read","employees.create","employees.update","reports.read","travel.read"], enabled: true, fields: ["employee_personal", "employee_employment"] },
-    { name: "Manager", type: "custom", allowed_actions: ["employees.read","reports.read","requests.approve","roster.read","roster.create","roster.update"], enabled: true, fields: ["employee_basic", "employee_employment"] },
+    { name: "HR Officer", type: "custom", allowed_actions: ["employees.read","employees.create","employees.update","reports.read","travel.read","travel.claim.read","travel.claim.approve.hr"], enabled: true, fields: ["employee_personal", "employee_employment"] },
+    { name: "Manager", type: "custom", allowed_actions: ["employees.read","reports.read","requests.approve","roster.read","roster.create","roster.update","travel.read","travel.claim.read","travel.request.approve.ops","travel.claim.approve.ops"], enabled: true, fields: ["employee_basic", "employee_employment"] },
+    { name: "Accounts Approver", type: "custom", allowed_actions: ["travel.read","travel.claim.read","travel.claim.approve.accounts"], enabled: true, fields: ["employee_basic"] },
     { name: "Employee", type: "custom", allowed_actions: ["profile.read","profile.update"], enabled: true, fields: ["own_personal", "own_employment"] }
   ];
 
@@ -356,6 +366,8 @@ async function main() {
     'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.manage',
     'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.settle',
     'travel.rates.read','travel.rates.manage',
+    // granular stage permissions
+    'travel.request.approve.ops','travel.request.approve.dg','travel.claim.approve.ops','travel.claim.approve.dg','travel.claim.approve.hr','travel.claim.approve.accounts',
     'reports.read','audit.read','requests.approve','profile.read','profile.update'
   ];
 
@@ -399,6 +411,10 @@ async function main() {
         'travel.read','travel.create','travel.update','travel.submit','travel.status',
         'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.submit','travel.claim.status'
       ] } } });
+      for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
+    }
+    if (orig.name === 'Accounts Approver') {
+      const extraPerms = await prisma.permission.findMany({ where: { key: { in: ['travel.read','travel.claim.read'] } } });
       for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
 
@@ -475,7 +491,6 @@ async function main() {
   ];
 
   console.log('👥 Seeding employees...');
-  const createdEmployees = [];
   for (const emp of employees) {
     const dist = createdDistricts.find((d) => d.name === emp.district);
     const city = createdCities.find((c) => c.name === emp.city && (!dist || c.district_id === dist.id))
@@ -529,7 +544,6 @@ async function main() {
   ];
 
   console.log('👤 Seeding users...');
-  const createdUsers = [];
   for (const user of users) {
     const createdUser = await prisma.user.create({ data: user });
     console.log(`✅ Created User: ${createdUser.email}`);
@@ -765,153 +779,52 @@ async function main() {
     { employee_id: empId('HR Viewer Test'), organization: 'PSBA', department_id: deptId('HR'), designation_id: desigId('HR Officer', 'HR'), employment_type: 'Regular', effective_from: new Date('2022-03-01'), office_location: 'Head Quarter', remarks: 'HR viewer for Manage list', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'Level-3').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false }
   ];
 
-  console.log('💼 Seeding employment records...');
-  const createdEmployments = [];
-  for (const emp of employmentRecords) {
-    const employment = await prisma.employment.create({ data: emp });
-    console.log(`✅ Created Employment: ${employment.organization} - Employee ${employment.employee_id}`);
+  // NOTE: Employees already seeded earlier; removed duplicate employee creation loop to avoid P2002 errors.
+  // Now seed employment records.
+  console.log('🧑‍💼 Seeding employment records...');
+  // reuse existing createdEmployments array declared earlier
+  for (const rec of employmentRecords) {
+    const employment = await prisma.employment.create({ data: rec });
     createdEmployments.push(employment);
+    console.log(`✅ Employment created for employee_id ${rec.employee_id}`);
   }
 
-  // Seed employment salaries
-  const salaryRecords = [
-    {
-      employment_id: createdEmployments[0].id,
-      basic_salary: 75000.0,
-      medical_allowance: 8000.0,
-      house_rent: 25000.0,
-      conveyance_allowance: 5000.0,
-      other_allowances: 3000.0,
-      bank_account_primary: "1234567890123456",
-      bank_name_primary: "HBL",
-      bank_branch_code: "1234",
-      payment_mode: "Bank Transfer",
-      salary_effective_from: new Date("2020-01-15"),
-      payroll_status: "Active",
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[1].id,
-      basic_salary: 85000.0,
-      medical_allowance: 10000.0,
-      house_rent: 30000.0,
-      conveyance_allowance: 6000.0,
-      other_allowances: 4000.0,
-      bank_account_primary: "2345678901234567",
-      bank_name_primary: "UBL",
-      bank_branch_code: "5678",
-      payment_mode: "Bank Transfer",
-      salary_effective_from: new Date("2021-03-01"),
-      salary_effective_till: new Date("2024-02-29"),
-      payroll_status: "Active",
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[2].id,
-      basic_salary: 95000.0,
-      medical_allowance: 12000.0,
-      house_rent: 35000.0,
-      conveyance_allowance: 7000.0,
-      other_allowances: 5000.0,
-      daily_wage_rate: null,
-      bank_account_primary: "3456789012345678",
-      bank_name_primary: "MCB",
-      bank_branch_code: "9012",
-      payment_mode: "Bank Transfer",
-      salary_effective_from: new Date("2022-06-01"),
-      payroll_status: "Active",
-      is_deleted: false
-    }
-  ];
-
-  console.log('💰 Seeding employment salaries...');
-  for (const salary of salaryRecords) {
-    const employmentSalary = await prisma.employmentSalary.create({ data: salary });
-    console.log(`✅ Created Salary Record: Employment ${employmentSalary.employment_id} - Basic: ${employmentSalary.basic_salary}`);
+  // After base employees seeded, add extra HR Approver if not present
+  const existingHrApprover = createdEmployees.find(e => e.full_name === 'HR Approver');
+  if(!existingHrApprover){
+    const hrApproverEmp = await prisma.employee.create({ data: {
+      employee_id: 'EMPHR002', full_name: 'HR Approver', father_husband_name: 'Karim', relationship_type: 'father', cnic: '3520212345934', cnic_issue_date: new Date('2018-04-04'), cnic_expire_date: new Date('2038-04-03'), date_of_birth: new Date('1991-09-09'), gender: 'Male', marital_status: 'Married', nationality: 'Pakistani', religion: 'Islam', mobile_number: '03241234567', whatsapp_number: '03241234567', email: 'hrapprover.emp@psba.gop.pk', present_address: 'Lahore', permanent_address: 'Lahore', district: 'Lahore', city: 'Lahore', status: 'Active', is_deleted: false }
+    });
+    createdEmployees.push(hrApproverEmp);
+    console.log('✅ Created Employee: HR Approver (EMPHR002)');
   }
 
-  // Remove employment location seeding (replaced by location_id on Employment)
+  // 👤 Seeding users (additional)...
+  const findEmpIdLater = (name) => createdEmployees.find(e => e.full_name === name)?.id;
+  const extraUsers = [];
+  if(!createdUsers.find(u => u.email === 'hrapprover@psba.gop.pk')){
+    extraUsers.push({ email: 'hrapprover@psba.gop.pk', password: encrypt('hrapp123'), role_id: (createdRoles.find(r => r.name === 'HR Admin')?.id || createdRoles[1].id), employee_id: findEmpIdLater('HR Approver'), is_deleted: false });
+  }
+  if(!createdUsers.find(u => u.email === 'accounts@psba.gop.pk')){
+    extraUsers.push({ email: 'accounts@psba.gop.pk', password: encrypt('accounts123'), role_id: (createdRoles.find(r => r.name === 'Manager')?.id || createdRoles[2].id), employee_id: findEmpIdLater('Kashif Rasheed'), is_deleted: false });
+  }
+  for(const u of extraUsers){ const cu = await prisma.user.create({ data: u }); createdUsers.push(cu); console.log('✅ Created User:', cu.email); }
 
-  // Seed employment contracts
-  const contractRecords = [
-    {
-      employment_id: createdEmployments[0].id,
-      contract_type: "Permanent",
-      contract_number: "MBWO-EMP2024001-2020",
-      start_date: new Date("2020-01-15"),
-      confirmation_status: "Confirmed",
-     
-     
-      confirmation_date: new Date("2020-07-15"),
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[1].id,
-      contract_type: "Fixed-term",
-      contract_number: "PMBMC-EMP2024002-2021",
-      start_date: new Date("2021-03-01"),
-      end_date: new Date("2024-02-29"),
-      confirmation_status: "Confirmed",
-      confirmation_date: new Date("2021-09-01"),
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[2].id,
-      contract_type: "Probation",
-      contract_number: "PSBA-EMP2024003-2022",
-      start_date: new Date("2022-06-01"),
-      probation_start: new Date("2022-06-01"),
-      probation_end: new Date("2024-06-01"),
-      is_deleted: false
-    }
-  ];
 
-  console.log('📝 Seeding employment contracts...');
-  for (const contract of contractRecords) {
-    const employmentContract = await prisma.employmentContract.create({ data: contract });
-    console.log(`✅ Created Contract Record: Employment ${employmentContract.employment_id} - ${employmentContract.contract_type}`);
+
+  // Ensure employment record for HR Approver (after base employment seeding)
+  const hrDept = createdDepartments.find(d=> d.name==='HR');
+  const hrManagerDesig = createdDesignations.find(d=> d.title==='HR Manager' && d.department_id===hrDept?.id) || createdDesignations.find(d=> d.title==='HR Officer' && d.department_id===hrDept?.id);
+  const scaleBps18 = await prisma.scaleGrade.findFirst({ where: { name: 'BPS-18' } });
+  const hrApproverEmpId = findEmpIdLater('HR Approver');
+  if(hrApproverEmpId && !await prisma.employment.findFirst({ where: { employee_id: hrApproverEmpId, is_current: true } })){
+    const locHQ = await prisma.location.findFirst({ where: { type: 'HEAD_OFFICE' } });
+    const hrEmp = await prisma.employment.create({ data: { employee_id: hrApproverEmpId, organization: 'PSBA', department_id: hrDept?.id, designation_id: hrManagerDesig?.id, employment_type: 'Regular', effective_from: new Date('2022-05-01'), office_location: 'Head Quarter', remarks: 'HR Approver Seed', scale_grade_id: scaleBps18?.id, employment_status: 'active', is_current: true, filer_status: 'filer', location_id: locHQ?.id, is_deleted: false } });
+    createdEmployments.push(hrEmp);
+    console.log('✅ Created Employment: HR Approver');
   }
 
-  // Seed employment documents
-  const employmentDocuments = [
-    {
-     
-      employment_id: createdEmployments[0].id,
-      file_path: "/uploads/employment/ahmed_medical_fitness.pdf",
-      file_type: "medical_fitness",
-      document_name: "ahmed_medical_fitness.pdf",
-      file_size: 3145728,
-      mime_type: "application/pdf",
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[0].id,
-      file_path: "/uploads/employment/ahmed_police_certificate.pdf",
-      file_type: "police_character",
-      document_name: "ahmed_police_certificate.pdf",
-      file_size: 2097152,
-      mime_type: "application/pdf",
-      is_deleted: false
-    },
-    {
-      employment_id: createdEmployments[1].id,
-      file_path: "/uploads/employment/fatima_contract.pdf",
-      file_type: "contract_document",
-      document_name: "fatima_contract.pdf",
-      file_size: 4194304,
-      mime_type: "application/pdf",
-      associated_id: createdEmployments[1].id,
-      is_deleted: false
-    }
-  ];
-
-  console.log('📄 Seeding employment documents...');
-  for (const doc of employmentDocuments) {
-    const employmentDocument = await prisma.employmentDocument.create({ data: doc });
-    console.log(`✅ Created Employment Document: ${employmentDocument.file_type} for employment ${employmentDocument.employment_id}`);
-  }
-
-  // After roles and users: Permissions are already seeded above; proceed to system settings only
+  // Permissions are already seeded above; proceed to system settings only
   // Seed default system settings (security/ui)
   await prisma.systemSetting.upsert({
     where: { key: 'security' },

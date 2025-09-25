@@ -58,6 +58,11 @@ export const computeExpenseClaimTotals = (claim) => {
 
 export const submitExpenseClaim = (id) => api.post(`/travel/expense-claims/${id}/submit`).then(r => r.data.claim);
 
+// List pending expense claim approvals for current user
+export const listPendingExpenseClaimApprovals = () => api.get('/travel/expense-claims/pending-approvals').then(r => r.data.claims);
+// Decide (approve/reject) an expense claim
+export const decideExpenseClaim = (id, action, remarks) => api.post(`/travel/expense-claims/${id}/decision`, { action, remarks }).then(r => r.data.claim);
+
 // ===== Legacy Travel Claims API (deprecated) stubs to prevent import errors =====
 // These map to no-ops so old components no longer break the build. Remove old pages to clean up.
 export const getTravelClaims = async () => [];

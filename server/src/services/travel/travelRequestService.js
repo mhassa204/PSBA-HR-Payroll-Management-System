@@ -14,15 +14,23 @@ module.exports = {
     const desigTitle = employment?.designation?.title || '';
     const locType = employment?.location?.type || 'HEAD_OFFICE';
     const scaleLevel = Number(employment?.scale_grade?.level || 0);
-    const isOps = /operations/i.test(deptName);
-    const isHR = /^hr$/i.test(deptName) || /human\s*resources/i.test(deptName);
-    const isDG = /^director\s+general$/i.test(desigTitle);
+    const roleName = (req.session.user?.role?.name || '');
+    const perms = req.session.user?.permissions || [];
+
+    // Permission-driven stage approver flags (fall back to legacy heuristic for backward compatibility)
+    const isOps = perms.includes('travel.request.approve.ops') || /operations/i.test(deptName);
+    const isDG = perms.includes('travel.request.approve.dg') || /^director\s+general$/i.test(desigTitle);
+    const isHR = perms.includes('travel.claim.approve.hr') || /hr/i.test(roleName) || /^hr$/i.test(deptName) || /human\s*resources/i.test(deptName);
+    const isAccountsApprover = perms.includes('travel.claim.approve.accounts') || /accounts|finance|budget|payroll|reconciliation/i.test(deptName);
+    const canApproveClaimOps = perms.includes('travel.claim.approve.ops');
+    const canApproveClaimDG = perms.includes('travel.claim.approve.dg');
+
     const managesAnyLocation = meUserId ? !!(await prisma.location.findFirst({ where: { manager_user_id: meUserId, is_deleted: false, is_active: true }, select: { id: true } })) : false;
     const isBps17Plus = scaleLevel >= 17;
     const canCreateOrOwn = (locType === 'BAZAAR') ? managesAnyLocation : (locType === 'HEAD_OFFICE' ? isBps17Plus : false);
     const canViewAll = (isHR || isOps || isDG);
-    const isSuperAdmin = (req.session.user?.role?.name === 'Super Admin') || (req.session.user?.permissions||[]).includes('*');
-    return { meEmpId, meUserId, employment, deptName, desigTitle, locType, scaleLevel, isOps, isHR, isDG, managesAnyLocation, isBps17Plus, canCreateOrOwn, canViewAll, isSuperAdmin };
+    const isSuperAdmin = (req.session.user?.role?.name === 'Super Admin') || perms.includes('*');
+    return { meEmpId, meUserId, employment, deptName, desigTitle, locType, scaleLevel, isOps, isDG, isHR, isAccountsApprover, canApproveClaimOps, canApproveClaimDG, managesAnyLocation, isBps17Plus, canCreateOrOwn, canViewAll, isSuperAdmin };
   },
 
   computeTotalDays: (departureDate, departureTime, expectedReturnDate) => {

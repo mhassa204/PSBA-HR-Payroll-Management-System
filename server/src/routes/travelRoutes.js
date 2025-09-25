@@ -29,6 +29,7 @@ router.patch('/requests/:id/status', isAuthenticated, travelRequestController.up
 
 // Expense Claims
 router.get('/expense-claims/eligible', isAuthenticated, expenseClaimController.eligible);
+router.get('/expense-claims/pending-approvals', isAuthenticated, expenseClaimController.listPendingApprovals);
 router.get('/expense-claims', isAuthenticated, authorizeAny(['travel.claim.read','travel.claim.create']), expenseClaimController.list);
 router.post('/expense-claims', isAuthenticated, authorizeAny(['travel.claim.create','travel.claim.read']), expenseClaimController.create);
 router.get('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.claim.read','travel.claim.create']), expenseClaimController.getOne);
@@ -46,5 +47,8 @@ router.delete('/expense-claims/:id/documents/:docId', isAuthenticated, authorize
 
 // Submit Expense Claim
 router.post('/expense-claims/:id/submit', isAuthenticated, authorizeAny(['travel.claim.submit','travel.claim.update','travel.claim.create']), expenseClaimController.submit);
+
+// Expense Claim Approvals
+router.post('/expense-claims/:id/decision', isAuthenticated, expenseClaimController.decide);
 
 module.exports = router;

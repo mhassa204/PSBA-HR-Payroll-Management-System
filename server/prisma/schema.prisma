@@ -65,6 +65,8 @@ model Employee {
   // New back-relations for travel request attendees and status actions
   travelRequestAttendees  TravelRequestEmployee[]
   travelRequestStatusActions TravelRequestStatusEntry[]
+  // Add missing back relation for travel claim status entries
+  travelClaimStatusEntries TravelClaimStatusEntry[]
 }
 
 model Department {
@@ -659,6 +661,7 @@ model TravelClaim {
   grand_total        Float?         @default(0) // G = E + F
   documents          TravelClaimDocument[]
   segments           TravelClaimSegment[]
+  statusEntries      TravelClaimStatusEntry[]
 
   @@unique([travel_request_id, employee_id], name: "request_employee_claim_unique")
 }
@@ -734,4 +737,18 @@ model TravelRate {
 
   @@unique([scale_grade_id])
   @@index([is_active])
+}
+
+// New: Travel Claim status history
+model TravelClaimStatusEntry {
+  id                Int       @id @default(autoincrement())
+  claim_id          Int
+  action            String   // SUBMITTED, OPS_APPROVED, HR_APPROVED, ACCOUNTS_APPROVED, REJECTED, etc.
+  actor_employee_id Int
+  remarks           String?
+  createdAt         DateTime  @default(now())
+  claim             TravelClaim @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  actor             Employee    @relation(fields: [actor_employee_id], references: [id])
+  @@index([claim_id])
+  @@index([actor_employee_id])
 }

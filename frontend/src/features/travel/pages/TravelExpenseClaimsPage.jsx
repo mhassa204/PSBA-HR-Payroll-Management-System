@@ -12,7 +12,9 @@ import {
   deleteExpenseClaimDocument,
   deleteExpenseClaim,
   submitExpenseClaim,
-  computeExpenseClaimTotals
+  computeExpenseClaimTotals,
+  listPendingExpenseClaimApprovals,
+  decideExpenseClaim
 } from '../../../services/travelService';
 import { useAuthStore } from '../../auth/authStore';
 
@@ -46,11 +48,18 @@ export default function TravelExpenseClaimsPage(){
 
   const [segmentsDraft, setSegmentsDraft] = useState([]); // local unsaved until added
 
+  const [approvalsTab, setApprovalsTab] = useState('create'); // create | manage | approvals
+  const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [loadingApprovals, setLoadingApprovals] = useState(false);
+  const [decisionTarget, setDecisionTarget] = useState(null);
+
   const loadEligible = async () => {
     setLoadingEligible(true);
     try { const rs = await getEligibleExpenseClaimRequests(); setEligible(rs); } finally { setLoadingEligible(false);} };
   const loadClaims = async () => { setLoadingClaims(true); try { const rs = await listExpenseClaims(); setClaims(rs); } finally { setLoadingClaims(false);} };
+  const loadPendingApprovals = async () => { setLoadingApprovals(true); try { const rs = await listPendingExpenseClaimApprovals(); setPendingApprovals(rs); } finally { setLoadingApprovals(false);} };
   useEffect(()=>{ loadEligible(); loadClaims(); },[]);
+  useEffect(()=>{ if(approvalsTab==='approvals') loadPendingApprovals(); }, [approvalsTab]);
 
   const startClaim = (req) => { setSelectedRequest(req); setStep(2);} ;
   const chooseAttendee = (att) => { setSelectedAttendee(att); setPendingCreationAttendee(att); };
@@ -349,6 +358,28 @@ export default function TravelExpenseClaimsPage(){
 
         </div>
       )}
+
+      {decisionTarget && (
+        <></>
+      )}
+    </div>
+  );
+}
+
+function DecisionForm({ claim, onDone, onClose }){
+  const [remarks, setRemarks] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const act = async (action) => { try { setSubmitting(true); const updated = await decideExpenseClaim(claim.id, action, remarks); onDone(updated); } catch(e){ alert(e.message); } finally { setSubmitting(false);} };
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-xs text-slate-500">Remarks (optional)</label>
+        <textarea value={remarks} onChange={e=>setRemarks(e.target.value)} className="w-full border rounded p-2 text-xs" rows={3} />
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button disabled={submitting} onClick={()=>act('REJECT')} className="px-3 py-1 text-xs rounded bg-red-600 text-white disabled:opacity-40">Reject</button>
+        <button disabled={submitting} onClick={()=>act('APPROVE')} className="px-3 py-1 text-xs rounded bg-emerald-600 text-white disabled:opacity-40">Approve</button>
+      </div>
     </div>
   );
 }
