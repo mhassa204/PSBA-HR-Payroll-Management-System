@@ -240,7 +240,8 @@ const LeftSidebar = () => {
         { name: 'Roles', href: '/settings/roles', icon: ViewColumnsIcon, show: () => can('roles.read') },
         { name: 'Districts', href: '/settings/districts', icon: ViewColumnsIcon, show: () => can('districts.read') },
         { name: 'Cities', href: '/settings/cities', icon: ViewColumnsIcon, show: () => can('cities.read') },
-        { name: 'Education Levels', href: '/settings/education-levels', icon: ViewColumnsIcon, show: () => can('education-levels.read') }
+        { name: 'Education Levels', href: '/settings/education-levels', icon: ViewColumnsIcon, show: () => can('education-levels.read') },
+        { name: 'Travel Rates', href: '/settings/travel-rates', icon: ViewColumnsIcon, show: () => can('travel.rates.read') }
       ]
     },
     {

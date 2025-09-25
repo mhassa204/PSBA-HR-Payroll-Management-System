@@ -40,7 +40,7 @@ router.post('/expense-claims/:id/segments', isAuthenticated, authorizeAny(['trav
 router.put('/expense-claims/:id/segments/:segmentId', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.updateSegment);
 router.delete('/expense-claims/:id/segments/:segmentId', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.deleteSegment);
 
-// Documents
+// Documents now exclude TICKET category
 router.post('/expense-claims/:id/documents', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.uploadDocuments);
 router.delete('/expense-claims/:id/documents/:docId', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.deleteDocument);
 

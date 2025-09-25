@@ -62,7 +62,7 @@ export default function TravelExpenseClaimsPage(){
       setSaving(true);
       const c = await createExpenseClaim({ travel_request_id: selectedRequest.id, employee_id: pendingCreationAttendee.employee_id });
       setClaim(c);
-      setForm(prev => ({...prev, from_date: c.from_date?.slice(0,10)||'', to_date: c.to_date?.slice(0,10)||'' }));
+      setForm(prev => ({...prev, from_date: c.from_date?.slice(0,10)||'', to_date: c.to_date?.slice(0,10)||'', rate_per_km: c.rate_per_km||0, per_diem_rate: c.per_diem_rate||0 }));
       setStep(3);
       setPendingCreationAttendee(null);
       loadEligible();
@@ -71,7 +71,7 @@ export default function TravelExpenseClaimsPage(){
 
   const cancelCreateFlow = () => { setPendingCreationAttendee(null); setSelectedAttendee(null); };
 
-  const refreshClaim = async () => { if(!claim) return; const full = await getExpenseClaim(claim.id); setClaim(full); };
+  const refreshClaim = async () => { if(!claim) return; const full = await getExpenseClaim(claim.id); setClaim(full); setForm(f=>({...f, rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0 })); };
 
   const persistCore = async () => {
     if(!claim) return;
@@ -82,8 +82,7 @@ export default function TravelExpenseClaimsPage(){
         to_date: form.to_date || null,
         overnight_stay: !!form.overnight_stay,
         rate_per_km: Number(form.rate_per_km||0),
-        toll_tax_total: Number(form.toll_tax_total||0),
-        per_diem_days: Number(form.per_diem_days||0),
+        // remove manual per diem rate input usage
         per_diem_rate: Number(form.per_diem_rate||0)
       };
       const updated = await updateExpenseClaim(claim.id, payload);
@@ -215,7 +214,7 @@ export default function TravelExpenseClaimsPage(){
             </div>
             <div>
               <label className="text-xs text-slate-500">Rate / Km (B)</label>
-              <Input value={form.rate_per_km} onChange={e=>setForm(p=>({...p,rate_per_km:e.target.value}))} />
+              <div className="text-sm font-medium pt-2">{form.rate_per_km || 0}</div>
             </div>
             <div>
               <label className="text-xs text-slate-500">Toll Tax Total (D)</label>
@@ -227,7 +226,7 @@ export default function TravelExpenseClaimsPage(){
             </div>
             <div>
               <label className="text-xs text-slate-500">Per Diem Rate</label>
-              <Input value={form.per_diem_rate} onChange={e=>setForm(p=>({...p,per_diem_rate:e.target.value}))} />
+              <div className="text-sm font-medium pt-2">{form.per_diem_rate || 0}</div>
             </div>
             <div className="md:col-span-7 flex justify-end">
               <button disabled={saving} onClick={persistCore} className="px-4 py-2 rounded bg-emerald-600 text-white disabled:opacity-40">Save Core</button>
@@ -300,7 +299,7 @@ export default function TravelExpenseClaimsPage(){
           {/* Documents */}
           <div className="bg-white border rounded shadow-sm p-4 text-sm space-y-4">
             <div className="font-medium">Documents</div>
-            {['FUEL','TOLL','TICKET','PICTURE','REPORT'].map(cat => {
+            {['FUEL','TOLL','PICTURE','REPORT'].map(cat => {
               const docs = (claim.documents||[]).filter(d=>d.category===cat);
               const isReport = cat==='REPORT';
               return (
@@ -315,7 +314,17 @@ export default function TravelExpenseClaimsPage(){
                     {docs.length===0 && <div className="text-slate-500 text-xs">No files</div>}
                     {docs.map(d => (
                       <div key={d.id} className="relative">
-                        <a href={d.url || d.file_path} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white hover:bg-slate-50 max-w-[160px] truncate">{d.file_path.split('/').pop()}</a>
+                        {(() => {
+                          let p = d.file_path || '';
+                          // Normalize slashes and strip leading ./ or /\
+                          p = p.replace(/^\\+|^\/+/, '');
+                          const isAbsolute = /^https?:\/\//i.test(p);
+                          const base = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+                          const url = isAbsolute ? p : (p.startsWith('uploads/') ? `${base}/${p}` : `${base}/${p}`);
+                          return (
+                            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white hover:bg-slate-50 max-w-[160px] truncate">{p.split('/').pop()}</a>
+                          );
+                        })()}
                         {(!isReport || docs.length>0) && (
                           <button onClick={()=>handleDocDelete(d.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-5 w-5 text-xs">×</button>
                         )}

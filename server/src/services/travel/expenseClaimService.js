@@ -7,6 +7,17 @@ const withinLastNDays = (date, days) => {
   return diff <= days;
 };
 
+async function getEmployeeScaleGrade(employeeId){
+  const emp = await prisma.employment.findFirst({ where: { employee_id: employeeId, is_current: true }, include: { scale_grade: true } });
+  return emp?.scale_grade_id ? { id: emp.scale_grade_id, grade: emp.scale_grade } : null;
+}
+async function getRatesForEmployee(employeeId){
+  const sg = await getEmployeeScaleGrade(employeeId);
+  if(!sg) return { rate_per_km: 0, per_diem_rate: 0 };
+  const rate = await prisma.travelRate.findFirst({ where: { scale_grade_id: sg.id, is_active: true } });
+  return { rate_per_km: rate?.rate_per_km || 0, per_diem_rate: rate?.per_diem_rate || 0 };
+}
+
 module.exports = {
   getAuthContext: async (req) => {
     const employee_id = Number(req.session.user?.employee_id);
@@ -34,6 +45,8 @@ module.exports = {
     return claims;
   },
   createClaim: async (employee_id, data) => {
+    if(!data.travel_request_id) throw new Error('travel_request_id required');
+    if(!data.employee_id) throw new Error('employee_id required');
     const request = await prisma.travelRequest.findUnique({ where: { id: Number(data.travel_request_id) }, include: { attendees: true } });
     if(!request || request.applicant_id !== employee_id) throw new Error('Forbidden');
     if(request.status !== 'APPROVED') throw new Error('Request not approved');
@@ -42,7 +55,8 @@ module.exports = {
     if(!isAttendee) throw new Error('Employee not attendee');
     const existing = await prisma.travelClaim.findFirst({ where: { travel_request_id: request.id, employee_id: attendeeEmpId, is_deleted: false } });
     if(existing) throw new Error('Claim already exists');
-    const created = await prisma.travelClaim.create({ data: { travel_request_id: request.id, employee_id: attendeeEmpId, from_date: request.departure_date, to_date: request.expected_return_date, per_diem_days: request.total_days||0 } });
+    const rates = await getRatesForEmployee(attendeeEmpId);
+    const created = await prisma.travelClaim.create({ data: { travel_request_id: request.id, employee_id: attendeeEmpId, from_date: request.departure_date, to_date: request.expected_return_date, per_diem_days: request.total_days||0, rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate, toll_tax_total: 0 } });
     return prisma.travelClaim.findUnique({ where: { id: created.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
   _canAccess(claim, employee_id, isSuperAdmin) {
@@ -59,17 +73,21 @@ module.exports = {
     return claim;
   },
   updateClaim: async (id, employee_id, isSuperAdmin, data) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { request: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { request: true, employee: true } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
     const updateData = {};
     ['from_date','to_date'].forEach(f=>{ if(data[f]) updateData[f] = new Date(data[f]); });
     if('overnight_stay' in data) updateData.overnight_stay = !!data.overnight_stay;
-    if('rate_per_km' in data) updateData.rate_per_km = Number(data.rate_per_km||0);
     if('toll_tax_total' in data) updateData.toll_tax_total = Number(data.toll_tax_total||0);
     if('per_diem_days' in data) updateData.per_diem_days = Number(data.per_diem_days||0);
-    if('per_diem_rate' in data) updateData.per_diem_rate = Number(data.per_diem_rate||0);
+    // rates ignored if sent; always ensure populated
+    if(!claim.rate_per_km || !claim.per_diem_rate){
+      const rates = await getRatesForEmployee(claim.employee_id);
+      if(!claim.rate_per_km) updateData.rate_per_km = rates.rate_per_km;
+      if(!claim.per_diem_rate) updateData.per_diem_rate = rates.per_diem_rate;
+    }
     await prisma.travelClaim.update({ where: { id: claim.id }, data: updateData });
     return module.exports.recomputeTotals(claim.id);
   },

@@ -28,7 +28,8 @@ import {
   DeviceManagement,
   DistrictManagement,
   CityManagement,
-  EducationLevelManagement
+  EducationLevelManagement,
+  TravelRateManagement
 } from "./features/settings";
 import { UserManagement } from "./features/users";
 import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
@@ -314,6 +315,14 @@ function App() {
               element={
                 <PrivateRoute permissions={["system.security.read"]}>
                   <SecuritySettings />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/travel-rates"
+              element={
+                <PrivateRoute permissions={["travel.rates.read"]}>
+                  <TravelRateManagement />
                 </PrivateRoute>
               }
             />

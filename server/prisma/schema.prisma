@@ -157,6 +157,7 @@ model ScaleGrade {
   updatedAt         DateTime     @updatedAt
   is_deleted        Boolean      @default(false)
   employmentRecords Employment[]
+  travelRate       TravelRate?
 }
 
 model PastExperience {
@@ -299,7 +300,7 @@ model EmploymentDocument {
   mime_type     String?
   associated_id Int?
   createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  updatedAt     DateTime   @default(now())
   is_deleted    Boolean    @default(false)
   employment    Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
 
@@ -523,7 +524,7 @@ model LeaveType {
   code        String?
   is_active   Boolean              @default(true)
   createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  updatedAt   DateTime             @default(now())
   is_deleted  Boolean              @default(false)
   bankDefaults LeaveBankDefault[]
   allocations  LeaveBankAllocation[]
@@ -538,7 +539,7 @@ model LeaveBank {
   createdByUserId  Int?
   createdBy        User?                  @relation(fields: [createdByUserId], references: [id])
   createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+  updatedAt        DateTime               @default(now())
   is_deleted       Boolean                @default(false)
   defaults         LeaveBankDefault[]
   allocations      LeaveBankAllocation[]
@@ -599,7 +600,6 @@ enum TravelRequestStatus {
 enum TravelClaimDocCategory {
   FUEL
   TOLL
-  TICKET
   PICTURE
   REPORT
 }
@@ -719,4 +719,19 @@ model TravelRequestStatusEntry {
 
   @@index([request_id])
   @@index([actor_employee_id])
+}
+
+// New: Travel allowance rates per Scale Grade
+model TravelRate {
+  id            Int        @id @default(autoincrement())
+  scale_grade_id Int
+  rate_per_km   Float?     @default(0)
+  per_diem_rate Float?     @default(0)
+  is_active     Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  scaleGrade    ScaleGrade @relation(fields: [scale_grade_id], references: [id], onDelete: Cascade)
+
+  @@unique([scale_grade_id])
+  @@index([is_active])
 }

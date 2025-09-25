@@ -29,6 +29,7 @@ const districtRoutes = require("./routes/districtRoutes");
 const cityRoutes = require("./routes/cityRoutes");
 const educationLevelRoutes = require("./routes/educationLevelRoutes");
 const travelRoutes = require("./routes/travelRoutes");
+const travelRateRoutes = require("./routes/travelRateRoutes");
 
 const app = express(); 
 const PORT = process.env.PORT || 3000;
@@ -96,6 +97,7 @@ app.use("/api/districts", districtRoutes);
 app.use("/api/cities", cityRoutes);
 app.use("/api/education-levels", educationLevelRoutes);
 app.use("/api/travel", travelRoutes);
+app.use("/api", travelRateRoutes); // Mount travel rates (endpoints: GET /api/travel-rates, etc.)
 const { isAuthenticated } = require("./middleware/auth");
 app.use("/api/admin", isAuthenticated, adminRoutes);
 

@@ -9,3 +9,4 @@ export { default as DeviceManagement } from './pages/DeviceManagement';
 export { default as DistrictManagement } from './pages/DistrictManagement';
 export { default as CityManagement } from './pages/CityManagement';
 export { default as EducationLevelManagement } from './pages/EducationLevelManagement';
+export { default as TravelRateManagement } from './pages/TravelRateManagement';

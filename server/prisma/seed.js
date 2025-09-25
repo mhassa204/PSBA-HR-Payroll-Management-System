@@ -309,7 +309,10 @@ async function main() {
         "reports.read",
         "users.read","users.manage",
         "audit.read",
-        "roster.read","roster.create","roster.update","roster.delete","roster.status"
+        "roster.read","roster.create","roster.update","roster.delete","roster.status",
+        "travel.read","travel.create","travel.update","travel.delete","travel.submit","travel.cancel","travel.status","travel.manage",
+        "travel.claim.read","travel.claim.create","travel.claim.update","travel.claim.delete","travel.claim.submit","travel.claim.status","travel.claim.settle",
+        "travel.rates.read","travel.rates.manage"
       ], enabled: true, fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] },
     { name: "HR Officer", type: "custom", allowed_actions: ["employees.read","employees.create","employees.update","reports.read","travel.read"], enabled: true, fields: ["employee_personal", "employee_employment"] },
     { name: "Manager", type: "custom", allowed_actions: ["employees.read","reports.read","requests.approve","roster.read","roster.create","roster.update"], enabled: true, fields: ["employee_basic", "employee_employment"] },
@@ -352,6 +355,7 @@ async function main() {
     'admin.tools',
     'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.manage',
     'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.settle',
+    'travel.rates.read','travel.rates.manage',
     'reports.read','audit.read','requests.approve','profile.read','profile.update'
   ];
 
@@ -383,7 +387,8 @@ async function main() {
       const extraKeys = [
         'attendance.map','leaves.read','leaves.create','leaves.update','leaves.delete','leaves.status','leaves.apply','leave-banks.read','leave-banks.create','leave-banks.update','leave-banks.delete','leave-types.read','leave-types.create','leave-types.update','leave-types.delete',
         'travel.read','travel.create','travel.update','travel.delete','travel.submit','travel.cancel','travel.status','travel.manage',
-        'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.settle'
+        'travel.claim.read','travel.claim.create','travel.claim.update','travel.claim.delete','travel.claim.submit','travel.claim.status','travel.claim.settle',
+        'travel.rates.read','travel.rates.manage'
       ];
       const extraPerms = await prisma.permission.findMany({ where: { key: { in: extraKeys } } });
       for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
@@ -397,8 +402,15 @@ async function main() {
       for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
 
-    if (permsToCreate.length) {
-      await prisma.role.update({ where: { id: role.id }, data: { rolePermissions: { create: permsToCreate } } });
+    // Deduplicate permission_ids to avoid P2002 unique constraint violations
+    const seen = new Set();
+    const uniquePerms = [];
+    for (const p of permsToCreate) {
+      if (!seen.has(p.permission_id)) { seen.add(p.permission_id); uniquePerms.push(p); }
+    }
+
+    if (uniquePerms.length) {
+      await prisma.role.update({ where: { id: role.id }, data: { rolePermissions: { create: uniquePerms } } });
     }
   }
 
@@ -828,6 +840,7 @@ async function main() {
       contract_number: "MBWO-EMP2024001-2020",
       start_date: new Date("2020-01-15"),
       confirmation_status: "Confirmed",
+     
       confirmation_date: new Date("2020-07-15"),
       is_deleted: false
     },
@@ -1045,6 +1058,17 @@ async function main() {
     console.log('✅ Sample expense claim seeded: Request', recentApprovedReq.id, 'Claim', claim.id);
   } else {
     console.log('⚠️ Skipped sample expense claim seeding (missing employees)');
+  }
+
+  // Seed Travel Rates (sample)
+  console.log('🧮 Seeding travel rates...');
+  const sampleGrades = await prisma.scaleGrade.findMany({ where: { name: { in: ['BPS-17','BPS-18','BPS-19','Level-3'] } } });
+  for(const g of sampleGrades){
+    const exists = await prisma.travelRate.findFirst({ where: { scale_grade_id: g.id } });
+    if(!exists){
+      await prisma.travelRate.create({ data: { scale_grade_id: g.id, rate_per_km: g.name==='BPS-17'?300: g.name==='BPS-18'?320: g.name==='BPS-19'?350: 150, per_diem_rate: g.name==='BPS-17'?1500: g.name==='BPS-18'?1700: g.name==='BPS-19'?2000: 800 } });
+      console.log('  • Rate added for', g.name);
+    }
   }
 
   console.log('🎉 Database seeding completed successfully!');

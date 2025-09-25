@@ -31,7 +31,8 @@ export const addExpenseClaimSegment = (claimId, payload) => api.post(`/travel/ex
 export const updateExpenseClaimSegment = (claimId, segmentId, payload) => api.put(`/travel/expense-claims/${claimId}/segments/${segmentId}`, payload).then(r => r.data.claim);
 export const deleteExpenseClaimSegment = (claimId, segmentId) => api.delete(`/travel/expense-claims/${claimId}/segments/${segmentId}`).then(r => r.data.claim);
 
-// Documents (categories: FUEL, TOLL, TICKET, PICTURE, REPORT) - REPORT is single & mandatory
+// Documents (categories: FUEL, TOLL, PICTURE, REPORT) - REPORT is single & mandatory
+// rate_per_km & per_diem_rate now auto-fetched from TravelRate per employee scale grade
 export const uploadExpenseClaimDocuments = async (claimId, category, files) => {
   const fd = new FormData();
   [...files].forEach(f => fd.append('files', f));
