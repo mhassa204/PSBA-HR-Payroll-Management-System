@@ -234,7 +234,32 @@ module.exports = {
     const act = action.toUpperCase();
     const next = {};
 
+    // Helper derivations
+    const approvalsOrder = ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'];
+    const lastApproval = [...claim.statusEntries].reverse().find(e=>approvalsOrder.includes(e.action));
+    const hasHRAppr = claim.statusEntries.some(e=>e.action==='HR_APPROVED');
+    const hasAccountsAppr = claim.statusEntries.some(e=>e.action==='ACCOUNTS_APPROVED');
+
+    const isLastStageActor = (stageAction) => {
+      if(stageAction==='OPS_APPROVED') return (ctx.isOps || ctx.canApproveClaimOps);
+      if(stageAction==='DG_APPROVED') return (ctx.isDG || ctx.canApproveClaimDG);
+      if(stageAction==='HR_APPROVED') return ctx.isHR;
+      if(stageAction==='ACCOUNTS_APPROVED') return isAccounts;
+      return false;
+    };
+    const nextStageHasActed = () => {
+      if(!lastApproval) return false;
+      if(lastApproval.action==='OPS_APPROVED' || lastApproval.action==='DG_APPROVED') return hasHRAppr || hasAccountsAppr; // any later stage
+      if(lastApproval.action==='HR_APPROVED') return hasAccountsAppr; // only accounts after HR
+      if(lastApproval.action==='ACCOUNTS_APPROVED') return false; // final stage
+      return false;
+    };
+
     if(act==='APPROVE'){
+      // Idempotent re-approve: if actor is last approver and next stage not yet acted, just return claim (no error)
+      if(lastApproval && isLastStageActor(lastApproval.action) && !nextStageHasActed()) {
+        return claim; // no change
+      }
       if(nowStatus==='SUBMITTED'){
         if(locType==='BAZAAR' && (ctx.isOps || ctx.canApproveClaimOps)){ next.status='PENDING_APPROVAL'; next.entry='OPS_APPROVED'; }
         else if(locType==='HEAD_OFFICE' && (ctx.isDG || ctx.canApproveClaimDG)){ next.status='PENDING_APPROVAL'; next.entry='DG_APPROVED'; }
@@ -251,40 +276,104 @@ module.exports = {
       await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: next.status } });
       await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: next.entry, actor_employee_id: actorEmpId, remarks: remarks||null } });
     } else if(act==='REJECT'){
-      next.status='REJECTED';
-      next.entry = (nowStatus==='SUBMITTED'?(locType==='BAZAAR'?'OPS_REJECTED':'DG_REJECTED'):(nowStatus==='PENDING_APPROVAL'?'HR_REJECTED':'ACCOUNTS_REJECTED'));
+      // Generic previous-stage modification: if actor owns last approval & next stage not acted -> change to REJECTED
+      let handledChange = false;
+      if(lastApproval && isLastStageActor(lastApproval.action) && !nextStageHasActed()){
+        await prisma.travelClaimStatusEntry.delete({ where: { id: lastApproval.id } });
+        const map = { OPS_APPROVED:'OPS_REJECTED', DG_APPROVED:'DG_REJECTED', HR_APPROVED:'HR_REJECTED', ACCOUNTS_APPROVED:'ACCOUNTS_REJECTED' };
+        next.status='REJECTED'; next.entry = map[lastApproval.action] || 'REJECTED';
+        handledChange = true;
+      }
+      if(!handledChange){
+        next.status='REJECTED';
+        next.entry = (nowStatus==='SUBMITTED'?(locType==='BAZAAR'?'OPS_REJECTED':'DG_REJECTED'):(nowStatus==='PENDING_APPROVAL'?'HR_REJECTED':'ACCOUNTS_REJECTED'));
+      }
       await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: next.status } });
       await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: next.entry, actor_employee_id: actorEmpId, remarks: remarks||null } });
     } else if(act==='CLEAR'){
-      const entries = claim.statusEntries.slice().reverse();
+      // Support undo of last approval OR last rejection (if user was actor and no later stage acted)
+      const entriesDesc = claim.statusEntries.slice().reverse();
       const approvalsOrder = ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'];
-      const lastApproval = entries.find(e => approvalsOrder.includes(e.action));
-      if(!lastApproval) throw new Error('No approval to clear');
-      if(lastApproval.action==='OPS_APPROVED' || lastApproval.action==='DG_APPROVED'){
-        if(nowStatus!=='PENDING_APPROVAL') throw new Error('Cannot clear at this stage');
-        if(lastApproval.action==='OPS_APPROVED' && !(ctx.isOps || ctx.canApproveClaimOps)) throw new Error('Not authorized to clear OPS approval');
-        if(lastApproval.action==='DG_APPROVED' && !(ctx.isDG || ctx.canApproveClaimDG)) throw new Error('Not authorized to clear DG approval');
-        if(claim.statusEntries.some(e=>e.action==='HR_APPROVED')) throw new Error('Later approvals exist');
-        await prisma.travelClaimStatusEntry.delete({ where: { id: lastApproval.id } });
-        await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'SUBMITTED' } });
-      } else if(lastApproval.action==='HR_APPROVED'){
-        if(nowStatus!=='VERIFIED') throw new Error('Cannot clear HR approval now');
-        if(!ctx.isHR) throw new Error('Not authorized to clear HR approval');
-        if(claim.statusEntries.some(e=>e.action==='ACCOUNTS_APPROVED')) throw new Error('Later approvals exist');
-        await prisma.travelClaimStatusEntry.delete({ where: { id: lastApproval.id } });
-        await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'PENDING_APPROVAL' } });
-      } else if(lastApproval.action==='ACCOUNTS_APPROVED'){
-        if(nowStatus!=='APPROVED') throw new Error('Cannot clear Accounts approval now');
-        if(!isAccounts) throw new Error('Not authorized to clear Accounts approval');
-        await prisma.travelClaimStatusEntry.delete({ where: { id: lastApproval.id } });
-        await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'VERIFIED' } });
+      const rejectionActions = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED'];
+      const lastEntry = entriesDesc[0];
+      if(!lastEntry) throw new Error('No decision to clear');
+
+      const stageFromAction = (action) => {
+        if(action.startsWith('OPS_')) return 'OPS';
+        if(action.startsWith('DG_')) return 'DG';
+        if(action.startsWith('HR_')) return 'HR';
+        if(action.startsWith('ACCOUNTS_')) return 'ACCOUNTS';
+        return null;
+      };
+      const actorStage = stageFromAction(lastEntry.action);
+      const isActorAuthorized = () => {
+        if(actorStage==='OPS') return (ctx.isOps || ctx.canApproveClaimOps);
+        if(actorStage==='DG') return (ctx.isDG || ctx.canApproveClaimDG);
+        if(actorStage==='HR') return ctx.isHR;
+        if(actorStage==='ACCOUNTS') return ctx.isAccountsApprover;
+        return false;
+      };
+      if(lastEntry.actor_employee_id !== actorEmpId) throw new Error('Cannot clear another user\'s decision');
+      if(!isActorAuthorized()) throw new Error('Not authorized to clear this decision');
+
+      if(approvalsOrder.includes(lastEntry.action)) {
+        // Approval undo (existing logic adapted)
+        const lastAppr = lastEntry; // alias
+        const hasHRAppr = claim.statusEntries.some(e=>e.action==='HR_APPROVED');
+        const hasAccountsAppr = claim.statusEntries.some(e=>e.action==='ACCOUNTS_APPROVED');
+        const nextStageHasActed = () => {
+          if(!lastAppr) return false;
+            if(lastAppr.action==='OPS_APPROVED' || lastAppr.action==='DG_APPROVED') return hasHRAppr || hasAccountsAppr;
+            if(lastAppr.action==='HR_APPROVED') return hasAccountsAppr;
+            if(lastAppr.action==='ACCOUNTS_APPROVED') return false;
+            return false;
+        };
+        if(nextStageHasActed()) throw new Error('Cannot clear, next stage already acted');
+        if(lastAppr.action==='OPS_APPROVED' || lastAppr.action==='DG_APPROVED'){
+          if(nowStatus!=='PENDING_APPROVAL') throw new Error('Cannot clear at this stage');
+          await prisma.travelClaimStatusEntry.delete({ where: { id: lastAppr.id } });
+          await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'SUBMITTED' } });
+        } else if(lastAppr.action==='HR_APPROVED') {
+          if(nowStatus!=='VERIFIED') throw new Error('Cannot clear HR approval now');
+          await prisma.travelClaimStatusEntry.delete({ where: { id: lastAppr.id } });
+          await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'PENDING_APPROVAL' } });
+        } else if(lastAppr.action==='ACCOUNTS_APPROVED') {
+          if(nowStatus!=='APPROVED') throw new Error('Cannot clear Accounts approval now');
+          await prisma.travelClaimStatusEntry.delete({ where: { id: lastAppr.id } });
+          await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'VERIFIED' } });
+        }
+      } else if(rejectionActions.includes(lastEntry.action)) {
+        // Rejection undo: only if overall status currently REJECTED
+        if(claim.status !== 'REJECTED') throw new Error('Cannot clear rejection after further changes');
+        // Remove last rejection entry and revert status to prior workflow stage
+        await prisma.travelClaimStatusEntry.delete({ where: { id: lastEntry.id } });
+        let revertStatus = 'SUBMITTED';
+        if(lastEntry.action==='HR_REJECTED') revertStatus = 'PENDING_APPROVAL';
+        else if(lastEntry.action==='ACCOUNTS_REJECTED') revertStatus = 'VERIFIED';
+        // OPS/DG rejected revert stays SUBMITTED
+        await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: revertStatus } });
       } else {
-        throw new Error('Unsupported approval clear');
+        throw new Error('Unsupported decision type to clear');
       }
     } else {
       throw new Error('Invalid action');
     }
 
     return prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { documents: true, segments: true, request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } }, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } } } });
+  },
+  listAllForApprovers: async (ctx) => {
+    // For approvers (any stage permission) return all non-deleted claims with enriched includes
+    if(!(ctx.isSuperAdmin || ctx.isHR || ctx.isDG || ctx.isOps || ctx.isAccountsApprover || ctx.canApproveClaimOps || ctx.canApproveClaimDG)) return [];
+    return prisma.travelClaim.findMany({
+      where: { is_deleted: false },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } },
+        request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } },
+        documents: true,
+        segments: true,
+        statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } }
+      }
+    });
   }
 };

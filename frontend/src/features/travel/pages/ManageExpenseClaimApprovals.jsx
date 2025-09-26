@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { listPendingExpenseClaimApprovals, decideExpenseClaim } from '../../../services/travelService';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useAuthStore } from '../../auth/authStore';
+import { listPendingExpenseClaimApprovals, listAllExpenseClaimApprovals, decideExpenseClaim, exportExpenseClaimsToCsv, getTravelCapabilities } from '../../../services/travelService';
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>{children}</div>
@@ -11,6 +12,88 @@ export default function ManageExpenseClaimApprovals(){
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [remarks, setRemarks] = useState('');
+  const [viewTab, setViewTab] = useState('pending'); // pending | all
+  const [allClaims, setAllClaims] = useState([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
+  // Auth / permission context
+  const user = useAuthStore(s=>s.user);
+  const can = useAuthStore(s=>s.can);
+  const isSuper = user?.role?.name === 'Super Admin';
+  // Fetch backend capability heuristics (includes legacy isOps / isDG / isHR flags)
+  const [caps, setCaps] = useState(null);
+  useEffect(()=>{ (async()=>{ try { const c = await getTravelCapabilities(); setCaps(c); } catch(_){ /* ignore */ } })(); },[]);
+  const roleName = (user?.role?.name||'').toLowerCase();
+  // Permission OR heuristic fallbacks mirroring backend travelRequestService
+  const canOps = isSuper || can('travel.claim.approve.ops') || caps?.isOps;
+  const canDG = isSuper || can('travel.claim.approve.dg') || caps?.isDG;
+  const canHR = isSuper || can('travel.claim.approve.hr') || caps?.isHR || /(^hr$|human\s*resources)/i.test(roleName);
+  const canAccounts = isSuper || can('travel.claim.approve.accounts') || /(accounts|finance|budget|payroll|reconciliation)/i.test(roleName);
+  const hasAnyApprovalPerm = canOps || canDG || canHR || canAccounts;
+  // If user has none, short-circuit action eligibility
+
+  // Helper to compute dynamic eligibility replicating backend generalized logic
+  const computeEligibility = (claim) => {
+    if(!claim) return { canApprove:false, canReject:false, canClear:false };
+    const status = claim.status;
+    const entries = claim.statusEntries || [];
+    const approvalsOrder = ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'];
+    const rejectionActions = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED'];
+    const lastApproval = [...entries].reverse().find(e=>approvalsOrder.includes(e.action));
+    const lastEntry = entries[entries.length-1];
+    const hasHRAppr = entries.some(e=>e.action==='HR_APPROVED');
+    const hasAccountsAppr = entries.some(e=>e.action==='ACCOUNTS_APPROVED');
+    const locType = claim.request?.applicant?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
+
+    // If rejected, allow undo (CLEAR) if last entry is a rejection by this user and they still have that stage permission
+    if(status === 'REJECTED') {
+      let canClear = false;
+      if(lastEntry && rejectionActions.includes(lastEntry.action) && lastEntry.actor_employee_id === user?.employee_id){
+        const stage = lastEntry.action.split('_')[0];
+        if( (stage==='OPS' && canOps) || (stage==='DG' && canDG) || (stage==='HR' && canHR) || (stage==='ACCOUNTS' && canAccounts) ) {
+          canClear = true;
+        }
+      }
+      return { canApprove:false, canReject:false, canClear };
+    }
+
+    const nextStageHasActed = () => {
+      if(!lastApproval) return false;
+      if(lastApproval.action==='OPS_APPROVED' || lastApproval.action==='DG_APPROVED') return hasHRAppr || hasAccountsAppr;
+      if(lastApproval.action==='HR_APPROVED') return hasAccountsAppr;
+      if(lastApproval.action==='ACCOUNTS_APPROVED') return false; // final stage
+      return false;
+    };
+
+    const lastApprovalIsMine = lastApproval && lastApproval.actor_employee_id === user?.employee_id;
+    const userIsLastActor = lastApprovalIsMine && !nextStageHasActed();
+
+    let canForwardApprove = false;
+    if(status==='SUBMITTED'){
+      if(locType==='BAZAAR' && canOps) canForwardApprove = true;
+      if(locType==='HEAD_OFFICE' && canDG) canForwardApprove = true;
+    } else if(status==='PENDING_APPROVAL'){
+      if(canHR) canForwardApprove = true;
+    } else if(status==='VERIFIED'){
+      if(canAccounts) canForwardApprove = true;
+    }
+
+    // Final approved by accounts: allow last actor to clear or reject (but not re-approve)
+    if(status==='APPROVED' && lastApprovalIsMine){
+      return { canApprove:false, canReject:true, canClear:true };
+    }
+    // User was last stage actor and next stage has not acted: allow full modification
+    if(userIsLastActor){
+      return { canApprove:true, canReject:true, canClear:true };
+    }
+    // Forward stage normal approval path
+    if(canForwardApprove){
+      return { canApprove:true, canReject:true, canClear:false };
+    }
+    return { canApprove:false, canReject:false, canClear:false };
+  };
 
   const load = async () => { setLoading(true); try { const rs = await listPendingExpenseClaimApprovals(); setList(rs); } finally { setLoading(false); } };
   useEffect(()=>{ load(); },[]);
@@ -26,54 +109,134 @@ export default function ManageExpenseClaimApprovals(){
     finally { setSubmitting(false); }
   };
 
+  const loadAll = async () => { setLoadingAll(true); try { const rs = await listAllExpenseClaimApprovals(); setAllClaims(rs); } finally { setLoadingAll(false);} };
+  // extend initial load to fetch all in background
+  useEffect(()=>{ load(); loadAll(); },[]);
+
+  const filteredAll = useMemo(()=>{
+    return (allClaims||[]).filter(c => {
+      const q = search.trim().toLowerCase();
+      if(q){
+        const empName = (c.employee?.full_name||'').toLowerCase();
+        const reqPurpose = (c.request?.purpose||c.request?.travel_purpose||'').toLowerCase();
+        if(!(`${c.id}`.includes(q) || `${c.employee_id}`.includes(q) || empName.includes(q) || reqPurpose.includes(q))) return false;
+      }
+      if(statusFilter && c.status !== statusFilter) return false;
+      return true;
+    });
+  }, [allClaims, search, statusFilter]);
+
+  const exportCsv = () => {
+    const csv = exportExpenseClaimsToCsv(filteredAll);
+    if(!csv){ alert('Nothing to export'); return; }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='expense-claims.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),500);
+  };
+
   const currentEmployment = (emp) => emp?.employmentRecords?.[0];
   const formatMoney = (v) => (v||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-800">Manage Expense Claim Approvals</h1>
-      <Card>
-        <div className="flex items-center justify-between p-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-800">Pending Claims</h2>
-          <button onClick={load} className="text-xs text-sky-600">Refresh</button>
-        </div>
-        <div className="divide-y">
-          {loading && <div className="p-4 text-slate-500 text-sm">Loading...</div>}
-          {!loading && list.length===0 && <div className="p-4 text-slate-500 text-sm">No pending claims</div>}
-          {list.map(c => {
-            const emp = c.employee; const empJob = currentEmployment(emp);
-            const lastActions = (c.statusEntries||[]).map(s=>s.action);
-            const canClear = ['ACCOUNTS_APPROVED','HR_APPROVED','OPS_APPROVED','DG_APPROVED'].some(a=> lastActions.includes(a)) && !['REJECTED'].includes(c.status);
-            const onRowAction = async (claim, action) => {
-              if(action==='VIEW') return open(claim);
-              if(action==='') return;
-              const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval' };
-              if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
-              try { await decideExpenseClaim(claim.id, action, ''); await load(); } catch(e){ alert(e?.response?.data?.error || e.message); }
-            };
-            return (
-              <div key={c.id} className="p-4 flex items-center justify-between text-sm">
-                <div className="space-y-0.5">
-                  <div className="font-medium text-slate-800">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} ({empJob?.designation?.title || '—'})</div>
-                  <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {formatMoney(c.grand_total)}</div>
-                  <div className="flex flex-wrap gap-1">
-                    {(c.statusEntries||[]).map(se => <span key={se.id} className="px-1.5 py-0.5 bg-slate-100 rounded text-[10px]" title={new Date(se.createdAt).toLocaleString()}>{se.action}</span>)}
+      <div className="flex gap-4 text-sm">
+        <button onClick={()=>setViewTab('pending')} className={viewTab==='pending'? 'pb-2 border-b-2 border-sky-600 text-sky-600 font-medium':'pb-2 text-slate-500'}>Pending Approvals</button>
+        <button onClick={()=>{ setViewTab('all'); if(allClaims.length===0) loadAll(); }} className={viewTab==='all'? 'pb-2 border-b-2 border-sky-600 text-sky-600 font-medium':'pb-2 text-slate-500'}>All Claims</button>
+      </div>
+      {viewTab==='pending' && (
+        <Card>
+          <div className="flex items-center justify-between p-4 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-slate-800">Pending Claims</h2>
+            <button onClick={load} className="text-xs text-sky-600">Refresh</button>
+          </div>
+          <div className="divide-y">
+            {loading && <div className="p-4 text-slate-500 text-sm">Loading...</div>}
+            {!loading && list.length===0 && <div className="p-4 text-slate-500 text-sm">No pending claims</div>}
+            {list.map(c => {
+              const emp = c.employee; const empJob = currentEmployment(emp);
+              const eligibility = computeEligibility(c);
+              const onRowAction = async (claim, action) => {
+                if(action==='') return;
+                const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of' };
+                if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
+                try { await decideExpenseClaim(claim.id, action, ''); await load(); } catch(e){ alert(e?.response?.data?.error || e.message); }
+              };
+              return (
+                <div key={c.id} className="p-4 flex items-center justify-between text-sm">
+                  <div className="space-y-0.5">
+                    <div className="font-medium text-slate-800">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} ({empJob?.designation?.title || '—'})</div>
+                    <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {formatMoney(c.grand_total)}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(c.statusEntries||[]).map(se => <span key={se.id} className="px-1.5 py-0.5 bg-slate-100 rounded text-[10px]" title={new Date(se.createdAt).toLocaleString()}>{se.action}</span>)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={()=>open(c)} className="text-xs px-2 py-1 rounded border bg-white hover:bg-slate-50">View</button>
+                    <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-white">
+                      <option value="" disabled>Action</option>
+                      <option value="APPROVE" disabled={!eligibility.canApprove}>Approve</option>
+                      <option value="REJECT" disabled={!eligibility.canReject}>Reject</option>
+                      <option value="CLEAR" disabled={!eligibility.canClear}>Undo Decision</option>
+                    </select>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-white">
-                    <option value="" disabled>Action</option>
-                    <option value="VIEW">View</option>
-                    <option value="APPROVE" disabled={c.status==='APPROVED'||c.status==='REJECTED'}>Approve</option>
-                    <option value="REJECT" disabled={c.status==='APPROVED'||c.status==='REJECTED'}>Reject</option>
-                    <option value="CLEAR" disabled={!canClear}>Clear Approval</option>
-                  </select>
+              );
+            })}
+           </div>
+         </Card>
+       )}
+      {viewTab==='all' && (
+        <Card>
+          <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-lg font-semibold text-slate-800">All Claims</h2>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search id, emp, purpose" className="border rounded px-2 py-1 text-xs" />
+              <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="border rounded px-2 py-1 text-xs">
+                <option value="">All Statuses</option>
+                {['DRAFT','SUBMITTED','PENDING_APPROVAL','VERIFIED','APPROVED','REJECTED'].map(s=> <option key={s} value={s}>{s}</option>)}
+              </select>
+              <button onClick={exportCsv} className="text-xs px-2 py-1 border rounded bg-white hover:bg-slate-50">Export CSV</button>
+              <button onClick={loadAll} className="text-xs text-sky-600">Refresh</button>
+            </div>
+            <div className="text-[11px] text-slate-500">Showing {filteredAll.length} / {allClaims.length}</div>
+          </div>
+          <div className="divide-y max-h-[60vh] overflow-auto">
+            {loadingAll && <div className="p-4 text-slate-500 text-sm">Loading...</div>}
+            {!loadingAll && filteredAll.length===0 && <div className="p-4 text-slate-500 text-sm">No claims match filters.</div>}
+            {filteredAll.map(c => {
+              const emp = c.employee; const empJob = c.employee?.employmentRecords?.[0];
+              const eligibility = computeEligibility(c);
+              const onRowAction = async (claim, action) => {
+                if(action==='') return;
+                const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of' };
+                if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
+                try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
+              };
+              return (
+                <div key={c.id} className="p-4 flex items-center justify-between text-sm">
+                  <div className="space-y-0.5">
+                    <div className="font-medium text-slate-800 flex flex-wrap items-center gap-1">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} <span className="text-slate-400">({empJob?.designation?.title || '—'})</span> <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 border">{c.status}</span></div>
+                    <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {(c.grand_total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(c.statusEntries||[]).map(se => <span key={se.id} className="px-1.5 py-0.5 bg-slate-100 rounded text-[10px]" title={new Date(se.createdAt).toLocaleString()}>{se.action}</span>)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={()=>open(c)} className="text-xs px-2 py-1 rounded border bg-white hover:bg-slate-50">View</button>
+                    <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-white">
+                      <option value="" disabled>Action</option>
+                      <option value="APPROVE" disabled={!eligibility.canApprove}>Approve</option>
+                      <option value="REJECT" disabled={!eligibility.canReject}>Reject</option>
+                      <option value="CLEAR" disabled={!eligibility.canClear}>Undo Decision</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+              );
+            })}
+           </div>
+         </Card>
+       )}
 
       {selected && (() => { const emp = selected.employee; const empJob = currentEmployment(emp); return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -196,16 +359,21 @@ export default function ManageExpenseClaimApprovals(){
               <textarea value={remarks} onChange={e=>setRemarks(e.target.value)} rows={3} className="w-full border rounded p-2 text-xs" placeholder="Add remarks for this decision" />
             </div>
             <div className="flex gap-2 justify-end pt-2">
-              <select disabled={submitting} onChange={e=>{ const v=e.target.value; if(!v) return; act(v); e.target.value=''; }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-white">
-                <option value="" disabled>Action</option>
-                <option value="APPROVE" disabled={selected.status==='APPROVED'||selected.status==='REJECTED'}>Approve</option>
-                <option value="REJECT" disabled={selected.status==='APPROVED'||selected.status==='REJECTED'}>Reject</option>
-                <option value="CLEAR" disabled={selected.status==='DRAFT'||selected.status==='SUBMITTED'}>Clear Approval</option>
-              </select>
-              <button onClick={close} className="px-3 py-1 rounded bg-slate-200 text-slate-700 text-xs">Close</button>
+              {(() => { const elig = computeEligibility(selected); return (
+                <div className="flex gap-2">
+                  <button type="button" onClick={()=>{ setRemarks(''); close(); }} className="px-3 py-1 rounded bg-slate-200 text-slate-700 text-xs">Close</button>
+                  <select disabled={submitting} onChange={e=>{ const v=e.target.value; if(!v) return; if(v==='CLEAR'){ if(!window.confirm('Clear your last approval?')) { e.target.value=''; return;} } act(v); e.target.value=''; }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-white">
+                    <option value="" disabled>Action</option>
+                    <option value="APPROVE" disabled={!elig.canApprove}>Approve</option>
+                    <option value="REJECT" disabled={!elig.canReject}>Reject</option>
+                    <option value="CLEAR" disabled={!elig.canClear}>Undo Decision</option>
+                  </select>
+                </div>
+              ); })()}
+              <button onClick={close} className="px-3 py-1 rounded bg-slate-200 text-slate-700 text-xs">Dismiss</button>
             </div>
-          </div>
-        </div>
+           </div>
+         </div>
       ); })()}
     </div>
   );

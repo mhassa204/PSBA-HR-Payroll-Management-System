@@ -30,6 +30,7 @@ router.patch('/requests/:id/status', isAuthenticated, travelRequestController.up
 // Expense Claims
 router.get('/expense-claims/eligible', isAuthenticated, expenseClaimController.eligible);
 router.get('/expense-claims/pending-approvals', isAuthenticated, expenseClaimController.listPendingApprovals);
+router.get('/expense-claims/all', isAuthenticated, expenseClaimController.listAll);
 router.get('/expense-claims', isAuthenticated, authorizeAny(['travel.claim.read','travel.claim.create']), expenseClaimController.list);
 router.post('/expense-claims', isAuthenticated, authorizeAny(['travel.claim.create','travel.claim.read']), expenseClaimController.create);
 router.get('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.claim.read','travel.claim.create']), expenseClaimController.getOne);

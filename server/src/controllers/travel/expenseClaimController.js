@@ -68,5 +68,8 @@ module.exports = {
   },
   decide: async (req, res) => {
     try { const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req); const meEmpId = ctx.meEmpId; if(!meEmpId) return res.status(400).json({ success:false, error:'User not linked' }); const { action, remarks } = req.body||{}; const claim = await service.decideClaim(req.params.id, meEmpId, ctx, action, remarks); res.json({ success:true, claim }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+  listAll: async (req, res) => {
+    try { const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req); const claims = await service.listAllForApprovers(ctx); res.json({ success:true, claims }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
   }
 };
