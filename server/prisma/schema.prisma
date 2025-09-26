@@ -655,6 +655,10 @@ model TravelClaim {
   from_date          DateTime?
   to_date            DateTime?
   overnight_stay     Boolean        @default(false)
+  // New fields to persist UI transport selections and totals
+  transport_mode     String?        @default("OWN") // OWN | OTHER
+  fuel_total         Float?         @default(0)
+  fare_total         Float?         @default(0)
   total_distance_km  Float?         @default(0)
   rate_per_km        Float?         @default(0)
   distance_amount    Float?         @default(0) // C = A x B
@@ -676,7 +680,10 @@ model TravelClaimSegment {
   claim_id       Int
   departure_from String
   departure_to   String
+  // New: dates for departure and arrival (in addition to times)
+  depart_date    DateTime?
   depart_time    String? // HH:MM
+  arrive_date    DateTime?
   arrive_time    String?
   mode           String?
   distance_km    Float? @default(0)

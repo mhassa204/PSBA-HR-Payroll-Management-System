@@ -43,7 +43,11 @@ export default function TravelExpenseClaimsPage(){
     rate_per_km: '',
     toll_tax_total: '',
     per_diem_days: '',
-    per_diem_rate: ''
+    per_diem_rate: '',
+    // New UI-only fields for transport mode
+    transport_mode: 'OWN', // OWN | OTHER
+    fuel_total: '',
+    fare_total: ''
   });
 
   const [segmentsDraft, setSegmentsDraft] = useState([]); // local unsaved until added
@@ -71,7 +75,18 @@ export default function TravelExpenseClaimsPage(){
       setSaving(true);
       const c = await createExpenseClaim({ travel_request_id: selectedRequest.id, employee_id: pendingCreationAttendee.employee_id });
       setClaim(c);
-      setForm(prev => ({...prev, from_date: c.from_date?.slice(0,10)||'', to_date: c.to_date?.slice(0,10)||'', rate_per_km: c.rate_per_km||0, per_diem_rate: c.per_diem_rate||0, per_diem_days: c.per_diem_days || '' }));
+      setForm(prev => ({
+        ...prev,
+        from_date: c.from_date?.slice(0,10)||'',
+        to_date: c.to_date?.slice(0,10)||'',
+        rate_per_km: c.rate_per_km||0,
+        per_diem_rate: c.per_diem_rate||0,
+        per_diem_days: c.per_diem_days || '',
+        toll_tax_total: c.toll_tax_total ?? '',
+        transport_mode: c.transport_mode || 'OWN',
+        fuel_total: c.fuel_total ?? '',
+        fare_total: c.fare_total ?? ''
+      }));
       setStep(3);
       setPendingCreationAttendee(null);
       loadEligible();
@@ -80,7 +95,16 @@ export default function TravelExpenseClaimsPage(){
 
   const cancelCreateFlow = () => { setPendingCreationAttendee(null); setSelectedAttendee(null); };
 
-  const refreshClaim = async () => { if(!claim) return; const full = await getExpenseClaim(claim.id); setClaim(full); setForm(f=>({...f, rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'' })); };
+  const refreshClaim = async () => { if(!claim) return; const full = await getExpenseClaim(claim.id); setClaim(full); setForm(f=>({
+    ...f,
+    rate_per_km: full.rate_per_km||0,
+    per_diem_rate: full.per_diem_rate||0,
+    per_diem_days: full.per_diem_days||'',
+    toll_tax_total: full.toll_tax_total ?? f.toll_tax_total,
+    transport_mode: full.transport_mode || f.transport_mode,
+    fuel_total: full.fuel_total ?? f.fuel_total,
+    fare_total: full.fare_total ?? f.fare_total
+  })); };
 
   // Auto-sync rates into form if form empty but claim has values (when claim updates from backend recompute)
   React.useEffect(()=>{
@@ -103,11 +127,29 @@ export default function TravelExpenseClaimsPage(){
         to_date: form.to_date || null,
         overnight_stay: !!form.overnight_stay,
         toll_tax_total: Number(form.toll_tax_total||0),
-        per_diem_days: Number(form.per_diem_days||0)
+        per_diem_days: Number(form.per_diem_days||0),
+        // new fields
+        transport_mode: form.transport_mode,
+        fuel_total: Number(form.fuel_total||0),
+        fare_total: Number(form.fare_total||0)
       };
       const updated = await updateExpenseClaim(claim.id, payload);
       setClaim(updated);
+      // sync form with updated claim values
+      setForm(f => ({
+        ...f,
+        from_date: updated.from_date ? String(updated.from_date).slice(0,10) : f.from_date,
+        to_date: updated.to_date ? String(updated.to_date).slice(0,10) : f.to_date,
+        overnight_stay: !!updated.overnight_stay,
+        per_diem_days: (updated.per_diem_days ?? f.per_diem_days ?? '').toString(),
+        toll_tax_total: (updated.toll_tax_total ?? f.toll_tax_total ?? '').toString(),
+        transport_mode: updated.transport_mode || f.transport_mode,
+        fuel_total: (updated.fuel_total ?? f.fuel_total ?? '').toString(),
+        fare_total: (updated.fare_total ?? f.fare_total ?? '').toString()
+      }));
       loadClaims();
+    } catch(e){
+      alert(e?.response?.data?.error || e.message || 'Failed to save');
     } finally { setSaving(false);} };
 
   const handleDeleteClaim = async () => {
@@ -171,7 +213,7 @@ export default function TravelExpenseClaimsPage(){
                       <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {c.grand_total||0}</div>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> { setClaim(full); setForm(f=>({ ...f, from_date: full.from_date?.slice(0,10)||'', to_date: full.to_date?.slice(0,10)||'', rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'' })); }); }} className="px-2 py-1 bg-slate-700 text-white rounded">Open</button>
+                      <button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> { setClaim(full); setForm(f=>({ ...f, from_date: full.from_date?.slice(0,10)||'', to_date: full.to_date?.slice(0,10)||'', rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'', toll_tax_total: full.toll_tax_total ?? f.toll_tax_total, transport_mode: full.transport_mode || f.transport_mode, fuel_total: full.fuel_total ?? f.fuel_total, fare_total: full.fare_total ?? f.fare_total })); }); }} className="px-2 py-1 bg-slate-700 text-white rounded">Open</button>
                     </div>
                   </div>
                 ))}
@@ -233,23 +275,39 @@ export default function TravelExpenseClaimsPage(){
               <span className="text-xs">Overnight Stay</span>
             </div>
             <div>
-              <label className="text-xs text-slate-500">Rate / Km (B)</label>
-              <div className="text-sm font-medium pt-2">{form.rate_per_km || 0}</div>
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">Toll Tax Total (D)</label>
-              <Input value={form.toll_tax_total} onChange={e=>setForm(p=>({...p,toll_tax_total:e.target.value}))} />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">Per Diem Days</label>
+              <label className="text-xs text-slate-500">Diem Days</label>
               <Input value={form.per_diem_days} onChange={e=>setForm(p=>({...p,per_diem_days:e.target.value}))} />
             </div>
-            <div>
-              <label className="text-xs text-slate-500">Per Diem Rate</label>
-              <div className="text-sm font-medium pt-2">{form.per_diem_rate || 0}</div>
+            {/* Transport mode toggle + conditional fields */}
+            <div className="md:col-span-7">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs text-slate-500">Mode of Transport:</span>
+                <div className="inline-flex border rounded overflow-hidden">
+                  <button type="button" onClick={()=>setForm(p=>({...p, transport_mode:'OWN'}))} className={`px-3 py-1 text-xs ${form.transport_mode==='OWN'?'bg-sky-600 text-white':'bg-white text-slate-700'}`}>Own Vehicle</button>
+                  <button type="button" onClick={()=>setForm(p=>({...p, transport_mode:'OTHER'}))} className={`px-3 py-1 text-xs border-l ${form.transport_mode==='OTHER'?'bg-sky-600 text-white':'bg-white text-slate-700'}`}>Other</button>
+                </div>
+                {form.transport_mode==='OWN' && (
+                  <>
+                    <div className="min-w-[220px]">
+                      <label className="text-xs text-slate-500">Total Fuel Price Amount</label>
+                      <Input value={form.fuel_total} onChange={e=>setForm(p=>({...p,fuel_total:e.target.value}))} />
+                    </div>
+                    <div className="min-w-[220px]">
+                      <label className="text-xs text-slate-500">Toll Tax Total (D)</label>
+                      <Input value={form.toll_tax_total||''} onChange={e=>setForm(p=>({...p,toll_tax_total:e.target.value}))} />
+                    </div>
+                  </>
+                )}
+                {form.transport_mode==='OTHER' && (
+                  <div className="min-w-[220px]">
+                    <label className="text-xs text-slate-500">Total Fare</label>
+                    <Input value={form.fare_total} onChange={e=>setForm(p=>({...p,fare_total:e.target.value}))} />
+                  </div>
+                )}
+              </div>
             </div>
             <div className="md:col-span-7 flex justify-end">
-              <button disabled={saving} onClick={persistCore} className="px-4 py-2 rounded bg-emerald-600 text-white disabled:opacity-40">Save Core</button>
+              <button disabled={saving || claim.status!=='DRAFT'} onClick={persistCore} className="px-4 py-2 rounded bg-emerald-600 text-white disabled:opacity-40">Save Core</button>
             </div>
           </div>
 
@@ -257,7 +315,7 @@ export default function TravelExpenseClaimsPage(){
           <div className="bg-white border rounded shadow-sm p-4 text-sm">
             <div className="flex items-center justify-between mb-3">
               <div className="font-medium">Travel Segments</div>
-              <button onClick={()=>setSegmentsDraft(d=>[...d,{ departure_from:'', departure_to:'', depart_time:'', arrive_time:'', mode:'', distance_km:'' }])} className="px-3 py-1 text-xs rounded bg-slate-700 text-white">Add Row</button>
+              <button onClick={()=>setSegmentsDraft(d=>[...d,{ departure_from:'', departure_to:'', depart_date:'', depart_time:'', arrive_date:'', arrive_time:'', mode:'', distance_km:'' }])} className="px-3 py-1 text-xs rounded bg-slate-700 text-white">Add Row</button>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs">
@@ -265,7 +323,9 @@ export default function TravelExpenseClaimsPage(){
                   <tr>
                     <th className="p-2 text-left">Departure From</th>
                     <th className="p-2 text-left">Departure To</th>
+                    <th className="p-2 text-left">Date of Departure</th>
                     <th className="p-2 text-left">Time of Departure</th>
+                    <th className="p-2 text-left">Date of Arrival</th>
                     <th className="p-2 text-left">Time of Arrival</th>
                     <th className="p-2 text-left">Mode</th>
                     <th className="p-2 text-left">Distance (KM)</th>
@@ -273,11 +333,28 @@ export default function TravelExpenseClaimsPage(){
                   </tr>
                 </thead>
                 <tbody>
+                  {(claim.segments||[]).map(seg => (
+                    <tr key={seg.id} className="border-b bg-emerald-50/40">
+                      <td className="p-1"><Input defaultValue={seg.departure_from} onBlur={e=>updateSegmentRow({...seg,departure_from:e.target.value})} /></td>
+                      <td className="p-1"><Input defaultValue={seg.departure_to} onBlur={e=>updateSegmentRow({...seg,departure_to:e.target.value})} /></td>
+                      <td className="p-1"><Input type="date" defaultValue={(seg.depart_date||'').slice(0,10)} onBlur={e=>updateSegmentRow({...seg,depart_date:e.target.value})} /></td>
+                      <td className="p-1"><Input type="time" defaultValue={seg.depart_time||''} onBlur={e=>updateSegmentRow({...seg,depart_time:e.target.value})} /></td>
+                      <td className="p-1"><Input type="date" defaultValue={(seg.arrive_date||'').slice(0,10)} onBlur={e=>updateSegmentRow({...seg,arrive_date:e.target.value})} /></td>
+                      <td className="p-1"><Input type="time" defaultValue={seg.arrive_time||''} onBlur={e=>updateSegmentRow({...seg,arrive_time:e.target.value})} /></td>
+                      <td className="p-1"><Input defaultValue={seg.mode||''} onBlur={e=>updateSegmentRow({...seg,mode:e.target.value})} /></td>
+                      <td className="p-1"><Input defaultValue={seg.distance_km||''} onBlur={e=>updateSegmentRow({...seg,distance_km:Number(e.target.value||0)})} /></td>
+                      <td className="p-1 text-right space-x-2">
+                        <button className="text-red-600" onClick={()=>removeSegment(seg.id)}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
                   {segmentsDraft.map((r,idx)=> (
                     <tr key={idx} className="border-b">
                       <td className="p-1"><Input value={r.departure_from} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,departure_from:e.target.value}:x))} /></td>
                       <td className="p-1"><Input value={r.departure_to} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,departure_to:e.target.value}:x))} /></td>
+                      <td className="p-1"><Input type="date" value={r.depart_date||''} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,depart_date:e.target.value}:x))} /></td>
                       <td className="p-1"><Input type="time" value={r.depart_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,depart_time:e.target.value}:x))} /></td>
+                      <td className="p-1"><Input type="date" value={r.arrive_date||''} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,arrive_date:e.target.value}:x))} /></td>
                       <td className="p-1"><Input type="time" value={r.arrive_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,arrive_time:e.target.value}:x))} /></td>
                       <td className="p-1"><Input value={r.mode} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,mode:e.target.value}:x))} /></td>
                       <td className="p-1"><Input value={r.distance_km} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,distance_km:e.target.value}:x))} /></td>
@@ -287,34 +364,13 @@ export default function TravelExpenseClaimsPage(){
                       </td>
                     </tr>
                   ))}
-                  {(claim.segments||[]).map(seg => (
-                    <tr key={seg.id} className="border-b bg-emerald-50/40">
-                      <td className="p-1"><Input defaultValue={seg.departure_from} onBlur={e=>updateSegmentRow({...seg,departure_from:e.target.value})} /></td>
-                      <td className="p-1"><Input defaultValue={seg.departure_to} onBlur={e=>updateSegmentRow({...seg,departure_to:e.target.value})} /></td>
-                      <td className="p-1"><Input type="time" defaultValue={seg.depart_time||''} onBlur={e=>updateSegmentRow({...seg,depart_time:e.target.value})} /></td>
-                      <td className="p-1"><Input type="time" defaultValue={seg.arrive_time||''} onBlur={e=>updateSegmentRow({...seg,arrive_time:e.target.value})} /></td>
-                      <td className="p-1"><Input defaultValue={seg.mode||''} onBlur={e=>updateSegmentRow({...seg,mode:e.target.value})} /></td>
-                      <td className="p-1"><Input defaultValue={seg.distance_km||''} onBlur={e=>updateSegmentRow({...seg,distance_km:Number(e.target.value||0)})} /></td>
-                      <td className="p-1 text-right space-x-2">
-                        <button className="text-red-600" onClick={()=>removeSegment(seg.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Totals Summary */}
-          <div className="bg-white border rounded shadow-sm p-4 text-sm grid md:grid-cols-7 gap-4">
-            <div><div className="text-xs text-slate-500">A Total Distance (KM)</div><div className="font-medium">{totals.A}</div></div>
-            <div><div className="text-xs text-slate-500">B Rate / KM</div><div className="font-medium">{totals.B}</div></div>
-            <div><div className="text-xs text-slate-500">C A x B</div><div className="font-medium">{totals.C}</div></div>
-            <div><div className="text-xs text-slate-500">D Toll Tax</div><div className="font-medium">{totals.D}</div></div>
-            <div><div className="text-xs text-slate-500">E Travel Total (C + D)</div><div className="font-medium">{totals.E}</div></div>
-            <div><div className="text-xs text-slate-500">F Per Diem Amount</div><div className="font-medium">{totals.F}</div></div>
-            <div><div className="text-xs text-slate-500">G Grand Total</div><div className="font-semibold text-emerald-700">{totals.G}</div></div>
-          </div>
+          {/* Totals Summary - hidden per requirement */}
+          {/* Removed the A-G totals grid from the form UI */}
 
           {/* Documents */}
           <div className="bg-white border rounded shadow-sm p-4 text-sm space-y-4">
@@ -325,9 +381,9 @@ export default function TravelExpenseClaimsPage(){
               return (
                 <div key={cat} className="border rounded p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-xs">{cat} {isReport && <span className="text-rose-600">(Required single file)</span>}</div>
+                    <div className="font-medium text-xs">{cat} {isReport && <span className="text-rose-600">(At least one required)</span>}</div>
                     <label className="text-xs px-2 py-1 bg-slate-700 text-white rounded cursor-pointer">Upload
-                      <input type="file" className="hidden" multiple={!isReport} onChange={e=>{ if(e.target.files?.length){ handleDocUpload(cat, e.target.files); e.target.value=''; } }} />
+                      <input type="file" className="hidden" multiple={true} onChange={e=>{ if(e.target.files?.length){ handleDocUpload(cat, e.target.files); e.target.value=''; } }} />
                     </label>
                   </div>
                   <div className="flex flex-wrap gap-2">

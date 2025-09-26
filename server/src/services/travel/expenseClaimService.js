@@ -56,7 +56,7 @@ module.exports = {
     const existing = await prisma.travelClaim.findFirst({ where: { travel_request_id: request.id, employee_id: attendeeEmpId, is_deleted: false } });
     if(existing) throw new Error('Claim already exists');
     const rates = await getRatesForEmployee(attendeeEmpId);
-    const created = await prisma.travelClaim.create({ data: { travel_request_id: request.id, employee_id: attendeeEmpId, from_date: request.departure_date, to_date: request.expected_return_date, per_diem_days: 0, rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate, toll_tax_total: 0 } });
+    const created = await prisma.travelClaim.create({ data: { travel_request_id: request.id, employee_id: attendeeEmpId, from_date: request.departure_date, to_date: request.expected_return_date, per_diem_days: 0, rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate, toll_tax_total: 0, transport_mode: 'OWN', fuel_total: 0, fare_total: 0 } });
     return prisma.travelClaim.findUnique({ where: { id: created.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
   _canAccess(claim, employee_id, isSuperAdmin) {
@@ -92,6 +92,10 @@ module.exports = {
     if('overnight_stay' in data) updateData.overnight_stay = !!data.overnight_stay;
     if('toll_tax_total' in data) updateData.toll_tax_total = Number(data.toll_tax_total||0);
     if('per_diem_days' in data) updateData.per_diem_days = Number(data.per_diem_days||0);
+    // New fields
+    if('transport_mode' in data) updateData.transport_mode = String(data.transport_mode||'OWN').toUpperCase();
+    if('fuel_total' in data) updateData.fuel_total = Number(data.fuel_total||0);
+    if('fare_total' in data) updateData.fare_total = Number(data.fare_total||0);
     // rates ignored if sent; always ensure populated
     if(!claim.rate_per_km || !claim.per_diem_rate){
       const rates = await getRatesForEmployee(claim.employee_id);
@@ -122,7 +126,17 @@ module.exports = {
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
-    await prisma.travelClaimSegment.create({ data: { claim_id: claim.id, departure_from: payload.departure_from || '', departure_to: payload.departure_to||'', depart_time: payload.depart_time||null, arrive_time: payload.arrive_time||null, mode: payload.mode||null, distance_km: Number(payload.distance_km||0) } });
+    await prisma.travelClaimSegment.create({ data: { 
+      claim_id: claim.id,
+      departure_from: payload.departure_from || '',
+      departure_to: payload.departure_to||'',
+      depart_date: payload.depart_date ? new Date(payload.depart_date) : null,
+      depart_time: payload.depart_time||null,
+      arrive_date: payload.arrive_date ? new Date(payload.arrive_date) : null,
+      arrive_time: payload.arrive_time||null,
+      mode: payload.mode||null,
+      distance_km: Number(payload.distance_km||0)
+    } });
     return module.exports.recomputeTotals(claim.id);
   },
   updateSegment: async (claimId, segmentId, employee_id, isSuperAdmin, payload) => {
@@ -132,7 +146,16 @@ module.exports = {
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
     const seg = await prisma.travelClaimSegment.findUnique({ where: { id: Number(segmentId) } });
     if(!seg || seg.claim_id !== claim.id) throw new Error('Not found');
-    await prisma.travelClaimSegment.update({ where: { id: seg.id }, data: { departure_from: payload.departure_from || '', departure_to: payload.departure_to||'', depart_time: payload.depart_time||null, arrive_time: payload.arrive_time||null, mode: payload.mode||null, distance_km: Number(payload.distance_km||0) } });
+    await prisma.travelClaimSegment.update({ where: { id: seg.id }, data: { 
+      departure_from: payload.departure_from || '',
+      departure_to: payload.departure_to||'',
+      depart_date: payload.depart_date ? new Date(payload.depart_date) : seg.depart_date,
+      depart_time: payload.depart_time||null,
+      arrive_date: payload.arrive_date ? new Date(payload.arrive_date) : seg.arrive_date,
+      arrive_time: payload.arrive_time||null,
+      mode: payload.mode||null,
+      distance_km: Number(payload.distance_km||0)
+    } });
     return module.exports.recomputeTotals(claim.id);
   },
   deleteSegment: async (claimId, segmentId, employee_id, isSuperAdmin) => {
@@ -149,19 +172,19 @@ module.exports = {
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
     const cat = String(category||'OTHER').toUpperCase();
-    if(cat==='REPORT' && claim.documents.some(d=>d.category==='REPORT')) throw new Error('REPORT already uploaded');
-    const createMany = files.map(f => ({ claim_id: claim.id, category: cat, file_path: f._savedRelPath || f.path.replace(/.*uploads[\\\/]/,'uploads/'), mime_type: f.mimetype, file_size: f.size }));
+    // Allow multiple REPORT uploads; submission will ensure at least one exists
+    const createMany = files.map(f => ({ claim_id: claim.id, category: cat, file_path: f._savedRelPath || f.path.replace(/.*uploads[\\\\/]/,'uploads/'), mime_type: f.mimetype, file_size: f.size }));
     await prisma.travelClaimDocument.createMany({ data: createMany });
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
   deleteDocument: async (claimId, docId, employee_id, isSuperAdmin) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true, documents: true } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
     const doc = await prisma.travelClaimDocument.findUnique({ where: { id: Number(docId) } });
     if(!doc || doc.claim_id !== claim.id) throw new Error('Not found');
-    if(doc.category === 'REPORT') throw new Error('Cannot delete report');
+    // Allow deleting REPORT too; submission requires at least one remaining
     await prisma.travelClaimDocument.delete({ where: { id: doc.id } });
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
@@ -174,33 +197,18 @@ module.exports = {
     return { success: true };
   },
   submitClaim: async (id, employee_id, isSuperAdmin) => {
-    // Refactored formatting to avoid any hidden characters / syntax issues
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
-      include: {
-        documents: true,
-        request: {
-          include: {
-            applicant: {
-              include: {
-                employmentRecords: {
-                  where: { is_current: true, is_deleted: false },
-                  include: { location: true, designation: true, department: true }
-                }
-              }
-            }
-          }
-        }
-      }
+      include: { documents: true, request: true, employee: true }
     });
     if(!claim) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims can be submitted');
-    const hasReport = claim.documents.some(d=>d.category==='REPORT');
+    const hasReport = (claim.documents||[]).some(d=>d.category==='REPORT');
     if(!hasReport) throw new Error('Report document required before submission');
     await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'SUBMITTED' } });
     await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'SUBMITTED', actor_employee_id: employee_id } });
-    return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } }, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } } } });
+    return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true, statusEntries: { orderBy: { createdAt: 'asc' } } } });
   },
   listPendingApprovals: async (ctx) => {
     // Adjusted to new fixed statuses with strict stage guards

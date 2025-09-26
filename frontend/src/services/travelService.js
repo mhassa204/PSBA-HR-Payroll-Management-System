@@ -21,25 +21,27 @@ export const listExpenseClaims = () => api.get('/travel/expense-claims').then(r 
 
 // Create a claim (one per travel_request + attendee employee)
 export const createExpenseClaim = (payload) => api.post('/travel/expense-claims', payload).then(r => r.data.claim);
-// Fetch / update / delete claim
-export const getExpenseClaim = (id) => api.get(`/travel/expense-claims/${id}`).then(r => r.data.claim);
 export const updateExpenseClaim = (id, payload) => api.put(`/travel/expense-claims/${id}`, payload).then(r => r.data.claim);
+// Fetch a specific claim (with segments/documents)
+export const getExpenseClaim = (id) => api.get(`/travel/expense-claims/${id}`).then(r => r.data.claim);
+// Delete a claim (only in DRAFT)
 export const deleteExpenseClaim = (id) => api.delete(`/travel/expense-claims/${id}`).then(r => r.data);
 
-// Segments CRUD
-export const addExpenseClaimSegment = (claimId, payload) => api.post(`/travel/expense-claims/${claimId}/segments`, payload).then(r => r.data.claim);
-export const updateExpenseClaimSegment = (claimId, segmentId, payload) => api.put(`/travel/expense-claims/${claimId}/segments/${segmentId}`, payload).then(r => r.data.claim);
-export const deleteExpenseClaimSegment = (claimId, segmentId) => api.delete(`/travel/expense-claims/${claimId}/segments/${segmentId}`).then(r => r.data.claim);
+// Segment operations
+export const addExpenseClaimSegment = (id, payload) => api.post(`/travel/expense-claims/${id}/segments`, payload).then(r => r.data.claim);
+export const updateExpenseClaimSegment = (id, segmentId, payload) => api.put(`/travel/expense-claims/${id}/segments/${segmentId}`, payload).then(r => r.data.claim);
+export const deleteExpenseClaimSegment = (id, segmentId) => api.delete(`/travel/expense-claims/${id}/segments/${segmentId}`).then(r => r.data.claim);
 
-// Documents (categories: FUEL, TOLL, PICTURE, REPORT) - REPORT is single & mandatory
-// rate_per_km & per_diem_rate now auto-fetched from TravelRate per employee scale grade
-export const uploadExpenseClaimDocuments = async (claimId, category, files) => {
+// Document operations
+export const uploadExpenseClaimDocuments = (id, category, files) => {
   const fd = new FormData();
-  [...files].forEach(f => fd.append('files', f));
-  const r = await api.post(`/travel/expense-claims/${claimId}/documents?category=${encodeURIComponent(category)}`, fd);
-  return r.data.claim;
+  // Ensure files is iterable (FileList or Array<File>)
+  Array.from(files).forEach(f => fd.append('files', f));
+  return api.post(`/travel/expense-claims/${id}/documents?category=${encodeURIComponent(category)}`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }).then(r => r.data.claim);
 };
-export const deleteExpenseClaimDocument = (claimId, docId) => api.delete(`/travel/expense-claims/${claimId}/documents/${docId}`).then(r => r.data.claim);
+export const deleteExpenseClaimDocument = (id, docId) => api.delete(`/travel/expense-claims/${id}/documents/${docId}`).then(r => r.data.claim);
 
 // Utility: compute totals client-side (mirrors backend logic) (A-G mapping)
 export const computeExpenseClaimTotals = (claim) => {
