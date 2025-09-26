@@ -203,24 +203,54 @@ module.exports = {
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } }, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } } } });
   },
   listPendingApprovals: async (ctx) => {
-    // Adjusted to new fixed statuses
+    // Adjusted to new fixed statuses with strict stage guards
     const stageFilters = [];
-    // First stage pending -> SUBMITTED
+
+    // First stage pending -> SUBMITTED (no prior OPS/DG decision)
+    const firstStageNone = { action: { in: ['OPS_APPROVED','OPS_REJECTED','DG_APPROVED','DG_REJECTED'] } };
     if (ctx.isOps || ctx.canApproveClaimOps) {
-      stageFilters.push({ status: 'SUBMITTED', employee: { employmentRecords: { some: { is_current: true, location: { type: 'BAZAAR' } } } } });
+      stageFilters.push({
+        status: 'SUBMITTED',
+        employee: { employmentRecords: { some: { is_current: true, location: { type: 'BAZAAR' } } } },
+        statusEntries: { none: firstStageNone }
+      });
     }
     if (ctx.isDG || ctx.canApproveClaimDG) {
-      stageFilters.push({ status: 'SUBMITTED', employee: { employmentRecords: { some: { is_current: true, location: { type: 'HEAD_OFFICE' } } } } });
+      stageFilters.push({
+        status: 'SUBMITTED',
+        employee: { employmentRecords: { some: { is_current: true, location: { type: 'HEAD_OFFICE' } } } },
+        statusEntries: { none: firstStageNone }
+      });
     }
-    // HR after first-stage approval -> status APPROVED (exclude ones HR already approved)
+
+    // HR after first-stage approval -> status APPROVED
+    // Must have an OPS/DG approval and NO HR decision yet
     if (ctx.isHR) {
-      stageFilters.push({ status: 'APPROVED', statusEntries: { none: { action: 'HR_APPROVED' } } });
+      stageFilters.push({
+        status: 'APPROVED',
+        statusEntries: {
+          some: { action: { in: ['OPS_APPROVED','DG_APPROVED'] } },
+          none: { action: { in: ['HR_APPROVED','HR_REJECTED'] } }
+        }
+      });
     }
-    // Accounts after HR -> status VERIFIED (exclude ones accounts already approved)
+
+    // Accounts after HR -> status VERIFIED
+    // Must have HR approval and NO Accounts decision yet
+    // Additionally, if the current user was the HR approver, exclude it from their pending list
     if (ctx.isAccountsApprover) {
-      stageFilters.push({ status: 'VERIFIED', statusEntries: { none: { action: 'ACCOUNTS_APPROVED' } } });
+      stageFilters.push({
+        status: 'VERIFIED',
+        statusEntries: {
+          // ensure HR approval exists by someone other than the current user
+          some: { AND: [ { action: 'HR_APPROVED' }, { NOT: { actor_employee_id: ctx.meEmpId } } ] },
+          none: { action: { in: ['ACCOUNTS_APPROVED','ACCOUNTS_REJECTED'] } }
+        }
+      });
     }
+
     if (stageFilters.length === 0) return [];
+
     const claims = await prisma.travelClaim.findMany({
       where: { OR: stageFilters },
       orderBy: { createdAt: 'desc' },
