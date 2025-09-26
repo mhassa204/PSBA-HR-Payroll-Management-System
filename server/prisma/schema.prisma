@@ -205,7 +205,7 @@ model EmployeeDocument {
   mime_type     String?
   associated_id Int?
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime @default(now())
   is_deleted    Boolean  @default(false)
   employee      Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
 
@@ -584,10 +584,15 @@ model LeaveBankAllocation {
 enum TravelClaimStatus {
   DRAFT
   SUBMITTED
-  PENDING_APPROVAL
-  VERIFIED
-  APPROVED
-  REJECTED
+  PENDING_APPROVAL // legacy (treated same as APPROVED after first stage)
+  VERIFIED         // after HR approval (still used)
+  APPROVED         // now specifically means first-stage (OPS/DG) approved
+  PROCESSED        // final after Accounts approval
+  REJECTED         // legacy generic
+  REJECTED_OPS
+  REJECTED_DG
+  REJECTED_HR
+  REJECTED_ACCOUNTS
   PARTIALLY_SETTLED
   SETTLED
 }

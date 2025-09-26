@@ -30,7 +30,7 @@ export default function ManageExpenseClaimApprovals(){
   const canOps = isSuper || can('travel.claim.approve.ops') || caps?.isOps;
   const canDG = isSuper || can('travel.claim.approve.dg') || caps?.isDG;
   const canHR = isSuper || can('travel.claim.approve.hr') || caps?.isHR || /(^hr$|human\s*resources)/i.test(roleName);
-  const canAccounts = isSuper || can('travel.claim.approve.accounts') || /(accounts|finance|budget|payroll|reconciliation)/i.test(roleName);
+  const canAccounts = isSuper || can('travel.claim.approve.accounts') || caps?.isAccountsApprover || /(accounts|finance|budget|payroll|reconciliation)/i.test(roleName);
   const hasAnyApprovalPerm = canOps || canDG || canHR || canAccounts;
   // If user has none, short-circuit action eligibility
 
@@ -45,10 +45,10 @@ export default function ManageExpenseClaimApprovals(){
     const lastEntry = entries[entries.length-1];
     const hasHRAppr = entries.some(e=>e.action==='HR_APPROVED');
     const hasAccountsAppr = entries.some(e=>e.action==='ACCOUNTS_APPROVED');
-    const locType = claim.request?.applicant?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
+    const locType = claim.employee?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
 
-    // If rejected, allow undo (CLEAR) if last entry is a rejection by this user and they still have that stage permission
-    if(status === 'REJECTED') {
+    // Rejected: only allow CLEAR by the actor who rejected at their stage
+    if(status === 'REJECTED' || (typeof status === 'string' && status.startsWith('REJECTED'))){
       let canClear = false;
       if(lastEntry && rejectionActions.includes(lastEntry.action) && lastEntry.actor_employee_id === user?.employee_id){
         const stage = lastEntry.action.split('_')[0];
@@ -68,30 +68,26 @@ export default function ManageExpenseClaimApprovals(){
     };
 
     const lastApprovalIsMine = lastApproval && lastApproval.actor_employee_id === user?.employee_id;
-    const userIsLastActor = lastApprovalIsMine && !nextStageHasActed();
 
-    let canForwardApprove = false;
+    // If I was the last approver and the next stage hasn't acted, I can only CLEAR (undo), not approve/reject again
+    if(lastApprovalIsMine && !nextStageHasActed()){
+      return { canApprove:false, canReject:false, canClear:true };
+    }
+
+    // Forward-stage actions
     if(status==='SUBMITTED'){
-      if(locType==='BAZAAR' && canOps) canForwardApprove = true;
-      if(locType==='HEAD_OFFICE' && canDG) canForwardApprove = true;
-    } else if(status==='PENDING_APPROVAL'){
-      if(canHR) canForwardApprove = true;
-    } else if(status==='VERIFIED'){
-      if(canAccounts) canForwardApprove = true;
+      if((locType==='BAZAAR' && canOps) || (locType==='HEAD_OFFICE' && canDG)){
+        return { canApprove:true, canReject:true, canClear:false };
+      }
+    } else if(status==='APPROVED') { // HR stage
+      if(canHR) return { canApprove:true, canReject:true, canClear:false };
+    } else if(status==='VERIFIED') { // Accounts stage
+      if(canAccounts) return { canApprove:true, canReject:true, canClear:false };
+    } else if((status==='PROCESSED' || status==='SETTLED') && lastApproval?.action==='ACCOUNTS_APPROVED' && lastApprovalIsMine){
+      // Finalized by Accounts: allow only CLEAR by the accounts approver who approved
+      return { canApprove:false, canReject:false, canClear:true };
     }
 
-    // Final approved by accounts: allow last actor to clear or reject (but not re-approve)
-    if(status==='APPROVED' && lastApprovalIsMine){
-      return { canApprove:false, canReject:true, canClear:true };
-    }
-    // User was last stage actor and next stage has not acted: allow full modification
-    if(userIsLastActor){
-      return { canApprove:true, canReject:true, canClear:true };
-    }
-    // Forward stage normal approval path
-    if(canForwardApprove){
-      return { canApprove:true, canReject:true, canClear:false };
-    }
     return { canApprove:false, canReject:false, canClear:false };
   };
 
@@ -104,7 +100,13 @@ export default function ManageExpenseClaimApprovals(){
   const act = async (action) => {
     if(!selected) return; if(!window.confirm(`Confirm ${action.toLowerCase()}?`)) return;
     setSubmitting(true);
-    try { const upd = await decideExpenseClaim(selected.id, action, remarks); setSelected(upd); await load(); close(); }
+    try {
+      const upd = await decideExpenseClaim(selected.id, action, remarks);
+      setSelected(upd);
+      await load();
+      await loadAll();
+      close();
+    }
     catch(e){ alert(e?.response?.data?.error || e.message); }
     finally { setSubmitting(false); }
   };
@@ -160,7 +162,7 @@ export default function ManageExpenseClaimApprovals(){
                 if(action==='') return;
                 const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of' };
                 if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
-                try { await decideExpenseClaim(claim.id, action, ''); await load(); } catch(e){ alert(e?.response?.data?.error || e.message); }
+                try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
               };
               return (
                 <div key={c.id} className="p-4 flex items-center justify-between text-sm">
@@ -194,7 +196,7 @@ export default function ManageExpenseClaimApprovals(){
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search id, emp, purpose" className="border rounded px-2 py-1 text-xs" />
               <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="border rounded px-2 py-1 text-xs">
                 <option value="">All Statuses</option>
-                {['DRAFT','SUBMITTED','PENDING_APPROVAL','VERIFIED','APPROVED','REJECTED'].map(s=> <option key={s} value={s}>{s}</option>)}
+                {['DRAFT','SUBMITTED','APPROVED','VERIFIED','PROCESSED','REJECTED','PENDING_APPROVAL'].map(s=> <option key={s} value={s}>{s}</option>)}
               </select>
               <button onClick={exportCsv} className="text-xs px-2 py-1 border rounded bg-white hover:bg-slate-50">Export CSV</button>
               <button onClick={loadAll} className="text-xs text-sky-600">Refresh</button>

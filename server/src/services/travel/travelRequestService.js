@@ -17,10 +17,12 @@ module.exports = {
     const roleName = (req.session.user?.role?.name || '');
     const perms = req.session.user?.permissions || [];
 
-    // Permission-driven stage approver flags (fall back to legacy heuristic for backward compatibility)
+    // Permission-driven stage approver flags
     const isOps = perms.includes('travel.request.approve.ops') || /operations/i.test(deptName);
     const isDG = perms.includes('travel.request.approve.dg') || /^director\s+general$/i.test(desigTitle);
-    const isHR = perms.includes('travel.claim.approve.hr') || /hr/i.test(roleName) || /^hr$/i.test(deptName) || /human\s*resources/i.test(deptName);
+    // HR remains permission-based to avoid accidental overlaps
+    const isHR = perms.includes('travel.claim.approve.hr');
+    // Restore department-based fallback for Accounts approvers
     const isAccountsApprover = perms.includes('travel.claim.approve.accounts') || /accounts|finance|budget|payroll|reconciliation/i.test(deptName);
     const canApproveClaimOps = perms.includes('travel.claim.approve.ops');
     const canApproveClaimDG = perms.includes('travel.claim.approve.dg');
