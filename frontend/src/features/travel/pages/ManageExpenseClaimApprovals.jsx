@@ -56,6 +56,7 @@ export default function ManageExpenseClaimApprovals(){
     const hasHRAppr = entries.some(e=>e.action==='HR_APPROVED');
     const hasAccountsAppr = entries.some(e=>e.action==='ACCOUNTS_APPROVED');
     const locType = claim.employee?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
+    const directToDG = canDG && (claim.employee?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(meEmpId||''));
 
     // Rejected: only allow CLEAR by the actor who rejected at their stage
     if(status === 'REJECTED' || (typeof status === 'string' && status.startsWith('REJECTED'))){
@@ -82,10 +83,14 @@ export default function ManageExpenseClaimApprovals(){
 
     const lastApprovalIsMine = lastApproval && lastApproval.actor_employee_id === user?.employee_id;
 
-    // If I was the last approver/recommender and the next stage hasn't acted, I can only CLEAR (undo)
     if(lastApprovalIsMine && !nextStageHasActed()){
       const canClear = true;
       return { canApprove:false, canReject:false, canClear, canRecommend:false };
+    }
+
+    // DG fast-track: skip recommender if direct report to DG
+    if(status==='SUBMITTED' && directToDG){
+      if(locType==='HEAD_OFFICE' && canDG) return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
     }
 
     // Recommender stage

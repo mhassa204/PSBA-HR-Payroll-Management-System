@@ -67,7 +67,8 @@ module.exports = {
     const filters = [];
 
     // New: Recommendation stage for immediate in-charge of applicant
-    if (ctx.meEmpId) {
+    // Skip creating recommender tasks for DG; if applicant reports directly to DG, the recommender stage is bypassed
+    if (ctx.meEmpId && !ctx.isDG) {
       filters.push({
         is_deleted: false,
         status: 'CREATED',
@@ -89,6 +90,16 @@ module.exports = {
         status: 'CREATED',
         applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { is: { type: { in: allowedTypes } } } } } },
         statusEntries: { some: { action: 'RECOMMENDED' }, none: { action: { in: ['APPROVED','REJECTED'] } } }
+      });
+    }
+
+    // Additional DG fast-track: If applicant reports directly to DG, allow DG to see without recommendation
+    if (ctx.isDG && ctx.meEmpId) {
+      filters.push({
+        is_deleted: false,
+        status: 'CREATED',
+        applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'HEAD_OFFICE' }, reporting_officer_id: String(ctx.meEmpId) } } },
+        statusEntries: { none: { action: { in: ['APPROVED','REJECTED'] } } }
       });
     }
 

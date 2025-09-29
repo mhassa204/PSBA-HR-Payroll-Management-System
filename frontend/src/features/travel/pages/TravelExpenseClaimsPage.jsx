@@ -307,11 +307,41 @@ export default function TravelExpenseClaimsPage(){
             <CardContent className="grid md:grid-cols-7 gap-4 text-sm p-6">
               <div>
                 <label className="text-xs text-muted-foreground">From Date</label>
-                <Input type="date" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))} />
+                <div className="relative">
+                  <Input type="date" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))} />
+                  <button
+                    type="button"
+                    aria-label="Open from date picker"
+                    onClick={(e)=>{ const inp = e.currentTarget.previousElementSibling; if(inp){ if(typeof inp.showPicker==='function'){ inp.showPicker(); } else { inp.focus(); try{ inp.click(); }catch(_){ /* ignore */ } } } }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">To Date</label>
-                <Input type="date" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))} />
+                <div className="relative">
+                  <Input type="date" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))} />
+                  <button
+                    type="button"
+                    aria-label="Open to date picker"
+                    onClick={(e)=>{ const inp = e.currentTarget.previousElementSibling; if(inp){ if(typeof inp.showPicker==='function'){ inp.showPicker(); } else { inp.focus(); try{ inp.click(); }catch(_){ /* ignore */ } } } }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-2 mt-5">
                 <input type="checkbox" checked={form.overnight_stay} onChange={e=>setForm(p=>({...p,overnight_stay:e.target.checked}))} />

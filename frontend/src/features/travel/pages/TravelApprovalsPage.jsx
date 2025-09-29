@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTravelRequest, updateTravelRequestStatus, recommendTravelRequest, clearTravelRecommendation, recommendDecisionTravelRequest } from '../../../services/travelService';
+import { getTravelRequest, updateTravelRequestStatus, recommendTravelRequest, clearTravelRecommendation, recommendDecisionTravelRequest, getTravelCapabilities } from '../../../services/travelService';
 import api from '../../../lib/axios';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,12 +14,14 @@ export default function TravelApprovalsPage() {
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const meEmpId = useAuthStore(s=>s.user?.employee_id);
+  const [caps, setCaps] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
       const res = await api.get('/travel/requests/pending-approvals');
       setList(res.data?.requests || []);
+      if (!caps) { try { const c = await getTravelCapabilities(); setCaps(c); } catch(_){} }
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
@@ -60,6 +62,11 @@ export default function TravelApprovalsPage() {
     } finally { setSubmitting(false); }
   };
 
+  const isDirectReportToMe = (req) => {
+    const ers = req?.applicant?.employmentRecords || [];
+    return ers.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(meEmpId||''));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -76,6 +83,7 @@ export default function TravelApprovalsPage() {
             {list.map(r => {
               const recommended = hasRecommended(r);
               const canUndo = canUndoRecommendation(r);
+              const fastTrackDG = !!(caps?.isDG) && isDirectReportToMe(r);
               return (
                 <div key={r.id} className="p-4 flex items-center justify-between text-sm">
                   <div className="space-y-0.5">
@@ -91,13 +99,13 @@ export default function TravelApprovalsPage() {
                       {canUndo && (
                         <Button disabled={submitting} size="sm" variant="secondary" onClick={()=>doAction(r,'UNDO_RECOMMEND')}>Undo</Button>
                       )}
-                      {!canUndo && !recommended && (
+                      {!canUndo && !recommended && !fastTrackDG && (
                         <>
                           <Button disabled={submitting} size="sm" onClick={()=>doAction(r,'RECOMMEND')}>Recommend</Button>
                           <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(r,'RECOMMENDER_REJECT')}>Reject</Button>
                         </>
                       )}
-                      {!canUndo && recommended && (
+                      {!canUndo && (recommended || fastTrackDG) && (
                         <>
                           <Button disabled={submitting} size="sm" onClick={()=>doAction(r,'APPROVE')}>Approve</Button>
                           <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(r,'REJECT')}>Reject</Button>

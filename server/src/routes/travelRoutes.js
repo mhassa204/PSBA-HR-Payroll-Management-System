@@ -36,23 +36,24 @@ router.patch('/requests/:id/status', isAuthenticated, travelRequestController.up
 router.get('/expense-claims/eligible', isAuthenticated, expenseClaimController.eligible);
 router.get('/expense-claims/pending-approvals', isAuthenticated, expenseClaimController.listPendingApprovals);
 router.get('/expense-claims/all', isAuthenticated, expenseClaimController.listAll);
-router.get('/expense-claims', isAuthenticated, authorizeAny(['travel.claim.read','travel.claim.create']), expenseClaimController.list);
-router.post('/expense-claims', isAuthenticated, authorizeAny(['travel.claim.create','travel.claim.read']), expenseClaimController.create);
-router.get('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.claim.read','travel.claim.create']), expenseClaimController.getOne);
-router.put('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.update);
-router.delete('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.delete);
+// Relax permissions: rely on service._canAccess and business rules
+router.get('/expense-claims', isAuthenticated, expenseClaimController.list);
+router.post('/expense-claims', isAuthenticated, expenseClaimController.create);
+router.get('/expense-claims/:id', isAuthenticated, expenseClaimController.getOne);
+router.put('/expense-claims/:id', isAuthenticated, expenseClaimController.update);
+router.delete('/expense-claims/:id', isAuthenticated, expenseClaimController.delete);
 
 // Segments
-router.post('/expense-claims/:id/segments', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.addSegment);
-router.put('/expense-claims/:id/segments/:segmentId', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.updateSegment);
-router.delete('/expense-claims/:id/segments/:segmentId', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.deleteSegment);
+router.post('/expense-claims/:id/segments', isAuthenticated, expenseClaimController.addSegment);
+router.put('/expense-claims/:id/segments/:segmentId', isAuthenticated, expenseClaimController.updateSegment);
+router.delete('/expense-claims/:id/segments/:segmentId', isAuthenticated, expenseClaimController.deleteSegment);
 
 // Documents now exclude TICKET category
-router.post('/expense-claims/:id/documents', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.uploadDocuments);
-router.delete('/expense-claims/:id/documents/:docId', isAuthenticated, authorizeAny(['travel.claim.update','travel.claim.create']), expenseClaimController.deleteDocument);
+router.post('/expense-claims/:id/documents', isAuthenticated, expenseClaimController.uploadDocuments);
+router.delete('/expense-claims/:id/documents/:docId', isAuthenticated, expenseClaimController.deleteDocument);
 
 // Submit Expense Claim
-router.post('/expense-claims/:id/submit', isAuthenticated, authorizeAny(['travel.claim.submit','travel.claim.update','travel.claim.create']), expenseClaimController.submit);
+router.post('/expense-claims/:id/submit', isAuthenticated, expenseClaimController.submit);
 
 // Expense Claim Approvals
 router.post('/expense-claims/:id/decision', isAuthenticated, expenseClaimController.decide);

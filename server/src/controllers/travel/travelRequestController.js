@@ -6,9 +6,13 @@ module.exports = {
   reportees: async (req, res) => {
     const ctx = await travelService.getAuthContext(req);
     if (!ctx.meEmpId) return res.json({ success: true, employees: [] });
-    if (!ctx.canCreateOrOwn) return res.status(403).json({ success: false, error: 'Forbidden' });
-    const employees = await travelService.listReporteesPlusSelf(ctx.meEmpId);
-    res.json({ success: true, employees });
+    // Relaxed: do not gate by canCreateOrOwn; allow any logged-in employee to fetch self + direct reportees
+    try {
+      const employees = await travelService.listReporteesPlusSelf(ctx.meEmpId);
+      res.json({ success: true, employees });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
   },
   listManage: async (req, res) => {
     const ctx = await travelService.getAuthContext(req);

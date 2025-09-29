@@ -125,7 +125,7 @@ module.exports = {
     return claim;
   },
   updateClaim: async (id, employee_id, isSuperAdmin, data) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { request: true, employee: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
@@ -164,7 +164,7 @@ module.exports = {
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
   addSegment: async (claimId, employee_id, isSuperAdmin, payload) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
@@ -182,7 +182,7 @@ module.exports = {
     return module.exports.recomputeTotals(claim.id);
   },
   updateSegment: async (claimId, segmentId, employee_id, isSuperAdmin, payload) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
@@ -201,7 +201,7 @@ module.exports = {
     return module.exports.recomputeTotals(claim.id);
   },
   deleteSegment: async (claimId, segmentId, employee_id, isSuperAdmin) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
@@ -209,7 +209,7 @@ module.exports = {
     return module.exports.recomputeTotals(claim.id);
   },
   addDocuments: async (claimId, employee_id, isSuperAdmin, files, category) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { documents: true, request: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { documents: true, request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
@@ -220,7 +220,7 @@ module.exports = {
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
   deleteDocument: async (claimId, docId, employee_id, isSuperAdmin) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true, documents: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { request: true, documents: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
@@ -231,7 +231,19 @@ module.exports = {
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
   deleteClaim: async (id, employee_id, isSuperAdmin) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { request: true, documents: true, segments: true } });
+    const claim = await prisma.travelClaim.findUnique({
+      where: { id: Number(id) },
+      include: {
+        request: true,
+        documents: true,
+        segments: true,
+        employee: {
+          include: {
+            employmentRecords: { where: { is_current: true, is_deleted: false } }
+          }
+        }
+      }
+    });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims deletable');
@@ -241,7 +253,7 @@ module.exports = {
   submitClaim: async (id, employee_id, isSuperAdmin) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
-      include: { documents: true, request: true, employee: true }
+      include: { documents: true, request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } }
     });
     if(!claim) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
@@ -257,7 +269,8 @@ module.exports = {
     const stageFilters = [];
 
     // Recommendation stage for immediate in-charge
-    if (ctx.meEmpId) {
+    // Skip assigning recommender tasks to DG; DG’s direct reports bypass recommendation entirely
+    if (ctx.meEmpId && !ctx.isDG) {
       stageFilters.push({
         status: 'SUBMITTED',
         // Existing: request applicant's in-charge
@@ -289,11 +302,20 @@ module.exports = {
       });
     }
     if (ctx.isDG || ctx.canApproveClaimDG) {
+      // Standard DG path (requires recommendation)
       stageFilters.push({
         status: 'SUBMITTED',
         employee: { employmentRecords: { some: { is_current: true, location: { type: 'HEAD_OFFICE' } } } },
         statusEntries: { none: firstStageNone, some: { action: 'RECOMMENDED' } }
       });
+      // Fast-track for DG direct reports (skip recommendation)
+      if (ctx.meEmpId) {
+        stageFilters.push({
+          status: 'SUBMITTED',
+          employee: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'HEAD_OFFICE' }, reporting_officer_id: String(ctx.meEmpId) } } },
+          statusEntries: { none: firstStageNone }
+        });
+      }
     }
 
     // HR stage
@@ -377,8 +399,9 @@ module.exports = {
     };
     const currentStatus = claim.status;
     const hasRecommended = claim.statusEntries.some(e => e.action === 'RECOMMENDED');
+    const isDirectReportToDG = () => ctx.isDG && (claim.employee?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
     const determineNextStage = () => {
-      if (currentStatus === 'SUBMITTED') return hasRecommended ? FIRST_STAGE_ACTOR : 'RECOMMENDER'; // leads to SUBMITTED (no change) then APPROVED
+      if (currentStatus === 'SUBMITTED') return (hasRecommended || isDirectReportToDG()) ? FIRST_STAGE_ACTOR : 'RECOMMENDER'; // bypass recommender for DG direct reports
       if (currentStatus === 'APPROVED') return 'HR';               // leads to VERIFIED
       if (currentStatus === 'VERIFIED') return 'ACCOUNTS';         // leads to PROCESSED
       return null;
@@ -438,6 +461,8 @@ module.exports = {
       if (actionUpper === 'RECOMMEND') {
         if (currentStatus !== 'SUBMITTED') throw new Error('Only SUBMITTED claims can be recommended');
         if (hasRecommended) return claim;
+        // If DG’s direct report, bypass recommender entirely
+        if (isDirectReportToDG()) return claim;
         assertAuthorized('RECOMMENDER', 'RECOMMEND');
         await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: remarks || null } });
         return reload();
