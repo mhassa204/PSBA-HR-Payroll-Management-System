@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuthStore } from '../../auth/authStore';
 import { listPendingExpenseClaimApprovals, listAllExpenseClaimApprovals, decideExpenseClaim, exportExpenseClaimsToCsv, getTravelCapabilities } from '../../../services/travelService';
-
-const Card = ({ children, className = '' }) => (
-  <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>{children}</div>
-);
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import EnhancedModal from '@/components/ui/EnhancedModal';
 
 export default function ManageExpenseClaimApprovals(){
   const [list, setList] = useState([]);
@@ -31,18 +32,25 @@ export default function ManageExpenseClaimApprovals(){
   const canDG = isSuper || can('travel.claim.approve.dg') || caps?.isDG;
   const canHR = isSuper || can('travel.claim.approve.hr') || caps?.isHR || /(^hr$|human\s*resources)/i.test(roleName);
   const canAccounts = isSuper || can('travel.claim.approve.accounts') || caps?.isAccountsApprover || /(accounts|finance|budget|payroll|reconciliation)/i.test(roleName);
+  const meEmpId = user?.employee_id;
   const hasAnyApprovalPerm = canOps || canDG || canHR || canAccounts;
   // If user has none, short-circuit action eligibility
 
-  // Helper to compute dynamic eligibility replicating backend generalized logic
+  // Helper to compute dynamic eligibility replicating backend generalized logic (with recommender stage)
+  const isRecommenderFor = (claim) => {
+    const ro = String(meEmpId||'');
+    const applicantEmps = claim?.request?.applicant?.employmentRecords||[];
+    return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === ro);
+  };
   const computeEligibility = (claim) => {
-    if(!claim) return { canApprove:false, canReject:false, canClear:false };
+    if(!claim) return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
     const status = claim.status;
     const entries = claim.statusEntries || [];
     const approvalsOrder = ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'];
     const rejectionActions = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED'];
-    const lastApproval = [...entries].reverse().find(e=>approvalsOrder.includes(e.action));
+    const lastApproval = [...entries].reverse().find(e=>approvalsOrder.includes(e.action) || e.action==='RECOMMENDED');
     const lastEntry = entries[entries.length-1];
+    const hasRecommended = entries.some(e=>e.action==='RECOMMENDED');
     const hasHRAppr = entries.some(e=>e.action==='HR_APPROVED');
     const hasAccountsAppr = entries.some(e=>e.action==='ACCOUNTS_APPROVED');
     const locType = claim.employee?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
@@ -56,11 +64,12 @@ export default function ManageExpenseClaimApprovals(){
           canClear = true;
         }
       }
-      return { canApprove:false, canReject:false, canClear };
+      return { canApprove:false, canReject:false, canClear, canRecommend:false };
     }
 
     const nextStageHasActed = () => {
       if(!lastApproval) return false;
+      if(lastApproval.action==='RECOMMENDED') return entries.some(e=>['OPS_APPROVED','DG_APPROVED'].includes(e.action));
       if(lastApproval.action==='OPS_APPROVED' || lastApproval.action==='DG_APPROVED') return hasHRAppr || hasAccountsAppr;
       if(lastApproval.action==='HR_APPROVED') return hasAccountsAppr;
       if(lastApproval.action==='ACCOUNTS_APPROVED') return false; // final stage
@@ -69,26 +78,34 @@ export default function ManageExpenseClaimApprovals(){
 
     const lastApprovalIsMine = lastApproval && lastApproval.actor_employee_id === user?.employee_id;
 
-    // If I was the last approver and the next stage hasn't acted, I can only CLEAR (undo), not approve/reject again
+    // If I was the last approver/recommender and the next stage hasn't acted, I can only CLEAR (undo)
     if(lastApprovalIsMine && !nextStageHasActed()){
-      return { canApprove:false, canReject:false, canClear:true };
+      const canClear = true;
+      return { canApprove:false, canReject:false, canClear, canRecommend:false };
+    }
+
+    // Recommender stage
+    if(status==='SUBMITTED' && !hasRecommended){
+      const canRecommend = isRecommenderFor(claim);
+      return { canApprove:false, canReject:false, canClear:false, canRecommend };
     }
 
     // Forward-stage actions
     if(status==='SUBMITTED'){
       if((locType==='BAZAAR' && canOps) || (locType==='HEAD_OFFICE' && canDG)){
-        return { canApprove:true, canReject:true, canClear:false };
+        if(!hasRecommended) return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
+        return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
       }
     } else if(status==='APPROVED') { // HR stage
-      if(canHR) return { canApprove:true, canReject:true, canClear:false };
+      if(canHR) return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
     } else if(status==='VERIFIED') { // Accounts stage
-      if(canAccounts) return { canApprove:true, canReject:true, canClear:false };
+      if(canAccounts) return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
     } else if((status==='PROCESSED' || status==='SETTLED') && lastApproval?.action==='ACCOUNTS_APPROVED' && lastApprovalIsMine){
       // Finalized by Accounts: allow only CLEAR by the accounts approver who approved
-      return { canApprove:false, canReject:false, canClear:true };
+      return { canApprove:false, canReject:false, canClear:true, canRecommend:false };
     }
 
-    return { canApprove:false, canReject:false, canClear:false };
+    return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
   };
 
   const load = async () => { setLoading(true); try { const rs = await listPendingExpenseClaimApprovals(); setList(rs); } finally { setLoading(false); } };
@@ -141,149 +158,149 @@ export default function ManageExpenseClaimApprovals(){
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-800">Manage Expense Claim Approvals</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Manage Expense Claim Approvals</h1>
+      </div>
       <div className="flex gap-4 text-sm">
-        <button onClick={()=>setViewTab('pending')} className={viewTab==='pending'? 'pb-2 border-b-2 border-sky-600 text-sky-600 font-medium':'pb-2 text-slate-500'}>Pending Approvals</button>
-        <button onClick={()=>{ setViewTab('all'); if(allClaims.length===0) loadAll(); }} className={viewTab==='all'? 'pb-2 border-b-2 border-sky-600 text-sky-600 font-medium':'pb-2 text-slate-500'}>All Claims</button>
+        <Button variant={viewTab==='pending'? 'default':'outline'} size="sm" onClick={()=>setViewTab('pending')}>Pending Approvals</Button>
+        <Button variant={viewTab==='all'? 'default':'outline'} size="sm" onClick={()=>{ setViewTab('all'); if(allClaims.length===0) loadAll(); }}>All Claims</Button>
       </div>
       {viewTab==='pending' && (
         <Card>
-          <div className="flex items-center justify-between p-4 border-b border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-800">Pending Claims</h2>
-            <button onClick={load} className="text-xs text-sky-600">Refresh</button>
-          </div>
-          <div className="divide-y">
-            {loading && <div className="p-4 text-slate-500 text-sm">Loading...</div>}
-            {!loading && list.length===0 && <div className="p-4 text-slate-500 text-sm">No pending claims</div>}
-            {list.map(c => {
-              const emp = c.employee; const empJob = currentEmployment(emp);
-              const eligibility = computeEligibility(c);
-              const onRowAction = async (claim, action) => {
-                if(action==='') return;
-                const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of' };
-                if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
-                try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
-              };
-              return (
-                <div key={c.id} className="p-4 flex items-center justify-between text-sm">
-                  <div className="space-y-0.5">
-                    <div className="font-medium text-slate-800">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} ({empJob?.designation?.title || '—'})</div>
-                    <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {formatMoney(c.grand_total)}</div>
-                    <div className="flex flex-wrap gap-1">
-                      {(c.statusEntries||[]).map(se => <span key={se.id} className="px-1.5 py-0.5 bg-slate-100 rounded text-[10px]" title={new Date(se.createdAt).toLocaleString()}>{se.action}</span>)}
+          <CardHeader className="border-b">
+            <CardTitle>Pending Claims</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {loading && <div className="p-4 text-muted-foreground text-sm">Loading...</div>}
+              {!loading && list.length===0 && <div className="p-4 text-muted-foreground text-sm">No pending claims</div>}
+              {list.map(c => {
+                const emp = c.employee; const empJob = currentEmployment(emp);
+                const eligibility = computeEligibility(c);
+                const onRowAction = async (claim, action) => {
+                  if(action==='') return;
+                  const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of', RECOMMEND:'recommend' };
+                  if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
+                  try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
+                };
+                return (
+                  <div key={c.id} className="p-4 flex items-center justify-between text-sm">
+                    <div className="space-y-0.5">
+                      <div className="font-medium">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} ({empJob?.designation?.title || '—'})</div>
+                      <div className="text-muted-foreground">Distance {c.total_distance_km||0} km • Grand {formatMoney(c.grand_total)}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {(c.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[10px]">{se.action}</Badge>)}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=>open(c)}>View</Button>
+                      <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-background">
+                        <option value="" disabled>Action</option>
+                        <option value="RECOMMEND" disabled={!eligibility.canRecommend}>Recommend</option>
+                        <option value="APPROVE" disabled={!eligibility.canApprove}>Approve</option>
+                        <option value="REJECT" disabled={!eligibility.canReject}>Reject</option>
+                        <option value="CLEAR" disabled={!eligibility.canClear}>Undo Decision</option>
+                      </select>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={()=>open(c)} className="text-xs px-2 py-1 rounded border bg-white hover:bg-slate-50">View</button>
-                    <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-white">
-                      <option value="" disabled>Action</option>
-                      <option value="APPROVE" disabled={!eligibility.canApprove}>Approve</option>
-                      <option value="REJECT" disabled={!eligibility.canReject}>Reject</option>
-                      <option value="CLEAR" disabled={!eligibility.canClear}>Undo Decision</option>
-                    </select>
-                  </div>
-                </div>
-              );
-            })}
-           </div>
+                );
+              })}
+             </div>
+           </CardContent>
          </Card>
        )}
       {viewTab==='all' && (
         <Card>
-          <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-lg font-semibold text-slate-800">All Claims</h2>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search id, emp, purpose" className="border rounded px-2 py-1 text-xs" />
-              <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="border rounded px-2 py-1 text-xs">
-                <option value="">All Statuses</option>
-                {['DRAFT','SUBMITTED','APPROVED','VERIFIED','PROCESSED','REJECTED','PENDING_APPROVAL'].map(s=> <option key={s} value={s}>{s}</option>)}
-              </select>
-              <button onClick={exportCsv} className="text-xs px-2 py-1 border rounded bg-white hover:bg-slate-50">Export CSV</button>
-              <button onClick={loadAll} className="text-xs text-sky-600">Refresh</button>
+          <CardHeader className="border-b">
+            <CardTitle>All Claims</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search id, emp, purpose" className="w-56" />
+                <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="border rounded px-2 py-2 text-sm">
+                  <option value="">All Statuses</option>
+                  {['DRAFT','SUBMITTED','APPROVED','VERIFIED','PROCESSED','REJECTED','PENDING_APPROVAL'].map(s=> <option key={s} value={s}>{s}</option>)}
+                </select>
+                <Button variant="outline" size="sm" onClick={exportCsv}>Export CSV</Button>
+                <Button variant="link" size="sm" onClick={loadAll}>Refresh</Button>
+              </div>
+              <div className="text-[11px] text-muted-foreground">Showing {filteredAll.length} / {allClaims.length}</div>
             </div>
-            <div className="text-[11px] text-slate-500">Showing {filteredAll.length} / {allClaims.length}</div>
-          </div>
-          <div className="divide-y max-h-[60vh] overflow-auto">
-            {loadingAll && <div className="p-4 text-slate-500 text-sm">Loading...</div>}
-            {!loadingAll && filteredAll.length===0 && <div className="p-4 text-slate-500 text-sm">No claims match filters.</div>}
-            {filteredAll.map(c => {
-              const emp = c.employee; const empJob = c.employee?.employmentRecords?.[0];
-              const eligibility = computeEligibility(c);
-              const onRowAction = async (claim, action) => {
-                if(action==='') return;
-                const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of' };
-                if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
-                try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
-              };
-              return (
-                <div key={c.id} className="p-4 flex items-center justify-between text-sm">
-                  <div className="space-y-0.5">
-                    <div className="font-medium text-slate-800 flex flex-wrap items-center gap-1">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} <span className="text-slate-400">({empJob?.designation?.title || '—'})</span> <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 border">{c.status}</span></div>
-                    <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {(c.grand_total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-                    <div className="flex flex-wrap gap-1">
-                      {(c.statusEntries||[]).map(se => <span key={se.id} className="px-1.5 py-0.5 bg-slate-100 rounded text-[10px]" title={new Date(se.createdAt).toLocaleString()}>{se.action}</span>)}
+            <div className="divide-y max-h-[60vh] overflow-auto">
+              {loadingAll && <div className="p-4 text-muted-foreground text-sm">Loading...</div>}
+              {!loadingAll && filteredAll.length===0 && <div className="p-4 text-muted-foreground text-sm">No claims match filters.</div>}
+              {filteredAll.map(c => {
+                const emp = c.employee; const empJob = c.employee?.employmentRecords?.[0];
+                const eligibility = computeEligibility(c);
+                const onRowAction = async (claim, action) => {
+                  if(action==='') return;
+                  const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of', RECOMMEND:'recommend' };
+                  if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
+                  try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
+                };
+                return (
+                  <div key={c.id} className="p-4 flex items-center justify-between text-sm">
+                    <div className="space-y-0.5">
+                      <div className="font-medium flex flex-wrap items-center gap-1">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} <span className="text-muted-foreground">({empJob?.designation?.title || '—'})</span> <Badge variant="outline" className="ml-2 text-[10px]">{c.status}</Badge></div>
+                      <div className="text-muted-foreground">Distance {c.total_distance_km||0} km • Grand {(c.grand_total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {(c.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[10px]" title={new Date(se.createdAt).toLocaleString()}>{se.action}</Badge>)}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=>open(c)}>View</Button>
+                      <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-background">
+                        <option value="" disabled>Action</option>
+                        <option value="RECOMMEND" disabled={!eligibility.canRecommend}>Recommend</option>
+                        <option value="APPROVE" disabled={!eligibility.canApprove}>Approve</option>
+                        <option value="REJECT" disabled={!eligibility.canReject}>Reject</option>
+                        <option value="CLEAR" disabled={!eligibility.canClear}>Undo Decision</option>
+                      </select>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={()=>open(c)} className="text-xs px-2 py-1 rounded border bg-white hover:bg-slate-50">View</button>
-                    <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-white">
-                      <option value="" disabled>Action</option>
-                      <option value="APPROVE" disabled={!eligibility.canApprove}>Approve</option>
-                      <option value="REJECT" disabled={!eligibility.canReject}>Reject</option>
-                      <option value="CLEAR" disabled={!eligibility.canClear}>Undo Decision</option>
-                    </select>
-                  </div>
-                </div>
-              );
-            })}
-           </div>
+                );
+              })}
+             </div>
+           </CardContent>
          </Card>
        )}
 
-      {selected && (() => { const emp = selected.employee; const empJob = currentEmployment(emp); return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-slate-900/50" onClick={close} />
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-5xl mx-4 p-5 space-y-5 text-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="font-semibold text-slate-800 text-lg">Expense Claim #{selected.id}</div>
-                <div className="text-slate-500 text-xs">Created {new Date(selected.createdAt).toLocaleString()}</div>
-              </div>
-              <button onClick={close} className="text-slate-500 hover:text-slate-700">✕</button>
-            </div>
-
+      <EnhancedModal isOpen={!!selected} onClose={close} title={selected? `Expense Claim #${selected.id}`: ''} size="xl">
+        {selected && (() => { const emp = selected.employee; const empJob = currentEmployment(emp); return (
+          <div className="p-1 md:p-4 space-y-5 text-sm">
             <div className="grid md:grid-cols-4 gap-4">
-              <div>
-                <div className="text-slate-500 text-[11px] uppercase">Employee</div>
-                <div className="font-medium text-slate-800">{emp?.full_name || '—'} <span className="text-slate-400">#{selected.employee_id}</span></div>
-                <div className="text-slate-500 text-xs">CNIC: {emp?.cnic || '—'}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 text-[11px] uppercase">Designation</div>
-                <div className="font-medium text-slate-800">{empJob?.designation?.title || '—'}</div>
-                <div className="text-slate-500 text-xs">Dept: {empJob?.department?.title || empJob?.department?.name || '—'}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 text-[11px] uppercase">Location</div>
-                <div className="font-medium text-slate-800">{empJob?.location?.name || '—'}</div>
-                <div className="text-slate-500 text-xs">Type: {empJob?.location?.type || '—'}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 text-[11px] uppercase">Status</div>
-                <div className="font-medium text-slate-800">{selected.status}</div>
-                <div className="text-slate-500 text-xs">Segments: {(selected.segments||[]).length}</div>
-              </div>
+              <Card className="p-3">
+                <div className="text-[11px] uppercase text-muted-foreground mb-1">Employee</div>
+                <div className="font-medium">{emp?.full_name || '—'} <span className="text-muted-foreground">#{selected.employee_id}</span></div>
+                <div className="text-xs text-muted-foreground">CNIC: {emp?.cnic || '—'}</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-[11px] uppercase text-muted-foreground mb-1">Designation</div>
+                <div className="font-medium">{empJob?.designation?.title || '—'}</div>
+                <div className="text-xs text-muted-foreground">Dept: {empJob?.department?.title || empJob?.department?.name || '—'}</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-[11px] uppercase text-muted-foreground mb-1">Location</div>
+                <div className="font-medium">{empJob?.location?.name || '—'}</div>
+                <div className="text-xs text-muted-foreground">Type: {empJob?.location?.type || '—'}</div>
+              </Card>
+              <Card className="p-3">
+                <div className="text-[11px] uppercase text-muted-foreground mb-1">Status</div>
+                <div className="font-medium">{selected.status}</div>
+                <div className="text-xs text-muted-foreground">Segments: {(selected.segments||[]).length}</div>
+              </Card>
             </div>
 
             <div className="grid md:grid-cols-3 gap-4">
               <Card className="p-3">
-                <div className="text-[11px] uppercase text-slate-500 mb-1">Request</div>
-                <div className="font-medium text-slate-800">#{selected.travel_request_id}</div>
-                <div className="text-xs text-slate-600">{selected.request?.purpose || selected.request?.travel_purpose}</div>
-                <div className="text-[11px] text-slate-500 mt-1">{selected.request?.origin} → {selected.request?.destination}</div>
+                <div className="text-[11px] uppercase text-muted-foreground mb-1">Request</div>
+                <div className="font-medium">#{selected.travel_request_id}</div>
+                <div className="text-xs text-muted-foreground">{selected.request?.purpose || selected.request?.travel_purpose}</div>
+                <div className="text-[11px] text-muted-foreground mt-1">{selected.request?.origin} → {selected.request?.destination}</div>
               </Card>
               <Card className="p-3">
-                <div className="text-[11px] uppercase text-slate-500 mb-1">Totals</div>
+                <div className="text-[11px] uppercase text-muted-foreground mb-1">Totals</div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   <div>Distance KM</div><div className="text-right font-medium">{selected.total_distance_km||0}</div>
                   <div>Per Diem Days</div><div className="text-right font-medium">{selected.per_diem_days||0}</div>
@@ -291,12 +308,12 @@ export default function ManageExpenseClaimApprovals(){
                   <div>Per Diem Total</div><div className="text-right font-medium">{formatMoney(selected.per_diem_total)}</div>
                   <div>Transport Total</div><div className="text-right font-medium">{formatMoney(selected.transport_total)}</div>
                   <div>Other Total</div><div className="text-right font-medium">{formatMoney(selected.other_total)}</div>
-                  <div className="col-span-2 border-t pt-1"></div>
+                  <div className="col-span-2 border-t pt-1" />
                   <div>Grand Total</div><div className="text-right font-semibold">{formatMoney(selected.grand_total)}</div>
                 </div>
               </Card>
               <Card className="p-3">
-                <div className="text-[11px] uppercase text-slate-500 mb-1">Documents</div>
+                <div className="text-[11px] uppercase text-muted-foreground mb-1">Documents</div>
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-auto">
                   {(selected.documents||[]).map(d => {
                     let p = d.file_path || ''; p = p.replace(/^\\+|^\/+/, ''); const isAbsolute = /^https?:\/\//i.test(p);
@@ -304,16 +321,16 @@ export default function ManageExpenseClaimApprovals(){
                     const url = isAbsolute ? p : (p.startsWith('uploads/') ? `${base}/${p}` : `${base}/${p}`);
                     return <a key={d.id} href={url} target="_blank" rel="noreferrer" className="text-[10px] px-2 py-1 border rounded bg-white hover:bg-slate-50">{d.category}:{p.split('/').pop()}</a>;
                   })}
-                  {(!selected.documents||selected.documents.length===0) && <div className="text-[10px] text-slate-500">No documents</div>}
+                  {(!selected.documents||selected.documents.length===0) && <div className="text-[10px] text-muted-foreground">No documents</div>}
                 </div>
               </Card>
             </div>
 
             <div>
-              <div className="text-[11px] uppercase text-slate-500 mb-2">Segments</div>
+              <div className="text-[11px] uppercase text-muted-foreground mb-2">Segments</div>
               <div className="overflow-auto border rounded">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-slate-600">
+                  <thead className="bg-accent/30 text-muted-foreground">
                     <tr>
                       <th className="p-2 text-left font-medium">#</th>
                       <th className="p-2 text-left font-medium">Mode</th>
@@ -334,49 +351,50 @@ export default function ManageExpenseClaimApprovals(){
                         <td className="p-2">{formatMoney(s.amount)}</td>
                       </tr>
                     ))}
-                    {(!selected.segments || selected.segments.length===0) && <tr><td colSpan={6} className="p-2 text-center text-slate-500">No segments</td></tr>}
+                    {(!selected.segments || selected.segments.length===0) && <tr><td colSpan={6} className="p-2 text-center text-muted-foreground">No segments</td></tr>}
                   </tbody>
                 </table>
               </div>
             </div>
 
             <div>
-              <div className="text-[11px] uppercase text-slate-500 mb-2">Status History</div>
+              <div className="text-[11px] uppercase text-muted-foreground mb-2">Status History</div>
               <div className="space-y-1 max-h-48 overflow-auto pr-1">
                 {(selected.statusEntries||[]).map(se => { const actorJob = currentEmployment(se.actor); return (
-                  <div key={se.id} className="flex items-start gap-2 text-xs border rounded p-2 bg-slate-50">
-                    <div className="font-mono text-[10px] px-1 py-0.5 bg-white rounded border">{se.action}</div>
+                  <div key={se.id} className="flex items-start gap-2 text-xs border rounded p-2 bg-accent/20">
+                    <div className="font-mono text-[10px] px-1 py-0.5 bg-background rounded border">{se.action}</div>
                     <div className="flex-1">
-                      <div className="font-medium text-slate-700">{se.actor?.full_name || '—'} <span className="text-slate-400">#{se.actor_employee_id}</span> {actorJob?.designation?.title && <span className="text-slate-500">({actorJob.designation.title})</span>}</div>
-                      <div className="text-slate-500">at {new Date(se.createdAt).toLocaleString()} {se.remarks && <span className="italic text-slate-600">— {se.remarks}</span>}</div>
+                      <div className="font-medium">{se.actor?.full_name || '—'} <span className="text-muted-foreground">#{se.actor_employee_id}</span> {actorJob?.designation?.title && <span className="text-muted-foreground">({actorJob.designation.title})</span>}</div>
+                      <div className="text-muted-foreground">at {new Date(se.createdAt).toLocaleString()} {se.remarks && <span className="italic">— {se.remarks}</span>}</div>
                     </div>
                   </div>
                 ); })}
-                {(!selected.statusEntries||selected.statusEntries.length===0) && <div className="text-[11px] text-slate-500">No history</div>}
+                {(!selected.statusEntries||selected.statusEntries.length===0) && <div className="text-[11px] text-muted-foreground">No history</div>}
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-slate-500">Remarks (optional)</label>
+              <label className="text-xs text-muted-foreground">Remarks (optional)</label>
               <textarea value={remarks} onChange={e=>setRemarks(e.target.value)} rows={3} className="w-full border rounded p-2 text-xs" placeholder="Add remarks for this decision" />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               {(() => { const elig = computeEligibility(selected); return (
                 <div className="flex gap-2">
-                  <button type="button" onClick={()=>{ setRemarks(''); close(); }} className="px-3 py-1 rounded bg-slate-200 text-slate-700 text-xs">Close</button>
-                  <select disabled={submitting} onChange={e=>{ const v=e.target.value; if(!v) return; if(v==='CLEAR'){ if(!window.confirm('Clear your last approval?')) { e.target.value=''; return;} } act(v); e.target.value=''; }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-white">
+                  <Button type="button" variant="outline" size="sm" onClick={()=>{ setRemarks(''); close(); }}>Close</Button>
+                  <select disabled={submitting} onChange={e=>{ const v=e.target.value; if(!v) return; if(v==='CLEAR'){ if(!window.confirm('Clear your last decision?')) { e.target.value=''; return;} } act(v); e.target.value=''; }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-background">
                     <option value="" disabled>Action</option>
+                    <option value="RECOMMEND" disabled={!elig.canRecommend}>Recommend</option>
                     <option value="APPROVE" disabled={!elig.canApprove}>Approve</option>
                     <option value="REJECT" disabled={!elig.canReject}>Reject</option>
                     <option value="CLEAR" disabled={!elig.canClear}>Undo Decision</option>
                   </select>
                 </div>
               ); })()}
-              <button onClick={close} className="px-3 py-1 rounded bg-slate-200 text-slate-700 text-xs">Dismiss</button>
+              <Button variant="outline" size="sm" onClick={close}>Dismiss</Button>
             </div>
            </div>
-         </div>
-      ); })()}
+        ); })()}
+      </EnhancedModal>
     </div>
   );
 }

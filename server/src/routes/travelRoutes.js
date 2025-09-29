@@ -13,6 +13,10 @@ router.get('/requests', isAuthenticated, travelRequestController.listManage);
 // List pending approvals eligible for current user (placed before /requests/:id to avoid param capture)
 router.get('/requests/pending-approvals', isAuthenticated, travelRequestController.listPendingApprovals);
 
+// Recommender actions
+router.post('/requests/:id/recommend', isAuthenticated, travelRequestController.recommend);
+router.post('/requests/:id/recommend/clear', isAuthenticated, travelRequestController.clearRecommendation);
+
 // List only current user's own requests (allowed based on location/grade rules)
 router.get('/requests/mine', isAuthenticated, travelRequestController.listMine);
 router.post('/requests', isAuthenticated, travelRequestController.create);

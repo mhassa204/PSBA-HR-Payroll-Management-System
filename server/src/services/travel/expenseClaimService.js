@@ -214,20 +214,36 @@ module.exports = {
     // Adjusted to new fixed statuses with strict stage guards
     const stageFilters = [];
 
-    // First stage pending -> SUBMITTED (no prior OPS/DG decision)
+    // New: Recommendation stage (immediate in-charge of claim creator/applicant)
+    // Show SUBMITTED claims where applicant's reporting_officer_id == me and no recommendation yet
+    if (ctx.meEmpId) {
+      stageFilters.push({
+        status: 'SUBMITTED',
+        request: {
+          applicant: {
+            employmentRecords: {
+              some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) }
+            }
+          }
+        },
+        statusEntries: { none: { action: 'RECOMMENDED' } }
+      });
+    }
+
+    // First stage pending -> SUBMITTED (no prior OPS/DG decision) but must be recommended already
     const firstStageNone = { action: { in: ['OPS_APPROVED','OPS_REJECTED','DG_APPROVED','DG_REJECTED'] } };
     if (ctx.isOps || ctx.canApproveClaimOps) {
       stageFilters.push({
         status: 'SUBMITTED',
         employee: { employmentRecords: { some: { is_current: true, location: { type: 'BAZAAR' } } } },
-        statusEntries: { none: firstStageNone }
+        statusEntries: { none: firstStageNone, some: { action: 'RECOMMENDED' } }
       });
     }
     if (ctx.isDG || ctx.canApproveClaimDG) {
       stageFilters.push({
         status: 'SUBMITTED',
         employee: { employmentRecords: { some: { is_current: true, location: { type: 'HEAD_OFFICE' } } } },
-        statusEntries: { none: firstStageNone }
+        statusEntries: { none: firstStageNone, some: { action: 'RECOMMENDED' } }
       });
     }
 
@@ -264,7 +280,7 @@ module.exports = {
       orderBy: { createdAt: 'desc' },
       include: {
         employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } },
-        request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true } } } } } },
+        request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } },
         documents: true,
         segments: true,
         statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } }
@@ -300,6 +316,10 @@ module.exports = {
     const rejectionMap = { OPS: 'OPS_REJECTED', DG: 'DG_REJECTED', HR: 'HR_REJECTED', ACCOUNTS: 'ACCOUNTS_REJECTED' };
     const canActStage = (stageKey) => {
       if (ctx.isSuperAdmin) return true;
+      if (stageKey === 'RECOMMENDER') {
+        const applicantEmps = claim.request?.applicant?.employmentRecords || [];
+        return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
+      }
       if (stageKey === 'OPS') return (ctx.isOps || ctx.canApproveClaimOps);
       if (stageKey === 'DG') return (ctx.isDG || ctx.canApproveClaimDG);
       if (stageKey === 'HR') return ctx.isHR;
@@ -307,8 +327,9 @@ module.exports = {
       return false;
     };
     const currentStatus = claim.status;
+    const hasRecommended = claim.statusEntries.some(e => e.action === 'RECOMMENDED');
     const determineNextStage = () => {
-      if (currentStatus === 'SUBMITTED') return FIRST_STAGE_ACTOR; // leads to APPROVED
+      if (currentStatus === 'SUBMITTED') return hasRecommended ? FIRST_STAGE_ACTOR : 'RECOMMENDER'; // leads to SUBMITTED (no change) then APPROVED
       if (currentStatus === 'APPROVED') return 'HR';               // leads to VERIFIED
       if (currentStatus === 'VERIFIED') return 'ACCOUNTS';         // leads to PROCESSED
       return null;
@@ -351,33 +372,45 @@ module.exports = {
     const isApprovalAction = (a) => ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'].includes(a);
     const REJECTION_STATUSES = new Set(['REJECTED','REJECTED_OPS','REJECTED_DG','REJECTED_HR','REJECTED_ACCOUNTS']);
     // Map a status entry action to its stage key
-    const mapActionToStage = (act) => act.startsWith('OPS_') ? 'OPS' : act.startsWith('DG_') ? 'DG' : act.startsWith('HR_') ? 'HR' : act.startsWith('ACCOUNTS_') ? 'ACCOUNTS' : null;
+    const mapActionToStage = (act) => act.startsWith('OPS_') ? 'OPS' : act.startsWith('DG_') ? 'DG' : act.startsWith('HR_') ? 'HR' : act.startsWith('ACCOUNTS_') ? 'ACCOUNTS' : (act==='RECOMMENDED' ? 'RECOMMENDER' : null);
 
     const assertAuthorized = (stage, intent) => {
-      const userIsLastApprover = lastEntry && lastEntry.actor_employee_id === actorEmpId && isApprovalAction(lastEntry.action) && approvalStatusMap[lastEntry.action].includes(claim.status);
+      const userIsLastApprover = lastEntry && lastEntry.actor_employee_id === actorEmpId && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED') && (isApprovalAction(lastEntry.action) ? approvalStatusMap[lastEntry.action].includes(claim.status) : claim.status==='SUBMITTED');
       if (!canActStage(stage)) {
         if (userIsLastApprover) {
-          if (intent === 'APPROVE') throw { __idempotentReturn: true };
-          if (intent === 'REJECT') throw new Error('Already approved. Use CLEAR first to undo your approval, then reject.');
+          if (intent === 'APPROVE' || intent==='RECOMMEND') throw { __idempotentReturn: true };
+          if (intent === 'REJECT') throw new Error('Already decided. Use CLEAR first to undo your decision, then reject.');
         }
         throw new Error(`Not authorized for stage ${stage}`);
       }
     };
 
     try {
-      if (actionUpper === 'APPROVE') {
+      if (actionUpper === 'RECOMMEND') {
+        if (currentStatus !== 'SUBMITTED') throw new Error('Only SUBMITTED claims can be recommended');
+        if (hasRecommended) return claim;
+        assertAuthorized('RECOMMENDER', 'RECOMMEND');
+        await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: remarks || null } });
+        return reload();
+      } else if (actionUpper === 'APPROVE') {
         if (REJECTION_STATUSES.has(currentStatus)) throw new Error('Cannot approve rejected claim. Clear rejection first.');
         if (['PROCESSED','SETTLED'].includes(currentStatus)) return claim; // already final
         const stage = determineNextStage();
         if (!stage) throw new Error('No further approvals allowed');
         // If the same user approved the previous stage, they cannot act on the next stage without CLEAR
-        if (lastEntry && isApprovalAction(lastEntry.action) && lastEntry.actor_employee_id === actorEmpId) {
+        if (lastEntry && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED') && lastEntry.actor_employee_id === actorEmpId) {
           const lastStage = mapActionToStage(lastEntry.action);
           if (stage !== lastStage) {
-            throw new Error('You already approved the previous stage. Use CLEAR to undo your approval; you cannot act on the next stage.');
+            throw new Error('You already decided the previous stage. Use CLEAR to undo your decision; you cannot act on the next stage.');
           }
         }
         assertAuthorized(stage, 'APPROVE');
+        if (stage === 'RECOMMENDER') {
+          // Recommendation does not change status; only insert a status entry
+          if (lastEntry && lastEntry.action === 'RECOMMENDED' && claim.status==='SUBMITTED') return claim; // idempotent
+          await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: remarks || null } });
+          return reload();
+        }
         let approvalAction; let targetStatus; let fallbacks = [];
         if (stage === 'OPS') { approvalAction = 'OPS_APPROVED'; targetStatus = 'APPROVED'; }
         else if (stage === 'DG') { approvalAction = 'DG_APPROVED'; targetStatus = 'APPROVED'; }
@@ -393,11 +426,11 @@ module.exports = {
         const stage = determineNextStage();
         if (!stage) throw new Error('No active stage to reject');
         // Block cross-stage re-decision by the same actor without CLEAR
-        if (lastEntry && isApprovalAction(lastEntry.action) && lastEntry.actor_employee_id === actorEmpId) {
+        if (lastEntry && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED') && lastEntry.actor_employee_id === actorEmpId) {
           const lastStage = mapActionToStage(lastEntry.action);
-          // If the computed next stage differs from the user's last approval stage, require CLEAR first
-          if (stage !== lastStage) throw new Error('You already approved the previous stage. Use CLEAR to undo your approval before rejecting.');
+          if (stage !== lastStage) throw new Error('You already decided the previous stage. Use CLEAR to undo your decision before rejecting.');
         }
+        if (stage === 'RECOMMENDER') throw new Error('Recommenders cannot reject. Only Recommend or Clear.');
         assertAuthorized(stage, 'REJECT');
         const rejectionAction = rejectionMap[stage];
         let rejectedStatus = stage === 'OPS' ? 'REJECTED_OPS' : stage === 'DG' ? 'REJECTED_DG' : stage === 'HR' ? 'REJECTED_HR' : 'REJECTED_ACCOUNTS';
@@ -408,9 +441,15 @@ module.exports = {
         if (!lastEntry) throw new Error('No decision to clear');
         const isApproval = isApprovalAction(lastEntry.action);
         const isRejection = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED'].includes(lastEntry.action);
+        const isRecommendation = lastEntry.action === 'RECOMMENDED';
         const lastStage = mapActionToStage(lastEntry.action);
         if (lastEntry.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin) throw new Error('Cannot clear another user\'s decision');
         assertAuthorized(lastStage, 'CLEAR');
+        if (isRecommendation) {
+          if (claim.status !== 'SUBMITTED') throw new Error('Cannot clear, workflow advanced');
+          await prisma.travelClaimStatusEntry.delete({ where: { id: lastEntry.id } });
+          return reload();
+        }
         if (isApproval) {
           const expectedStatuses = approvalStatusMap[lastEntry.action];
           if (!expectedStatuses.includes(claim.status)) throw new Error('Cannot clear, workflow advanced');

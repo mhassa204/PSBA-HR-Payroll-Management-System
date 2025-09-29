@@ -12,6 +12,9 @@ export const decideTravelRequest = (id, action) => api.post(`/travel/requests/${
 export const getPendingTravelApprovals = () => api.get('/travel/requests/pending-approvals').then(r => r.data.requests);
 export const getTravelCapabilities = () => api.get('/travel/me/capabilities').then(r => r.data.capabilities);
 export const updateTravelRequestStatus = (id, status) => api.patch(`/travel/requests/${id}/status`, { status }).then(r => r.data.request);
+// New recommender APIs
+export const recommendTravelRequest = (id) => api.post(`/travel/requests/${id}/recommend`).then(r => r.data.request);
+export const clearTravelRecommendation = (id) => api.post(`/travel/requests/${id}/recommend/clear`).then(r => r.data.request);
 
 // ================= New Travel Expense Claims (replaces legacy item-based claims) =================
 // Eligible approved travel requests (last 15 days) for which current user can file claims
@@ -64,7 +67,7 @@ export const submitExpenseClaim = (id) => api.post(`/travel/expense-claims/${id}
 export const listPendingExpenseClaimApprovals = () => api.get('/travel/expense-claims/pending-approvals').then(r => r.data.claims);
 // New: list all claims (for approvers history view)
 export const listAllExpenseClaimApprovals = () => api.get('/travel/expense-claims/all').then(r => r.data.claims);
-// Decide (approve/reject) an expense claim
+// Decide (approve/reject/recommend) an expense claim
 export const decideExpenseClaim = (id, action, remarks) => api.post(`/travel/expense-claims/${id}/decision`, { action, remarks }).then(r => r.data.claim);
 
 // Export helper: transform claims to CSV rows (minimal) (id,status,employee_id,travel_request_id,grand_total)

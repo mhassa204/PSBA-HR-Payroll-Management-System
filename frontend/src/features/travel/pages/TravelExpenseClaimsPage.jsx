@@ -17,9 +17,10 @@ import {
   decideExpenseClaim
 } from '../../../services/travelService';
 import { useAuthStore } from '../../auth/authStore';
-
-const Input = (p) => <input {...p} className={`border rounded px-2 py-1 text-sm w-full ${p.className||''}`} />;
-const Select = (p) => <select {...p} className={`border rounded px-2 py-1 text-sm w-full ${p.className||''}`} />;
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 export default function TravelExpenseClaimsPage(){
   const can = useAuthStore(s=>s.can);
@@ -171,82 +172,86 @@ export default function TravelExpenseClaimsPage(){
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-800">Travel Expense Claims</h1>
+      <h1 className="text-2xl font-bold">Travel Expense Claims</h1>
 
       {step===1 && (
-        <div className="bg-white rounded shadow border">
-          <div className="px-4 pt-4 flex gap-4 border-b text-sm font-medium">
-            <button className={tab==='eligible'? 'text-sky-600 border-b-2 border-sky-600 pb-2':'pb-2 text-slate-500'} onClick={()=>setTab('eligible')}>Create New (Eligible Requests)</button>
-            <button className={tab==='existing'? 'text-sky-600 border-b-2 border-sky-600 pb-2':'pb-2 text-slate-500'} onClick={()=>setTab('existing')}>Existing Claims</button>
-          </div>
+        <Card>
+          <CardHeader className="border-b">
+            <div className="flex gap-2">
+              <Button variant={tab==='eligible'? 'default':'outline'} size="sm" onClick={()=>setTab('eligible')}>Create New (Eligible Requests)</Button>
+              <Button variant={tab==='existing'? 'default':'outline'} size="sm" onClick={()=>setTab('existing')}>Existing Claims</Button>
+            </div>
+          </CardHeader>
           {tab==='eligible' && (
-            <>
-              <div className="p-4 font-semibold">Eligible Approved Requests (last 15 days)</div>
-              {loadingEligible && <div className="p-4 text-sm text-slate-500">Loading...</div>}
-              {!loadingEligible && eligible.length===0 && <div className="p-6 text-sm text-slate-500">No approved recent requests.</div>}
+            <CardContent className="space-y-2">
+              <div className="font-semibold">Eligible Approved Requests (last 15 days)</div>
+              {loadingEligible && <div className="text-sm text-muted-foreground">Loading...</div>}
+              {!loadingEligible && eligible.length===0 && <div className="text-sm text-muted-foreground">No approved recent requests.</div>}
               <div className="divide-y">
               {eligible.map(r=> (
                 <div key={r.id} className="p-4 flex items-center justify-between text-sm">
                   <div>
-                    <div className="font-medium text-slate-800">Request #{r.id} · {r.destination||'Destination'} · {r.status}</div>
-                    <div className="text-slate-500">Departure {String(r.departure_date).slice(0,10)} → Return {String(r.expected_return_date).slice(0,10)}</div>
+                    <div className="font-medium">Request #{r.id} · {r.destination||'Destination'} · {r.status}</div>
+                    <div className="text-muted-foreground">Departure {String(r.departure_date).slice(0,10)} → Return {String(r.expected_return_date).slice(0,10)}</div>
                   </div>
-                  <button disabled={!can('travel.claim.create')} onClick={()=>startClaim(r)} className="px-3 py-2 rounded bg-sky-600 disabled:opacity-40 text-white">Start</button>
+                  <Button disabled={!can('travel.claim.create')} onClick={()=>startClaim(r)}>Start</Button>
                 </div>
               ))}
               </div>
-            </>
+            </CardContent>
           )}
           {tab==='existing' && (
-            <div className="p-4 space-y-4">
+            <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="font-semibold">Existing Claims</div>
-                <button onClick={loadClaims} className="text-xs text-sky-600">Refresh</button>
+                <Button variant="link" size="sm" onClick={loadClaims}>Refresh</Button>
               </div>
-              {loadingClaims && <div className="text-xs text-slate-500">Loading claims...</div>}
-              {!loadingClaims && claims.length===0 && <div className="text-xs text-slate-400">No claims yet.</div>}
+              {loadingClaims && <div className="text-xs text-muted-foreground">Loading claims...</div>}
+              {!loadingClaims && claims.length===0 && <div className="text-xs text-muted-foreground">No claims yet.</div>}
               <div className="divide-y">
                 {claims.map(c => (
                   <div key={c.id} className="py-2 flex items-center justify-between text-xs">
                     <div className="space-y-0.5">
-                      <div className="font-medium text-slate-700">Claim #{c.id} • Req #{c.travel_request_id} • Emp #{c.employee_id}</div>
-                      <div className="text-slate-500">Distance {c.total_distance_km||0} km • Grand {c.grand_total||0}</div>
+                      <div className="font-medium">Claim #{c.id} • Req #{c.travel_request_id} • Emp #{c.employee_id}</div>
+                      <div className="text-muted-foreground">Distance {c.total_distance_km||0} km • Grand {c.grand_total||0}</div>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> { setClaim(full); setForm(f=>({ ...f, from_date: full.from_date?.slice(0,10)||'', to_date: full.to_date?.slice(0,10)||'', rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'', toll_tax_total: full.toll_tax_total ?? f.toll_tax_total, transport_mode: full.transport_mode || f.transport_mode, fuel_total: full.fuel_total ?? f.fuel_total, fare_total: full.fare_total ?? f.fare_total })); }); }} className="px-2 py-1 bg-slate-700 text-white rounded">Open</button>
+                      <Button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> { setClaim(full); setForm(f=>({ ...f, from_date: full.from_date?.slice(0,10)||'', to_date: full.to_date?.slice(0,10)||'', rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'', toll_tax_total: full.toll_tax_total ?? f.toll_tax_total, transport_mode: full.transport_mode || f.transport_mode, fuel_total: full.fuel_total ?? f.fuel_total, fare_total: full.fare_total ?? f.fare_total })); }); }} className="">Open</Button>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
+            </CardContent>
           )}
-        </div>
+        </Card>
       )}
 
       {step===2 && selectedRequest && (
-        <div className="bg-white rounded shadow border p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold">Select Attendee For Claim (Request #{selectedRequest.id})</div>
-            <button onClick={()=>{setStep(1); setSelectedRequest(null);}} className="text-slate-500 hover:underline text-sm">Back</button>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            {selectedRequest.attendees.map(a=> (
-              <button key={a.id} disabled={attendeeAlreadyClaimed(selectedRequest, a.employee_id)} onClick={()=>chooseAttendee(a)} className={`p-3 border rounded text-left hover:bg-slate-50 disabled:opacity-40 ${attendeeAlreadyClaimed(selectedRequest, a.employee_id)?'cursor-not-allowed':'cursor-pointer'}`}>
-                <div className="font-medium">{a.employee?.full_name||'Employee'} (#{a.employee_id})</div>
-                {attendeeAlreadyClaimed(selectedRequest, a.employee_id) && <div className="text-xs text-amber-600">Claim already created</div>}
-              </button>
-            ))}
-          </div>
-          {pendingCreationAttendee && (
-            <div className="p-3 border rounded bg-sky-50 text-xs flex items-center justify-between">
-              <div>Proceed creating claim for employee #{pendingCreationAttendee.employee_id}?</div>
-              <div className="flex gap-2">
-                <button onClick={confirmCreateClaim} className="px-2 py-1 bg-emerald-600 text-white rounded">Yes</button>
-                <button onClick={cancelCreateFlow} className="px-2 py-1 bg-red-600 text-white rounded">No</button>
-              </div>
+        <Card>
+          <CardHeader className="flex items-center justify-between border-b">
+            <CardTitle>Select Attendee For Claim (Request #{selectedRequest.id})</CardTitle>
+            <Button variant="link" size="sm" onClick={()=>{setStep(1); setSelectedRequest(null);}}>Back</Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              {selectedRequest.attendees.map(a=> (
+                <button key={a.id} disabled={attendeeAlreadyClaimed(selectedRequest, a.employee_id)} onClick={()=>chooseAttendee(a)} className={`p-3 border rounded text-left hover:bg-accent/30 disabled:opacity-40 ${attendeeAlreadyClaimed(selectedRequest, a.employee_id)?'cursor-not-allowed':'cursor-pointer'}`}>
+                  <div className="font-medium">{a.employee?.full_name||'Employee'} (#{a.employee_id})</div>
+                  {attendeeAlreadyClaimed(selectedRequest, a.employee_id) && <div className="text-xs text-amber-600">Claim already created</div>}
+                </button>
+              ))}
             </div>
-          )}
-        </div>
+            {pendingCreationAttendee && (
+              <div className="p-3 border rounded bg-accent/20 text-xs flex items-center justify-between">
+                <div>Proceed creating claim for employee #{pendingCreationAttendee.employee_id}?</div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={confirmCreateClaim}>Yes</Button>
+                  <Button size="sm" variant="destructive" onClick={cancelCreateFlow}>No</Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {step===3 && claim && (
@@ -254,163 +259,166 @@ export default function TravelExpenseClaimsPage(){
           <div className="flex items-center justify-between">
             <div className="font-semibold">Expense Claim #{claim.id} (Request #{claim.travel_request_id})</div>
             <div className="flex gap-3 items-center">
-              {claim.status==='DRAFT' && <button onClick={handleDeleteClaim} className="text-xs text-red-600 border border-red-600 rounded px-2 py-1">Delete</button>}
-              {claim.status==='DRAFT' && <button onClick={async ()=>{ if(!(claim.documents||[]).some(d=>d.category==='REPORT')) { alert('Upload REPORT before submitting'); return; } try { const updated = await submitExpenseClaim(claim.id); setClaim(updated); loadClaims(); alert('Submitted'); } catch(e){ alert(e.message); } }} className="text-xs text-sky-600 border border-sky-600 rounded px-2 py-1">Submit</button>}
-              <button onClick={()=>{ setStep(1); setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); loadEligible(); loadClaims(); }} className="text-slate-500 hover:underline text-sm">Close</button>
+              {claim.status==='DRAFT' && <Button variant="destructive" size="sm" onClick={handleDeleteClaim}>Delete</Button>}
+              {claim.status==='DRAFT' && <Button variant="outline" size="sm" onClick={async ()=>{ if(!(claim.documents||[]).some(d=>d.category==='REPORT')) { alert('Upload REPORT before submitting'); return; } try { const updated = await submitExpenseClaim(claim.id); setClaim(updated); loadClaims(); alert('Submitted'); } catch(e){ alert(e.message); } }}>Submit</Button>}
+              <Button variant="link" size="sm" onClick={()=>{ setStep(1); setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); loadEligible(); loadClaims(); }}>Close</Button>
             </div>
           </div>
 
           {/* Core Fields */}
-          <div className="bg-white border rounded shadow-sm p-4 grid md:grid-cols-7 gap-4 text-sm">
-            <div>
-              <label className="text-xs text-slate-500">From Date</label>
-              <Input type="date" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))} />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">To Date</label>
-              <Input type="date" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))} />
-            </div>
-            <div className="flex items-center gap-2 mt-5">
-              <input type="checkbox" checked={form.overnight_stay} onChange={e=>setForm(p=>({...p,overnight_stay:e.target.checked}))} />
-              <span className="text-xs">Overnight Stay</span>
-            </div>
-            <div>
-              <label className="text-xs text-slate-500">Diem Days</label>
-              <Input value={form.per_diem_days} onChange={e=>setForm(p=>({...p,per_diem_days:e.target.value}))} />
-            </div>
-            {/* Transport mode toggle + conditional fields */}
-            <div className="md:col-span-7">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-xs text-slate-500">Mode of Transport:</span>
-                <div className="inline-flex border rounded overflow-hidden">
-                  <button type="button" onClick={()=>setForm(p=>({...p, transport_mode:'OWN'}))} className={`px-3 py-1 text-xs ${form.transport_mode==='OWN'?'bg-sky-600 text-white':'bg-white text-slate-700'}`}>Own Vehicle</button>
-                  <button type="button" onClick={()=>setForm(p=>({...p, transport_mode:'OTHER'}))} className={`px-3 py-1 text-xs border-l ${form.transport_mode==='OTHER'?'bg-sky-600 text-white':'bg-white text-slate-700'}`}>Other</button>
-                </div>
-                {form.transport_mode==='OWN' && (
-                  <>
-                    <div className="min-w-[220px]">
-                      <label className="text-xs text-slate-500">Total Fuel Price Amount</label>
-                      <Input value={form.fuel_total} onChange={e=>setForm(p=>({...p,fuel_total:e.target.value}))} />
-                    </div>
-                    <div className="min-w-[220px]">
-                      <label className="text-xs text-slate-500">Toll Tax Total (D)</label>
-                      <Input value={form.toll_tax_total||''} onChange={e=>setForm(p=>({...p,toll_tax_total:e.target.value}))} />
-                    </div>
-                  </>
-                )}
-                {form.transport_mode==='OTHER' && (
-                  <div className="min-w-[220px]">
-                    <label className="text-xs text-slate-500">Total Fare</label>
-                    <Input value={form.fare_total} onChange={e=>setForm(p=>({...p,fare_total:e.target.value}))} />
-                  </div>
-                )}
+          <Card>
+            <CardContent className="grid md:grid-cols-7 gap-4 text-sm p-6">
+              <div>
+                <label className="text-xs text-muted-foreground">From Date</label>
+                <Input type="date" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))} />
               </div>
-            </div>
-            <div className="md:col-span-7 flex justify-end">
-              <button disabled={saving || claim.status!=='DRAFT'} onClick={persistCore} className="px-4 py-2 rounded bg-emerald-600 text-white disabled:opacity-40">Save Core</button>
-            </div>
-          </div>
+              <div>
+                <label className="text-xs text-muted-foreground">To Date</label>
+                <Input type="date" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))} />
+              </div>
+              <div className="flex items-center gap-2 mt-5">
+                <input type="checkbox" checked={form.overnight_stay} onChange={e=>setForm(p=>({...p,overnight_stay:e.target.checked}))} />
+                <span className="text-xs">Overnight Stay</span>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Diem Days</label>
+                <Input value={form.per_diem_days} onChange={e=>setForm(p=>({...p,per_diem_days:e.target.value}))} />
+              </div>
+              {/* Transport mode toggle + conditional fields */}
+              <div className="md:col-span-7">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-xs text-muted-foreground">Mode of Transport:</span>
+                  <div className="inline-flex border rounded overflow-hidden">
+                    <button type="button" onClick={()=>setForm(p=>({...p, transport_mode:'OWN'}))} className={`px-3 py-1 text-xs ${form.transport_mode==='OWN'?'bg-primary text-primary-foreground':'bg-background'}`}>Own Vehicle</button>
+                    <button type="button" onClick={()=>setForm(p=>({...p, transport_mode:'OTHER'}))} className={`px-3 py-1 text-xs border-l ${form.transport_mode==='OTHER'?'bg-primary text-primary-foreground':'bg-background'}`}>Other</button>
+                  </div>
+                  {form.transport_mode==='OWN' && (
+                    <>
+                      <div className="min-w-[220px]">
+                        <label className="text-xs text-muted-foreground">Total Fuel Price Amount</label>
+                        <Input value={form.fuel_total} onChange={e=>setForm(p=>({...p,fuel_total:e.target.value}))} />
+                      </div>
+                      <div className="min-w-[220px]">
+                        <label className="text-xs text-muted-foreground">Toll Tax Total (D)</label>
+                        <Input value={form.toll_tax_total||''} onChange={e=>setForm(p=>({...p,toll_tax_total:e.target.value}))} />
+                      </div>
+                    </>
+                  )}
+                  {form.transport_mode==='OTHER' && (
+                    <div className="min-w-[220px]">
+                      <label className="text-xs text-muted-foreground">Total Fare</label>
+                      <Input value={form.fare_total} onChange={e=>setForm(p=>({...p,fare_total:e.target.value}))} />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="md:col-span-7 flex justify-end">
+                <Button disabled={saving || claim.status!=='DRAFT'} onClick={persistCore}>Save Core</Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Segments table */}
-          <div className="bg-white border rounded shadow-sm p-4 text-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-medium">Travel Segments</div>
-              <button onClick={()=>setSegmentsDraft(d=>[...d,{ departure_from:'', departure_to:'', depart_date:'', depart_time:'', arrive_date:'', arrive_time:'', mode:'', distance_km:'' }])} className="px-3 py-1 text-xs rounded bg-slate-700 text-white">Add Row</button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead className="bg-slate-100">
-                  <tr>
-                    <th className="p-2 text-left">Departure From</th>
-                    <th className="p-2 text-left">Departure To</th>
-                    <th className="p-2 text-left">Date of Departure</th>
-                    <th className="p-2 text-left">Time of Departure</th>
-                    <th className="p-2 text-left">Date of Arrival</th>
-                    <th className="p-2 text-left">Time of Arrival</th>
-                    <th className="p-2 text-left">Mode</th>
-                    <th className="p-2 text-left">Distance (KM)</th>
-                    <th className="p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(claim.segments||[]).map(seg => (
-                    <tr key={seg.id} className="border-b bg-emerald-50/40">
-                      <td className="p-1"><Input defaultValue={seg.departure_from} onBlur={e=>updateSegmentRow({...seg,departure_from:e.target.value})} /></td>
-                      <td className="p-1"><Input defaultValue={seg.departure_to} onBlur={e=>updateSegmentRow({...seg,departure_to:e.target.value})} /></td>
-                      <td className="p-1"><Input type="date" defaultValue={(seg.depart_date||'').slice(0,10)} onBlur={e=>updateSegmentRow({...seg,depart_date:e.target.value})} /></td>
-                      <td className="p-1"><Input type="time" defaultValue={seg.depart_time||''} onBlur={e=>updateSegmentRow({...seg,depart_time:e.target.value})} /></td>
-                      <td className="p-1"><Input type="date" defaultValue={(seg.arrive_date||'').slice(0,10)} onBlur={e=>updateSegmentRow({...seg,arrive_date:e.target.value})} /></td>
-                      <td className="p-1"><Input type="time" defaultValue={seg.arrive_time||''} onBlur={e=>updateSegmentRow({...seg,arrive_time:e.target.value})} /></td>
-                      <td className="p-1"><Input defaultValue={seg.mode||''} onBlur={e=>updateSegmentRow({...seg,mode:e.target.value})} /></td>
-                      <td className="p-1"><Input defaultValue={seg.distance_km||''} onBlur={e=>updateSegmentRow({...seg,distance_km:Number(e.target.value||0)})} /></td>
-                      <td className="p-1 text-right space-x-2">
-                        <button className="text-red-600" onClick={()=>removeSegment(seg.id)}>Delete</button>
-                      </td>
+          <Card>
+            <CardContent className="p-4 text-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-medium">Travel Segments</div>
+                <Button size="sm" onClick={()=>setSegmentsDraft(d=>[...d,{ departure_from:'', departure_to:'', depart_date:'', depart_time:'', arrive_date:'', arrive_time:'', mode:'', distance_km:'' }])}>Add Row</Button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-accent/30">
+                    <tr>
+                      <th className="p-2 text-left">Departure From</th>
+                      <th className="p-2 text-left">Departure To</th>
+                      <th className="p-2 text-left">Date of Departure</th>
+                      <th className="p-2 text-left">Time of Departure</th>
+                      <th className="p-2 text-left">Date of Arrival</th>
+                      <th className="p-2 text-left">Time of Arrival</th>
+                      <th className="p-2 text-left">Mode</th>
+                      <th className="p-2 text-left">Distance (KM)</th>
+                      <th className="p-2"></th>
                     </tr>
-                  ))}
-                  {segmentsDraft.map((r,idx)=> (
-                    <tr key={idx} className="border-b">
-                      <td className="p-1"><Input value={r.departure_from} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,departure_from:e.target.value}:x))} /></td>
-                      <td className="p-1"><Input value={r.departure_to} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,departure_to:e.target.value}:x))} /></td>
-                      <td className="p-1"><Input type="date" value={r.depart_date||''} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,depart_date:e.target.value}:x))} /></td>
-                      <td className="p-1"><Input type="time" value={r.depart_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,depart_time:e.target.value}:x))} /></td>
-                      <td className="p-1"><Input type="date" value={r.arrive_date||''} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,arrive_date:e.target.value}:x))} /></td>
-                      <td className="p-1"><Input type="time" value={r.arrive_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,arrive_time:e.target.value}:x))} /></td>
-                      <td className="p-1"><Input value={r.mode} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,mode:e.target.value}:x))} /></td>
-                      <td className="p-1"><Input value={r.distance_km} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,distance_km:e.target.value}:x))} /></td>
-                      <td className="p-1 text-right space-x-2">
-                        <button className="text-emerald-600" onClick={()=>{ const seg = segmentsDraft[idx]; addSegment({ ...seg, distance_km: Number(seg.distance_km||0) }); setSegmentsDraft(d=>d.filter((_,i)=>i!==idx)); }}>✔</button>
-                        <button className="text-red-600" onClick={()=>setSegmentsDraft(d=>d.filter((_,i)=>i!==idx))}>✕</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Totals Summary - hidden per requirement */}
-          {/* Removed the A-G totals grid from the form UI */}
+                  </thead>
+                  <tbody>
+                    {(claim.segments||[]).map(seg => (
+                      <tr key={seg.id} className="border-b bg-emerald-50/40">
+                        <td className="p-1"><Input defaultValue={seg.departure_from} onBlur={e=>updateSegmentRow({...seg,departure_from:e.target.value})} /></td>
+                        <td className="p-1"><Input defaultValue={seg.departure_to} onBlur={e=>updateSegmentRow({...seg,departure_to:e.target.value})} /></td>
+                        <td className="p-1"><Input type="date" defaultValue={(seg.depart_date||'').slice(0,10)} onBlur={e=>updateSegmentRow({...seg,depart_date:e.target.value})} /></td>
+                        <td className="p-1"><Input type="time" defaultValue={seg.depart_time||''} onBlur={e=>updateSegmentRow({...seg,depart_time:e.target.value})} /></td>
+                        <td className="p-1"><Input type="date" defaultValue={(seg.arrive_date||'').slice(0,10)} onBlur={e=>updateSegmentRow({...seg,arrive_date:e.target.value})} /></td>
+                        <td className="p-1"><Input type="time" defaultValue={seg.arrive_time||''} onBlur={e=>updateSegmentRow({...seg,arrive_time:e.target.value})} /></td>
+                        <td className="p-1"><Input defaultValue={seg.mode||''} onBlur={e=>updateSegmentRow({...seg,mode:e.target.value})} /></td>
+                        <td className="p-1"><Input defaultValue={seg.distance_km||''} onBlur={e=>updateSegmentRow({...seg,distance_km:Number(e.target.value||0)})} /></td>
+                        <td className="p-1 text-right space-x-2">
+                          <button className="text-red-600" onClick={()=>removeSegment(seg.id)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {segmentsDraft.map((r,idx)=> (
+                      <tr key={idx} className="border-b">
+                        <td className="p-1"><Input value={r.departure_from} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,departure_from:e.target.value}:x))} /></td>
+                        <td className="p-1"><Input value={r.departure_to} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,departure_to:e.target.value}:x))} /></td>
+                        <td className="p-1"><Input type="date" value={r.depart_date||''} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,depart_date:e.target.value}:x))} /></td>
+                        <td className="p-1"><Input type="time" value={r.depart_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,depart_time:e.target.value}:x))} /></td>
+                        <td className="p-1"><Input type="date" value={r.arrive_date||''} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,arrive_date:e.target.value}:x))} /></td>
+                        <td className="p-1"><Input type="time" value={r.arrive_time} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,arrive_time:e.target.value}:x))} /></td>
+                        <td className="p-1"><Input value={r.mode} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,mode:e.target.value}:x))} /></td>
+                        <td className="p-1"><Input value={r.distance_km} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,distance_km:e.target.value}:x))} /></td>
+                        <td className="p-1 text-right space-x-2">
+                          <button className="text-emerald-600" onClick={()=>{ const seg = segmentsDraft[idx]; addSegment({ ...seg, distance_km: Number(seg.distance_km||0) }); setSegmentsDraft(d=>d.filter((_,i)=>i!==idx)); }}>✔</button>
+                          <button className="text-red-600" onClick={()=>setSegmentsDraft(d=>d.filter((_,i)=>i!==idx))}>✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Documents */}
-          <div className="bg-white border rounded shadow-sm p-4 text-sm space-y-4">
-            <div className="font-medium">Documents</div>
-            {['FUEL','TOLL','PICTURE','REPORT'].map(cat => {
-              const docs = (claim.documents||[]).filter(d=>d.category===cat);
-              const isReport = cat==='REPORT';
-              return (
-                <div key={cat} className="border rounded p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-xs">{cat} {isReport && <span className="text-rose-600">(At least one required)</span>}</div>
-                    <label className="text-xs px-2 py-1 bg-slate-700 text-white rounded cursor-pointer">Upload
-                      <input type="file" className="hidden" multiple={true} onChange={e=>{ if(e.target.files?.length){ handleDocUpload(cat, e.target.files); e.target.value=''; } }} />
-                    </label>
+          <Card>
+            <CardContent className="text-sm space-y-4 p-6">
+              <div className="font-medium">Documents</div>
+              {['FUEL','TOLL','PICTURE','REPORT'].map(cat => {
+                const docs = (claim.documents||[]).filter(d=>d.category===cat);
+                const isReport = cat==='REPORT';
+                return (
+                  <div key={cat} className="border rounded p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-medium text-xs">{cat} {isReport && <span className="text-rose-600">(At least one required)</span>}</div>
+                      <label className="text-xs px-2 py-1 bg-accent/40 border rounded cursor-pointer">Upload
+                        <input type="file" className="hidden" multiple={true} onChange={e=>{ if(e.target.files?.length){ handleDocUpload(cat, e.target.files); e.target.value=''; } }} />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {docs.length===0 && <div className="text-muted-foreground text-xs">No files</div>}
+                      {docs.map(d => (
+                        <div key={d.id} className="relative">
+                          {(() => {
+                            let p = d.file_path || '';
+                            // Normalize slashes and strip leading ./ or /\
+                            p = p.replace(/^\\+|^\/+/, '');
+                            const isAbsolute = /^https?:\/\//i.test(p);
+                            const base = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+                            const url = isAbsolute ? p : (p.startsWith('uploads/') ? `${base}/${p}` : `${base}/${p}`);
+                            return (
+                              <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white hover:bg-accent/30 max-w-[160px] truncate">{p.split('/').pop()}</a>
+                            );
+                          })()}
+                          {(!isReport || docs.length>0) && (
+                            <button onClick={()=>handleDocDelete(d.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-5 w-5 text-xs">×</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {docs.length===0 && <div className="text-slate-500 text-xs">No files</div>}
-                    {docs.map(d => (
-                      <div key={d.id} className="relative">
-                        {(() => {
-                          let p = d.file_path || '';
-                          // Normalize slashes and strip leading ./ or /\
-                          p = p.replace(/^\\+|^\/+/, '');
-                          const isAbsolute = /^https?:\/\//i.test(p);
-                          const base = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
-                          const url = isAbsolute ? p : (p.startsWith('uploads/') ? `${base}/${p}` : `${base}/${p}`);
-                          return (
-                            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white hover:bg-slate-50 max-w-[160px] truncate">{p.split('/').pop()}</a>
-                          );
-                        })()}
-                        {(!isReport || docs.length>0) && (
-                          <button onClick={()=>handleDocDelete(d.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-5 w-5 text-xs">×</button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </CardContent>
+          </Card>
 
         </div>
       )}
@@ -429,12 +437,12 @@ function DecisionForm({ claim, onDone, onClose }){
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-xs text-slate-500">Remarks (optional)</label>
+        <label className="text-xs text-muted-foreground">Remarks (optional)</label>
         <textarea value={remarks} onChange={e=>setRemarks(e.target.value)} className="w-full border rounded p-2 text-xs" rows={3} />
       </div>
       <div className="flex gap-2 justify-end">
-        <button disabled={submitting} onClick={()=>act('REJECT')} className="px-3 py-1 text-xs rounded bg-red-600 text-white disabled:opacity-40">Reject</button>
-        <button disabled={submitting} onClick={()=>act('APPROVE')} className="px-3 py-1 text-xs rounded bg-emerald-600 text-white disabled:opacity-40">Approve</button>
+        <Button disabled={submitting} onClick={()=>act('REJECT')} variant="destructive" size="sm">Reject</Button>
+        <Button disabled={submitting} onClick={()=>act('APPROVE')} size="sm">Approve</Button>
       </div>
     </div>
   );

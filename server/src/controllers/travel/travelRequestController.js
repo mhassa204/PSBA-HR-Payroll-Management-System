@@ -161,5 +161,25 @@ module.exports = {
     }
     const full = await travelService.updateStatusFlexible(id, targetStatus, meEmpId);
     res.json({ success: true, request: full });
+  },
+  recommend: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      const id = Number(req.params.id);
+      const result = await travelService.recommendOrClear(id, ctx.meEmpId, 'RECOMMEND', ctx);
+      res.json({ success: true, request: result });
+    } catch (e) {
+      res.status(400).json({ success: false, error: e.message });
+    }
+  },
+  clearRecommendation: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      const id = Number(req.params.id);
+      const result = await travelService.recommendOrClear(id, ctx.meEmpId, 'CLEAR', ctx);
+      res.json({ success: true, request: result });
+    } catch (e) {
+      res.status(400).json({ success: false, error: e.message });
+    }
   }
 };

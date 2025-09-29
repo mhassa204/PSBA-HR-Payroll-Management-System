@@ -2,23 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getMyTravelRequests, getTravelRequest, createTravelRequest, getTravelReportees } from '../../../services/travelService';
 import SearchableSelect from '../../../components/ui/SearchableSelect';
 import { useAuthStore } from '../../auth/authStore';
-
-const Card = ({ children, className = '' }) => (
-  <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>
-    {children}
-  </div>
-);
-
-const Header = ({ title, actions }) => (
-  <div className="flex items-center justify-between p-4 border-b border-slate-200">
-    <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
-    <div className="flex gap-2">{actions}</div>
-  </div>
-);
-
-const Input = (props) => (
-  <input {...props} className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${props.className||''}`} />
-);
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardAction } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import EnhancedModal from '@/components/ui/EnhancedModal';
 
 export default function TravelRequestsPage() {
   const can = useAuthStore(s => s.can);
@@ -97,168 +85,172 @@ export default function TravelRequestsPage() {
     } catch (e) { console.error(e); }
   };
 
+  const labelAction = (a) => a === 'RECOMMENDED' ? 'Recommended' : a;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">TADA Requests</h1>
+        <h1 className="text-2xl font-bold">TADA Requests</h1>
+        {!loading && (
+          <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
+        )}
       </div>
 
       {can('travel.create') && (
         <Card>
-          <Header title="New TADA Request" />
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="text-sm text-slate-600">Employees (multi-select)</label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {selectedEmployees.map(id => {
-                  const opt = employeeOptions.find(o => String(o.value) === String(id));
-                  return <span key={id} className="inline-flex items-center px-2 py-1 bg-slate-100 border rounded text-xs">{opt?.label} <button className="ml-1 text-slate-500" onClick={() => setSelectedEmployees(prev => prev.filter(x => x!==id))}>×</button></span>
-                })}
+          <CardHeader className="border-b">
+            <CardTitle>New TADA Request</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="text-sm text-muted-foreground">Employees (multi-select)</label>
+                <div className="flex flex-wrap gap-2 mb-2 mt-1">
+                  {selectedEmployees.map(id => {
+                    const opt = employeeOptions.find(o => String(o.value) === String(id));
+                    return (
+                      <Badge key={id} variant="outline" className="gap-2">
+                        {opt?.label}
+                        <button className="ml-1 opacity-60 hover:opacity-100" onClick={() => setSelectedEmployees(prev => prev.filter(x => x!==id))}>×</button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+                <SearchableSelect
+                  options={employeeOptions}
+                  value=""
+                  onChange={(val) => {
+                    const id = Number(val);
+                    if (!id) return;
+                    setSelectedEmployees(prev => prev.includes(id) ? prev : [...prev, id]);
+                  }}
+                  placeholder="Type to search employees..."
+                  allowClear
+                />
               </div>
-              <SearchableSelect
-                options={employeeOptions}
-                value=""
-                onChange={(val) => {
-                  const id = Number(val);
-                  if (!id) return;
-                  setSelectedEmployees(prev => prev.includes(id) ? prev : [...prev, id]);
-                }}
-                placeholder="Type to search employees..."
-                allowClear
-              />
+              <div>
+                <label className="text-sm text-muted-foreground">Departure Date</label>
+                <Input type="date" name="departure_date" value={form.departure_date} onChange={onChange} />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground">Departure Time</label>
+                <Input type="time" name="departure_time" value={form.departure_time} onChange={onChange} />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground">Expected Return Date</label>
+                <Input type="date" name="expected_return_date" value={form.expected_return_date} onChange={onChange} />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground">Purpose of Travel</label>
+                <Input name="purpose" value={form.purpose} onChange={onChange} placeholder="e.g., Market visit" />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground">Destination</label>
+                <Input name="destination" value={form.destination} onChange={onChange} placeholder="e.g., Lahore, Karachi" />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground">Total Days of Travel</label>
+                <Input name="total_days" value={previewDays} readOnly placeholder="Auto-calculated" />
+              </div>
             </div>
-            <div>
-              <label className="text-sm text-slate-600">Departure Date</label>
-              <Input type="date" name="departure_date" value={form.departure_date} onChange={onChange} />
-            </div>
-            <div>
-              <label className="text-sm text-slate-600">Departure Time</label>
-              <Input type="time" name="departure_time" value={form.departure_time} onChange={onChange} />
-            </div>
-            <div>
-              <label className="text-sm text-slate-600">Expected Return Date</label>
-              <Input type="date" name="expected_return_date" value={form.expected_return_date} onChange={onChange} />
-            </div>
-            <div>
-              <label className="text-sm text-slate-600">Purpose of Travel</label>
-              <Input name="purpose" value={form.purpose} onChange={onChange} placeholder="e.g., Market visit" />
-            </div>
-            <div>
-              <label className="text-sm text-slate-600">Destination</label>
-              <Input name="destination" value={form.destination} onChange={onChange} placeholder="e.g., Lahore, Karachi" />
-            </div>
-            <div>
-              <label className="text-sm text-slate-600">Total Days of Travel</label>
-              <Input name="total_days" value={previewDays} readOnly placeholder="Auto-calculated" />
-            </div>
-          </div>
-          <div className="p-4 border-t border-slate-200 flex justify-end">
-            <button onClick={onCreate} className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg">Create</button>
-          </div>
+          </CardContent>
+          <CardFooter className="border-t justify-end">
+            <Button onClick={onCreate}>Create</Button>
+          </CardFooter>
         </Card>
       )}
 
       <Card>
-        <Header title="My TADA Requests" />
-        <div className="divide-y">
-          {loading && <div className="p-4 text-slate-500">Loading...</div>}
-          {!loading && list.length === 0 && <div className="p-6 text-slate-500">No requests found</div>}
-          {list.map(r => (
-            <div key={r.id} className="p-4 flex items-center justify-between text-sm">
-              <div>
-                <div className="font-medium text-slate-800">{r.purpose || '—'}</div>
-                <div className="text-slate-500">{r.destination ? `${r.destination} · ` : ''}{String(r.departure_date).slice(0,10)} {r.departure_time ? `at ${r.departure_time}`:''} → {String(r.expected_return_date).slice(0,10)} · {r.total_days ? `${r.total_days} day(s)` : '—'}</div>
+        <CardHeader className="border-b">
+          <CardTitle>My TADA Requests</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="divide-y">
+            {loading && <div className="p-4 text-muted-foreground">Loading...</div>}
+            {!loading && list.length === 0 && <div className="p-6 text-muted-foreground">No requests found</div>}
+            {list.map(r => (
+              <div key={r.id} className="p-4 flex items-center justify-between text-sm">
+                <div className="space-y-0.5">
+                  <div className="font-medium">{r.purpose || '—'}</div>
+                  <div className="text-muted-foreground">{r.destination ? `${r.destination} · ` : ''}{String(r.departure_date).slice(0,10)} {r.departure_time ? `at ${r.departure_time}`:''} → {String(r.expected_return_date).slice(0,10)} · {r.total_days ? `${r.total_days} day(s)` : '—'}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{r.status || 'CREATED'}</Badge>
+                  <Button variant="outline" size="sm" onClick={()=>openDetail(r.id)}>View</Button>
+                  {r.status === 'CREATED' && (
+                    <Button variant="destructive" size="sm" onClick={()=>onDelete(r.id)}>Delete</Button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700">{r.status || 'CREATED'}</span>
-                <button onClick={()=>openDetail(r.id)} className="px-3 py-1 rounded-md bg-slate-100 text-slate-700 border">View</button>
-                {r.status === 'CREATED' && (
-                  <button onClick={()=>onDelete(r.id)} className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white">Delete</button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </CardContent>
       </Card>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-slate-900/50" onClick={()=>setOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4">
-            <div className="flex items-center justify-between p-4 border-b">
-              <div className="font-semibold text-slate-800">TADA Request Details</div>
-              <button onClick={()=>setOpen(false)} className="text-slate-500 hover:text-slate-700">✕</button>
-            </div>
-            <div className="p-4 space-y-4 text-sm">
-              {!selected && <div className="text-slate-500">Loading...</div>}
-              {selected && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-slate-500">Submission Date</div>
-                      <div className="font-medium text-slate-800">{String(selected.submission_date).slice(0,10)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500">Purpose</div>
-                      <div className="font-medium text-slate-800">{selected.purpose || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500">Destination</div>
-                      <div className="font-medium text-slate-800">{selected.destination || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500">Departure</div>
-                      <div className="font-medium text-slate-800">{String(selected.departure_date).slice(0,10)} {selected.departure_time ? `at ${selected.departure_time}`: ''}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500">Expected Return</div>
-                      <div className="font-medium text-slate-800">{String(selected.expected_return_date).slice(0,10)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500">Total Days</div>
-                      <div className="font-medium text-slate-800">{selected.total_days || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500">Employees</div>
-                      <div className="font-medium text-slate-800 space-y-1">
-                        {(selected.attendees||[]).length
-                          ? (selected.attendees||[]).map(a => (
-                              <div key={a.id}>{a.employee.full_name} — {a.employee.cnic || 'N/A'}</div>
-                            ))
-                          : '—'}
+      <EnhancedModal isOpen={open} onClose={()=>setOpen(false)} title="TADA Request Details" size="lg">
+        <div className="p-4 space-y-4 text-sm">
+          {!selected && <div className="text-muted-foreground">Loading...</div>}
+          {selected && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-muted-foreground">Submission Date</div>
+                  <div className="font-medium">{String(selected.submission_date).slice(0,10)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Purpose</div>
+                  <div className="font-medium">{selected.purpose || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Destination</div>
+                  <div className="font-medium">{selected.destination || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Departure</div>
+                  <div className="font-medium">{String(selected.departure_date).slice(0,10)} {selected.departure_time ? `at ${selected.departure_time}`: ''}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Expected Return</div>
+                  <div className="font-medium">{String(selected.expected_return_date).slice(0,10)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Total Days</div>
+                  <div className="font-medium">{selected.total_days || '—'}</div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-muted-foreground">Employees</div>
+                  <div className="font-medium space-y-1">
+                    {(selected.attendees||[]).length
+                      ? (selected.attendees||[]).map(a => (
+                          <div key={a.id}>{a.employee.full_name} — {a.employee.cnic || 'N/A'}</div>
+                        ))
+                      : '—'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <Badge variant="outline">Status: {selected.status}</Badge>
+              </div>
+
+              <div className="pt-2">
+                <div className="font-medium mb-2">Status History</div>
+                <div className="rounded-lg border divide-y">
+                  {(selected.statusEntries||[]).length === 0 && <div className="p-3 text-muted-foreground">No history</div>}
+                  {(selected.statusEntries||[]).map(s => (
+                    <div key={s.id} className="p-3 flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">{labelAction(s.action)}</div>
+                        <div className="text-xs text-muted-foreground">by {s.actor?.full_name || '—'} at {new Date(s.createdAt).toLocaleString()}</div>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2">
-                    <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-700">Status: {selected.status}</span>
-                    {false && selected.status === 'CREATED' && (
-                      <div className="flex items-center gap-2">
-                        {/* Decision buttons removed as per new requirements (handled via Manage/Approvals with dropdown) */}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-2">
-                    <div className="font-medium text-slate-800 mb-2">Status History</div>
-                    <div className="rounded-lg border border-slate-200 divide-y">
-                      {(selected.statusEntries||[]).length === 0 && <div className="p-3 text-slate-500">No history</div>}
-                      {(selected.statusEntries||[]).map(s => (
-                        <div key={s.id} className="p-3 flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-slate-800">{s.action}</div>
-                            <div className="text-slate-500 text-xs">by {s.actor?.full_name || '—'} at {new Date(s.createdAt).toLocaleString()}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </EnhancedModal>
     </div>
   );
 }

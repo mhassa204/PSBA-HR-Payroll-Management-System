@@ -64,21 +64,40 @@ module.exports = {
   },
 
   listPendingApprovals: async (ctx) => {
+    const filters = [];
+
+    // New: Recommendation stage for immediate in-charge of applicant
+    if (ctx.meEmpId) {
+      filters.push({
+        is_deleted: false,
+        status: 'CREATED',
+        applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) } } },
+        statusEntries: { none: { action: 'RECOMMENDED' } }
+      });
+    }
+
+    // Ops/DG see CREATED but only after recommendation exists
     const allowedTypes = [];
     if (ctx.isSuperAdmin) { allowedTypes.push('BAZAAR','HEAD_OFFICE'); }
     else {
       if (ctx.isOps) allowedTypes.push('BAZAAR');
       if (ctx.isDG) allowedTypes.push('HEAD_OFFICE');
     }
-    if (!ctx.meEmpId || allowedTypes.length === 0) return [];
-    return prisma.travelRequest.findMany({
-      where: {
+    if (ctx.meEmpId && allowedTypes.length) {
+      filters.push({
         is_deleted: false,
         status: 'CREATED',
-        applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { is: { type: { in: allowedTypes } } } } } }
-      },
+        applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { is: { type: { in: allowedTypes } } } } } },
+        statusEntries: { some: { action: 'RECOMMENDED' }, none: { action: { in: ['APPROVED','REJECTED'] } } }
+      });
+    }
+
+    if (!filters.length) return [];
+
+    return prisma.travelRequest.findMany({
+      where: { OR: filters },
       orderBy: { createdAt: 'desc' },
-      include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } }
+      include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } }, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } }
     });
   },
 
@@ -141,6 +160,29 @@ module.exports = {
     await prisma.travelRequest.update({ where: { id }, data: { status: targetStatus } });
     await prisma.travelRequestStatusEntry.create({ data: { request_id: id, action: targetStatus, actor_employee_id: actorEmpId } });
     return prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+  },
+
+  // New: decision API for recommendation/clear without changing status
+  recommendOrClear: async (id, actorEmpId, action, ctx) => {
+    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { statusEntries: true, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
+    if (!req || req.is_deleted) throw new Error('Not found');
+    if (req.status !== 'CREATED') throw new Error('Only CREATED requests can be recommended');
+    // Check recommender eligibility
+    const canRecommend = ctx.isSuperAdmin || (req.applicant?.employmentRecords||[]).some(er => String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
+    if (!canRecommend) throw new Error('Not authorized to recommend');
+    const last = req.statusEntries[req.statusEntries.length-1];
+    const act = String(action||'').toUpperCase();
+    if (act === 'RECOMMEND') {
+      if (last && last.action==='RECOMMENDED') return req; // idempotent
+      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId } });
+      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    } else if (act === 'CLEAR') {
+      if (!last || last.action!=='RECOMMENDED') throw new Error('Nothing to clear');
+      if (last.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin) throw new Error('Cannot clear another user\'s recommendation');
+      await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
+      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    }
+    throw new Error('Invalid action');
   },
 
   listReporteesPlusSelf: async (meEmpId) => {
