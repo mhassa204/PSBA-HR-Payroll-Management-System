@@ -37,33 +37,75 @@ module.exports = {
     const claims = await prisma.travelClaim.findMany({
       where: {
         is_deleted: false,
-        ...(isSuperAdmin ? {} : { OR: [ { employee_id }, { request: { applicant_id: employee_id } } ] })
+        ...(isSuperAdmin ? {} : {
+          OR: [
+            { employee_id },
+            { request: { applicant_id: employee_id } },
+            // New: allow reporting officer to view their reportees' claims (within-city as well)
+            { employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: String(employee_id) } } } }
+          ]
+        })
       },
-      include: { documents: true, segments: true, employee: true, request: true },
+      include: {
+        documents: true, segments: true,
+        employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } },
+        request: true
+      },
       orderBy: { createdAt: 'desc' }
     });
     return claims;
   },
   createClaim: async (employee_id, data) => {
-    if(!data.travel_request_id) throw new Error('travel_request_id required');
+    // Support two modes:
+    // 1) Request-linked (existing)
+    // 2) Within-city (no travel_request_id) for a reportee of the current user; multiple allowed
     if(!data.employee_id) throw new Error('employee_id required');
-    const request = await prisma.travelRequest.findUnique({ where: { id: Number(data.travel_request_id) }, include: { attendees: true } });
-    if(!request || request.applicant_id !== employee_id) throw new Error('Forbidden');
-    if(request.status !== 'APPROVED') throw new Error('Request not approved');
     const attendeeEmpId = Number(data.employee_id);
-    const isAttendee = request.attendees.some(a=>a.employee_id===attendeeEmpId);
-    if(!isAttendee) throw new Error('Employee not attendee');
-    const existing = await prisma.travelClaim.findFirst({ where: { travel_request_id: request.id, employee_id: attendeeEmpId, is_deleted: false } });
-    if(existing) throw new Error('Claim already exists');
+
+    if (data.travel_request_id) {
+      // ...existing request-linked creation path...
+      const request = await prisma.travelRequest.findUnique({ where: { id: Number(data.travel_request_id) }, include: { attendees: true } });
+      if(!request || request.applicant_id !== employee_id) throw new Error('Forbidden');
+      if(request.status !== 'APPROVED') throw new Error('Request not approved');
+      const isAttendee = request.attendees.some(a=>a.employee_id===attendeeEmpId);
+      if(!isAttendee) throw new Error('Employee not attendee');
+      const existing = await prisma.travelClaim.findFirst({ where: { travel_request_id: request.id, employee_id: attendeeEmpId, is_deleted: false } });
+      if(existing) throw new Error('Claim already exists');
+      const rates = await getRatesForEmployee(attendeeEmpId);
+      const created = await prisma.travelClaim.create({ data: { travel_request_id: request.id, employee_id: attendeeEmpId, from_date: request.departure_date, to_date: request.expected_return_date, per_diem_days: 0, rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate, toll_tax_total: 0, transport_mode: 'OWN', fuel_total: 0, fare_total: 0 } });
+      return prisma.travelClaim.findUnique({ where: { id: created.id }, include: { documents: true, segments: true, request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } });
+    }
+
+    // New: Within-city creation (no travel request)
+    // Validate that the selected employee is either self or reports to the current user
+    if (attendeeEmpId !== employee_id) {
+      const reporteeEmployment = await prisma.employment.findFirst({ where: { employee_id: attendeeEmpId, is_current: true, is_deleted: false, reporting_officer_id: String(employee_id) }, include: { location: true } });
+      if(!reporteeEmployment) throw new Error('Employee is not your reportee');
+    }
     const rates = await getRatesForEmployee(attendeeEmpId);
-    const created = await prisma.travelClaim.create({ data: { travel_request_id: request.id, employee_id: attendeeEmpId, from_date: request.departure_date, to_date: request.expected_return_date, per_diem_days: 0, rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate, toll_tax_total: 0, transport_mode: 'OWN', fuel_total: 0, fare_total: 0 } });
-    return prisma.travelClaim.findUnique({ where: { id: created.id }, include: { documents: true, segments: true, request: true, employee: true } });
+    const created = await prisma.travelClaim.create({ data: {
+      travel_request_id: null,
+      employee_id: attendeeEmpId,
+      from_date: null,
+      to_date: null,
+      per_diem_days: 0,
+      rate_per_km: rates.rate_per_km,
+      per_diem_rate: rates.per_diem_rate,
+      toll_tax_total: 0,
+      transport_mode: 'OWN', fuel_total: 0, fare_total: 0
+    } });
+    return prisma.travelClaim.findUnique({ where: { id: created.id }, include: { documents: true, segments: true, request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } });
   },
   _canAccess(claim, employee_id, isSuperAdmin) {
     if(isSuperAdmin) return true;
     if(!claim) return false;
     if(claim.employee_id === employee_id) return true;
     if(claim.request && claim.request.applicant_id === employee_id) return true;
+    // New: reporting officer of the employee can access
+    if (claim.employee && claim.employee.employmentRecords) {
+      const isRO = claim.employee.employmentRecords.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(employee_id));
+      if (isRO) return true;
+    }
     return false;
   },
   getClaim: async (id, employee_id, isSuperAdmin) => {
@@ -71,14 +113,14 @@ module.exports = {
     if(!Number.isInteger(parsedId) || parsedId <= 0){
       throw new Error('Invalid claim id');
     }
-    const claim = await prisma.travelClaim.findUnique({ where: { id: parsedId }, include: { documents: true, segments: true, request: true, employee: true } });
+    const claim = await prisma.travelClaim.findUnique({ where: { id: parsedId }, include: { documents: true, segments: true, request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } });
     if(!claim || claim.is_deleted) return null;
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     // If draft and rates missing/zero, pull latest rates
     if(claim.status === 'DRAFT' && (!claim.rate_per_km || !claim.per_diem_rate)) {
       const rates = await getRatesForEmployee(claim.employee_id);
       const upd = await prisma.travelClaim.update({ where: { id: claim.id }, data: { rate_per_km: rates.rate_per_km, per_diem_rate: rates.per_diem_rate } });
-      return prisma.travelClaim.findUnique({ where: { id: upd.id }, include: { documents: true, segments: true, request: true, employee: true } });
+      return prisma.travelClaim.findUnique({ where: { id: upd.id }, include: { documents: true, segments: true, request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } });
     }
     return claim;
   },
@@ -173,7 +215,7 @@ module.exports = {
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
     const cat = String(category||'OTHER').toUpperCase();
     // Allow multiple REPORT uploads; submission will ensure at least one exists
-    const createMany = files.map(f => ({ claim_id: claim.id, category: cat, file_path: f._savedRelPath || f.path.replace(/.*uploads[\\\\/]/,'uploads/'), mime_type: f.mimetype, file_size: f.size }));
+    const createMany = files.map(f => ({ claim_id: claim.id, category: cat, file_path: f._savedRelPath || f.path.replace(/.*uploads[\\/]/,'uploads/'), mime_type: f.mimetype, file_size: f.size }));
     await prisma.travelClaimDocument.createMany({ data: createMany });
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true } });
   },
@@ -211,14 +253,14 @@ module.exports = {
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true, statusEntries: { orderBy: { createdAt: 'asc' } } } });
   },
   listPendingApprovals: async (ctx) => {
-    // Adjusted to new fixed statuses with strict stage guards
+    // Adjusted to support recommender stage for within-city (no request)
     const stageFilters = [];
 
-    // New: Recommendation stage (immediate in-charge of claim creator/applicant)
-    // Show SUBMITTED claims where applicant's reporting_officer_id == me and no recommendation yet
+    // Recommendation stage for immediate in-charge
     if (ctx.meEmpId) {
       stageFilters.push({
         status: 'SUBMITTED',
+        // Existing: request applicant's in-charge
         request: {
           applicant: {
             employmentRecords: {
@@ -228,9 +270,16 @@ module.exports = {
         },
         statusEntries: { none: { action: 'RECOMMENDED' } }
       });
+      // New: within-city — employee's in-charge
+      stageFilters.push({
+        status: 'SUBMITTED',
+        employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) } } },
+        request: null,
+        statusEntries: { none: { action: 'RECOMMENDED' } }
+      });
     }
 
-    // First stage pending -> SUBMITTED (no prior OPS/DG decision) but must be recommended already
+    // First stage (OPS/DG) requires recommendation
     const firstStageNone = { action: { in: ['OPS_APPROVED','OPS_REJECTED','DG_APPROVED','DG_REJECTED'] } };
     if (ctx.isOps || ctx.canApproveClaimOps) {
       stageFilters.push({
@@ -247,8 +296,7 @@ module.exports = {
       });
     }
 
-    // HR after first-stage approval -> status APPROVED
-    // Must have an OPS/DG approval and NO HR decision yet
+    // HR stage
     if (ctx.isHR) {
       stageFilters.push({
         status: 'APPROVED',
@@ -259,14 +307,11 @@ module.exports = {
       });
     }
 
-    // Accounts after HR -> status VERIFIED
-    // Must have HR approval and NO Accounts decision yet
-    // Additionally, if the current user was the HR approver, exclude it from their pending list
+    // Accounts stage
     if (ctx.isAccountsApprover) {
       stageFilters.push({
         status: 'VERIFIED',
         statusEntries: {
-          // ensure HR approval exists by someone other than the current user
           some: { AND: [ { action: 'HR_APPROVED' }, { NOT: { actor_employee_id: ctx.meEmpId } } ] },
           none: { action: { in: ['ACCOUNTS_APPROVED','ACCOUNTS_REJECTED'] } }
         }
@@ -313,12 +358,16 @@ module.exports = {
     };
     const FIRST_STAGE_ACTOR = deriveFirstStage();
 
-    const rejectionMap = { OPS: 'OPS_REJECTED', DG: 'DG_REJECTED', HR: 'HR_REJECTED', ACCOUNTS: 'ACCOUNTS_REJECTED' };
+    const rejectionMap = { OPS: 'OPS_REJECTED', DG: 'DG_REJECTED', HR: 'HR_REJECTED', ACCOUNTS: 'ACCOUNTS_REJECTED', RECOMMENDER: 'RECOMMENDER_REJECTED' };
     const canActStage = (stageKey) => {
       if (ctx.isSuperAdmin) return true;
       if (stageKey === 'RECOMMENDER') {
+        // Allow recommendation by immediate in-charge of applicant (request-linked) or the employee (within-city)
         const applicantEmps = claim.request?.applicant?.employmentRecords || [];
-        return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
+        const employeeEmps = claim.employee?.employmentRecords || [];
+        const me = String(ctx.meEmpId||'');
+        return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === me)
+            || employeeEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === me);
       }
       if (stageKey === 'OPS') return (ctx.isOps || ctx.canApproveClaimOps);
       if (stageKey === 'DG') return (ctx.isDG || ctx.canApproveClaimDG);
@@ -372,10 +421,10 @@ module.exports = {
     const isApprovalAction = (a) => ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'].includes(a);
     const REJECTION_STATUSES = new Set(['REJECTED','REJECTED_OPS','REJECTED_DG','REJECTED_HR','REJECTED_ACCOUNTS']);
     // Map a status entry action to its stage key
-    const mapActionToStage = (act) => act.startsWith('OPS_') ? 'OPS' : act.startsWith('DG_') ? 'DG' : act.startsWith('HR_') ? 'HR' : act.startsWith('ACCOUNTS_') ? 'ACCOUNTS' : (act==='RECOMMENDED' ? 'RECOMMENDER' : null);
+    const mapActionToStage = (act) => act.startsWith('OPS_') ? 'OPS' : act.startsWith('DG_') ? 'DG' : act.startsWith('HR_') ? 'HR' : act.startsWith('ACCOUNTS_') ? 'ACCOUNTS' : (act==='RECOMMENDED' ? 'RECOMMENDER' : (act==='RECOMMENDER_REJECTED' ? 'RECOMMENDER' : null));
 
     const assertAuthorized = (stage, intent) => {
-      const userIsLastApprover = lastEntry && lastEntry.actor_employee_id === actorEmpId && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED') && (isApprovalAction(lastEntry.action) ? approvalStatusMap[lastEntry.action].includes(claim.status) : claim.status==='SUBMITTED');
+      const userIsLastApprover = lastEntry && lastEntry.actor_employee_id === actorEmpId && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED' || lastEntry.action==='RECOMMENDER_REJECTED') && (isApprovalAction(lastEntry.action) ? approvalStatusMap[lastEntry.action].includes(claim.status) : (lastEntry.action==='RECOMMENDED' ? claim.status==='SUBMITTED' : REJECTION_STATUSES.has(claim.status)));
       if (!canActStage(stage)) {
         if (userIsLastApprover) {
           if (intent === 'APPROVE' || intent==='RECOMMEND') throw { __idempotentReturn: true };
@@ -398,7 +447,7 @@ module.exports = {
         const stage = determineNextStage();
         if (!stage) throw new Error('No further approvals allowed');
         // If the same user approved the previous stage, they cannot act on the next stage without CLEAR
-        if (lastEntry && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED') && lastEntry.actor_employee_id === actorEmpId) {
+        if (lastEntry && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED' || lastEntry.action==='RECOMMENDER_REJECTED') && lastEntry.actor_employee_id === actorEmpId) {
           const lastStage = mapActionToStage(lastEntry.action);
           if (stage !== lastStage) {
             throw new Error('You already decided the previous stage. Use CLEAR to undo your decision; you cannot act on the next stage.');
@@ -426,11 +475,16 @@ module.exports = {
         const stage = determineNextStage();
         if (!stage) throw new Error('No active stage to reject');
         // Block cross-stage re-decision by the same actor without CLEAR
-        if (lastEntry && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED') && lastEntry.actor_employee_id === actorEmpId) {
+        if (lastEntry && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED' || lastEntry.action==='RECOMMENDER_REJECTED') && lastEntry.actor_employee_id === actorEmpId) {
           const lastStage = mapActionToStage(lastEntry.action);
           if (stage !== lastStage) throw new Error('You already decided the previous stage. Use CLEAR to undo your decision before rejecting.');
         }
-        if (stage === 'RECOMMENDER') throw new Error('Recommenders cannot reject. Only Recommend or Clear.');
+        if (stage === 'RECOMMENDER') {
+          assertAuthorized('RECOMMENDER', 'REJECT');
+          await updateStatusSafe('REJECTED');
+          await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDER_REJECTED', actor_employee_id: actorEmpId, remarks: remarks || null } });
+          return reload();
+        }
         assertAuthorized(stage, 'REJECT');
         const rejectionAction = rejectionMap[stage];
         let rejectedStatus = stage === 'OPS' ? 'REJECTED_OPS' : stage === 'DG' ? 'REJECTED_DG' : stage === 'HR' ? 'REJECTED_HR' : 'REJECTED_ACCOUNTS';
@@ -440,7 +494,7 @@ module.exports = {
       } else if (actionUpper === 'CLEAR') {
         if (!lastEntry) throw new Error('No decision to clear');
         const isApproval = isApprovalAction(lastEntry.action);
-        const isRejection = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED'].includes(lastEntry.action);
+        const isRejection = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED','RECOMMENDER_REJECTED'].includes(lastEntry.action);
         const isRecommendation = lastEntry.action === 'RECOMMENDED';
         const lastStage = mapActionToStage(lastEntry.action);
         if (lastEntry.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin) throw new Error('Cannot clear another user\'s decision');

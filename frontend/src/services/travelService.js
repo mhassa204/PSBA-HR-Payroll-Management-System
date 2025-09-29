@@ -15,6 +15,7 @@ export const updateTravelRequestStatus = (id, status) => api.patch(`/travel/requ
 // New recommender APIs
 export const recommendTravelRequest = (id) => api.post(`/travel/requests/${id}/recommend`).then(r => r.data.request);
 export const clearTravelRecommendation = (id) => api.post(`/travel/requests/${id}/recommend/clear`).then(r => r.data.request);
+export const recommendDecisionTravelRequest = (id, action) => api.post(`/travel/requests/${id}/recommend/decision`, { action }).then(r => r.data.request);
 
 // ================= New Travel Expense Claims (replaces legacy item-based claims) =================
 // Eligible approved travel requests (last 15 days) for which current user can file claims
@@ -22,7 +23,7 @@ export const getEligibleExpenseClaimRequests = () => api.get('/travel/expense-cl
 // List existing claims accessible to user
 export const listExpenseClaims = () => api.get('/travel/expense-claims').then(r => r.data.claims);
 
-// Create a claim (one per travel_request + attendee employee)
+// Create a claim (supports request-linked or within-city when travel_request_id is omitted)
 export const createExpenseClaim = (payload) => api.post('/travel/expense-claims', payload).then(r => r.data.claim);
 export const updateExpenseClaim = (id, payload) => api.put(`/travel/expense-claims/${id}`, payload).then(r => r.data.claim);
 // Fetch a specific claim (with segments/documents)

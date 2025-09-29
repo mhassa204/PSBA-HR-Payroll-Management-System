@@ -14,7 +14,8 @@ import {
   submitExpenseClaim,
   computeExpenseClaimTotals,
   listPendingExpenseClaimApprovals,
-  decideExpenseClaim
+  decideExpenseClaim,
+  getTravelReportees
 } from '../../../services/travelService';
 import { useAuthStore } from '../../auth/authStore';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
@@ -57,24 +58,32 @@ export default function TravelExpenseClaimsPage(){
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [loadingApprovals, setLoadingApprovals] = useState(false);
   const [decisionTarget, setDecisionTarget] = useState(null);
+  const [withinCityTab, setWithinCityTab] = useState('with-request'); // with-request | within-city
+  const [reportees, setReportees] = useState([]);
 
   const loadEligible = async () => {
     setLoadingEligible(true);
     try { const rs = await getEligibleExpenseClaimRequests(); setEligible(rs); } finally { setLoadingEligible(false);} };
   const loadClaims = async () => { setLoadingClaims(true); try { const rs = await listExpenseClaims(); setClaims(rs); } finally { setLoadingClaims(false);} };
   const loadPendingApprovals = async () => { setLoadingApprovals(true); try { const rs = await listPendingExpenseClaimApprovals(); setPendingApprovals(rs); } finally { setLoadingApprovals(false);} };
+  const loadReportees = async () => { try { const rs = await getTravelReportees(); setReportees(rs || []); } catch(_){} };
   useEffect(()=>{ loadEligible(); loadClaims(); },[]);
   useEffect(()=>{ if(approvalsTab==='approvals') loadPendingApprovals(); }, [approvalsTab]);
+  useEffect(()=>{ if (withinCityTab==='within-city' && reportees.length===0) loadReportees(); }, [withinCityTab]);
 
   const startClaim = (req) => { setSelectedRequest(req); setStep(2);} ;
   const chooseAttendee = (att) => { setSelectedAttendee(att); setPendingCreationAttendee(att); };
   const reqId = () => selectedRequest?.id;
 
+  const startWithinCityClaim = () => { setSelectedRequest(null); setStep(2); setWithinCityTab('within-city'); };
+  const chooseReportee = (emp) => { setSelectedAttendee({ employee_id: emp.id, employee: { full_name: emp.full_name, cnic: emp.cnic } }); setPendingCreationAttendee({ employee_id: emp.id }); };
+
   const confirmCreateClaim = async () => {
-    if(!pendingCreationAttendee || !selectedRequest) return;
+    if(!pendingCreationAttendee) return;
     try {
       setSaving(true);
-      const c = await createExpenseClaim({ travel_request_id: selectedRequest.id, employee_id: pendingCreationAttendee.employee_id });
+      const payload = selectedRequest ? { travel_request_id: selectedRequest.id, employee_id: pendingCreationAttendee.employee_id } : { employee_id: pendingCreationAttendee.employee_id };
+      const c = await createExpenseClaim(payload);
       setClaim(c);
       setForm(prev => ({
         ...prev,
@@ -177,12 +186,13 @@ export default function TravelExpenseClaimsPage(){
       {step===1 && (
         <Card>
           <CardHeader className="border-b">
-            <div className="flex gap-2">
-              <Button variant={tab==='eligible'? 'default':'outline'} size="sm" onClick={()=>setTab('eligible')}>Create New (Eligible Requests)</Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant={tab==='eligible'? 'default':'outline'} size="sm" onClick={()=>{ setTab('eligible'); setWithinCityTab('with-request'); }}>Create New (Eligible Requests)</Button>
               <Button variant={tab==='existing'? 'default':'outline'} size="sm" onClick={()=>setTab('existing')}>Existing Claims</Button>
+              <Button variant={tab==='eligible' && withinCityTab==='within-city'? 'default':'outline'} size="sm" onClick={()=>{ setTab('eligible'); setWithinCityTab('within-city'); }}>Create Within City</Button>
             </div>
           </CardHeader>
-          {tab==='eligible' && (
+          {tab==='eligible' && withinCityTab==='with-request' && (
             <CardContent className="space-y-2">
               <div className="font-semibold">Eligible Approved Requests (last 15 days)</div>
               {loadingEligible && <div className="text-sm text-muted-foreground">Loading...</div>}
@@ -200,23 +210,48 @@ export default function TravelExpenseClaimsPage(){
               </div>
             </CardContent>
           )}
+          {tab==='eligible' && withinCityTab==='within-city' && (
+            <CardContent className="space-y-3">
+              <div className="font-semibold">Select Employee (Your Reportees)</div>
+              {reportees.length===0 && <div className="text-sm text-muted-foreground">No reportees found.</div>}
+              <div className="grid md:grid-cols-2 gap-3">
+                {reportees.map(emp => (
+                  <button key={emp.id} onClick={()=>chooseReportee(emp)} className="p-3 border rounded text-left hover:bg-accent/30">
+                    <div className="font-medium">{emp.full_name} (#{emp.id})</div>
+                    <div className="text-xs text-muted-foreground">CNIC: {emp.cnic || '—'}</div>
+                  </button>
+                ))}
+              </div>
+              {pendingCreationAttendee && (
+                <div className="p-3 border rounded bg-accent/20 text-xs flex items-center justify-between">
+                  <div>Proceed creating within-city claim for employee #{pendingCreationAttendee.employee_id}?</div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={confirmCreateClaim}>Yes</Button>
+                    <Button size="sm" variant="destructive" onClick={()=>setPendingCreationAttendee(null)}>No</Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          )}
           {tab==='existing' && (
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="font-semibold">Existing Claims</div>
                 <Button variant="link" size="sm" onClick={loadClaims}>Refresh</Button>
               </div>
-              {loadingClaims && <div className="text-xs text-muted-foreground">Loading claims...</div>}
-              {!loadingClaims && claims.length===0 && <div className="text-xs text-muted-foreground">No claims yet.</div>}
+              {loadingClaims && <div className="text-sm text-muted-foreground">Loading claims...</div>}
+              {!loadingClaims && claims.length===0 && <div className="text-sm text-muted-foreground">No claims yet.</div>}
               <div className="divide-y">
                 {claims.map(c => (
-                  <div key={c.id} className="py-2 flex items-center justify-between text-xs">
+                  <div key={c.id} className="p-3 flex items-center justify-between text-sm">
                     <div className="space-y-0.5">
                       <div className="font-medium">Claim #{c.id} • Req #{c.travel_request_id} • Emp #{c.employee_id}</div>
                       <div className="text-muted-foreground">Distance {c.total_distance_km||0} km • Grand {c.grand_total||0}</div>
                     </div>
                     <div className="flex gap-2">
-                      <Button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> { setClaim(full); setForm(f=>({ ...f, from_date: full.from_date?.slice(0,10)||'', to_date: full.to_date?.slice(0,10)||'', rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'', toll_tax_total: full.toll_tax_total ?? f.toll_tax_total, transport_mode: full.transport_mode || f.transport_mode, fuel_total: full.fuel_total ?? f.fuel_total, fare_total: full.fare_total ?? f.fare_total })); }); }} className="">Open</Button>
+                      <Button onClick={()=>{ setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); setStep(3); getExpenseClaim(c.id).then(full=> { setClaim(full); setForm(f=>({ ...f, from_date: full.from_date?.slice(0,10)||'', to_date: full.to_date?.slice(0,10)||'', rate_per_km: full.rate_per_km||0, per_diem_rate: full.per_diem_rate||0, per_diem_days: full.per_diem_days||'', toll_tax_total: full.toll_tax_total ?? f.toll_tax_total, transport_mode: full.transport_mode || f.transport_mode, fuel_total: full.fuel_total ?? f.fuel_total, fare_total: full.fare_total ?? f.fare_total })); }); }}>
+                        Open
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -253,6 +288,8 @@ export default function TravelExpenseClaimsPage(){
           </CardContent>
         </Card>
       )}
+
+      {/* When within-city, step 2 is reached directly from startWithinCityClaim button in header, but we integrated into tab instead */}
 
       {step===3 && claim && (
         <div className="space-y-6">
@@ -326,7 +363,7 @@ export default function TravelExpenseClaimsPage(){
                 <Button size="sm" onClick={()=>setSegmentsDraft(d=>[...d,{ departure_from:'', departure_to:'', depart_date:'', depart_time:'', arrive_date:'', arrive_time:'', mode:'', distance_km:'' }])}>Add Row</Button>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-full text-xs">
+                <table className="min-w-full text-sm">
                   <thead className="bg-accent/30">
                     <tr>
                       <th className="p-2 text-left">Departure From</th>
@@ -352,7 +389,7 @@ export default function TravelExpenseClaimsPage(){
                         <td className="p-1"><Input defaultValue={seg.mode||''} onBlur={e=>updateSegmentRow({...seg,mode:e.target.value})} /></td>
                         <td className="p-1"><Input defaultValue={seg.distance_km||''} onBlur={e=>updateSegmentRow({...seg,distance_km:Number(e.target.value||0)})} /></td>
                         <td className="p-1 text-right space-x-2">
-                          <button className="text-red-600" onClick={()=>removeSegment(seg.id)}>Delete</button>
+                          <Button size="sm" variant="destructive" onClick={()=>removeSegment(seg.id)}>Delete</Button>
                         </td>
                       </tr>
                     ))}
@@ -367,8 +404,8 @@ export default function TravelExpenseClaimsPage(){
                         <td className="p-1"><Input value={r.mode} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,mode:e.target.value}:x))} /></td>
                         <td className="p-1"><Input value={r.distance_km} onChange={e=>setSegmentsDraft(d=>d.map((x,i)=>i===idx?{...x,distance_km:e.target.value}:x))} /></td>
                         <td className="p-1 text-right space-x-2">
-                          <button className="text-emerald-600" onClick={()=>{ const seg = segmentsDraft[idx]; addSegment({ ...seg, distance_km: Number(seg.distance_km||0) }); setSegmentsDraft(d=>d.filter((_,i)=>i!==idx)); }}>✔</button>
-                          <button className="text-red-600" onClick={()=>setSegmentsDraft(d=>d.filter((_,i)=>i!==idx))}>✕</button>
+                          <Button size="sm" onClick={()=>{ const seg = segmentsDraft[idx]; addSegment({ ...seg, distance_km: Number(seg.distance_km||0) }); setSegmentsDraft(d=>d.filter((_,i)=>i!==idx)); }}>Save</Button>
+                          <Button size="sm" variant="destructive" onClick={()=>setSegmentsDraft(d=>d.filter((_,i)=>i!==idx))}>Remove</Button>
                         </td>
                       </tr>
                     ))}
@@ -389,8 +426,8 @@ export default function TravelExpenseClaimsPage(){
                   <div key={cat} className="border rounded p-3">
                     <div className="flex items-center justify-between mb-2">
                       <div className="font-medium text-xs">{cat} {isReport && <span className="text-rose-600">(At least one required)</span>}</div>
-                      <label className="text-xs px-2 py-1 bg-accent/40 border rounded cursor-pointer">Upload
-                        <input type="file" className="hidden" multiple={true} onChange={e=>{ if(e.target.files?.length){ handleDocUpload(cat, e.target.files); e.target.value=''; } }} />
+                      <label className="relative inline-flex items-center px-3 py-1.5 text-xs border rounded bg-white hover:bg-accent/30 cursor-pointer">Upload
+                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" multiple={true} onChange={e=>{ if(e.target.files?.length){ handleDocUpload(cat, e.target.files); e.target.value=''; } }} />
                       </label>
                     </div>
                     <div className="flex flex-wrap gap-2">

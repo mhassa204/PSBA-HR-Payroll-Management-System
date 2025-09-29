@@ -40,14 +40,16 @@ export default function ManageExpenseClaimApprovals(){
   const isRecommenderFor = (claim) => {
     const ro = String(meEmpId||'');
     const applicantEmps = claim?.request?.applicant?.employmentRecords||[];
-    return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === ro);
+    const employeeEmps = claim?.employee?.employmentRecords||[];
+    return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === ro)
+        || employeeEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === ro);
   };
   const computeEligibility = (claim) => {
     if(!claim) return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
     const status = claim.status;
     const entries = claim.statusEntries || [];
     const approvalsOrder = ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'];
-    const rejectionActions = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED'];
+    const rejectionActions = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED','RECOMMENDER_REJECTED'];
     const lastApproval = [...entries].reverse().find(e=>approvalsOrder.includes(e.action) || e.action==='RECOMMENDED');
     const lastEntry = entries[entries.length-1];
     const hasRecommended = entries.some(e=>e.action==='RECOMMENDED');
@@ -60,7 +62,9 @@ export default function ManageExpenseClaimApprovals(){
       let canClear = false;
       if(lastEntry && rejectionActions.includes(lastEntry.action) && lastEntry.actor_employee_id === user?.employee_id){
         const stage = lastEntry.action.split('_')[0];
-        if( (stage==='OPS' && canOps) || (stage==='DG' && canDG) || (stage==='HR' && canHR) || (stage==='ACCOUNTS' && canAccounts) ) {
+        if(stage==='RECOMMENDER') {
+          canClear = isRecommenderFor(claim);
+        } else if( (stage==='OPS' && canOps) || (stage==='DG' && canDG) || (stage==='HR' && canHR) || (stage==='ACCOUNTS' && canAccounts) ) {
           canClear = true;
         }
       }
@@ -87,7 +91,8 @@ export default function ManageExpenseClaimApprovals(){
     // Recommender stage
     if(status==='SUBMITTED' && !hasRecommended){
       const canRecommend = isRecommenderFor(claim);
-      return { canApprove:false, canReject:false, canClear:false, canRecommend };
+      const canReject = canRecommend; // allow recommender to reject
+      return { canApprove:false, canReject, canClear:false, canRecommend };
     }
 
     // Forward-stage actions
@@ -177,16 +182,16 @@ export default function ManageExpenseClaimApprovals(){
               {list.map(c => {
                 const emp = c.employee; const empJob = currentEmployment(emp);
                 const eligibility = computeEligibility(c);
-                const onRowAction = async (claim, action) => {
-                  if(action==='') return;
-                  const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of', RECOMMEND:'recommend' };
+                const clickAction = async (claim, action) => {
+                  const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear last decision on', RECOMMEND:'recommend' };
                   if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
                   try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
                 };
+                const reqPart = c.travel_request_id ? ` • Req #${c.travel_request_id}` : '';
                 return (
                   <div key={c.id} className="p-4 flex items-center justify-between text-sm">
                     <div className="space-y-0.5">
-                      <div className="font-medium">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} ({empJob?.designation?.title || '—'})</div>
+                      <div className="font-medium">Claim #{c.id}{reqPart} • {emp?.full_name || 'Employee'} ({empJob?.designation?.title || '—'})</div>
                       <div className="text-muted-foreground">Distance {c.total_distance_km||0} km • Grand {formatMoney(c.grand_total)}</div>
                       <div className="flex flex-wrap gap-1">
                         {(c.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[10px]">{se.action}</Badge>)}
@@ -194,13 +199,12 @@ export default function ManageExpenseClaimApprovals(){
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={()=>open(c)}>View</Button>
-                      <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-background">
-                        <option value="" disabled>Action</option>
-                        <option value="RECOMMEND" disabled={!eligibility.canRecommend}>Recommend</option>
-                        <option value="APPROVE" disabled={!eligibility.canApprove}>Approve</option>
-                        <option value="REJECT" disabled={!eligibility.canReject}>Reject</option>
-                        <option value="CLEAR" disabled={!eligibility.canClear}>Undo Decision</option>
-                      </select>
+                      <div className="flex items-center gap-1">
+                        {eligibility.canRecommend && <Button size="sm" onClick={()=>clickAction(c,'RECOMMEND')}>Recommend</Button>}
+                        {eligibility.canApprove && <Button size="sm" onClick={()=>clickAction(c,'APPROVE')}>Approve</Button>}
+                        {eligibility.canReject && <Button size="sm" variant="destructive" onClick={()=>clickAction(c,'REJECT')}>Reject</Button>}
+                        {eligibility.canClear && <Button size="sm" variant="secondary" onClick={()=>clickAction(c,'CLEAR')}>Undo</Button>}
+                      </div>
                     </div>
                   </div>
                 );
@@ -233,16 +237,17 @@ export default function ManageExpenseClaimApprovals(){
               {filteredAll.map(c => {
                 const emp = c.employee; const empJob = c.employee?.employmentRecords?.[0];
                 const eligibility = computeEligibility(c);
-                const onRowAction = async (claim, action) => {
-                  if(action==='') return;
-                  const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear approval of', RECOMMEND:'recommend' };
+                const clickAction = async (claim, action) => {
+                  const labelMap = { APPROVE:'approve', REJECT:'reject', CLEAR:'clear last decision on', RECOMMEND:'recommend' };
                   if(!window.confirm(`Confirm to ${labelMap[action]} claim #${claim.id}?`)) return;
                   try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
                 };
+                const reqBadge = c.status && <Badge variant="outline" className="ml-2 text-[10px]">{c.status}</Badge>;
+                const reqPart = c.travel_request_id ? <span> • Req #{c.travel_request_id}</span> : null;
                 return (
                   <div key={c.id} className="p-4 flex items-center justify-between text-sm">
                     <div className="space-y-0.5">
-                      <div className="font-medium flex flex-wrap items-center gap-1">Claim #{c.id} • Req #{c.travel_request_id} • {emp?.full_name || 'Employee'} <span className="text-muted-foreground">({empJob?.designation?.title || '—'})</span> <Badge variant="outline" className="ml-2 text-[10px]">{c.status}</Badge></div>
+                      <div className="font-medium flex flex-wrap items-center gap-1">Claim #{c.id}{reqPart} • {emp?.full_name || 'Employee'} <span className="text-muted-foreground">({empJob?.designation?.title || '—'})</span> {reqBadge}</div>
                       <div className="text-muted-foreground">Distance {c.total_distance_km||0} km • Grand {(c.grand_total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                       <div className="flex flex-wrap gap-1">
                         {(c.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[10px]" title={new Date(se.createdAt).toLocaleString()}>{se.action}</Badge>)}
@@ -250,13 +255,12 @@ export default function ManageExpenseClaimApprovals(){
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={()=>open(c)}>View</Button>
-                      <select onChange={e=>{ const v=e.target.value; e.target.value=''; onRowAction(c,v); }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-background">
-                        <option value="" disabled>Action</option>
-                        <option value="RECOMMEND" disabled={!eligibility.canRecommend}>Recommend</option>
-                        <option value="APPROVE" disabled={!eligibility.canApprove}>Approve</option>
-                        <option value="REJECT" disabled={!eligibility.canReject}>Reject</option>
-                        <option value="CLEAR" disabled={!eligibility.canClear}>Undo Decision</option>
-                      </select>
+                      <div className="flex items-center gap-1">
+                        {eligibility.canRecommend && <Button size="sm" onClick={()=>clickAction(c,'RECOMMEND')}>Recommend</Button>}
+                        {eligibility.canApprove && <Button size="sm" onClick={()=>clickAction(c,'APPROVE')}>Approve</Button>}
+                        {eligibility.canReject && <Button size="sm" variant="destructive" onClick={()=>clickAction(c,'REJECT')}>Reject</Button>}
+                        {eligibility.canClear && <Button size="sm" variant="secondary" onClick={()=>clickAction(c,'CLEAR')}>Undo</Button>}
+                      </div>
                     </div>
                   </div>
                 );
@@ -293,12 +297,14 @@ export default function ManageExpenseClaimApprovals(){
             </div>
 
             <div className="grid md:grid-cols-3 gap-4">
-              <Card className="p-3">
-                <div className="text-[11px] uppercase text-muted-foreground mb-1">Request</div>
-                <div className="font-medium">#{selected.travel_request_id}</div>
-                <div className="text-xs text-muted-foreground">{selected.request?.purpose || selected.request?.travel_purpose}</div>
-                <div className="text-[11px] text-muted-foreground mt-1">{selected.request?.origin} → {selected.request?.destination}</div>
-              </Card>
+              {selected.request && (
+                <Card className="p-3">
+                  <div className="text-[11px] uppercase text-muted-foreground mb-1">Request</div>
+                  <div className="font-medium">#{selected.travel_request_id}</div>
+                  <div className="text-xs text-muted-foreground">{selected.request?.purpose || selected.request?.travel_purpose}</div>
+                  <div className="text-[11px] text-muted-foreground mt-1">{selected.request?.origin} → {selected.request?.destination}</div>
+                </Card>
+              )}
               <Card className="p-3">
                 <div className="text-[11px] uppercase text-muted-foreground mb-1">Totals</div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -369,7 +375,7 @@ export default function ManageExpenseClaimApprovals(){
                     </div>
                   </div>
                 ); })}
-                {(!selected.statusEntries||selected.statusEntries.length===0) && <div className="text-[11px] text-muted-foreground">No history</div>}
+                {(!selected.statusEntries||selected.statusEntries.length===0) && <div className="text:[11px] text-muted-foreground">No history</div>}
               </div>
             </div>
 
@@ -379,15 +385,12 @@ export default function ManageExpenseClaimApprovals(){
             </div>
             <div className="flex gap-2 justify-end pt-2">
               {(() => { const elig = computeEligibility(selected); return (
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <Button type="button" variant="outline" size="sm" onClick={()=>{ setRemarks(''); close(); }}>Close</Button>
-                  <select disabled={submitting} onChange={e=>{ const v=e.target.value; if(!v) return; if(v==='CLEAR'){ if(!window.confirm('Clear your last decision?')) { e.target.value=''; return;} } act(v); e.target.value=''; }} defaultValue="" className="border text-xs rounded px-2 py-1 bg-background">
-                    <option value="" disabled>Action</option>
-                    <option value="RECOMMEND" disabled={!elig.canRecommend}>Recommend</option>
-                    <option value="APPROVE" disabled={!elig.canApprove}>Approve</option>
-                    <option value="REJECT" disabled={!elig.canReject}>Reject</option>
-                    <option value="CLEAR" disabled={!elig.canClear}>Undo Decision</option>
-                  </select>
+                  {elig.canRecommend && <Button disabled={submitting} size="sm" onClick={()=>act('RECOMMEND')}>Recommend</Button>}
+                  {elig.canApprove && <Button disabled={submitting} size="sm" onClick={()=>act('APPROVE')}>Approve</Button>}
+                  {elig.canReject && <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>act('REJECT')}>Reject</Button>}
+                  {elig.canClear && <Button disabled={submitting} size="sm" variant="secondary" onClick={()=>act('CLEAR')}>Undo</Button>}
                 </div>
               ); })()}
               <Button variant="outline" size="sm" onClick={close}>Dismiss</Button>

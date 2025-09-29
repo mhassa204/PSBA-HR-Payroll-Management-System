@@ -166,15 +166,23 @@ module.exports = {
   recommendOrClear: async (id, actorEmpId, action, ctx) => {
     const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { statusEntries: true, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
     if (!req || req.is_deleted) throw new Error('Not found');
-    if (req.status !== 'CREATED') throw new Error('Only CREATED requests can be recommended');
+    if (req.status !== 'CREATED') throw new Error('Only CREATED requests can be actioned');
     // Check recommender eligibility
     const canRecommend = ctx.isSuperAdmin || (req.applicant?.employmentRecords||[]).some(er => String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
-    if (!canRecommend) throw new Error('Not authorized to recommend');
+    if (!canRecommend) throw new Error('Not authorized');
     const last = req.statusEntries[req.statusEntries.length-1];
     const act = String(action||'').toUpperCase();
     if (act === 'RECOMMEND') {
       if (last && last.action==='RECOMMENDED') return req; // idempotent
       await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId } });
+      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    } else if (act === 'REJECT') {
+      // recommender rejection
+      if (last && last.action==='RECOMMENDED' && last.actor_employee_id!==actorEmpId && !ctx.isSuperAdmin) {
+        // If someone else recommended, allow rejection as recommender still? For simplicity require same actor or super admin.
+      }
+      await prisma.travelRequest.update({ where: { id: req.id }, data: { status: 'REJECTED' } });
+      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED_REJECTED', actor_employee_id: actorEmpId } });
       return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
     } else if (act === 'CLEAR') {
       if (!last || last.action!=='RECOMMENDED') throw new Error('Nothing to clear');

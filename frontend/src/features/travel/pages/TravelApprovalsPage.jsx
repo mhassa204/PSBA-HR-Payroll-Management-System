@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { getTravelRequest, updateTravelRequestStatus, recommendTravelRequest } from '../../../services/travelService';
+import { getTravelRequest, updateTravelRequestStatus, recommendTravelRequest, clearTravelRecommendation, recommendDecisionTravelRequest } from '../../../services/travelService';
 import api from '../../../lib/axios';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import EnhancedModal from '@/components/ui/EnhancedModal';
+import { useAuthStore } from '../../auth/authStore';
 
 export default function TravelApprovalsPage() {
   const [list, setList] = useState([]);
@@ -12,6 +13,7 @@ export default function TravelApprovalsPage() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const meEmpId = useAuthStore(s=>s.user?.employee_id);
 
   const load = async () => {
     setLoading(true);
@@ -30,7 +32,33 @@ export default function TravelApprovalsPage() {
   };
 
   const hasRecommended = (r) => (r.statusEntries||[]).some(se => se.action === 'RECOMMENDED');
+  const lastEntry = (r) => (r.statusEntries||[])[(r.statusEntries||[]).length-1];
+  const canUndoRecommendation = (r) => {
+    const last = lastEntry(r);
+    return r.status==='CREATED' && last && last.action==='RECOMMENDED' && String(last.actor_employee_id)===String(meEmpId);
+  };
   const labelAction = (a) => a === 'RECOMMENDED' ? 'Recommended' : a;
+
+  const doAction = async (r, action) => {
+    if(!r) return;
+    setSubmitting(true);
+    try {
+      if(action==='RECOMMEND') {
+        await recommendTravelRequest(r.id);
+      } else if(action==='RECOMMENDER_REJECT') {
+        await recommendDecisionTravelRequest(r.id, 'REJECT');
+      } else if(action==='UNDO_RECOMMEND') {
+        await clearTravelRecommendation(r.id);
+      } else if(action==='APPROVE') {
+        await updateTravelRequestStatus(r.id, 'APPROVED');
+      } else if(action==='REJECT') {
+        await updateTravelRequestStatus(r.id, 'REJECTED');
+      }
+      await load();
+    } catch(err) {
+      alert(err?.response?.data?.error || 'Update failed');
+    } finally { setSubmitting(false); }
+  };
 
   return (
     <div className="space-y-6">
@@ -45,44 +73,41 @@ export default function TravelApprovalsPage() {
           <div className="divide-y">
             {loading && <div className="p-4 text-muted-foreground">Loading...</div>}
             {!loading && list.length === 0 && <div className="p-6 text-muted-foreground">No pending requests</div>}
-            {list.map(r => (
-              <div key={r.id} className="p-4 flex items-center justify-between text-sm">
-                <div className="space-y-0.5">
-                  <div className="font-medium">{r.purpose || '—'}</div>
-                  <div className="text-muted-foreground">{r.destination ? `${r.destination} · ` : ''}{String(r.departure_date).slice(0,10)} {r.departure_time ? `at ${r.departure_time}`:''} → {String(r.expected_return_date).slice(0,10)} · {r.total_days ? `${r.total_days} day(s)` : '—'}</div>
-                  <div className="flex flex-wrap gap-1">
-                    {(r.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[10px]">{labelAction(se.action)}</Badge>)}
+            {list.map(r => {
+              const recommended = hasRecommended(r);
+              const canUndo = canUndoRecommendation(r);
+              return (
+                <div key={r.id} className="p-4 flex items-center justify-between text-sm">
+                  <div className="space-y-0.5">
+                    <div className="font-medium">{r.purpose || '—'}</div>
+                    <div className="text-muted-foreground">{r.destination ? `${r.destination} · ` : ''}{String(r.departure_date).slice(0,10)} {r.departure_time ? `at ${r.departure_time}`:''} → {String(r.expected_return_date).slice(0,10)} · {r.total_days ? `${r.total_days} day(s)` : '—'}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(r.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[11px]">{labelAction(se.action)}</Badge>)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={()=>openDetail(r.id)}>View</Button>
+                    <div className="flex items-center gap-1">
+                      {canUndo && (
+                        <Button disabled={submitting} size="sm" variant="secondary" onClick={()=>doAction(r,'UNDO_RECOMMEND')}>Undo</Button>
+                      )}
+                      {!canUndo && !recommended && (
+                        <>
+                          <Button disabled={submitting} size="sm" onClick={()=>doAction(r,'RECOMMEND')}>Recommend</Button>
+                          <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(r,'RECOMMENDER_REJECT')}>Reject</Button>
+                        </>
+                      )}
+                      {!canUndo && recommended && (
+                        <>
+                          <Button disabled={submitting} size="sm" onClick={()=>doAction(r,'APPROVE')}>Approve</Button>
+                          <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(r,'REJECT')}>Reject</Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={()=>openDetail(r.id)}>View</Button>
-                  <select
-                    disabled={submitting}
-                    defaultValue=""
-                    onChange={async (e)=>{
-                      const val = e.target.value; e.target.value='';
-                      setSubmitting(true);
-                      try {
-                        if (val === 'RECOMMEND') {
-                          await recommendTravelRequest(r.id);
-                        } else if (val === 'APPROVED' || val === 'REJECTED') {
-                          await updateTravelRequestStatus(r.id, val);
-                        }
-                        await load();
-                      } catch(err){
-                        alert(err?.response?.data?.error || 'Update failed');
-                      } finally { setSubmitting(false); }
-                    }}
-                    className="border rounded-md px-2 py-1 text-sm bg-background"
-                  >
-                    <option value="" disabled>Action</option>
-                    <option value="RECOMMEND" disabled={hasRecommended(r) || r.status!=='CREATED'}>Recommend</option>
-                    <option value="APPROVED" disabled={!hasRecommended(r)}>Approve</option>
-                    <option value="REJECTED" disabled={!hasRecommended(r)}>Reject</option>
-                  </select>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>

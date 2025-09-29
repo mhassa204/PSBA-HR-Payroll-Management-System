@@ -16,6 +16,7 @@ router.get('/requests/pending-approvals', isAuthenticated, travelRequestControll
 // Recommender actions
 router.post('/requests/:id/recommend', isAuthenticated, travelRequestController.recommend);
 router.post('/requests/:id/recommend/clear', isAuthenticated, travelRequestController.clearRecommendation);
+router.post('/requests/:id/recommend/decision', isAuthenticated, travelRequestController.recommendDecision);
 
 // List only current user's own requests (allowed based on location/grade rules)
 router.get('/requests/mine', isAuthenticated, travelRequestController.listMine);

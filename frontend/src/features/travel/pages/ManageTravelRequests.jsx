@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { getTravelRequests, getTravelRequest, updateTravelRequestStatus, getTravelCapabilities } from '../../../services/travelService';
+import { getTravelRequests, getTravelRequest, updateTravelRequestStatus, getTravelCapabilities, recommendTravelRequest, clearTravelRecommendation, recommendDecisionTravelRequest } from '../../../services/travelService';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import EnhancedModal from '@/components/ui/EnhancedModal';
+import { useAuthStore } from '../../auth/authStore';
 
 export default function ManageTravelRequests() {
   const [list, setList] = useState([]);
@@ -12,6 +13,7 @@ export default function ManageTravelRequests() {
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [caps, setCaps] = useState({ isDG: false, isOps: false });
+  const meEmpId = useAuthStore(s=>s.user?.employee_id);
 
   const load = async () => {
     setLoading(true);
@@ -50,11 +52,26 @@ export default function ManageTravelRequests() {
     }
   };
 
-  const canDecide = (req) => {
-    if (!req) return false;
-    if (!(caps.isDG || caps.isOps)) return false; // HR excluded
-    // Frontend soft check; backend enforces eligibility
-    return true;
+  const hasRecommended = (r) => (r?.statusEntries||[]).some(se => se.action==='RECOMMENDED');
+  const lastEntry = (r) => (r?.statusEntries||[])[(r?.statusEntries||[]).length-1];
+  const canUndoRecommendation = (r) => {
+    const last = lastEntry(r);
+    return r?.status==='CREATED' && last && last.action==='RECOMMENDED' && String(last.actor_employee_id)===String(meEmpId);
+  };
+
+  const doAction = async (r, action) => {
+    if(!r) return; if(!window.confirm(`Confirm to ${action.toLowerCase().replace('_',' ')} request #${r.id}?`)) return;
+    setSubmitting(true);
+    try {
+      if(action==='RECOMMEND') await recommendTravelRequest(r.id);
+      else if(action==='UNDO_RECOMMEND') await clearTravelRecommendation(r.id);
+      else if(action==='RECOMMENDER_REJECT') await recommendDecisionTravelRequest(r.id, 'REJECT');
+      else if(action==='APPROVE') await updateTravelRequestStatus(r.id, 'APPROVED');
+      else if(action==='REJECT') await updateTravelRequestStatus(r.id, 'REJECTED');
+      const full = await getTravelRequest(r.id); setSelected(full);
+      await load();
+    } catch(err){ alert(err?.response?.data?.error || 'Action failed'); }
+    finally { setSubmitting(false); }
   };
 
   const labelAction = (a) => a === 'RECOMMENDED' ? 'Recommended' : a;
@@ -132,31 +149,24 @@ export default function ManageTravelRequests() {
 
               <div className="flex items-center gap-2 pt-2">
                 <Badge variant="outline">Status: {selected.status}</Badge>
-                {canDecide(selected) && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-muted-foreground">Status</label>
-                    <select
-                      disabled={submitting}
-                      value={selected.status}
-                      onChange={async (e)=>{
-                        const val = e.target.value;
-                        setSubmitting(true);
-                        try {
-                          const upd = await updateTravelRequestStatus(selected.id, val);
-                          setSelected(upd);
-                          await load();
-                        } catch(err){
-                          alert(err?.response?.data?.error || 'Update failed');
-                        } finally { setSubmitting(false); }
-                      }}
-                      className="border rounded-md px-2 py-1 text-sm bg-background"
-                    >
-                      <option value="CREATED">CREATED</option>
-                      <option value="APPROVED">APPROVED</option>
-                      <option value="REJECTED">REJECTED</option>
-                    </select>
-                  </div>
-                )}
+                <div className="flex items-center gap-1">
+                  {canUndoRecommendation(selected) && (
+                    <Button disabled={submitting} size="sm" variant="secondary" onClick={()=>doAction(selected,'UNDO_RECOMMEND')}>Undo</Button>
+                  )}
+                  {!hasRecommended(selected) && (
+                    <>
+                      {/* Recommender actions generally not exposed here; backend will enforce */}
+                      {/* <Button disabled={submitting} size="sm" onClick={()=>doAction(selected,'RECOMMEND')}>Recommend</Button>
+                      <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(selected,'RECOMMENDER_REJECT')}>Reject</Button> */}
+                    </>
+                  )}
+                  {hasRecommended(selected) && (caps.isDG || caps.isOps) && (
+                    <>
+                      <Button disabled={submitting} size="sm" onClick={()=>doAction(selected,'APPROVE')}>Approve</Button>
+                      <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(selected,'REJECT')}>Reject</Button>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="pt-2">

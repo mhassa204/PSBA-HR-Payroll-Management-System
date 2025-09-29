@@ -181,5 +181,17 @@ module.exports = {
     } catch (e) {
       res.status(400).json({ success: false, error: e.message });
     }
+  },
+  recommendDecision: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      const id = Number(req.params.id);
+      const action = String(req.body?.action || '').toUpperCase();
+      if (!['RECOMMEND','REJECT','CLEAR'].includes(action)) return res.status(400).json({ success:false, error:'Invalid action' });
+      const result = await travelService.recommendOrClear(id, ctx.meEmpId, action, ctx);
+      res.json({ success: true, request: result });
+    } catch (e) {
+      res.status(400).json({ success: false, error: e.message });
+    }
   }
 };
