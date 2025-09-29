@@ -308,12 +308,13 @@ export default function TravelExpenseClaimsPage(){
               <div>
                 <label className="text-xs text-muted-foreground">From Date</label>
                 <div className="relative">
-                  <Input type="date" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))} />
+                  <Input type="date" className="pr-10" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))} />
                   <button
                     type="button"
                     aria-label="Open from date picker"
                     onClick={(e)=>{ const inp = e.currentTarget.previousElementSibling; if(inp){ if(typeof inp.showPicker==='function'){ inp.showPicker(); } else { inp.focus(); try{ inp.click(); }catch(_){ /* ignore */ } } } }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-gray-500 hover:text-gray-700"
+                    style={{color:'#6b7280'}}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -327,12 +328,13 @@ export default function TravelExpenseClaimsPage(){
               <div>
                 <label className="text-xs text-muted-foreground">To Date</label>
                 <div className="relative">
-                  <Input type="date" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))} />
+                  <Input type="date" className="pr-10" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))} />
                   <button
                     type="button"
                     aria-label="Open to date picker"
                     onClick={(e)=>{ const inp = e.currentTarget.previousElementSibling; if(inp){ if(typeof inp.showPicker==='function'){ inp.showPicker(); } else { inp.focus(); try{ inp.click(); }catch(_){ /* ignore */ } } } }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-gray-500 hover:text-gray-700"
+                    style={{color:'#6b7280'}}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
