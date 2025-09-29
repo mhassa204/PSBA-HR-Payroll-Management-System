@@ -3,10 +3,10 @@ const prisma = new PrismaClient();
 
 module.exports = {
   list: async (req, res) => {
-    try { const rates = await prisma.travelRate.findMany({ include: { scaleGrade: true } }); res.json({ success:true, rates }); } catch(e){ res.status(500).json({ success:false, error: e.message }); }
+    try { const rates = await prisma.travelRate.findMany({ include: { scale_grade: true } }); res.json({ success:true, rates }); } catch(e){ res.status(500).json({ success:false, error: e.message }); }
   },
   getOne: async (req, res) => {
-    try { const rate = await prisma.travelRate.findUnique({ where: { id: Number(req.params.id) }, include: { scaleGrade: true } }); if(!rate) return res.status(404).json({ success:false, error:'Not found' }); res.json({ success:true, rate }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+    try { const rate = await prisma.travelRate.findUnique({ where: { id: Number(req.params.id) }, include: { scale_grade: true } }); if(!rate) return res.status(404).json({ success:false, error:'Not found' }); res.json({ success:true, rate }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
   },
   upsertByScale: async (req, res) => {
     try {

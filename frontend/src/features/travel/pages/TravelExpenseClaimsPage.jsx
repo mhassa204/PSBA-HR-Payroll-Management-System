@@ -168,6 +168,34 @@ export default function TravelExpenseClaimsPage(){
     try { await deleteExpenseClaim(claim.id); setClaim(null); setStep(1); setSelectedRequest(null); setSelectedAttendee(null); loadEligible(); loadClaims(); } catch(e){ alert(e.message); }
   };
 
+  // New: Submit should first save core fields entered in the form
+  const handleSubmit = async () => {
+    if (!claim) return;
+    if (!(claim.documents||[]).some(d=>d.category==='REPORT')) { alert('Upload REPORT before submitting'); return; }
+    try {
+      setSaving(true);
+      const payload = {
+        from_date: form.from_date || null,
+        to_date: form.to_date || null,
+        overnight_stay: !!form.overnight_stay,
+        toll_tax_total: Number(form.toll_tax_total||0),
+        per_diem_days: Number(form.per_diem_days||0),
+        transport_mode: form.transport_mode,
+        fuel_total: Number(form.fuel_total||0),
+        fare_total: Number(form.fare_total||0)
+      };
+      await updateExpenseClaim(claim.id, payload);
+      const updated = await submitExpenseClaim(claim.id);
+      setClaim(updated);
+      loadClaims();
+      alert('Submitted');
+    } catch (e) {
+      alert(e?.response?.data?.error || e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const addSegment = async (seg) => { if(!claim) return; const updated = await addExpenseClaimSegment(claim.id, seg); setClaim(updated); loadClaims(); };
   const updateSegmentRow = async (seg) => { if(!claim) return; const updated = await updateExpenseClaimSegment(claim.id, seg.id, seg); setClaim(updated); loadClaims(); };
   const removeSegment = async (id) => { if(!claim) return; const updated = await deleteExpenseClaimSegment(claim.id, id); setClaim(updated); loadClaims(); };
@@ -297,7 +325,7 @@ export default function TravelExpenseClaimsPage(){
             <div className="font-semibold">Expense Claim #{claim.id} (Request #{claim.travel_request_id})</div>
             <div className="flex gap-3 items-center">
               {claim.status==='DRAFT' && <Button variant="destructive" size="sm" onClick={handleDeleteClaim}>Delete</Button>}
-              {claim.status==='DRAFT' && <Button variant="outline" size="sm" onClick={async ()=>{ if(!(claim.documents||[]).some(d=>d.category==='REPORT')) { alert('Upload REPORT before submitting'); return; } try { const updated = await submitExpenseClaim(claim.id); setClaim(updated); loadClaims(); alert('Submitted'); } catch(e){ alert(e.message); } }}>Submit</Button>}
+              {claim.status==='DRAFT' && <Button variant="outline" size="sm" disabled={saving} onClick={handleSubmit}>Submit</Button>}
               <Button variant="link" size="sm" onClick={()=>{ setStep(1); setClaim(null); setSelectedRequest(null); setSelectedAttendee(null); loadEligible(); loadClaims(); }}>Close</Button>
             </div>
           </div>

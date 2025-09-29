@@ -43,7 +43,7 @@ export default function TravelRateManagement(){
           <tbody>
             {rates.map(r=> (
               <tr key={r.id} className="border-b last:border-none">
-                <td className="py-2">{r.scaleGrade?.name}</td>
+                <td className="py-2">{r.scale_grade?.name}</td>
                 <td>{r.rate_per_km}</td>
                 <td>{r.per_diem_rate}</td>
                 <td className="text-right"><button onClick={()=>remove(r.id)} className="text-red-600 text-xs">Delete</button></td>
