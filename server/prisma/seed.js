@@ -27,6 +27,10 @@ async function main() {
   // Updated for new expense claim schema (removed travelClaimItem & travelClaimReceipt)
   await prisma.travelClaimDocument.deleteMany({});
   await prisma.travelClaimSegment.deleteMany({});
+  // New: purge accounts tranches and claim status history
+  await prisma.travelClaimTrancheItem.deleteMany({});
+  await prisma.travelClaimTranche.deleteMany({});
+  await prisma.travelClaimStatusEntry.deleteMany({});
   await prisma.travelClaim.deleteMany({});
   await prisma.travelRequestStatusEntry.deleteMany({});
   await prisma.travelRequestEmployee.deleteMany({});
@@ -67,6 +71,9 @@ async function main() {
     console.log(`🗑️ Hard deleting role tag: ${tag.name} (ID: ${tag.id})`);
     await prisma.roleTag.delete({ where: { id: tag.id } });
   }
+
+  // New: clear travel rates before scale grades to avoid FK violations
+  await prisma.travelRate.deleteMany({});
 
   const existingScaleGrades = await prisma.scaleGrade.findMany({
     select: { id: true, name: true }
@@ -325,7 +332,11 @@ async function main() {
       ], enabled: true, fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] },
     { name: "HR Officer", type: "custom", allowed_actions: ["employees.read","employees.create","employees.update","reports.read","travel.read","travel.claim.read","travel.claim.approve.hr"], enabled: true, fields: ["employee_personal", "employee_employment"] },
     { name: "Manager", type: "custom", allowed_actions: ["employees.read","reports.read","requests.approve","roster.read","roster.create","roster.update","travel.read","travel.claim.read","travel.request.approve.ops","travel.claim.approve.ops"], enabled: true, fields: ["employee_basic", "employee_employment"] },
-    { name: "Accounts Approver", type: "custom", allowed_actions: ["travel.read","travel.claim.read","travel.claim.approve.accounts"], enabled: true, fields: ["employee_basic"] },
+    // Expanded Accounts permissions to cover list/status/export contexts
+    { name: "Accounts Approver", type: "custom", allowed_actions: [
+        "travel.read","travel.claim.read","travel.claim.status","travel.claim.settle","travel.rates.read","reports.read",
+        "travel.claim.approve.accounts"
+      ], enabled: true, fields: ["employee_basic"] },
     { name: "Employee", type: "custom", allowed_actions: ["profile.read","profile.update"], enabled: true, fields: ["own_personal", "own_employment"] }
   ];
 
@@ -414,7 +425,7 @@ async function main() {
       for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
     if (orig.name === 'Accounts Approver') {
-      const extraPerms = await prisma.permission.findMany({ where: { key: { in: ['travel.read','travel.claim.read'] } } });
+      const extraPerms = await prisma.permission.findMany({ where: { key: { in: ['travel.read','travel.claim.read','travel.claim.status','travel.claim.settle','travel.rates.read','reports.read'] } } });
       for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
     }
 
@@ -493,7 +504,7 @@ async function main() {
   console.log('👥 Seeding employees...');
   for (const emp of employees) {
     const dist = createdDistricts.find((d) => d.name === emp.district);
-    const city = createdCities.find((c) => c.name === emp.city && (!dist || c.district_id === dist.id))
+    const city = createdCities.find(c => c.name === emp.city && (!dist || c.district_id === dist.id))
               || createdCities.find((c) => c.name === emp.city);
 
     // Normalize CNIC and mobile formats
@@ -779,24 +790,16 @@ async function main() {
     { employee_id: empId('HR Viewer Test'), organization: 'PSBA', department_id: deptId('HR'), designation_id: desigId('HR Officer', 'HR'), employment_type: 'Regular', effective_from: new Date('2022-03-01'), office_location: 'Head Quarter', remarks: 'HR viewer for Manage list', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'Level-3').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false }
   ];
 
-  // NOTE: Employees already seeded earlier; removed duplicate employee creation loop to avoid P2002 errors.
-  // Now seed employment records.
-  console.log('🧑‍💼 Seeding employment records...');
-  // reuse existing createdEmployments array declared earlier
+  // NEW: Persist employment records
+  console.log('🧾 Seeding employment records...');
   for (const rec of employmentRecords) {
-    const employment = await prisma.employment.create({ data: rec });
-    createdEmployments.push(employment);
-    console.log(`✅ Employment created for employee_id ${rec.employee_id}`);
-  }
-
-  // After base employees seeded, add extra HR Approver if not present
-  const existingHrApprover = createdEmployees.find(e => e.full_name === 'HR Approver');
-  if(!existingHrApprover){
-    const hrApproverEmp = await prisma.employee.create({ data: {
-      employee_id: 'EMPHR002', full_name: 'HR Approver', father_husband_name: 'Karim', relationship_type: 'father', cnic: '3520212345934', cnic_issue_date: new Date('2018-04-04'), cnic_expire_date: new Date('2038-04-03'), date_of_birth: new Date('1991-09-09'), gender: 'Male', marital_status: 'Married', nationality: 'Pakistani', religion: 'Islam', mobile_number: '03241234567', whatsapp_number: '03241234567', email: 'hrapprover.emp@psba.gop.pk', present_address: 'Lahore', permanent_address: 'Lahore', district: 'Lahore', city: 'Lahore', status: 'Active', is_deleted: false }
-    });
-    createdEmployees.push(hrApproverEmp);
-    console.log('✅ Created Employee: HR Approver (EMPHR002)');
+    if (!rec.employee_id) continue;
+    const exists = await prisma.employment.findFirst({ where: { employee_id: rec.employee_id, is_current: true } });
+    if (!exists) {
+      const e = await prisma.employment.create({ data: rec });
+      createdEmployments.push(e);
+      console.log(`✅ Created Employment for employee_id ${rec.employee_id}`);
+    }
   }
 
   // 👤 Seeding users (additional)...
@@ -806,7 +809,9 @@ async function main() {
     extraUsers.push({ email: 'hrapprover@psba.gop.pk', password: encrypt('hrapp123'), role_id: (createdRoles.find(r => r.name === 'HR Admin')?.id || createdRoles[1].id), employee_id: findEmpIdLater('HR Approver'), is_deleted: false });
   }
   if(!createdUsers.find(u => u.email === 'accounts@psba.gop.pk')){
-    extraUsers.push({ email: 'accounts@psba.gop.pk', password: encrypt('accounts123'), role_id: (createdRoles.find(r => r.name === 'Manager')?.id || createdRoles[2].id), employee_id: findEmpIdLater('Kashif Rasheed'), is_deleted: false });
+    // Use Accounts Approver role so this user can access tranches UI and APIs
+    const accountsRoleId = (createdRoles.find(r => r.name === 'Accounts Approver')?.id || createdRoles[2].id);
+    extraUsers.push({ email: 'accounts@psba.gop.pk', password: encrypt('accounts123'), role_id: accountsRoleId, employee_id: findEmpIdLater('Kashif Rasheed'), is_deleted: false });
   }
   for(const u of extraUsers){ const cu = await prisma.user.create({ data: u }); createdUsers.push(cu); console.log('✅ Created User:', cu.email); }
 
@@ -824,95 +829,39 @@ async function main() {
     console.log('✅ Created Employment: HR Approver');
   }
 
-  // Permissions are already seeded above; proceed to system settings only
-  // Seed default system settings (security/ui)
-  await prisma.systemSetting.upsert({
-    where: { key: 'security' },
-    update: {},
-    create: {
-      key: 'security',
-      category: 'security',
-      value: {
-        passwordPolicy: { minLength: 8, requireNumber: true, requireUppercase: true, requireSymbol: false },
-        sessionMaxAgeMinutes: 60,
-        lockoutThreshold: 5,
-        twoFactorEnabled: false
-      }
+  // Seed EmploymentSalary bank info for tranche CSV
+  console.log('🏦 Seeding employment salaries for tranche testing...');
+  const ensureSalary = async (empName, bank, account) => {
+    const eid = findEmpIdLater(empName);
+    if (!eid) return;
+    const empRec = await prisma.employment.findFirst({ where: { employee_id: eid, is_current: true } });
+    if (!empRec) return;
+    const exists = await prisma.employmentSalary.findFirst({ where: { employment_id: empRec.id } });
+    if (!exists) {
+      const sal = await prisma.employmentSalary.create({ data: { employment_id: empRec.id, basic_salary: 100000, gross_salary: 150000, bank_name_primary: bank, bank_account_primary: account, bank_branch_code: '1234', payment_mode: 'Bank Transfer', payroll_status: 'Active' } });
+      salaryRecords.push(sal);
+      console.log(`✅ Salary seeded for ${empName}`);
     }
-  });
+  };
+  await ensureSalary('Muhammad Ahmad', 'National Bank of Pakistan', 'PK00NBP0000001234567890');
+  await ensureSalary('Muhammad Ali Hassan', 'Habib Bank Limited', 'PK00HBL0000000987654321');
+  await ensureSalary('Rizwan Haider Shah', 'United Bank Limited', 'PK00UBL0000001111222233');
 
-  // Seed Travel Requests test data (TADA)
-  console.log('🧳 Seeding travel requests (test data)...');
+  // Helper to get employee id by full name for subsequent seeding
   const empByName = (n) => createdEmployees.find(e => e.full_name === n)?.id;
+  // Helper to get a date N days from now
   const daysFromNow = (d) => { const dt = new Date(); dt.setDate(dt.getDate() + d); return dt; };
-
-  // 1) Head Office request (PENDING/CREATED) by BPS-17 applicant
-  const t1 = await prisma.travelRequest.create({ data: {
-    applicant_id: empByName('Muhammad Ahmad'),
-    departure_date: daysFromNow(1),
-    departure_time: '09:30',
-    expected_return_date: daysFromNow(3),
-    purpose: 'HO visit for IT coordination',
-    destination: 'Lahore HQ',
-    total_days: 2,
-    status: 'CREATED'
-  }});
-  await prisma.travelRequestEmployee.createMany({ data: [
-    { request_id: t1.id, employee_id: empByName('Muhammad Ahmad') },
-    { request_id: t1.id, employee_id: empByName('Muhammad Ali Hassan') }
-  ]});
-  await prisma.travelRequestStatusEntry.create({ data: { request_id: t1.id, action: 'CREATED', actor_employee_id: empByName('Muhammad Ahmad') } });
-
-  // 2) Bazaar request (PENDING/CREATED) by Bazaar Manager at BAZAAR location
-  const t2 = await prisma.travelRequest.create({ data: {
-    applicant_id: empByName('Bazaar Manager One'),
-    departure_date: daysFromNow(2),
-    departure_time: '10:00',
-    expected_return_date: daysFromNow(2),
-    purpose: 'Bazaar operations visit',
-    destination: 'Mian Plaza',
-    total_days: 1,
-    status: 'CREATED'
-  }});
-  await prisma.travelRequestEmployee.createMany({ data: [
-    { request_id: t2.id, employee_id: empByName('Bazaar Manager One') },
-    { request_id: t2.id, employee_id: empByName('Head Office Staff') }
-  ]});
-  await prisma.travelRequestStatusEntry.create({ data: { request_id: t2.id, action: 'CREATED', actor_employee_id: empByName('Bazaar Manager One') } });
-
-  // 3) HO request already APPROVED by DG
-  const t3 = await prisma.travelRequest.create({ data: {
-    applicant_id: empByName('Muhammad Ahmad'),
-    departure_date: daysFromNow(-5),
-    departure_time: '08:00',
-    expected_return_date: daysFromNow(-3),
-    purpose: 'Approved HO trip',
-    destination: 'Islamabad',
-    total_days: 2,
-    status: 'APPROVED'
-  }});
-  await prisma.travelRequestEmployee.createMany({ data: [
-    { request_id: t3.id, employee_id: empByName('Muhammad Ahmad') }
-  ]});
-  await prisma.travelRequestStatusEntry.create({ data: { request_id: t3.id, action: 'CREATED', actor_employee_id: empByName('Muhammad Ahmad') } });
-  await prisma.travelRequestStatusEntry.create({ data: { request_id: t3.id, action: 'APPROVED', actor_employee_id: empByName('Naveed Rafaqat Ahmad') } });
-
-  // 4) Bazaar request REJECTED by Ops approver
-  const t4 = await prisma.travelRequest.create({ data: {
-    applicant_id: empByName('Bazaar Manager One'),
-    departure_date: daysFromNow(-4),
-    departure_time: '08:30',
-    expected_return_date: daysFromNow(-4),
-    purpose: 'Rejected bazaar trip',
-    destination: 'Faisalabad Bazaar',
-    total_days: 1,
-    status: 'REJECTED'
-  }});
-  await prisma.travelRequestEmployee.createMany({ data: [
-    { request_id: t4.id, employee_id: empByName('Bazaar Manager One') }
-  ]});
-  await prisma.travelRequestStatusEntry.create({ data: { request_id: t4.id, action: 'CREATED', actor_employee_id: empByName('Bazaar Manager One') } });
-  await prisma.travelRequestStatusEntry.create({ data: { request_id: t4.id, action: 'REJECTED', actor_employee_id: empByName('Muhammad Ali') } });
+  // Helper to recompute totals for a claim (distance, travel_total, per_diem_amount, grand_total)
+  const recomputeClaimTotals = async (claimId) => {
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { segments: true } });
+    if (!claim) return;
+    const total_distance_km = (claim.segments||[]).reduce((s,a)=> s + Number(a.distance_km||0),0);
+    const distance_amount = total_distance_km * Number(claim.rate_per_km||0);
+    const travel_total = distance_amount + Number(claim.toll_tax_total||0);
+    const per_diem_amount = Number(claim.per_diem_days||0) * Number(claim.per_diem_rate||0);
+    const grand_total = travel_total + per_diem_amount;
+    await prisma.travelClaim.update({ where: { id: claim.id }, data: { total_distance_km, distance_amount, travel_total, per_diem_amount, grand_total } });
+  };
 
   // ✅ Insert sample approved travel request + expense claims (with segments & documents)
   console.log('🧪 Seeding sample expense claim data...');
@@ -973,6 +922,42 @@ async function main() {
   } else {
     console.log('⚠️ Skipped sample expense claim seeding (missing employees)');
   }
+
+  // NEW: Seed VERIFIED claims for Accounts tranche testing
+  console.log('🧾 Seeding HR-VERIFIED claims for Accounts...');
+  const seedVerifiedClaim = async (empName, fromDaysAgo, toDaysAgo) => {
+    const empIdLocal = empByName(empName);
+    if (!empIdLocal) return null;
+    const rates17 = { rate_per_km: 300, per_diem_rate: 1500 };
+    const c = await prisma.travelClaim.create({ data: {
+      employee_id: empIdLocal,
+      travel_request_id: null, // within-city claim
+      from_date: daysFromNow(-fromDaysAgo),
+      to_date: daysFromNow(-toDaysAgo),
+      per_diem_days: 0,
+      rate_per_km: rates17.rate_per_km,
+      per_diem_rate: rates17.per_diem_rate,
+      toll_tax_total: 200,
+      transport_mode: 'OWN', fuel_total: 0, fare_total: 0,
+      status: 'VERIFIED'
+    }});
+    await prisma.travelClaimSegment.createMany({ data: [
+      { claim_id: c.id, departure_from: 'Lahore', departure_to: 'HQ', depart_time: '09:00', arrive_time: '10:00', mode: 'Car', distance_km: 20 },
+      { claim_id: c.id, departure_from: 'HQ', departure_to: 'Lahore', depart_time: '16:00', arrive_time: '17:00', mode: 'Car', distance_km: 20 }
+    ]});
+    await prisma.travelClaimDocument.create({ data: { claim_id: c.id, category: 'REPORT', file_path: 'uploads/Travel/Claims/demo/within_city_report.pdf', mime_type: 'application/pdf', file_size: 10000 } });
+    // Status history: SUBMITTED -> RECOMMENDED -> DG_APPROVED -> HR_APPROVED
+    await prisma.travelClaimStatusEntry.create({ data: { claim_id: c.id, action: 'SUBMITTED', actor_employee_id: empIdLocal } });
+    await prisma.travelClaimStatusEntry.create({ data: { claim_id: c.id, action: 'RECOMMENDED', actor_employee_id: empByName('Roshan Zameer') } });
+    await prisma.travelClaimStatusEntry.create({ data: { claim_id: c.id, action: 'DG_APPROVED', actor_employee_id: empByName('Naveed Rafaqat Ahmad') } });
+    await prisma.travelClaimStatusEntry.create({ data: { claim_id: c.id, action: 'HR_APPROVED', actor_employee_id: empByName('Mariya Iqbal') } });
+    // Totals recompute
+    await recomputeClaimTotals(c.id);
+    console.log('✅ Seeded VERIFIED claim for', empName, '→ Claim', c.id);
+    return c.id;
+  };
+  const v1 = await seedVerifiedClaim('Muhammad Ahmad', 8, 8);
+  const v2 = await seedVerifiedClaim('Muhammad Ali Hassan', 6, 6);
 
   // Seed Travel Rates (sample)
   console.log('🧮 Seeding travel rates...');

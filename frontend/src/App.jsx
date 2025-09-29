@@ -55,6 +55,7 @@ import ManageTravelRequests from "./features/travel/pages/ManageTravelRequests";
 import TravelApprovalsPage from "./features/travel/pages/TravelApprovalsPage";
 import TravelExpenseClaimsPage from "./features/travel/pages/TravelExpenseClaimsPage";
 import ManageExpenseClaimApprovals from "./features/travel/pages/ManageExpenseClaimApprovals";
+import AccountsTranchesPage from "./features/travel/pages/AccountsTranchesPage";
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -469,6 +470,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+            <Route path="/travel/accounts/tranches" element={<PrivateRoute><LeftSidebarLayout><AccountsTranchesPage/></LeftSidebarLayout></PrivateRoute>} />
           </Route>
         </Routes>
         </ConfirmationProvider>

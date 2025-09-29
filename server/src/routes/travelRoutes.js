@@ -36,12 +36,17 @@ router.patch('/requests/:id/status', isAuthenticated, travelRequestController.up
 router.get('/expense-claims/eligible', isAuthenticated, expenseClaimController.eligible);
 router.get('/expense-claims/pending-approvals', isAuthenticated, expenseClaimController.listPendingApprovals);
 router.get('/expense-claims/all', isAuthenticated, expenseClaimController.listAll);
+// Accounts processing: filter verified claims and create tranches (place BEFORE dynamic :id routes)
+router.get('/expense-claims/accounts', isAuthenticated, expenseClaimController.listForAccounts);
+router.post('/expense-claims/tranches', isAuthenticated, expenseClaimController.createTranche);
+router.get('/expense-claims/tranches', isAuthenticated, expenseClaimController.listTranches);
+router.get('/expense-claims/tranches/:id/export', isAuthenticated, expenseClaimController.exportTranche);
 // Relax permissions: rely on service._canAccess and business rules
 router.get('/expense-claims', isAuthenticated, expenseClaimController.list);
 router.post('/expense-claims', isAuthenticated, expenseClaimController.create);
 router.get('/expense-claims/:id', isAuthenticated, expenseClaimController.getOne);
-router.put('/expense-claims/:id', isAuthenticated, expenseClaimController.update);
-router.delete('/expense-claims/:id', isAuthenticated, expenseClaimController.delete);
+router.put('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.manage','travel.update']), expenseClaimController.update);
+router.delete('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.manage','travel.delete']), expenseClaimController.delete);
 
 // Segments
 router.post('/expense-claims/:id/segments', isAuthenticated, expenseClaimController.addSegment);

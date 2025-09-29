@@ -102,7 +102,7 @@ const LeftSidebar = () => {
       }
       try {
         setEmpLoading(true);
-        const res = await axios.get(`/employees/${user.employee_id}`);
+        const res = await axios.get(`/employees/${user.employee_id}`, { suppress403Toast: true });
         if (isMounted) setEmployee(res.data?.employee || null);
       } catch (e) {
         // Silently ignore (no permission or not found); fallback avatar will show
@@ -252,11 +252,12 @@ const LeftSidebar = () => {
       color: 'bg-fuchsia-600',
       show: () => (travelCaps.canCreateOrOwn || travelCaps.canViewAll || can('travel.claim.read') || travelCaps.isHR),
       children: [
-        { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => travelCaps.canCreateOrOwn },
-        { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => travelCaps.canViewAll },
-        { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG) },
+        { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => (travelCaps.canCreateOrOwn || travelCaps.isAccountsApprover) },
+        { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => (travelCaps.canViewAll || travelCaps.isAccountsApprover) },
+        { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isAccountsApprover) },
         { name: 'Expense Claims', href: '/travel/expense-claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') },
-        { name: 'Claim Approvals', href: '/travel/expense-claim-approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isHR) }
+        { name: 'Claim Approvals', href: '/travel/expense-claim-approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isHR || travelCaps.isAccountsApprover) },
+        { name: 'Accounts Tranches', href: '/travel/accounts/tranches', icon: ViewColumnsIcon, show: () => (travelCaps.isAccountsApprover || can('travel.claim.approve.accounts')) }
       ]
     }
   ];

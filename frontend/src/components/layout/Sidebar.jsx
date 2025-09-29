@@ -90,6 +90,21 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
   const location = useLocation();
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const user = useAuthStore(s=>s.user);
+  const can = useAuthStore(s=>s.can);
+  const isSuper = user?.role?.name==='Super Admin' || (user?.permissions||[]).includes('*');
+  const canAccounts = isSuper || can('travel.claim.approve.accounts') || /accounts|finance|budget|payroll|reconciliation/i.test(user?.role?.name||'');
+
+  // Build navigation dynamically to inject Accounts section
+  const nav = React.useMemo(()=>{
+    const base = [...navigation];
+    if (canAccounts) {
+      base.push({ name: 'Accounts', href: '/travel/accounts', icon: CogIcon, description: 'Accounts processing', children: [
+        { name: 'Tranches', href: '/travel/accounts/tranches' }
+      ]});
+    }
+    return base;
+  }, [canAccounts]);
 
   // Track expanded parents so they don't collapse on navigation
   const [expandedItems, setExpandedItems] = useState(new Set());
@@ -183,7 +198,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
               <li>
                 <ul role="list" className="-mx-2 space-y-1">
-                  {navigation.map((item) => {
+                  {nav.map((item) => {
                     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
                     const expanded = hasChildren && (expandedItems.has(item.name) || isChildActive(item.children));
                     return (
@@ -309,7 +324,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
                 <ul role="list" className="flex flex-1 flex-col gap-y-7">
                   <li>
                     <ul role="list" className="-mx-2 space-y-1">
-                      {navigation.map((item) => {
+                      {nav.map((item) => {
                         const hasChildren = Array.isArray(item.children) && item.children.length > 0;
                         const expanded = hasChildren && (expandedItems.has(item.name) || isChildActive(item.children));
                         return (

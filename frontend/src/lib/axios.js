@@ -28,6 +28,7 @@ axiosInstance.interceptors.response.use(
   (error) => {
     const status = error?.response?.status;
     const currentPath = window.location.pathname;
+    const suppress403Toast = !!error?.config?.suppress403Toast; // allow callers to silence expected 403s
     
     if (status === 401) {
       // Don't show unauthorized toast if user is already on login page
@@ -35,7 +36,9 @@ axiosInstance.interceptors.response.use(
         toastBus.emit({ type: 'error', message: 'Unauthorized. Please log in.' });
       }
     } else if (status === 403) {
-      toastBus.emit({ type: 'error', message: 'Forbidden. You do not have permission.' });
+      if (!suppress403Toast) {
+        toastBus.emit({ type: 'error', message: 'Forbidden. You do not have permission.' });
+      }
     } else if (status >= 500) {
       toastBus.emit({ type: 'error', message: 'Server error. Please try again later.' });
     } else if (status >= 400) {

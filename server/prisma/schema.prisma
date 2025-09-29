@@ -162,6 +162,18 @@ model ScaleGrade {
   travelRate       TravelRate?
 }
 
+// Define per-scale-grade travel rates
+model TravelRate {
+  id             Int         @id @default(autoincrement())
+  scale_grade_id Int         @unique
+  rate_per_km    Float       @default(0)
+  per_diem_rate  Float       @default(0)
+  is_active      Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  scale_grade    ScaleGrade  @relation(fields: [scale_grade_id], references: [id])
+}
+
 model PastExperience {
   id           Int      @id @default(autoincrement())
   employee_id  Int
@@ -287,7 +299,7 @@ model EmploymentContract {
   confirmation_date   DateTime?
   is_renewed          Boolean    @default(false)
   createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
+  updatedAt           DateTime   @default(now())
   is_deleted          Boolean    @default(false)
   employment          Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
 }
@@ -341,6 +353,8 @@ model User {
   createdRosters DutyRoster[]
   // Back-relation: leave banks created by this user
   createdLeaveBanks LeaveBank[]
+  // Back-relation: accounts tranches created by this user
+  createdTranches TravelClaimTranche[]
 }
 
 model Session {
@@ -636,6 +650,36 @@ model TravelRequest {
   @@index([applicant_id])
 }
 
+// Join model for travel request attendees
+model TravelRequestEmployee {
+  id          Int           @id @default(autoincrement())
+  request_id  Int
+  employee_id Int
+  createdAt   DateTime      @default(now())
+
+  request     TravelRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  employee    Employee      @relation(fields: [employee_id], references: [id])
+
+  @@unique([request_id, employee_id], name: "request_attendee_unique")
+  @@index([employee_id])
+}
+
+// Status history for travel requests (includes recommender actions)
+model TravelRequestStatusEntry {
+  id                 Int            @id @default(autoincrement())
+  request_id         Int
+  action             String
+  remarks            String?
+  actor_employee_id  Int?
+  createdAt          DateTime       @default(now())
+
+  request            TravelRequest  @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  actor              Employee?      @relation(fields: [actor_employee_id], references: [id])
+
+  @@index([request_id])
+  @@index([actor_employee_id])
+}
+
 model TravelClaim {
   id                 Int               @id @default(autoincrement())
   employee_id        Int
@@ -671,96 +715,85 @@ model TravelClaim {
   documents          TravelClaimDocument[]
   segments           TravelClaimSegment[]
   statusEntries      TravelClaimStatusEntry[]
+  // Back-relation for tranche items
+  trancheItems       TravelClaimTrancheItem[]
 
   @@unique([travel_request_id, employee_id], name: "request_employee_claim_unique")
 }
 
+// Status history for expense claims (OPS/DG/HR/Accounts)
+model TravelClaimStatusEntry {
+  id                 Int          @id @default(autoincrement())
+  claim_id           Int
+  action             String
+  remarks            String?
+  actor_employee_id  Int?
+  createdAt          DateTime     @default(now())
+
+  claim              TravelClaim  @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  actor              Employee?    @relation(fields: [actor_employee_id], references: [id])
+
+  @@index([claim_id])
+  @@index([actor_employee_id])
+}
+
+// Segment entries per claim leg
 model TravelClaimSegment {
   id             Int          @id @default(autoincrement())
   claim_id       Int
   departure_from String
   departure_to   String
-  // New: dates for departure and arrival (in addition to times)
+  // Dates and times
   depart_date    DateTime?
-  depart_time    String? // HH:MM
+  depart_time    String?
   arrive_date    DateTime?
   arrive_time    String?
   mode           String?
-  distance_km    Float? @default(0)
-  createdAt      DateTime @default(now())
-  claim          TravelClaim @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  distance_km    Float?       @default(0)
+  createdAt      DateTime     @default(now())
+
+  claim          TravelClaim  @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+
   @@index([claim_id])
 }
 
+// Supporting documents for a claim
 model TravelClaimDocument {
-  id          Int                   @id @default(autoincrement())
+  id          Int                     @id @default(autoincrement())
   claim_id    Int
   category    TravelClaimDocCategory
   file_path   String
   mime_type   String?
   file_size   Int?
-  createdAt   DateTime               @default(now())
-  claim       TravelClaim            @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  createdAt   DateTime                @default(now())
+
+  claim       TravelClaim             @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+
   @@index([claim_id])
   @@index([category])
 }
 
-// Removed duplicate re-definitions of TravelRequestStatus, TravelRequest, TravelClaim, TravelClaimSegment, TravelClaimDocument that were appended below.
-// The canonical definitions (with new expense claim fields) exist earlier in the file.
-// Duplicate block deleted to fix Prisma P1012 duplicate model/enum errors.
-
-// New: many-to-many attendees for a travel request
-model TravelRequestEmployee {
-  id          Int         @id @default(autoincrement())
-  request_id  Int
-  employee_id Int
-  request     TravelRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
-  employee    Employee     @relation(fields: [employee_id], references: [id])
-
-  @@unique([request_id, employee_id], name: "request_employee_unique")
-  @@index([employee_id])
+// Accounts processing tranches to group verified claims
+model TravelClaimTranche {
+  id                 Int                      @id @default(autoincrement())
+  code               String?                   @unique
+  title              String?
+  notes              String?
+  createdAt          DateTime                  @default(now())
+  created_by_user_id Int?
+  createdBy          User?                     @relation(fields: [created_by_user_id], references: [id])
+  items              TravelClaimTrancheItem[]
 }
 
-// New: status history entries for travel request
-model TravelRequestStatusEntry {
-  id                 Int       @id @default(autoincrement())
-  request_id         Int
-  action             String    // e.g., CREATED, APPROVED
-  actor_employee_id  Int
-  createdAt          DateTime  @default(now())
+model TravelClaimTrancheItem {
+  id         Int                @id @default(autoincrement())
+  tranche_id Int
+  claim_id   Int
+  addedAt    DateTime           @default(now())
 
-  request            TravelRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
-  actor              Employee      @relation(fields: [actor_employee_id], references: [id])
+  tranche    TravelClaimTranche @relation(fields: [tranche_id], references: [id], onDelete: Cascade)
+  claim      TravelClaim        @relation(fields: [claim_id], references: [id])
 
-  @@index([request_id])
-  @@index([actor_employee_id])
-}
-
-// New: Travel allowance rates per Scale Grade
-model TravelRate {
-  id            Int        @id @default(autoincrement())
-  scale_grade_id Int
-  rate_per_km   Float?     @default(0)
-  per_diem_rate Float?     @default(0)
-  is_active     Boolean    @default(true)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  scaleGrade    ScaleGrade @relation(fields: [scale_grade_id], references: [id], onDelete: Cascade)
-
-  @@unique([scale_grade_id])
-  @@index([is_active])
-}
-
-// New: Travel Claim status history
-model TravelClaimStatusEntry {
-  id                Int       @id @default(autoincrement())
-  claim_id          Int
-  action            String   // SUBMITTED, OPS_APPROVED, HR_APPROVED, ACCOUNTS_APPROVED, REJECTED, etc.
-  actor_employee_id Int
-  remarks           String?
-  createdAt         DateTime  @default(now())
-  claim             TravelClaim @relation(fields: [claim_id], references: [id], onDelete: Cascade)
-  actor             Employee    @relation(fields: [actor_employee_id], references: [id])
+  @@unique([tranche_id, claim_id], name: "tranche_claim_unique")
   @@index([claim_id])
-  @@index([actor_employee_id])
 }

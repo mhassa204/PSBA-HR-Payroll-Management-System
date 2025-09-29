@@ -90,3 +90,9 @@ export const deleteClaimItem = async () => { throw new Error('Legacy travel clai
 export const uploadClaimItemReceipts = async () => { throw new Error('Legacy travel claim receipts removed.'); };
 export const deleteClaimItemReceipt = async () => { throw new Error('Legacy travel claim receipts removed.'); };
 // ===============================================================================
+
+// Accounts
+export const listVerifiedClaimsForAccounts = (params) => api.get('/travel/expense-claims/accounts', { params }).then(r => r.data.claims);
+export const createExpenseTranche = (payload) => api.post('/travel/expense-claims/tranches', payload).then(r => r.data.tranche);
+export const listExpenseTranches = () => api.get('/travel/expense-claims/tranches').then(r => r.data.tranches);
+export const exportExpenseTranche = (id) => api.get(`/travel/expense-claims/tranches/${id}/export`, { responseType: 'blob' });

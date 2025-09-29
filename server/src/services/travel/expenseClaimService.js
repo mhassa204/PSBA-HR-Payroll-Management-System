@@ -571,5 +571,86 @@ module.exports = {
         statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } }
       }
     });
-  }
+  },
+  listForAccounts: async (ctx, filters) => {
+    if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) return [];
+    const where = { is_deleted: false, status: 'VERIFIED' };
+    if (filters) {
+      if (filters.employee_cnic) where.employee = { ...where.employee, cnic: { contains: String(filters.employee_cnic), mode: 'insensitive' } };
+      if (filters.employee_name) where.employee = { ...where.employee, full_name: { contains: String(filters.employee_name), mode: 'insensitive' } };
+      if (filters.statuses?.length) where.status = { in: filters.statuses };
+      if (filters.from_date || filters.to_date) where.claim_date = {
+        gte: filters.from_date ? new Date(filters.from_date) : undefined,
+        lte: filters.to_date ? new Date(filters.to_date) : undefined,
+      };
+      if (filters.claim_from || filters.claim_to) where.AND = [
+        ...(where.AND||[]),
+        { OR: [
+          { from_date: { gte: filters.claim_from ? new Date(filters.claim_from) : undefined } },
+          { to_date: { lte: filters.claim_to ? new Date(filters.claim_to) : undefined } },
+        ]}
+      ];
+    }
+    return prisma.travelClaim.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { department: true, designation: true, location: true, salary: true } } } },
+        request: true,
+        documents: true,
+        segments: true,
+        statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } }
+      }
+    });
+  },
+  createTranche: async (ctx, title, notes, claimIds) => {
+    if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) throw new Error('Forbidden');
+    const meUserId = ctx.meUserId || Number(ctx.req?.session?.user?.id);
+    if (!Array.isArray(claimIds) || claimIds.length===0) throw new Error('No claims selected');
+    const claims = await prisma.travelClaim.findMany({ where: { id: { in: claimIds.map(Number) }, status: 'VERIFIED', is_deleted: false } });
+    if (claims.length !== claimIds.length) throw new Error('Some claims are not eligible');
+    const code = `TR-${Date.now()}`;
+    const tranche = await prisma.travelClaimTranche.create({ data: { code, title: title||code, notes: notes||null, created_by_user_id: meUserId } });
+    await prisma.travelClaimTrancheItem.createMany({ data: claims.map(c => ({ tranche_id: tranche.id, claim_id: c.id })) });
+    // Mark all to processed
+    await prisma.travelClaim.updateMany({ where: { id: { in: claims.map(c=>c.id) } }, data: { status: 'PROCESSED' } });
+    for (const c of claims) {
+      await prisma.travelClaimStatusEntry.create({ data: { claim_id: c.id, action: 'ACCOUNTS_APPROVED', actor_employee_id: ctx.meEmpId } });
+    }
+    return prisma.travelClaimTranche.findUnique({ where: { id: tranche.id }, include: { items: { include: { claim: { include: { employee: true, request: true } } } } } });
+  },
+  listTranches: async (ctx) => {
+    if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) return [];
+    return prisma.travelClaimTranche.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { items: { include: { claim: { include: { employee: true, request: true } } } }, createdBy: true }
+    });
+  },
+  exportTrancheCsv: async (trancheId) => {
+    const t = await prisma.travelClaimTranche.findUnique({ where: { id: Number(trancheId) }, include: { items: { include: { claim: { include: { employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { salary: true, department: true, designation: true } } } }, request: true } } } } } });
+    if (!t) throw new Error('Not found');
+    const header = ['tranche_code','claim_id','request_id','employee_id','employee_name','cnic','dept','designation','bank_name','account_no','from_date','to_date','grand_total'];
+    const rows = [];
+    for (const it of t.items) {
+      const c = it.claim; const emp = c.employee; const empJob = emp?.employmentRecords?.[0]; const sal = empJob?.salary;
+      rows.push([
+        t.code,
+        c.id,
+        c.travel_request_id || '',
+        c.employee_id,
+        emp?.full_name || '',
+        emp?.cnic || '',
+        empJob?.department?.name || '',
+        empJob?.designation?.title || '',
+        sal?.bank_name_primary || '',
+        sal?.bank_account_primary || '',
+        c.from_date ? new Date(c.from_date).toISOString().slice(0,10) : '',
+        c.to_date ? new Date(c.to_date).toISOString().slice(0,10) : '',
+        c.grand_total || 0
+      ]);
+    }
+    const csv = [header.join(','), ...rows.map(r=>r.join(','))].join('\n');
+    return { code: t.code, csv };
+  },
+  // ...existing code...
 };

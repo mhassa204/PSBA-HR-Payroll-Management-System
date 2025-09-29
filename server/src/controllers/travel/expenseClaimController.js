@@ -71,5 +71,17 @@ module.exports = {
   },
   listAll: async (req, res) => {
     try { const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req); const claims = await service.listAllForApprovers(ctx); res.json({ success:true, claims }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+  listForAccounts: async (req, res) => {
+    try { const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req); const claims = await service.listForAccounts(ctx, req.query||{}); res.json({ success:true, claims }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+  createTranche: async (req, res) => {
+    try { const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req); const { title, notes, claimIds } = req.body||{}; const tranche = await service.createTranche(ctx, title, notes, Array.isArray(claimIds)?claimIds:[]); res.json({ success:true, tranche }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+  listTranches: async (req, res) => {
+    try { const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req); const tranches = await service.listTranches(ctx); res.json({ success:true, tranches }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+  exportTranche: async (req, res) => {
+    try { const { csv, code } = await service.exportTrancheCsv(req.params.id); res.setHeader('Content-Type','text/csv'); res.setHeader('Content-Disposition',`attachment; filename="tranche-${code}.csv"`); res.send(csv); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
   }
 };
