@@ -165,6 +165,7 @@ export default function ManageExpenseClaimApprovals(){
 
   const currentEmployment = (emp) => emp?.employmentRecords?.[0];
   const formatMoney = (v) => (v||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtDate = (v) => v ? new Date(v).toISOString().slice(0,10) : '—';
 
   return (
     <div className="space-y-6">
@@ -306,21 +307,35 @@ export default function ManageExpenseClaimApprovals(){
                 <Card className="p-3">
                   <div className="text-[11px] uppercase text-muted-foreground mb-1">Request</div>
                   <div className="font-medium">#{selected.travel_request_id}</div>
-                  <div className="text-xs text-muted-foreground">{selected.request?.purpose || selected.request?.travel_purpose}</div>
-                  <div className="text-[11px] text-muted-foreground mt-1">{selected.request?.origin} → {selected.request?.destination}</div>
+                  <div className="text-xs text-muted-foreground">{selected.request?.purpose || selected.request?.travel_purpose || '—'}</div>
+                  <div className="text-[11px] text-muted-foreground mt-1">Destination: {selected.request?.destination || '—'}</div>
+                  <div className="text-[11px] text-muted-foreground">Departure: {fmtDate(selected.request?.departure_date)} → Return: {fmtDate(selected.request?.expected_return_date)}</div>
                 </Card>
               )}
               <Card className="p-3">
+                <div className="text-[11px] uppercase text-muted-foreground mb-1">Claim Details</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <div>From Date</div><div className="text-right font-medium">{fmtDate(selected.from_date)}</div>
+                  <div>To Date</div><div className="text-right font-medium">{fmtDate(selected.to_date)}</div>
+                  <div>Overnight Stay</div><div className="text-right font-medium">{selected.overnight_stay? 'Yes':'No'}</div>
+                  <div>Transport Mode</div><div className="text-right font-medium">{selected.transport_mode || '—'}</div>
+                  <div>Fuel Total</div><div className="text-right font-medium">{formatMoney(selected.fuel_total)}</div>
+                  <div>Fare Total</div><div className="text-right font-medium">{formatMoney(selected.fare_total)}</div>
+                  <div>Toll Tax Total (D)</div><div className="text-right font-medium">{formatMoney(selected.toll_tax_total)}</div>
+                  <div>Rate / KM (B)</div><div className="text-right font-medium">{formatMoney(selected.rate_per_km)}</div>
+                </div>
+              </Card>
+              <Card className="p-3">
                 <div className="text-[11px] uppercase text-muted-foreground mb-1">Totals</div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  <div>Distance KM</div><div className="text-right font-medium">{selected.total_distance_km||0}</div>
+                  <div>Total Distance (A)</div><div className="text-right font-medium">{selected.total_distance_km||0}</div>
+                  <div>Distance Amount (C = A×B)</div><div className="text-right font-medium">{formatMoney(selected.distance_amount)}</div>
+                  <div>Travel Total (E = C + D)</div><div className="text-right font-medium">{formatMoney(selected.travel_total)}</div>
                   <div>Per Diem Days</div><div className="text-right font-medium">{selected.per_diem_days||0}</div>
                   <div>Per Diem Rate</div><div className="text-right font-medium">{formatMoney(selected.per_diem_rate)}</div>
-                  <div>Per Diem Total</div><div className="text-right font-medium">{formatMoney(selected.per_diem_total)}</div>
-                  <div>Transport Total</div><div className="text-right font-medium">{formatMoney(selected.transport_total)}</div>
-                  <div>Other Total</div><div className="text-right font-medium">{formatMoney(selected.other_total)}</div>
+                  <div>Per Diem Amount (F)</div><div className="text-right font-medium">{formatMoney(selected.per_diem_amount)}</div>
                   <div className="col-span-2 border-t pt-1" />
-                  <div>Grand Total</div><div className="text-right font-semibold">{formatMoney(selected.grand_total)}</div>
+                  <div>Grand Total (G = E + F)</div><div className="text-right font-semibold">{formatMoney(selected.grand_total)}</div>
                 </div>
               </Card>
               <Card className="p-3">
@@ -347,22 +362,33 @@ export default function ManageExpenseClaimApprovals(){
                       <th className="p-2 text-left font-medium">Mode</th>
                       <th className="p-2 text-left font-medium">From</th>
                       <th className="p-2 text-left font-medium">To</th>
+                      <th className="p-2 text-left font-medium">Depart Date</th>
+                      <th className="p-2 text-left font-medium">Depart Time</th>
+                      <th className="p-2 text-left font-medium">Arrive Date</th>
+                      <th className="p-2 text-left font-medium">Arrive Time</th>
                       <th className="p-2 text-left font-medium">Distance KM</th>
                       <th className="p-2 text-left font-medium">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(selected.segments||[]).map((s,i)=>(
-                      <tr key={s.id} className="border-t">
-                        <td className="p-2">{i+1}</td>
-                        <td className="p-2">{s.mode||'—'}</td>
-                        <td className="p-2">{s.origin||'—'}</td>
-                        <td className="p-2">{s.destination||'—'}</td>
-                        <td className="p-2">{s.distance_km||0}</td>
-                        <td className="p-2">{formatMoney(s.amount)}</td>
-                      </tr>
-                    ))}
-                    {(!selected.segments || selected.segments.length===0) && <tr><td colSpan={6} className="p-2 text-center text-muted-foreground">No segments</td></tr>}
+                    {(selected.segments||[]).map((s,i)=>{
+                      const amount = Number(s.distance_km||0) * Number(selected.rate_per_km||0);
+                      return (
+                        <tr key={s.id} className="border-t">
+                          <td className="p-2">{i+1}</td>
+                          <td className="p-2">{s.mode||'—'}</td>
+                          <td className="p-2">{s.departure_from||'—'}</td>
+                          <td className="p-2">{s.departure_to||'—'}</td>
+                          <td className="p-2">{fmtDate(s.depart_date)}</td>
+                          <td className="p-2">{s.depart_time||'—'}</td>
+                          <td className="p-2">{fmtDate(s.arrive_date)}</td>
+                          <td className="p-2">{s.arrive_time||'—'}</td>
+                          <td className="p-2">{s.distance_km||0}</td>
+                          <td className="p-2">{formatMoney(amount)}</td>
+                        </tr>
+                      );
+                    })}
+                    {(!selected.segments || selected.segments.length===0) && <tr><td colSpan={10} className="p-2 text-center text-muted-foreground">No segments</td></tr>}
                   </tbody>
                 </table>
               </div>
