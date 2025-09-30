@@ -20,12 +20,14 @@ export default function ManageExpenseClaimApprovals(){
   const [statusFilter, setStatusFilter] = useState('');
   // Inline edit state (Accounts only)
   const [editMode, setEditMode] = useState(false);
-  const [editVals, setEditVals] = useState({ total_distance_km: '', rate_per_km: '', per_diem_days: '', per_diem_rate: '' });
+  const [editVals, setEditVals] = useState({ total_distance_km: '', rate_per_km: '', per_diem_days: '', per_diem_rate: '', fare_total: '', toll_tax_total: '' });
   // enforce numeric-only; preserve caret position on change
   const rateKmRef = React.useRef(null);
   const totalDistRef = React.useRef(null);
   const perDiemDaysRef = React.useRef(null);
   const perDiemRateRef = React.useRef(null);
+  const fareTotalRef = React.useRef(null);
+  const tollTaxRef = React.useRef(null);
   const setNumWithRef = (field, ref) => (e) => {
     const el = e.target;
     const start = el.selectionStart ?? el.value.length;
@@ -151,6 +153,8 @@ export default function ManageExpenseClaimApprovals(){
     rate_per_km: String(c?.rate_per_km ?? ''),
     per_diem_days: String(c?.per_diem_days ?? ''),
     per_diem_rate: String(c?.per_diem_rate ?? ''),
+    fare_total: String(c?.fare_total ?? ''),
+    toll_tax_total: String(c?.toll_tax_total ?? ''),
   }); };
   const close = () => { setSelected(null); setEditMode(false); };
 
@@ -175,6 +179,8 @@ export default function ManageExpenseClaimApprovals(){
       rate_per_km: Number(editVals.rate_per_km || 0) || 0,
       per_diem_days: Number(editVals.per_diem_days || 0) || 0,
       per_diem_rate: Number(editVals.per_diem_rate || 0) || 0,
+      fare_total: Number(editVals.fare_total || 0) || 0,
+      toll_tax_total: Number(editVals.toll_tax_total || 0) || 0,
     };
     const totals = computeExpenseClaimTotals({ ...selected, ...payload });
     // Also persist dependent totals
@@ -352,6 +358,8 @@ export default function ManageExpenseClaimApprovals(){
             rate_per_km: Number(editVals.rate_per_km || 0) || 0,
             per_diem_days: Number(editVals.per_diem_days || 0) || 0,
             per_diem_rate: Number(editVals.per_diem_rate || 0) || 0,
+            fare_total: Number(editVals.fare_total || 0) || 0,
+            toll_tax_total: Number(editVals.toll_tax_total || 0) || 0,
           } : selected;
           const totals = computeExpenseClaimTotals(draft);
           return (
@@ -366,6 +374,8 @@ export default function ManageExpenseClaimApprovals(){
                     rate_per_km: String(selected?.rate_per_km ?? ''),
                     per_diem_days: String(selected?.per_diem_days ?? ''),
                     per_diem_rate: String(selected?.per_diem_rate ?? ''),
+                    fare_total: String(selected?.fare_total ?? ''),
+                    toll_tax_total: String(selected?.toll_tax_total ?? ''),
                   });
                 }}>Edit</Button>
               )}
@@ -376,6 +386,8 @@ export default function ManageExpenseClaimApprovals(){
                     rate_per_km: String(selected?.rate_per_km ?? ''),
                     per_diem_days: String(selected?.per_diem_days ?? ''),
                     per_diem_rate: String(selected?.per_diem_rate ?? ''),
+                    fare_total: String(selected?.fare_total ?? ''),
+                    toll_tax_total: String(selected?.toll_tax_total ?? ''),
                   }); }}>Cancel</Button>
                   <Button size="sm" onClick={saveEdits} disabled={submitting}>Update</Button>
                 </div>
@@ -423,8 +435,26 @@ export default function ManageExpenseClaimApprovals(){
                   <div>Overnight Stay</div><div className="text-right font-medium">{selected.overnight_stay? 'Yes':'No'}</div>
                   <div>Transport Mode</div><div className="text-right font-medium">{selected.transport_mode || '—'}</div>
                   <div>Fuel Total</div><div className="text-right font-medium">{formatMoney(selected.fuel_total)}</div>
-                  <div>Fare Total</div><div className="text-right font-medium">{formatMoney(selected.fare_total)}</div>
-                  <div>Toll Tax Total (D)</div><div className="text-right font-medium">{formatMoney(selected.toll_tax_total)}</div>
+                  <div>Fare Total</div>
+                  <div className="text-right font-medium">
+                    {editMode ? (
+                      <Input ref={fareTotalRef} type="text" value={editVals.fare_total}
+                        onChange={setNumWithRef('fare_total', fareTotalRef)}
+                        className="h-7 text-right" />
+                    ) : (
+                      formatMoney(selected.fare_total)
+                    )}
+                  </div>
+                  <div>Toll Tax Total (D)</div>
+                  <div className="text-right font-medium">
+                    {editMode ? (
+                      <Input ref={tollTaxRef} type="text" value={editVals.toll_tax_total}
+                        onChange={setNumWithRef('toll_tax_total', tollTaxRef)}
+                        className="h-7 text-right" />
+                    ) : (
+                      formatMoney(selected.toll_tax_total)
+                    )}
+                  </div>
                   <div>Rate / KM (B)</div>
                   <div className="text-right font-medium">
                     {editMode ? (

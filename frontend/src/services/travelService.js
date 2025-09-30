@@ -54,7 +54,9 @@ export const computeExpenseClaimTotals = (claim) => {
   const B = Number(claim.rate_per_km || 0);
   const C = +(A * B).toFixed(2);
   const D = Number(claim.toll_tax_total || 0);
-  const E = +(C + D).toFixed(2);
+  const mode = String(claim.transport_mode || 'OWN').toUpperCase();
+  const fare = Number(claim.fare_total || 0);
+  const E = +(C + D + (mode !== 'OWN' ? fare : 0)).toFixed(2);
   const perDiemDays = Number(claim.per_diem_days || 0);
   const perDiemRate = Number(claim.per_diem_rate || 0);
   const F = +(perDiemDays * perDiemRate).toFixed(2);

@@ -147,6 +147,9 @@ module.exports = {
       if('travel_total' in data) updateData.travel_total = Number(data.travel_total||0);
       if('per_diem_amount' in data) updateData.per_diem_amount = Number(data.per_diem_amount||0);
       if('grand_total' in data) updateData.grand_total = Number(data.grand_total||0);
+      // Newly allowed for Accounts edits
+      if('toll_tax_total' in data) updateData.toll_tax_total = Number(data.toll_tax_total||0);
+      if('fare_total' in data) updateData.fare_total = Number(data.fare_total||0);
     }
 
     // Regular editable fields in DRAFT
@@ -171,9 +174,11 @@ module.exports = {
       // Ensure totals are consistent even if some fields missing
       const A = ('total_distance_km' in updateData) ? updateData.total_distance_km : (updated.total_distance_km||0);
       const B = ('rate_per_km' in updateData) ? updateData.rate_per_km : (updated.rate_per_km||0);
-      const D = updated.toll_tax_total||0;
+      const D = ('toll_tax_total' in updateData) ? updateData.toll_tax_total : (updated.toll_tax_total||0);
+      const mode = (updated.transport_mode || 'OWN').toUpperCase();
+      const fare = ('fare_total' in updateData) ? updateData.fare_total : (updated.fare_total || 0);
       const C = ('distance_amount' in updateData) ? updateData.distance_amount : (A * B);
-      const E = ('travel_total' in updateData) ? updateData.travel_total : (C + D);
+      const E = ('travel_total' in updateData) ? updateData.travel_total : (C + D + (mode !== 'OWN' ? fare : 0));
       const pdDays = ('per_diem_days' in updateData) ? updateData.per_diem_days : (updated.per_diem_days||0);
       const pdRate = ('per_diem_rate' in updateData) ? updateData.per_diem_rate : (updated.per_diem_rate||0);
       const F = ('per_diem_amount' in updateData) ? updateData.per_diem_amount : (pdDays * pdRate);
@@ -190,7 +195,9 @@ module.exports = {
     const B = Number(claim.rate_per_km||0);
     const C = A * B;
     const D = Number(claim.toll_tax_total||0);
-    const E = C + D;
+    const mode = (claim.transport_mode || 'OWN').toUpperCase();
+    const fare = Number(claim.fare_total || 0);
+    const E = C + D + (mode !== 'OWN' ? fare : 0);
     const per_diem_days = Number(claim.per_diem_days||0);
     const per_diem_rate = Number(claim.per_diem_rate||0);
     const F = per_diem_days * per_diem_rate;
