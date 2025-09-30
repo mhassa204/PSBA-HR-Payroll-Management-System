@@ -124,28 +124,63 @@ module.exports = {
     }
     return claim;
   },
-  updateClaim: async (id, employee_id, isSuperAdmin, data) => {
-    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
+  updateClaim: async (id, employee_id, isSuperAdmin, data, ctx) => {
+    const claim = await prisma.travelClaim.findUnique({ where: { id: Number(id) }, include: { request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } }, statusEntries: true } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
-    if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
-    if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
-    const updateData = {};
-    ['from_date','to_date'].forEach(f=>{ if(data[f]) updateData[f] = new Date(data[f]); });
-    if('overnight_stay' in data) updateData.overnight_stay = !!data.overnight_stay;
-    if('toll_tax_total' in data) updateData.toll_tax_total = Number(data.toll_tax_total||0);
-    if('per_diem_days' in data) updateData.per_diem_days = Number(data.per_diem_days||0);
-    // New fields
-    if('transport_mode' in data) updateData.transport_mode = String(data.transport_mode||'OWN').toUpperCase();
-    if('fuel_total' in data) updateData.fuel_total = Number(data.fuel_total||0);
-    if('fare_total' in data) updateData.fare_total = Number(data.fare_total||0);
-    // rates ignored if sent; always ensure populated
-    if(!claim.rate_per_km || !claim.per_diem_rate){
-      const rates = await getRatesForEmployee(claim.employee_id);
-      if(!claim.rate_per_km) updateData.rate_per_km = rates.rate_per_km;
-      if(!claim.per_diem_rate) updateData.per_diem_rate = rates.per_diem_rate;
+    const editableByAccounts = (ctx && (ctx.isSuperAdmin || ctx.isAccountsApprover)) && !claim.statusEntries.some(e=>e.action==='ACCOUNTS_APPROVED');
+    const canAccess = module.exports._canAccess(claim, employee_id, isSuperAdmin) || editableByAccounts;
+    if(!canAccess) throw new Error('Forbidden');
+
+    if(!editableByAccounts){
+      if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
     }
-    await prisma.travelClaim.update({ where: { id: claim.id }, data: updateData });
-    return module.exports.recomputeTotals(claim.id);
+
+    const updateData = {};
+
+    // Accounts approver can adjust these even post-APPROVED/VERIFIED but before Accounts approval
+    if (editableByAccounts) {
+      if('total_distance_km' in data) updateData.total_distance_km = Number(data.total_distance_km||0);
+      if('rate_per_km' in data) updateData.rate_per_km = Number(data.rate_per_km||0);
+      if('per_diem_days' in data) updateData.per_diem_days = Number(data.per_diem_days||0);
+      if('per_diem_rate' in data) updateData.per_diem_rate = Number(data.per_diem_rate||0);
+      if('distance_amount' in data) updateData.distance_amount = Number(data.distance_amount||0);
+      if('travel_total' in data) updateData.travel_total = Number(data.travel_total||0);
+      if('per_diem_amount' in data) updateData.per_diem_amount = Number(data.per_diem_amount||0);
+      if('grand_total' in data) updateData.grand_total = Number(data.grand_total||0);
+    }
+
+    // Regular editable fields in DRAFT
+    if(!editableByAccounts){
+      ['from_date','to_date'].forEach(f=>{ if(data[f]) updateData[f] = new Date(data[f]); });
+      if('overnight_stay' in data) updateData.overnight_stay = !!data.overnight_stay;
+      if('toll_tax_total' in data) updateData.toll_tax_total = Number(data.toll_tax_total||0);
+      if('per_diem_days' in data) updateData.per_diem_days = Number(data.per_diem_days||0);
+      if('transport_mode' in data) updateData.transport_mode = String(data.transport_mode||'OWN').toUpperCase();
+      if('fuel_total' in data) updateData.fuel_total = Number(data.fuel_total||0);
+      if('fare_total' in data) updateData.fare_total = Number(data.fare_total||0);
+      if('rate_per_km' in data) updateData.rate_per_km = Number(data.rate_per_km||0);
+      if('per_diem_rate' in data) updateData.per_diem_rate = Number(data.per_diem_rate||0);
+    }
+
+    const updated = await prisma.travelClaim.update({ where: { id: claim.id }, data: updateData });
+
+    // Recompute totals if Accounts didn't explicitly pass dependent totals
+    if(!editableByAccounts){
+      return module.exports.recomputeTotals(claim.id);
+    } else {
+      // Ensure totals are consistent even if some fields missing
+      const A = ('total_distance_km' in updateData) ? updateData.total_distance_km : (updated.total_distance_km||0);
+      const B = ('rate_per_km' in updateData) ? updateData.rate_per_km : (updated.rate_per_km||0);
+      const D = updated.toll_tax_total||0;
+      const C = ('distance_amount' in updateData) ? updateData.distance_amount : (A * B);
+      const E = ('travel_total' in updateData) ? updateData.travel_total : (C + D);
+      const pdDays = ('per_diem_days' in updateData) ? updateData.per_diem_days : (updated.per_diem_days||0);
+      const pdRate = ('per_diem_rate' in updateData) ? updateData.per_diem_rate : (updated.per_diem_rate||0);
+      const F = ('per_diem_amount' in updateData) ? updateData.per_diem_amount : (pdDays * pdRate);
+      const G = ('grand_total' in updateData) ? updateData.grand_total : (E + F);
+      await prisma.travelClaim.update({ where: { id: claim.id }, data: { total_distance_km: A, distance_amount: C, travel_total: E, per_diem_amount: F, grand_total: G, rate_per_km: B, per_diem_rate: pdRate } });
+      return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true, statusEntries: { orderBy: { createdAt: 'asc' } } } });
+    }
   },
   recomputeTotals: async (claimId) => {
     const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { segments: true, documents: true, request: true, employee: true } });

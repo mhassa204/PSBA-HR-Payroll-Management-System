@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuthStore } from '../../auth/authStore';
-import { listPendingExpenseClaimApprovals, listAllExpenseClaimApprovals, decideExpenseClaim, exportExpenseClaimsToCsv, getTravelCapabilities } from '../../../services/travelService';
+import { listPendingExpenseClaimApprovals, listAllExpenseClaimApprovals, decideExpenseClaim, exportExpenseClaimsToCsv, getTravelCapabilities, updateExpenseClaim, computeExpenseClaimTotals } from '../../../services/travelService';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,11 @@ export default function ManageExpenseClaimApprovals(){
   const [loadingAll, setLoadingAll] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  // Inline edit state (Accounts only)
+  const [editMode, setEditMode] = useState(false);
+  const [editVals, setEditVals] = useState({ total_distance_km: '', rate_per_km: '', per_diem_days: '', per_diem_rate: '' });
+  const onlyDigits = (s) => (s ?? '').replace(/[^0-9]/g, '');
+  const selectOnFocus = (e)=> e.target.select();
 
   // Auth / permission context
   const user = useAuthStore(s=>s.user);
@@ -121,8 +126,13 @@ export default function ManageExpenseClaimApprovals(){
   const load = async () => { setLoading(true); try { const rs = await listPendingExpenseClaimApprovals(); setList(rs); } finally { setLoading(false); } };
   useEffect(()=>{ load(); },[]);
 
-  const open = (c) => { setSelected(c); setRemarks(''); };
-  const close = () => setSelected(null);
+  const open = (c) => { setSelected(c); setRemarks(''); setEditMode(false); setEditVals({
+    total_distance_km: String(c?.total_distance_km ?? ''),
+    rate_per_km: String(c?.rate_per_km ?? ''),
+    per_diem_days: String(c?.per_diem_days ?? ''),
+    per_diem_rate: String(c?.per_diem_rate ?? ''),
+  }); };
+  const close = () => { setSelected(null); setEditMode(false); };
 
   const act = async (action) => {
     if(!selected) return; if(!window.confirm(`Confirm ${action.toLowerCase()}?`)) return;
@@ -136,6 +146,37 @@ export default function ManageExpenseClaimApprovals(){
     }
     catch(e){ alert(e?.response?.data?.error || e.message); }
     finally { setSubmitting(false); }
+  };
+
+  const saveEdits = async () => {
+    if(!selected) return;
+    const payload = {
+      total_distance_km: parseInt(editVals.total_distance_km || '0', 10) || 0,
+      rate_per_km: parseInt(editVals.rate_per_km || '0', 10) || 0,
+      per_diem_days: parseInt(editVals.per_diem_days || '0', 10) || 0,
+      per_diem_rate: parseInt(editVals.per_diem_rate || '0', 10) || 0,
+    };
+    const totals = computeExpenseClaimTotals({ ...selected, ...payload });
+    // Also persist dependent totals
+    const submitPayload = {
+      ...payload,
+      distance_amount: totals.C,
+      travel_total: totals.E,
+      per_diem_amount: totals.F,
+      grand_total: totals.G,
+    };
+    setSubmitting(true);
+    try {
+      const upd = await updateExpenseClaim(selected.id, submitPayload);
+      setSelected(upd);
+      setEditMode(false);
+      await load();
+      await loadAll();
+    } catch(e){
+      alert(e?.response?.data?.error || e.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const loadAll = async () => { setLoadingAll(true); try { const rs = await listAllExpenseClaimApprovals(); setAllClaims(rs); } finally { setLoadingAll(false);} };
@@ -277,8 +318,45 @@ export default function ManageExpenseClaimApprovals(){
        )}
 
       <EnhancedModal isOpen={!!selected} onClose={close} title={selected? `Expense Claim #${selected.id}`: ''} size="xl">
-        {selected && (() => { const emp = selected.employee; const empJob = currentEmployment(emp); return (
+        {selected && (() => { 
+          const emp = selected.employee; const empJob = currentEmployment(emp);
+          const allowEdit = (isSuper || can('travel.claim.approve.accounts') || caps?.isAccountsApprover) && !(selected.statusEntries||[]).some(se=>se.action==='ACCOUNTS_APPROVED');
+          const draft = editMode ? {
+            ...selected,
+            total_distance_km: parseInt(editVals.total_distance_km || '0', 10) || 0,
+            rate_per_km: parseInt(editVals.rate_per_km || '0', 10) || 0,
+            per_diem_days: parseInt(editVals.per_diem_days || '0', 10) || 0,
+            per_diem_rate: parseInt(editVals.per_diem_rate || '0', 10) || 0,
+          } : selected;
+          const totals = computeExpenseClaimTotals(draft);
+          return (
           <div className="p-1 md:p-4 space-y-5 text-sm">
+            {/* Top-right edit controls for Accounts */}
+            <div className="flex justify-end">
+              {allowEdit && !editMode && (
+                <Button size="sm" onClick={()=>{
+                  setEditMode(true);
+                  setEditVals({
+                    total_distance_km: String(selected?.total_distance_km ?? ''),
+                    rate_per_km: String(selected?.rate_per_km ?? ''),
+                    per_diem_days: String(selected?.per_diem_days ?? ''),
+                    per_diem_rate: String(selected?.per_diem_rate ?? ''),
+                  });
+                }}>Edit</Button>
+              )}
+              {allowEdit && editMode && (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={()=>{ setEditMode(false); setEditVals({
+                    total_distance_km: String(selected?.total_distance_km ?? ''),
+                    rate_per_km: String(selected?.rate_per_km ?? ''),
+                    per_diem_days: String(selected?.per_diem_days ?? ''),
+                    per_diem_rate: String(selected?.per_diem_rate ?? ''),
+                  }); }}>Cancel</Button>
+                  <Button size="sm" onClick={saveEdits} disabled={submitting}>Update</Button>
+                </div>
+              )}
+            </div>
+
             <div className="grid md:grid-cols-4 gap-4">
               <Card className="p-3">
                 <div className="text-[11px] uppercase text-muted-foreground mb-1">Employee</div>
@@ -322,20 +400,60 @@ export default function ManageExpenseClaimApprovals(){
                   <div>Fuel Total</div><div className="text-right font-medium">{formatMoney(selected.fuel_total)}</div>
                   <div>Fare Total</div><div className="text-right font-medium">{formatMoney(selected.fare_total)}</div>
                   <div>Toll Tax Total (D)</div><div className="text-right font-medium">{formatMoney(selected.toll_tax_total)}</div>
-                  <div>Rate / KM (B)</div><div className="text-right font-medium">{formatMoney(selected.rate_per_km)}</div>
+                  <div>Rate / KM (B)</div>
+                  <div className="text-right font-medium">
+                    {editMode ? (
+                      <Input type="text" inputMode="numeric" pattern="[0-9]*" value={editVals.rate_per_km}
+                        onChange={e=> setEditVals(v=>({ ...v, rate_per_km: onlyDigits(e.target.value) }))}
+                        className="h-7 text-right" />
+                    ) : (
+                      formatMoney(selected.rate_per_km)
+                    )}
+                  </div>
                 </div>
               </Card>
               <Card className="p-3">
                 <div className="text-[11px] uppercase text-muted-foreground mb-1">Totals</div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  <div>Total Distance (A)</div><div className="text-right font-medium">{selected.total_distance_km||0}</div>
-                  <div>Distance Amount (C = A×B)</div><div className="text-right font-medium">{formatMoney(selected.distance_amount)}</div>
-                  <div>Travel Total (E = C + D)</div><div className="text-right font-medium">{formatMoney(selected.travel_total)}</div>
-                  <div>Per Diem Days</div><div className="text-right font-medium">{selected.per_diem_days||0}</div>
-                  <div>Per Diem Rate</div><div className="text-right font-medium">{formatMoney(selected.per_diem_rate)}</div>
-                  <div>Per Diem Amount (F)</div><div className="text-right font-medium">{formatMoney(selected.per_diem_amount)}</div>
+                  <div>Total Distance (A)</div>
+                  <div className="text-right font-medium">
+                    {editMode ? (
+                      <Input type="text" inputMode="numeric" pattern="[0-9]*" value={editVals.total_distance_km}
+                        onChange={e=> setEditVals(v=>({ ...v, total_distance_km: onlyDigits(e.target.value) }))}
+                        className="h-7 text-right" />
+                    ) : (
+                      totals.A || 0
+                    )}
+                  </div>
+
+                  <div>Distance Amount (C = A×B)</div><div className="text-right font-medium">{formatMoney(totals.C)}</div>
+                  <div>Travel Total (E = C + D)</div><div className="text-right font-medium">{formatMoney(totals.E)}</div>
+
+                  <div>Per Diem Days</div>
+                  <div className="text-right font-medium">
+                    {editMode ? (
+                      <Input type="text" inputMode="numeric" pattern="[0-9]*" value={editVals.per_diem_days}
+                        onChange={e=> setEditVals(v=>({ ...v, per_diem_days: onlyDigits(e.target.value) }))}
+                        className="h-7 text-right" />
+                    ) : (
+                      draft.per_diem_days || 0
+                    )}
+                  </div>
+
+                  <div>Per Diem Rate</div>
+                  <div className="text-right font-medium">
+                    {editMode ? (
+                      <Input type="text" inputMode="numeric" pattern="[0-9]*" value={editVals.per_diem_rate}
+                        onChange={e=> setEditVals(v=>({ ...v, per_diem_rate: onlyDigits(e.target.value) }))}
+                        className="h-7 text-right" />
+                    ) : (
+                      formatMoney(draft.per_diem_rate)
+                    )}
+                  </div>
+
+                  <div>Per Diem Amount (F)</div><div className="text-right font-medium">{formatMoney(totals.F)}</div>
                   <div className="col-span-2 border-t pt-1" />
-                  <div>Grand Total (G = E + F)</div><div className="text-right font-semibold">{formatMoney(selected.grand_total)}</div>
+                  <div>Grand Total (G = E + F)</div><div className="text-right font-semibold">{formatMoney(totals.G)}</div>
                 </div>
               </Card>
               <Card className="p-3">

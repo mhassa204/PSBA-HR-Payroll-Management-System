@@ -33,8 +33,8 @@ module.exports = {
   },
   update: async (req, res) => {
     try {
-      const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
-      const claim = await service.updateClaim(Number(req.params.id), employee_id, isSuperAdmin, req.body||{});
+      const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req);
+      const claim = await service.updateClaim(Number(req.params.id), ctx.meEmpId, ctx.isSuperAdmin, req.body||{}, ctx);
       res.json({ success:true, claim });
     } catch (e){ res.status(400).json({ success:false, error: e.message }); }
   },

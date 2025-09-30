@@ -45,7 +45,7 @@ router.get('/expense-claims/tranches/:id/export', isAuthenticated, expenseClaimC
 router.get('/expense-claims', isAuthenticated, expenseClaimController.list);
 router.post('/expense-claims', isAuthenticated, expenseClaimController.create);
 router.get('/expense-claims/:id', isAuthenticated, expenseClaimController.getOne);
-router.put('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.manage','travel.update']), expenseClaimController.update);
+router.put('/expense-claims/:id', isAuthenticated, expenseClaimController.update);
 router.delete('/expense-claims/:id', isAuthenticated, authorizeAny(['travel.manage','travel.delete']), expenseClaimController.delete);
 
 // Segments
