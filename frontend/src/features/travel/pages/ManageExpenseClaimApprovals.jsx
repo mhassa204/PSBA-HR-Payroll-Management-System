@@ -21,8 +21,28 @@ export default function ManageExpenseClaimApprovals(){
   // Inline edit state (Accounts only)
   const [editMode, setEditMode] = useState(false);
   const [editVals, setEditVals] = useState({ total_distance_km: '', rate_per_km: '', per_diem_days: '', per_diem_rate: '' });
-  const onlyDigits = (s) => (s ?? '').replace(/[^0-9]/g, '');
-  const selectOnFocus = (e)=> e.target.select();
+  // enforce numeric-only; preserve caret position on change
+  const rateKmRef = React.useRef(null);
+  const totalDistRef = React.useRef(null);
+  const perDiemDaysRef = React.useRef(null);
+  const perDiemRateRef = React.useRef(null);
+  const setNumWithRef = (field, ref) => (e) => {
+    const el = e.target;
+    const start = el.selectionStart ?? el.value.length;
+    const raw = el.value;
+    const cleaned = (raw ?? '').replace(/[^0-9]/g, '');
+    setEditVals(v => ({ ...v, [field]: cleaned }));
+    // restore caret after state update
+    requestAnimationFrame(() => {
+      if(ref?.current){
+        const removedBefore = (raw.slice(0, start).match(/[^0-9]/g) || []).length;
+        let pos = start - removedBefore;
+        pos = Math.max(0, Math.min(pos, cleaned.length));
+        try { ref.current.setSelectionRange(pos, pos); } catch(_) {}
+        try { ref.current.focus(); } catch(_) {}
+      }
+    });
+  };
 
   // Auth / permission context
   const user = useAuthStore(s=>s.user);
@@ -151,10 +171,10 @@ export default function ManageExpenseClaimApprovals(){
   const saveEdits = async () => {
     if(!selected) return;
     const payload = {
-      total_distance_km: parseInt(editVals.total_distance_km || '0', 10) || 0,
-      rate_per_km: parseInt(editVals.rate_per_km || '0', 10) || 0,
-      per_diem_days: parseInt(editVals.per_diem_days || '0', 10) || 0,
-      per_diem_rate: parseInt(editVals.per_diem_rate || '0', 10) || 0,
+      total_distance_km: Number(editVals.total_distance_km || 0) || 0,
+      rate_per_km: Number(editVals.rate_per_km || 0) || 0,
+      per_diem_days: Number(editVals.per_diem_days || 0) || 0,
+      per_diem_rate: Number(editVals.per_diem_rate || 0) || 0,
     };
     const totals = computeExpenseClaimTotals({ ...selected, ...payload });
     // Also persist dependent totals
@@ -320,13 +340,18 @@ export default function ManageExpenseClaimApprovals(){
       <EnhancedModal isOpen={!!selected} onClose={close} title={selected? `Expense Claim #${selected.id}`: ''} size="xl">
         {selected && (() => { 
           const emp = selected.employee; const empJob = currentEmployment(emp);
-          const allowEdit = (isSuper || can('travel.claim.approve.accounts') || caps?.isAccountsApprover) && !(selected.statusEntries||[]).some(se=>se.action==='ACCOUNTS_APPROVED');
+          const isAccountsUser = (isSuper || can('travel.claim.approve.accounts') || caps?.isAccountsApprover);
+          const entries = selected.statusEntries || [];
+          const hasAccountsDecision = entries.some(se => se.action === 'ACCOUNTS_APPROVED' || se.action === 'ACCOUNTS_REJECTED');
+          // Edit is only available to Accounts users when HR has approved (status === 'VERIFIED')
+          // and Accounts have not approved/rejected/processed/settled yet
+          const allowEdit = isAccountsUser && selected.status === 'VERIFIED' && !hasAccountsDecision;
           const draft = editMode ? {
             ...selected,
-            total_distance_km: parseInt(editVals.total_distance_km || '0', 10) || 0,
-            rate_per_km: parseInt(editVals.rate_per_km || '0', 10) || 0,
-            per_diem_days: parseInt(editVals.per_diem_days || '0', 10) || 0,
-            per_diem_rate: parseInt(editVals.per_diem_rate || '0', 10) || 0,
+            total_distance_km: Number(editVals.total_distance_km || 0) || 0,
+            rate_per_km: Number(editVals.rate_per_km || 0) || 0,
+            per_diem_days: Number(editVals.per_diem_days || 0) || 0,
+            per_diem_rate: Number(editVals.per_diem_rate || 0) || 0,
           } : selected;
           const totals = computeExpenseClaimTotals(draft);
           return (
@@ -403,8 +428,8 @@ export default function ManageExpenseClaimApprovals(){
                   <div>Rate / KM (B)</div>
                   <div className="text-right font-medium">
                     {editMode ? (
-                      <Input type="text" inputMode="numeric" pattern="[0-9]*" value={editVals.rate_per_km}
-                        onChange={e=> setEditVals(v=>({ ...v, rate_per_km: onlyDigits(e.target.value) }))}
+                      <Input ref={rateKmRef} type="text" value={editVals.rate_per_km}
+                        onChange={setNumWithRef('rate_per_km', rateKmRef)}
                         className="h-7 text-right" />
                     ) : (
                       formatMoney(selected.rate_per_km)
@@ -418,8 +443,8 @@ export default function ManageExpenseClaimApprovals(){
                   <div>Total Distance (A)</div>
                   <div className="text-right font-medium">
                     {editMode ? (
-                      <Input type="text" inputMode="numeric" pattern="[0-9]*" value={editVals.total_distance_km}
-                        onChange={e=> setEditVals(v=>({ ...v, total_distance_km: onlyDigits(e.target.value) }))}
+                      <Input ref={totalDistRef} type="text" value={editVals.total_distance_km}
+                        onChange={setNumWithRef('total_distance_km', totalDistRef)}
                         className="h-7 text-right" />
                     ) : (
                       totals.A || 0
@@ -432,8 +457,8 @@ export default function ManageExpenseClaimApprovals(){
                   <div>Per Diem Days</div>
                   <div className="text-right font-medium">
                     {editMode ? (
-                      <Input type="text" inputMode="numeric" pattern="[0-9]*" value={editVals.per_diem_days}
-                        onChange={e=> setEditVals(v=>({ ...v, per_diem_days: onlyDigits(e.target.value) }))}
+                      <Input ref={perDiemDaysRef} type="text" value={editVals.per_diem_days}
+                        onChange={setNumWithRef('per_diem_days', perDiemDaysRef)}
                         className="h-7 text-right" />
                     ) : (
                       draft.per_diem_days || 0
@@ -443,8 +468,8 @@ export default function ManageExpenseClaimApprovals(){
                   <div>Per Diem Rate</div>
                   <div className="text-right font-medium">
                     {editMode ? (
-                      <Input type="text" inputMode="numeric" pattern="[0-9]*" value={editVals.per_diem_rate}
-                        onChange={e=> setEditVals(v=>({ ...v, per_diem_rate: onlyDigits(e.target.value) }))}
+                      <Input ref={perDiemRateRef} type="text" value={editVals.per_diem_rate}
+                        onChange={setNumWithRef('per_diem_rate', perDiemRateRef)}
                         className="h-7 text-right" />
                     ) : (
                       formatMoney(draft.per_diem_rate)
@@ -490,7 +515,7 @@ export default function ManageExpenseClaimApprovals(){
                   </thead>
                   <tbody>
                     {(selected.segments||[]).map((s,i)=>{
-                      const amount = Number(s.distance_km||0) * Number(selected.rate_per_km||0);
+                      const amount = Number(s.distance_km||0) * Number((editMode ? draft.rate_per_km : selected.rate_per_km) || 0);
                       return (
                         <tr key={s.id} className="border-t">
                           <td className="p-2">{i+1}</td>
