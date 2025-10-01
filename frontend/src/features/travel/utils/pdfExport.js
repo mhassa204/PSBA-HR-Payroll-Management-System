@@ -241,14 +241,37 @@ export async function exportClaimToPdf(claim){
         if(isPdf){
           const ab = await fetchArrayBuffer(url);
           const src = await PDFDocument.load(ab);
-          const copied = await pdfDoc.copyPages(src, src.getPageIndices());
-          // Insert a title page, then the PDF pages
-          const titlePage = pdfDoc.addPage(pageSize);
-          const topY = titlePage.getSize().height - margin;
-          if(!docsHeadingDrawn){ drawHeading(titlePage, 'Documents', margin, topY, bold, 12); }
-          titlePage.drawText(label, { x: margin, y: (docsHeadingDrawn ? topY : topY-20) - 16, size: 11, font, color: rgb(0.15,0.15,0.15) });
+          // Create a page for the title and draw the first PDF page content right below it
+          const p = pdfDoc.addPage(pageSize);
+          const topY = p.getSize().height - margin;
+          if(!docsHeadingDrawn){ drawHeading(p, 'Documents', margin, topY, bold, 12); }
+          const labelY = (docsHeadingDrawn ? topY : topY-20) - 16;
+          p.drawText(label, { x: margin, y: labelY, size: 11, font, color: rgb(0.15,0.15,0.15) });
+
+          // Embed and draw the first source page below the label, scaled to fit under it
+          try {
+            const firstSrcPage = src.getPage(0);
+            const embeddedFirst = await pdfDoc.embedPage(firstSrcPage);
+            const epw = embeddedFirst.width;
+            const eph = embeddedFirst.height;
+            const maxW = 515;
+            const maxH = Math.max(0, labelY - 12 - margin);
+            const scale = Math.min(maxW/epw, maxH/eph, 1);
+            const iw = epw*scale, ih = eph*scale;
+            p.drawPage(embeddedFirst, { x: margin, y: Math.max(margin, labelY - 12 - ih), width: iw, height: ih });
+          } catch (_) {
+            // Fallback: if embedding fails, copy and append the first page as-is
+            const [firstCopy] = await pdfDoc.copyPages(src, [0]);
+            pdfDoc.addPage(firstCopy);
+          }
+
+          // Append the remaining pages of the PDF after the title+first-page page
+          const pageCount = src.getPageCount ? src.getPageCount() : src.getPageIndices().length;
+          for(let i=1; i<pageCount; i++){
+            const [cp] = await pdfDoc.copyPages(src, [i]);
+            pdfDoc.addPage(cp);
+          }
           docsHeadingDrawn = true;
-          for(const p of copied){ pdfDoc.addPage(p); }
         } else {
           // Image: draw title and image on the same page if possible
           const ab = await fetchArrayBuffer(url);
