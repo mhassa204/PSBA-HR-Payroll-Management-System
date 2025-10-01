@@ -77,11 +77,41 @@ export async function exportClaimToPdf(claim){
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const page = pdfDoc.addPage([595.28, 841.89]); // A4 portrait (points)
+  let page = pdfDoc.addPage([595.28, 841.89]); // A4 portrait (points)
   const margin = 40;
+  const pageSize = [595.28, 841.89];
   let y = page.getSize().height - margin;
 
+  // Helpers for pagination
+  const newPage = () => { page = pdfDoc.addPage(pageSize); y = page.getSize().height - margin; };
+  const ensureSpace = (needed = 16) => { if ((y - needed) < margin) newPage(); };
+  const wrapLines = (text, fnt, size, maxWidth) => {
+    const words = safe(text).split(/\s+/);
+    const lines = []; let line = '';
+    for (const w of words){
+      const test = line ? (line+' '+w) : w;
+      const width = fnt.widthOfTextAtSize(test, size);
+      if (width > maxWidth){ if (line) { lines.push(line); line = w; } else { lines.push(test); line=''; } }
+      else { line = test; }
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+  const drawParagraph = (text, { fnt=font, size=11, maxWidth=515, lineHeight=14, contHeading } = {}) => {
+    const lines = wrapLines(text, fnt, size, maxWidth);
+    for (const ln of lines){
+      if ((y - lineHeight) < margin){
+        newPage();
+        if (contHeading){ drawHeading(page, contHeading, margin, y, bold, 12); y -= 16; }
+      }
+      page.drawText(safe(ln), { x: margin, y, size, font: fnt });
+      y -= lineHeight;
+    }
+    return y;
+  };
+
   const writeKV = (label, value) => {
+    ensureSpace(16);
     const lbl = safe(`${label}: `);
     const val = safe(String(value ?? '—'));
     const lblWidth = bold.widthOfTextAtSize(lbl, 11);
@@ -95,14 +125,14 @@ export async function exportClaimToPdf(claim){
   y -= 24;
 
   // Status + totals
-  drawHeading(page, 'Summary', margin, y, bold, 12); y -= 16;
+  ensureSpace(20); drawHeading(page, 'Summary', margin, y, bold, 12); y -= 16;
   writeKV('Status', claim.status);
   writeKV('Grand Total', (claim.grand_total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}));
   writeKV('Travel Request', claim.travel_request_id ? `#${claim.travel_request_id}` : '—');
   y -= 8;
 
   // Employee
-  drawHeading(page, 'Employee', margin, y, bold, 12); y -= 16;
+  ensureSpace(20); drawHeading(page, 'Employee', margin, y, bold, 12); y -= 16;
   const emp = claim.employee || {};
   const job = (emp.employmentRecords||[])[0] || {};
   writeKV('Name', emp.full_name || '—');
@@ -120,7 +150,7 @@ export async function exportClaimToPdf(claim){
     try { reqData = await loadTravelRequestFull(claim.travel_request_id) || reqData; } catch(_) {}
   }
   if (reqData) {
-    drawHeading(page, 'Travel Request', margin, y, bold, 12); y -= 16;
+    ensureSpace(20); drawHeading(page, 'Travel Request', margin, y, bold, 12); y -= 16;
     writeKV('Request ID', claim.travel_request_id || reqData.id || '—');
     writeKV('Status', reqData.status || '—');
     writeKV('Submission Date', reqData.submission_date ? String(reqData.submission_date).slice(0,10) : '—');
@@ -132,14 +162,13 @@ export async function exportClaimToPdf(claim){
     y -= 8;
 
     // Attendees
-    drawHeading(page, 'Attendees', margin, y, bold, 12); y -= 16;
+    ensureSpace(20); drawHeading(page, 'Attendees', margin, y, bold, 12); y -= 16;
     const attendees = Array.isArray(reqData.attendees) ? reqData.attendees : [];
-    if(attendees.length===0){ page.drawText(safe('No attendees'), { x: margin, y, size: 11, font }); y -= 16; }
+    if(attendees.length===0){ ensureSpace(16); page.drawText(safe('No attendees'), { x: margin, y, size: 11, font }); y -= 16; }
     else {
       for(const a of attendees){
         const label = `${a.employee?.full_name || '—'}${a.employee?.cnic ? ' — '+a.employee.cnic : ''}`;
-        y = drawMultilineText(page, label, margin, y, font, 11, 515, 14) - 2;
-        if(y < 80){ y = page.getSize().height - margin; drawHeading(page, 'Attendees (cont.)', margin, y, bold, 12); y -= 16; }
+        y = drawParagraph(label, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Attendees (cont.)' }) - 2;
       }
     }
     y -= 8;
@@ -147,20 +176,19 @@ export async function exportClaimToPdf(claim){
     // Request Status History
     const reqEntries = Array.isArray(reqData.statusEntries) ? reqData.statusEntries : [];
     if(reqEntries.length){
-      drawHeading(page, 'Request Status History', margin, y, bold, 12); y -= 16;
+      ensureSpace(20); drawHeading(page, 'Request Status History', margin, y, bold, 12); y -= 16;
       for(const se of reqEntries){
         const actor = se.actor?.full_name || (se.actor_employee_id ? `Emp #${se.actor_employee_id}` : '—');
         const when = se.createdAt ? new Date(se.createdAt).toLocaleString() : '';
         const line = `${se.action} by ${actor}${when?` at ${when}`:''}${se.remarks?` — ${se.remarks}`:''}`;
-        y = drawMultilineText(page, line, margin, y, font, 11, 515, 14) - 2;
-        if(y < 80){ y = page.getSize().height - margin; drawHeading(page, 'Request Status History (cont.)', margin, y, bold, 12); y -= 16; }
+        y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Request Status History (cont.)' }) - 2;
       }
       y -= 8;
     }
   }
 
   // Claim details
-  drawHeading(page, 'Claim Details', margin, y, bold, 12); y -= 16;
+  ensureSpace(20); drawHeading(page, 'Claim Details', margin, y, bold, 12); y -= 16;
   writeKV('From Date', claim.from_date ? String(claim.from_date).slice(0,10) : '—');
   writeKV('To Date', claim.to_date ? String(claim.to_date).slice(0,10) : '—');
   writeKV('Overnight Stay', claim.overnight_stay ? 'Yes' : 'No');
@@ -177,72 +205,73 @@ export async function exportClaimToPdf(claim){
   y -= 8;
 
   // Segments
-  drawHeading(page, 'Segments', margin, y, bold, 12); y -= 16;
+  ensureSpace(20); drawHeading(page, 'Segments', margin, y, bold, 12); y -= 16;
   const segs = claim.segments || [];
-  if(segs.length===0){ page.drawText(safe('No segments'), { x: margin, y, size: 11, font }); y -= 16; }
+  if(segs.length===0){ ensureSpace(16); page.drawText(safe('No segments'), { x: margin, y, size: 11, font }); y -= 16; }
   else {
     for(const [i,s] of segs.entries()){
       const line = `#${i+1} * ${s.mode||'—'} * ${s.departure_from||'—'} -> ${s.departure_to||'—'} * Depart ${s.depart_date?String(s.depart_date).slice(0,10):'—'} ${s.depart_time||''} * Arrive ${s.arrive_date?String(s.arrive_date).slice(0,10):'—'} ${s.arrive_time||''} * KM ${s.distance_km||0}`;
-      y = drawMultilineText(page, line, margin, y, font, 11, 515, 14) - 2;
-      if(y < 80){ y = page.getSize().height - margin; drawHeading(page, 'Segments (cont.)', margin, y, bold, 12); y -= 16; }
+      y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Segments (cont.)' }) - 2;
     }
   }
 
   // Status history
-  drawHeading(page, 'Status History', margin, y, bold, 12); y -= 16;
+  ensureSpace(20); drawHeading(page, 'Status History', margin, y, bold, 12); y -= 16;
   const entries = claim.statusEntries || [];
-  if(entries.length===0){ page.drawText(safe('No history'), { x: margin, y, size: 11, font }); y -= 16; }
+  if(entries.length===0){ ensureSpace(16); page.drawText(safe('No history'), { x: margin, y, size: 11, font }); y -= 16; }
   else {
     for(const se of entries){
       const actor = se.actor?.full_name || `Emp #${se.actor_employee_id}`;
       const when = new Date(se.createdAt).toLocaleString();
       const line = `${se.action} by ${actor} at ${when}${se.remarks?` — ${se.remarks}`:''}`;
-      y = drawMultilineText(page, line, margin, y, font, 11, 515, 14) - 2;
-      if(y < 80){ y = page.getSize().height - margin; drawHeading(page, 'Status History (cont.)', margin, y, bold, 12); y -= 16; }
+      y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Status History (cont.)' }) - 2;
     }
   }
 
-  // Begin documents section on a new page for clarity
-  let docInsertPos = pdfDoc.getPageCount();
-
+  // Documents: start a dedicated sequence so each document appears right under its title
   const docs = claim.documents || [];
   if(docs.length>0){
-    const docPage = pdfDoc.addPage([595.28, 841.89]);
-    docInsertPos = pdfDoc.getPageCount()-1;
-    let yy = docPage.getSize().height - margin;
-    drawHeading(docPage, 'Documents', margin, yy, bold, 12); yy -= 20;
-
+    let docsHeadingDrawn = false;
     for(const d of docs){
       const url = resolveDocUrl(d.file_path);
       if(!url) continue;
-      // Try to detect if PDF
+      const label = safe((d.category||'DOC')+': '+(d.file_path||'').split('/').pop());
       const isPdf = /\.pdf($|\?)/i.test(url);
       try {
         if(isPdf){
           const ab = await fetchArrayBuffer(url);
           const src = await PDFDocument.load(ab);
           const copied = await pdfDoc.copyPages(src, src.getPageIndices());
+          // Insert a title page, then the PDF pages
+          const titlePage = pdfDoc.addPage(pageSize);
+          const topY = titlePage.getSize().height - margin;
+          if(!docsHeadingDrawn){ drawHeading(titlePage, 'Documents', margin, topY, bold, 12); }
+          titlePage.drawText(label, { x: margin, y: (docsHeadingDrawn ? topY : topY-20) - 16, size: 11, font, color: rgb(0.15,0.15,0.15) });
+          docsHeadingDrawn = true;
           for(const p of copied){ pdfDoc.addPage(p); }
-          // Also add a label line on the docs page
-          docPage.drawText(safe((d.category||'DOC')+': '+(d.file_path||'').split('/').pop()), { x: margin, y: yy, size: 10, font, color: rgb(0.15,0.15,0.15) });
-          yy -= 14;
         } else {
-          // Assume image
+          // Image: draw title and image on the same page if possible
           const ab = await fetchArrayBuffer(url);
-          let img; let scale = 1; let w=0; let h=0;
+          let img; let w=0; let h=0;
           try { const bytes = new Uint8Array(ab); img = await pdfDoc.embedPng(bytes); w = img.width; h = img.height; }
           catch(_) { const bytes = new Uint8Array(ab); img = await pdfDoc.embedJpg(bytes); w = img.width; h = img.height; }
+          const p = pdfDoc.addPage(pageSize);
+          const topY = p.getSize().height - margin;
+          if(!docsHeadingDrawn){ drawHeading(p, 'Documents', margin, topY, bold, 12); }
+          const labelY = (docsHeadingDrawn ? topY : topY-20) - 16;
+          p.drawText(label, { x: margin, y: labelY, size: 11, font, color: rgb(0.15,0.15,0.15) });
           const maxW = 515, maxH = 650;
-          scale = Math.min(maxW/w, maxH/h, 1);
+          const scale = Math.min(maxW/w, maxH/h, 1);
           const iw = w*scale, ih = h*scale;
-          const p = pdfDoc.addPage([595.28, 841.89]);
-          p.drawText(safe((d.category||'DOC')+': '+(d.file_path||'').split('/').pop()), { x: margin, y: p.getSize().height - margin - 12, size: 10, font, color: rgb(0.15,0.15,0.15) });
-          p.drawImage(img, { x: margin, y: (p.getSize().height - margin - 24 - ih), width: iw, height: ih });
+          p.drawImage(img, { x: margin, y: Math.max(margin, labelY - 12 - ih), width: iw, height: ih });
+          docsHeadingDrawn = true;
         }
       } catch(err){
-        // On error, write a note and continue
-        const p = pdfDoc.addPage([595.28, 841.89]);
-        p.drawText(safe('Failed to embed document: '+(d.file_path||'')), { x: margin, y: p.getSize().height - margin - 12, size: 10, font, color: rgb(0.8,0.2,0.2) });
+        const p = pdfDoc.addPage(pageSize);
+        const topY = p.getSize().height - margin;
+        if(!docsHeadingDrawn){ drawHeading(p, 'Documents', margin, topY, bold, 12); }
+        p.drawText(safe('Failed to embed document: '+(d.file_path||'')), { x: margin, y: (docsHeadingDrawn ? topY : topY-20) - 16, size: 10, font, color: rgb(0.8,0.2,0.2) });
+        docsHeadingDrawn = true;
       }
     }
   }
