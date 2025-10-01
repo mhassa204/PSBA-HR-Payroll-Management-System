@@ -256,11 +256,34 @@ export default function ManageExpenseClaimApprovals(){
     return roleScoped.filter(c => {
       const q = search.trim().toLowerCase();
       if(q){
+        const qDigits = q.replace(/\D+/g,'');
         const empName = (c.employee?.full_name||'').toLowerCase();
+        const empCnicRaw = String(c.employee?.cnic||'');
+        const empCnicDigits = empCnicRaw.replace(/\D+/g,'');
         const reqPurpose = (c.request?.purpose||c.request?.travel_purpose||'').toLowerCase();
-        if(!(`${c.id}`.includes(q) || `${c.employee_id}`.includes(q) || empName.includes(q) || reqPurpose.includes(q))) return false;
+        const basicMatch = (`${c.id}`.includes(q) || `${c.employee_id}`.includes(q) || empName.includes(q) || reqPurpose.includes(q));
+        const cnicMatch = (!!qDigits && empCnicDigits.includes(qDigits)) || empCnicRaw.toLowerCase().includes(q);
+        if(!(basicMatch || cnicMatch)) return false;
       }
-      if(statusFilter && c.status !== statusFilter) return false;
+      if(statusFilter){
+        const stat = String(c.status||'');
+        const entries = c.statusEntries || [];
+        const approvals = ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'];
+        const rejections = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED','RECOMMENDER_REJECTED'];
+        const approvedByMe = entries.some(e => approvals.includes(e.action) && String(e.actor_employee_id||'')===String(meEmpId||''));
+        const rejectedByMe = entries.some(e => rejections.includes(e.action) && String(e.actor_employee_id||'')===String(meEmpId||''));
+        let matchesStatus = false;
+        if(statusFilter==='APPROVED'){
+          // Show items currently in APPROVED, or any that I have approved at any stage
+          matchesStatus = (stat==='APPROVED') || approvedByMe;
+        } else if(statusFilter==='REJECTED'){
+          // Treat as any rejected status OR ones I rejected at any stage
+          matchesStatus = (stat==='REJECTED' || stat.startsWith('REJECTED')) || rejectedByMe;
+        } else {
+          matchesStatus = (stat===statusFilter);
+        }
+        if(!matchesStatus) return false;
+      }
       return true;
     });
   }, [allClaims, search, statusFilter, canAccounts, canHR, canDG, meEmpId]);
@@ -329,7 +352,7 @@ export default function ManageExpenseClaimApprovals(){
           <CardContent className="space-y-3">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div className="flex items-center gap-3 flex-wrap">
-                <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search id, emp, purpose" className="w-56" />
+                <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search id, emp, cnic, purpose" className="w-56" />
                 <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="border rounded px-2 py-2 text-sm">
                   <option value="">All Statuses</option>
                   {['DRAFT','SUBMITTED','APPROVED','VERIFIED','PROCESSED','REJECTED','PENDING_APPROVAL'].map(s=> <option key={s} value={s}>{s}</option>)}
