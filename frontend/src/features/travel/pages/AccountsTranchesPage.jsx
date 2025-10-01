@@ -33,16 +33,22 @@ export default function AccountsTranchesPage(){
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Accounts • Tranches</h1>
         <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
       </div>
 
-      <Card>
-        <CardHeader className="border-b"><CardTitle>Filter Verified Claims</CardTitle></CardHeader>
+      {/* Layout: Filters/Claims on top, Tranches below; full-width and responsive */}
+      <Card className="w-full">
+        <CardHeader className="border-b">
+          <div className="flex items-center justify-between">
+            <CardTitle>Filter Accounts-Approved (Verified) Claims</CardTitle>
+            <span className="text-[11px] text-muted-foreground hidden md:inline">Only claims already approved by Accounts are listed here</span>
+          </div>
+        </CardHeader>
         <CardContent className="p-4 text-sm space-y-3">
-          <div className="grid md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div><label className="text-xs text-muted-foreground">CNIC</label><Input value={filters.employee_cnic} onChange={e=>setFilters(f=>({...f,employee_cnic:e.target.value}))} /></div>
             <div><label className="text-xs text-muted-foreground">Employee Name</label><Input value={filters.employee_name} onChange={e=>setFilters(f=>({...f,employee_name:e.target.value}))} /></div>
             <div><label className="text-xs text-muted-foreground">Claim Date From</label><Input type="date" value={filters.from_date} onChange={e=>setFilters(f=>({...f,from_date:e.target.value}))} /></div>
@@ -50,7 +56,7 @@ export default function AccountsTranchesPage(){
             <div><label className="text-xs text-muted-foreground">From Date</label><Input type="date" value={filters.claim_from} onChange={e=>setFilters(f=>({...f,claim_from:e.target.value}))} /></div>
             <div><label className="text-xs text-muted-foreground">To Date</label><Input type="date" value={filters.claim_to} onChange={e=>setFilters(f=>({...f,claim_to:e.target.value}))} /></div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={load}>Apply</Button>
             <Button size="sm" variant="secondary" onClick={()=>{ setFilters({ employee_cnic:'', employee_name:'', from_date:'', to_date:'', claim_from:'', claim_to:'', statuses:['VERIFIED'] }); }}>Reset</Button>
           </div>
@@ -63,21 +69,25 @@ export default function AccountsTranchesPage(){
               <Button size="sm" variant="outline" onClick={()=>toggleAll(false)}>None</Button>
             </div>
           </div>
-          <div className="divide-y">
+
+          {/* Scrollable list taking available width */}
+          <div className="rounded border max-h-[60vh] overflow-auto divide-y">
             {loading && <div className="p-3 text-muted-foreground">Loading...</div>}
-            {!loading && claims.length===0 && <div className="p-3 text-muted-foreground">No verified claims match filters.</div>}
+            {!loading && claims.length===0 && <div className="p-3 text-muted-foreground">No accounts-approved verified claims match filters.</div>}
             {claims.map(c => {
               const emp = c.employee; const job = emp?.employmentRecords?.[0];
+              const hasAccountsApproval = (c.statusEntries||[]).some(se => se.action === 'ACCOUNTS_APPROVED');
               return (
-                <div key={c.id} className="p-3 flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-3">
+                <div key={c.id} className="p-3 flex items-center justify-between text-sm bg-white">
+                  <div className="flex items-center gap-3 min-w-0">
                     <input type="checkbox" checked={!!checked[c.id]} onChange={e=>setChecked(m=>({...m,[c.id]: e.target.checked}))} />
-                    <div>
-                      <div className="font-medium">Claim #{c.id} • {emp?.full_name||'Employee'} <span className="text-muted-foreground">(CNIC: {emp?.cnic||'—'})</span></div>
-                      <div className="text-muted-foreground">Req #{c.travel_request_id||'—'} • From {c.from_date?String(c.from_date).slice(0,10):'—'} → {c.to_date?String(c.to_date).slice(0,10):'—'} • Grand {(c.grand_total||0).toLocaleString()}</div>
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">Claim #{c.id} • {emp?.full_name||'Employee'} <span className="text-muted-foreground">(CNIC: {emp?.cnic||'—'})</span></div>
+                      <div className="text-muted-foreground text-xs truncate">Req #{c.travel_request_id||'—'} • From {c.from_date?String(c.from_date).slice(0,10):'—'} → {c.to_date?String(c.to_date).slice(0,10):'—'} • Grand {(c.grand_total||0).toLocaleString()}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
+                    {hasAccountsApproval && <Badge variant="secondary" className="text-[10px]">Accounts Approved</Badge>}
                     <Badge variant="outline" className="text-[10px]">{c.status}</Badge>
                   </div>
                 </div>
@@ -101,16 +111,16 @@ export default function AccountsTranchesPage(){
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="w-full">
         <CardHeader className="border-b"><CardTitle>Processed Tranches</CardTitle></CardHeader>
         <CardContent className="p-4 text-sm space-y-3">
           {loadingTranches && <div className="text-muted-foreground">Loading...</div>}
           {!loadingTranches && tranches.length===0 && <div className="text-muted-foreground">No tranches yet.</div>}
-          <div className="divide-y">
+          <div className="rounded border divide-y">
             {tranches.map(t => {
               const total = (t.items||[]).reduce((s,it)=> s + Number(it.claim?.grand_total||0), 0);
               return (
-                <div key={t.id} className="p-3 flex items-center justify-between text-sm">
+                <div key={t.id} className="p-3 flex items-center justify-between text-sm bg-white">
                   <div>
                     <div className="font-medium">{t.title || t.code} <span className="text-muted-foreground">({t.code})</span></div>
                     <div className="text-muted-foreground">Claims: {(t.items||[]).length} • Total: {total.toLocaleString()}</div>

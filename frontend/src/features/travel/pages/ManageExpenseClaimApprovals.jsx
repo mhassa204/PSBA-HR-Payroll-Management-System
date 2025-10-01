@@ -99,16 +99,29 @@ export default function ManageExpenseClaimApprovals(){
       return { canApprove:false, canReject:false, canClear, canRecommend:false };
     }
 
+    // Processed: no further actions (including Undo)
+    if (status === 'PROCESSED') {
+      return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
+    }
+
     const nextStageHasActed = () => {
       if(!lastApproval) return false;
       if(lastApproval.action==='RECOMMENDED') return entries.some(e=>['OPS_APPROVED','DG_APPROVED'].includes(e.action));
       if(lastApproval.action==='OPS_APPROVED' || lastApproval.action==='DG_APPROVED') return hasHRAppr || hasAccountsAppr;
       if(lastApproval.action==='HR_APPROVED') return hasAccountsAppr;
-      if(lastApproval.action==='ACCOUNTS_APPROVED') return false; // final stage
+      if(lastApproval.action==='ACCOUNTS_APPROVED') return false; // final stage entry
       return false;
     };
 
     const lastApprovalIsMine = lastApproval && lastApproval.actor_employee_id === user?.employee_id;
+
+    // If Accounts approval already exists, lock further actions to only CLEAR by the same approver
+    if (hasAccountsAppr) {
+      if (lastApproval && lastApproval.action==='ACCOUNTS_APPROVED' && lastApprovalIsMine) {
+        return { canApprove:false, canReject:false, canClear:true, canRecommend:false };
+      }
+      return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
+    }
 
     if(lastApprovalIsMine && !nextStageHasActed()){
       const canClear = true;
@@ -137,9 +150,9 @@ export default function ManageExpenseClaimApprovals(){
       if(canHR) return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
     } else if(status==='VERIFIED') { // Accounts stage
       if(canAccounts) return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
-    } else if((status==='PROCESSED' || status==='SETTLED') && lastApproval?.action==='ACCOUNTS_APPROVED' && lastApprovalIsMine){
-      // Finalized by Accounts: allow only CLEAR by the accounts approver who approved
-      return { canApprove:false, canReject:false, canClear:true, canRecommend:false };
+    } else if(status==='SETTLED' && lastApproval?.action==='ACCOUNTS_APPROVED' && lastApprovalIsMine){
+      // If settled (even more final), previously allowed CLEAR; now keep locked to avoid Undo
+      return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
     }
 
     return { canApprove:false, canReject:false, canClear:false, canRecommend:false };

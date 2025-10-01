@@ -481,7 +481,8 @@ module.exports = {
       OPS_APPROVED: ['APPROVED'],
       DG_APPROVED: ['APPROVED'],
       HR_APPROVED: ['VERIFIED'],
-      ACCOUNTS_APPROVED: ['PROCESSED','SETTLED','APPROVED'] // accept any of these as final depending on schema
+      // Keep Accounts approval non-final: status remains VERIFIED until tranching; also handle idempotence when already processed/settled
+      ACCOUNTS_APPROVED: ['VERIFIED','PROCESSED','SETTLED']
     };
     const isApprovalAction = (a) => ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'].includes(a);
     const REJECTION_STATUSES = new Set(['REJECTED','REJECTED_OPS','REJECTED_DG','REJECTED_HR','REJECTED_ACCOUNTS']);
@@ -531,9 +532,15 @@ module.exports = {
         if (stage === 'OPS') { approvalAction = 'OPS_APPROVED'; targetStatus = 'APPROVED'; }
         else if (stage === 'DG') { approvalAction = 'DG_APPROVED'; targetStatus = 'APPROVED'; }
         else if (stage === 'HR') { approvalAction = 'HR_APPROVED'; targetStatus = 'VERIFIED'; }
-        else if (stage === 'ACCOUNTS') { approvalAction = 'ACCOUNTS_APPROVED'; targetStatus = 'PROCESSED'; fallbacks = ['SETTLED','APPROVED']; }
+        else if (stage === 'ACCOUNTS') {
+          approvalAction = 'ACCOUNTS_APPROVED';
+          // Do NOT move to PROCESSED here. Keep status at VERIFIED; only tranching should move to PROCESSED
+          targetStatus = null; fallbacks = [];
+        }
         if (lastEntry && lastEntry.action === approvalAction && approvalStatusMap[approvalAction].includes(claim.status)) return claim; // idempotent
-        await updateStatusSafe(targetStatus, fallbacks);
+        if (targetStatus) {
+          await updateStatusSafe(targetStatus, fallbacks);
+        }
         await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: approvalAction, actor_employee_id: actorEmpId, remarks: remarks || null } });
         return reload();
       } else if (actionUpper === 'REJECT') {
@@ -616,7 +623,7 @@ module.exports = {
   },
   listForAccounts: async (ctx, filters) => {
     if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) return [];
-    const where = { is_deleted: false, status: 'VERIFIED' };
+    const where = { is_deleted: false, status: 'VERIFIED', statusEntries: { some: { action: 'ACCOUNTS_APPROVED' } } };
     if (filters) {
       if (filters.employee_cnic) where.employee = { ...where.employee, cnic: { contains: String(filters.employee_cnic), mode: 'insensitive' } };
       if (filters.employee_name) where.employee = { ...where.employee, full_name: { contains: String(filters.employee_name), mode: 'insensitive' } };
@@ -649,16 +656,15 @@ module.exports = {
     if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) throw new Error('Forbidden');
     const meUserId = ctx.meUserId || Number(ctx.req?.session?.user?.id);
     if (!Array.isArray(claimIds) || claimIds.length===0) throw new Error('No claims selected');
-    const claims = await prisma.travelClaim.findMany({ where: { id: { in: claimIds.map(Number) }, status: 'VERIFIED', is_deleted: false } });
+    // Only allow grouping of VERIFIED claims that have already been approved by Accounts
+    const claims = await prisma.travelClaim.findMany({ where: { id: { in: claimIds.map(Number) }, status: 'VERIFIED', is_deleted: false, statusEntries: { some: { action: 'ACCOUNTS_APPROVED' } } } });
     if (claims.length !== claimIds.length) throw new Error('Some claims are not eligible');
     const code = `TR-${Date.now()}`;
     const tranche = await prisma.travelClaimTranche.create({ data: { code, title: title||code, notes: notes||null, created_by_user_id: meUserId } });
     await prisma.travelClaimTrancheItem.createMany({ data: claims.map(c => ({ tranche_id: tranche.id, claim_id: c.id })) });
-    // Mark all to processed
+    // Upon tranching, mark all to processed
     await prisma.travelClaim.updateMany({ where: { id: { in: claims.map(c=>c.id) } }, data: { status: 'PROCESSED' } });
-    for (const c of claims) {
-      await prisma.travelClaimStatusEntry.create({ data: { claim_id: c.id, action: 'ACCOUNTS_APPROVED', actor_employee_id: ctx.meEmpId } });
-    }
+    // Do NOT create ACCOUNTS_APPROVED entries here to avoid duplicates; approval was already recorded
     return prisma.travelClaimTranche.findUnique({ where: { id: tranche.id }, include: { items: { include: { claim: { include: { employee: true, request: true } } } } } });
   },
   listTranches: async (ctx) => {
