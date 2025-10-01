@@ -197,5 +197,53 @@ module.exports = {
     } catch (e) {
       res.status(400).json({ success: false, error: e.message });
     }
+  },
+
+  // ================= Accounts Manual Entry (TADA) =================
+  searchEmployees: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) return res.status(403).json({ success:false, error:'Forbidden' });
+      const q = String(req.query.q||'').trim();
+      const where = q ? {
+        is_deleted: false,
+        OR: [
+          { full_name: { contains: q, mode: 'insensitive' } },
+          { cnic: { contains: q, mode: 'insensitive' } }
+        ]
+      } : { is_deleted: false };
+      const emps = await prisma.employee.findMany({ where, orderBy: { full_name: 'asc' }, take: 50, select: { id: true, full_name: true, cnic: true } });
+      res.json({ success:true, employees: emps });
+    } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+
+  manualCreate: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) return res.status(403).json({ success:false, error:'Forbidden' });
+      const data = req.body || {};
+      const applicant_id = Number(data.applicant_id);
+      if (!applicant_id) return res.status(400).json({ success:false, error:'applicant_id is required' });
+      if (!data.departure_date) return res.status(400).json({ success:false, error:'departure_date is required' });
+      if (!data.expected_return_date) return res.status(400).json({ success:false, error:'expected_return_date is required' });
+      const computedDays = travelService.computeTotalDays(data.departure_date, data.departure_time, data.expected_return_date);
+      const attendeeIds = Array.isArray(data.employee_ids) ? data.employee_ids.map(Number).filter(Boolean) : [];
+      const full = await travelService.createRequestOnBehalf({ ...ctx, meEmpId: applicant_id }, data, attendeeIds, computedDays, ctx.meEmpId);
+      res.json({ success:true, request: full });
+    } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+
+  manualDecision: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) return res.status(403).json({ success:false, error:'Forbidden' });
+      const id = Number(req.params.id);
+      const { stage, actor_employee_id, action } = req.body || {};
+      const actorEmpId = Number(actor_employee_id);
+      const act = String(action||'').toUpperCase();
+      if (!['RECOMMEND','REJECT','APPROVE','CLEAR'].includes(act)) return res.status(400).json({ success:false, error:'Invalid action' });
+      const full = await travelService.manualDecision(id, { stage, actorEmpId, action: act }, ctx);
+      res.json({ success:true, request: full });
+    } catch(e){ res.status(400).json({ success:false, error: e.message }); }
   }
 };

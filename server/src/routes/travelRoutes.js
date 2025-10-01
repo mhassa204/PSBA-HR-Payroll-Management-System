@@ -6,6 +6,7 @@ const expenseClaimController = require('../controllers/travel/expenseClaimContro
 
 // Return reportees + self for logged-in user (for employee selector)
 router.get('/employees/reportees', isAuthenticated, travelRequestController.reportees);
+router.get('/employees/search', isAuthenticated, travelRequestController.searchEmployees); // New route for employee search
 
 // Travel Requests CRUD (simplified fields)
 router.get('/requests', isAuthenticated, travelRequestController.listManage);
@@ -31,6 +32,12 @@ router.get('/me/capabilities', isAuthenticated, travelRequestController.capabili
 
 // Flexible status update (dropdown driven) allowing Ops/DG to toggle CREATED/APPROVED/REJECTED within their scope
 router.patch('/requests/:id/status', isAuthenticated, travelRequestController.updateStatusFlexible);
+
+// ================= Accounts Manual Entry (TADA) =================
+// Create a request on behalf of any employee
+router.post('/requests/manual', isAuthenticated, travelRequestController.manualCreate);
+// Record recommendation/approval with selected actor identity
+router.post('/requests/:id/manual/decision', isAuthenticated, travelRequestController.manualDecision);
 
 // Expense Claims
 router.get('/expense-claims/eligible', isAuthenticated, expenseClaimController.eligible);

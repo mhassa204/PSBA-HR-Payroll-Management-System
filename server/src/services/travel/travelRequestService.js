@@ -141,6 +141,29 @@ module.exports = {
     return prisma.travelRequest.findUnique({ where: { id: created.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
   },
 
+  // New: on-behalf request creation
+  createRequestOnBehalf: async (ctx, data, attendeeIds, totalDays, createdByEmpId) => {
+    // ctx.meEmpId is replaced with applicant_id so created request belongs to that employee
+    const created = await prisma.travelRequest.create({
+      data: {
+        applicant_id: Number(ctx.meEmpId),
+        departure_date: new Date(data.departure_date),
+        departure_time: data.departure_time || null,
+        expected_return_date: new Date(data.expected_return_date),
+        purpose: data.purpose || null,
+        destination: data.destination || null,
+        total_days: totalDays,
+        status: 'CREATED'
+      }
+    });
+    if (attendeeIds.length) {
+      await prisma.travelRequestEmployee.createMany({ data: attendeeIds.map(eid => ({ request_id: created.id, employee_id: eid })) });
+    }
+    // Record CREATED by the applicant, as normal
+    await prisma.travelRequestStatusEntry.create({ data: { request_id: created.id, action: 'CREATED', actor_employee_id: Number(ctx.meEmpId) } });
+    return prisma.travelRequest.findUnique({ where: { id: created.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+  },
+
   getById: (id) => prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } }),
 
   updateRequest: async (id, data, attendeeIds, totalDays) => {
@@ -201,6 +224,48 @@ module.exports = {
       await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
       return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
     }
+    throw new Error('Invalid action');
+  },
+
+  manualDecision: async (id, { stage, actorEmpId, action }, ctx) => {
+    // Mirror normal flow but attribute actor to the selected employee
+    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true } } } }, statusEntries: true } });
+    if (!req || req.is_deleted) throw new Error('Not found');
+    if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) throw new Error('Forbidden');
+
+    const act = String(action||'').toUpperCase();
+    if (act === 'RECOMMEND') {
+      if (req.status !== 'CREATED') throw new Error('Only CREATED can be recommended');
+      const last = req.statusEntries[req.statusEntries.length-1];
+      if (last && last.action==='RECOMMENDED') return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId } });
+      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    }
+
+    // Approval/Reject: DG or OPS depending on location type
+    const locType = req.applicant?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
+    if (act === 'APPROVE' || act === 'REJECT') {
+      if (req.status !== 'CREATED') throw new Error('Already decided');
+      const isBazaar = locType === 'BAZAAR';
+      const actionKey = act === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+      // Update request status and record status entry with selected actor
+      await prisma.travelRequest.update({ where: { id: req.id }, data: { status: actionKey } });
+      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: actionKey, actor_employee_id: actorEmpId } });
+      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    }
+
+    if (act === 'CLEAR') {
+      const last = req.statusEntries[req.statusEntries.length-1];
+      if (!last) throw new Error('Nothing to clear');
+      // Allow Accounts/SuperAdmin to clear last decision regardless of actor
+      await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
+      // If cleared action was terminal, revert status
+      if (['APPROVED','REJECTED'].includes(last.action)) {
+        await prisma.travelRequest.update({ where: { id: req.id }, data: { status: 'CREATED' } });
+      }
+      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    }
+
     throw new Error('Invalid action');
   },
 
