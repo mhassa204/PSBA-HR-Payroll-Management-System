@@ -55,7 +55,7 @@ router.post('/expense-claims/:id/segments', isAuthenticated, expenseClaimControl
 router.put('/expense-claims/:id/segments/:segmentId', isAuthenticated, expenseClaimController.updateSegment);
 router.delete('/expense-claims/:id/segments/:segmentId', isAuthenticated, expenseClaimController.deleteSegment);
 
-// Documents now exclude TICKET category
+// Documents upload: allow any category (FUEL, TOLL, PICTURE, REPORT, OTHER); supports multi-file upload
 router.post('/expense-claims/:id/documents', isAuthenticated, expenseClaimController.uploadDocuments);
 router.delete('/expense-claims/:id/documents/:docId', isAuthenticated, expenseClaimController.deleteDocument);
 

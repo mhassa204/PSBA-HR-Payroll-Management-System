@@ -60,7 +60,9 @@ export default function TravelExpenseClaimsPage(){
   const [decisionTarget, setDecisionTarget] = useState(null);
   const [withinCityTab, setWithinCityTab] = useState('with-request'); // with-request | within-city
   const [reportees, setReportees] = useState([]);
-
+  // Flag: within-city claims have no linked travel request
+  const isWithinCity = !!(claim && !claim.travel_request_id);
+  
   const loadEligible = async () => {
     setLoadingEligible(true);
     try { const rs = await getEligibleExpenseClaimRequests(); setEligible(rs); } finally { setLoadingEligible(false);} };
@@ -171,7 +173,8 @@ export default function TravelExpenseClaimsPage(){
   // New: Submit should first save core fields entered in the form
   const handleSubmit = async () => {
     if (!claim) return;
-    if (!(claim.documents||[]).some(d=>d.category==='REPORT')) { alert('Upload REPORT before submitting'); return; }
+    const isWithinCity = !claim.travel_request_id;
+    if (!isWithinCity && !(claim.documents||[]).some(d=>d.category==='REPORT')) { alert('Upload REPORT before submitting'); return; }
     try {
       setSaving(true);
       const payload = {
@@ -333,46 +336,52 @@ export default function TravelExpenseClaimsPage(){
           {/* Core Fields */}
           <Card>
             <CardContent className="grid md:grid-cols-7 gap-4 text-sm p-6">
-              <div>
-                <label className="text-xs text-muted-foreground">From Date</label>
-                <div className="relative">
-                  <Input type="date" className="pr-10" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))} />
-                  <button
-                    type="button"
-                    aria-label="Open from date picker"
-                    onClick={(e)=>{ const inp = e.currentTarget.previousElementSibling; if(inp){ if(typeof inp.showPicker==='function'){ inp.showPicker(); } else { inp.focus(); try{ inp.click(); }catch(_){ /* ignore */ } } } }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-gray-500 hover:text-gray-700"
-                    style={{color:'#6b7280'}}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                      <line x1="16" y1="2" x2="16" y2="6"></line>
-                      <line x1="8" y1="2" x2="8" y2="6"></line>
-                      <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">To Date</label>
-                <div className="relative">
-                  <Input type="date" className="pr-10" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))} />
-                  <button
-                    type="button"
-                    aria-label="Open to date picker"
-                    onClick={(e)=>{ const inp = e.currentTarget.previousElementSibling; if(inp){ if(typeof inp.showPicker==='function'){ inp.showPicker(); } else { inp.focus(); try{ inp.click(); }catch(_){ /* ignore */ } } } }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-gray-500 hover:text-gray-700"
-                    style={{color:'#6b7280'}}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                      <line x1="16" y1="2" x2="16" y2="6"></line>
-                      <line x1="8" y1="2" x2="8" y2="6"></line>
-                      <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                  </button>
-                </div>
-              </div>
+              {/* From/To dates are hidden for within-city */}
+              {!isWithinCity && (
+                <>
+                  <div>
+                    <label className="text-xs text-muted-foreground">From Date</label>
+                    <div className="relative">
+                      <Input type="date" className="pr-10" value={form.from_date} onChange={e=>setForm(p=>({...p,from_date:e.target.value}))} />
+                      <button
+                        type="button"
+                        aria-label="Open from date picker"
+                        onClick={(e)=>{ const inp = e.currentTarget.previousElementSibling; if(inp){ if(typeof inp.showPicker==='function'){ inp.showPicker(); } else { inp.focus(); try{ inp.click(); }catch(_){ /* ignore */ } } } }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-gray-500 hover:text-gray-700"
+                        style={{color:'#6b7280'}}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                          <line x1="16" y1="2" x2="16" y2="6"></line>
+                          <line x1="8" y1="2" x2="8" y2="6"></line>
+                          <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">To Date</label>
+                    <div className="relative">
+                      <Input type="date" className="pr-10" value={form.to_date} onChange={e=>setForm(p=>({...p,to_date:e.target.value}))} />
+                      <button
+                        type="button"
+                        aria-label="Open to date picker"
+                        onClick={(e)=>{ const inp = e.currentTarget.previousElementSibling; if(inp){ if(typeof inp.showPicker==='function'){ inp.showPicker(); } else { inp.focus(); try{ inp.click(); }catch(_){ /* ignore */ } } } }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 text-gray-500 hover:text-gray-700"
+                        style={{color:'#6b7280'}}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                          <line x1="16" y1="2" x2="16" y2="6"></line>
+                          <line x1="8" y1="2" x2="8" y2="6"></line>
+                          <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="flex items-center gap-2 mt-5">
                 <input type="checkbox" checked={form.overnight_stay} onChange={e=>setForm(p=>({...p,overnight_stay:e.target.checked}))} />
                 <span className="text-xs">Overnight Stay</span>
@@ -391,10 +400,13 @@ export default function TravelExpenseClaimsPage(){
                   </div>
                   {form.transport_mode==='OWN' && (
                     <>
-                      <div className="min-w-[220px]">
-                        <label className="text-xs text-muted-foreground">Total Fuel Price Amount</label>
-                        <Input value={form.fuel_total} onChange={e=>setForm(p=>({...p,fuel_total:e.target.value}))} />
-                      </div>
+                      {/* Hide Total Fuel Price for within-city */}
+                      {!isWithinCity && (
+                        <div className="min-w-[220px]">
+                          <label className="text-xs text-muted-foreground">Total Fuel Price Amount</label>
+                          <Input value={form.fuel_total} onChange={e=>setForm(p=>({...p,fuel_total:e.target.value}))} />
+                        </div>
+                      )}
                       <div className="min-w-[220px]">
                         <label className="text-xs text-muted-foreground">Toll Tax Total (D)</label>
                         <Input value={form.toll_tax_total||''} onChange={e=>setForm(p=>({...p,toll_tax_total:e.target.value}))} />
@@ -415,7 +427,7 @@ export default function TravelExpenseClaimsPage(){
             </CardContent>
           </Card>
 
-          {/* Segments table */}
+          {/* Travel Segments */}
           <Card>
             <CardContent className="p-4 text-sm">
               <div className="flex items-center justify-between mb-3">
@@ -479,41 +491,72 @@ export default function TravelExpenseClaimsPage(){
           <Card>
             <CardContent className="text-sm space-y-4 p-6">
               <div className="font-medium">Documents</div>
-              {['FUEL','TOLL','PICTURE','REPORT'].map(cat => {
-                const docs = (claim.documents||[]).filter(d=>d.category===cat);
-                const isReport = cat==='REPORT';
-                return (
-                  <div key={cat} className="border rounded p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-xs">{cat} {isReport && <span className="text-rose-600">(At least one required)</span>}</div>
-                      <label className="relative inline-flex items-center px-3 py-1.5 text-xs border rounded bg-white hover:bg-accent/30 cursor-pointer">Upload
-                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" multiple={true} onChange={e=>{ if(e.target.files?.length){ handleDocUpload(cat, e.target.files); e.target.value=''; } }} />
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {docs.length===0 && <div className="text-muted-foreground text-xs">No files</div>}
-                      {docs.map(d => (
-                        <div key={d.id} className="relative">
-                          {(() => {
-                            let p = d.file_path || '';
-                            // Normalize slashes and strip leading ./ or /\
-                            p = p.replace(/^\\+|^\/+/, '');
-                            const isAbsolute = /^https?:\/\//i.test(p);
-                            const base = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
-                            const url = isAbsolute ? p : (p.startsWith('uploads/') ? `${base}/${p}` : `${base}/${p}`);
-                            return (
-                              <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white hover:bg-accent/30 max-w-[160px] truncate">{p.split('/').pop()}</a>
-                            );
-                          })()}
-                          {(!isReport || docs.length>0) && (
-                            <button onClick={()=>handleDocDelete(d.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-5 w-5 text-xs">×</button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+              {isWithinCity ? (
+                <div className="border rounded p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium text-xs">Documents <span className="text-muted-foreground">(optional)</span></div>
+                    <label className="relative inline-flex items-center px-3 py-1.5 text-xs border rounded bg-white hover:bg-accent/30 cursor-pointer">Upload
+                      <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" multiple={true} onChange={e=>{ if(e.target.files?.length){ handleDocUpload('OTHER', e.target.files); e.target.value=''; } }} />
+                    </label>
                   </div>
-                );
-              })}
+                  <div className="flex flex-wrap gap-2">
+                    {(claim.documents||[]).length===0 && <div className="text-muted-foreground text-xs">No files</div>}
+                    {(claim.documents||[]).map(d => (
+                      <div key={d.id} className="relative">
+                        {(() => {
+                          let p = d.file_path || '';
+                          p = p.replace(/^\\+|^\/+/, '');
+                          const isAbsolute = /^https?:\//i.test(p);
+                          const base = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+                          const url = isAbsolute ? p : (p.startsWith('uploads/') ? `${base}/${p}` : `${base}/${p}`);
+                          return (
+                            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white hover:bg-accent/30 max-w-[160px] truncate">{p.split('/').pop()}</a>
+                          );
+                        })()}
+                        <button onClick={()=>handleDocDelete(d.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-5 w-5 text-xs">×</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                // Outstation/request-linked: keep category groups, with REPORT required
+                <>
+                  {['FUEL','TOLL','PICTURE','REPORT','OTHER'].map(cat => {
+                    const docs = (claim.documents||[]).filter(d=>d.category===cat);
+                    const isReport = cat==='REPORT';
+                    return (
+                      <div key={cat} className="border rounded p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-medium text-xs">{cat} {isReport && <span className="text-rose-600">(At least one required)</span>}</div>
+                          <label className="relative inline-flex items-center px-3 py-1.5 text-xs border rounded bg-white hover:bg-accent/30 cursor-pointer">Upload
+                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" multiple={true} onChange={e=>{ if(e.target.files?.length){ handleDocUpload(cat, e.target.files); e.target.value=''; } }} />
+                          </label>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {docs.length===0 && <div className="text-muted-foreground text-xs">No files</div>}
+                          {docs.map(d => (
+                            <div key={d.id} className="relative">
+                              {(() => {
+                                let p = d.file_path || '';
+                                p = p.replace(/^\\+|^\/+/, '');
+                                const isAbsolute = /^https?:\//i.test(p);
+                                const base = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+                                const url = isAbsolute ? p : (p.startsWith('uploads/') ? `${base}/${p}` : `${base}/${p}`);
+                                return (
+                                  <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center px-2 py-1 text-xs border rounded bg-white hover:bg-accent/30 max-w-[160px] truncate">{p.split('/').pop()}</a>
+                                );
+                              })()}
+                              {(!isReport || docs.length>0) && (
+                                <button onClick={()=>handleDocDelete(d.id)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-5 w-5 text-xs">×</button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </CardContent>
           </Card>
 

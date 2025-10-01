@@ -251,12 +251,13 @@ module.exports = {
     return module.exports.recomputeTotals(claim.id);
   },
   addDocuments: async (claimId, employee_id, isSuperAdmin, files, category) => {
+    // Supports multi-file uploads; category may be FUEL, TOLL, PICTURE, REPORT, OTHER
     const claim = await prisma.travelClaim.findUnique({ where: { id: Number(claimId) }, include: { documents: true, request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
     if(!claim || claim.is_deleted) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims editable');
     const cat = String(category||'OTHER').toUpperCase();
-    // Allow multiple REPORT uploads; submission will ensure at least one exists
+    // Allow multiple REPORT uploads; submission will ensure at least one exists (for request-linked claims)
     const createMany = files.map(f => ({ claim_id: claim.id, category: cat, file_path: f._savedRelPath || f.path.replace(/.*uploads[\\/]/,'uploads/'), mime_type: f.mimetype, file_size: f.size }));
     await prisma.travelClaimDocument.createMany({ data: createMany });
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true } });
@@ -300,8 +301,9 @@ module.exports = {
     if(!claim) throw new Error('Not found');
     if(!module.exports._canAccess(claim, employee_id, isSuperAdmin)) throw new Error('Forbidden');
     if(claim.status !== 'DRAFT') throw new Error('Only draft claims can be submitted');
+    const isWithinCity = !claim.travel_request_id;
     const hasReport = (claim.documents||[]).some(d=>d.category==='REPORT');
-    if(!hasReport) throw new Error('Report document required before submission');
+    if(!isWithinCity && !hasReport) throw new Error('Report document required before submission');
     await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'SUBMITTED' } });
     await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'SUBMITTED', actor_employee_id: employee_id } });
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true, statusEntries: { orderBy: { createdAt: 'asc' } } } });
