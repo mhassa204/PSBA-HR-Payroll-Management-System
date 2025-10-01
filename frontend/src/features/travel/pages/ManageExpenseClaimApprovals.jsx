@@ -246,7 +246,8 @@ export default function ManageExpenseClaimApprovals(){
   const pendingFiltered = useMemo(()=> (list||[]).filter(passesRoleFilter), [list, canAccounts, canHR, canDG, meEmpId]);
 
   const filteredAll = useMemo(()=>{
-    const roleScoped = (allClaims||[]).filter(passesRoleFilter);
+    const actedByMe = (c) => (c.statusEntries||[]).some(se => String(se.actor_employee_id||'') === String(meEmpId||''));
+    const roleScoped = (allClaims||[]).filter(c => passesRoleFilter(c) || actedByMe(c));
     return roleScoped.filter(c => {
       const q = search.trim().toLowerCase();
       if(q){

@@ -662,6 +662,11 @@ module.exports = {
       });
     }
 
+    // Always include claims where the current user has acted (approved/rejected/recommended)
+    if (ctx.meEmpId) {
+      orFilters.push({ statusEntries: { some: { actor_employee_id: Number(ctx.meEmpId) } } });
+    }
+
     if (orFilters.length === 0) return [];
 
     return prisma.travelClaim.findMany({
