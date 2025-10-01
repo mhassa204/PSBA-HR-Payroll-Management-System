@@ -607,10 +607,65 @@ module.exports = {
     }
   },
   listAllForApprovers: async (ctx) => {
-    // For approvers (any stage permission) return all non-deleted claims with enriched includes
-    if(!(ctx.isSuperAdmin || ctx.isHR || ctx.isDG || ctx.isOps || ctx.isAccountsApprover || ctx.canApproveClaimOps || ctx.canApproveClaimDG)) return [];
+    // Super Admin retains full visibility
+    if (ctx.isSuperAdmin) {
+      return prisma.travelClaim.findMany({
+        where: { is_deleted: false },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } },
+          request: { include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, designation: true, department: true } } } } } },
+          documents: true,
+          segments: true,
+          statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } } } }
+        }
+      });
+    }
+
+    const me = String(ctx.meEmpId || '');
+    const orFilters = [];
+
+    // Accounts: show only HR-approved (status VERIFIED)
+    if (ctx.isAccountsApprover) {
+      orFilters.push({ status: 'VERIFIED' });
+    }
+
+    // HR: show only DG-approved (status APPROVED with DG_APPROVED entry)
+    if (ctx.isHR) {
+      orFilters.push({
+        status: 'APPROVED',
+        statusEntries: { some: { action: 'DG_APPROVED' } }
+      });
+    }
+
+    // DG: show recommended claims and claims by direct reports (fast-track)
+    if (ctx.isDG || ctx.canApproveClaimDG) {
+      orFilters.push({
+        status: 'SUBMITTED',
+        OR: [
+          { statusEntries: { some: { action: 'RECOMMENDED' } } },
+          { employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } }
+        ]
+      });
+    }
+
+    // Other users (non-approvers): show only reportees' claims so they can recommend
+    const isApprover = ctx.isHR || ctx.isDG || ctx.isOps || ctx.isAccountsApprover || ctx.canApproveClaimOps || ctx.canApproveClaimDG;
+    if (!isApprover && ctx.meEmpId) {
+      orFilters.push({
+        status: 'SUBMITTED',
+        statusEntries: { none: { action: 'RECOMMENDED' } },
+        OR: [
+          { request: { applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } } },
+          { employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } }
+        ]
+      });
+    }
+
+    if (orFilters.length === 0) return [];
+
     return prisma.travelClaim.findMany({
-      where: { is_deleted: false },
+      where: { is_deleted: false, OR: orFilters },
       orderBy: { createdAt: 'desc' },
       include: {
         employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } },

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuthStore } from '../../auth/authStore';
 import { listPendingExpenseClaimApprovals, listAllExpenseClaimApprovals, decideExpenseClaim, exportExpenseClaimsToCsv, getTravelCapabilities, updateExpenseClaim, computeExpenseClaimTotals } from '../../../services/travelService';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -61,7 +61,6 @@ export default function ManageExpenseClaimApprovals(){
   const canAccounts = isSuper || can('travel.claim.approve.accounts') || caps?.isAccountsApprover || /(accounts|finance|budget|payroll|reconciliation)/i.test(roleName);
   const meEmpId = user?.employee_id;
   const hasAnyApprovalPerm = canOps || canDG || canHR || canAccounts;
-  // If user has none, short-circuit action eligibility
 
   // Helper to compute dynamic eligibility replicating backend generalized logic (with recommender stage)
   const isRecommenderFor = (claim) => {
@@ -99,8 +98,8 @@ export default function ManageExpenseClaimApprovals(){
       return { canApprove:false, canReject:false, canClear, canRecommend:false };
     }
 
-    // Processed: no further actions (including Undo)
-    if (status === 'PROCESSED') {
+    // Processed/Settled: lock all actions
+    if (status === 'PROCESSED' || status === 'SETTLED') {
       return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
     }
 
@@ -115,7 +114,7 @@ export default function ManageExpenseClaimApprovals(){
 
     const lastApprovalIsMine = lastApproval && lastApproval.actor_employee_id === user?.employee_id;
 
-    // If Accounts approval already exists, lock further actions to only CLEAR by the same approver
+    // If Accounts approval already exists, lock further actions to only CLEAR by the same approver (unless processed/settled, handled above)
     if (hasAccountsAppr) {
       if (lastApproval && lastApproval.action==='ACCOUNTS_APPROVED' && lastApprovalIsMine) {
         return { canApprove:false, canReject:false, canClear:true, canRecommend:false };
@@ -150,9 +149,6 @@ export default function ManageExpenseClaimApprovals(){
       if(canHR) return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
     } else if(status==='VERIFIED') { // Accounts stage
       if(canAccounts) return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
-    } else if(status==='SETTLED' && lastApproval?.action==='ACCOUNTS_APPROVED' && lastApprovalIsMine){
-      // If settled (even more final), previously allowed CLEAR; now keep locked to avoid Undo
-      return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
     }
 
     return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
@@ -222,8 +218,36 @@ export default function ManageExpenseClaimApprovals(){
   // extend initial load to fetch all in background
   useEffect(()=>{ load(); loadAll(); },[]);
 
+  // Role-based client filters for both tabs
+  const passesRoleFilter = (c) => {
+    const entries = c.statusEntries||[];
+    const has = (act) => entries.some(e=>e.action===act);
+    const empRepsToMe = (c.employee?.employmentRecords||[]).some(er=>er.is_current && !er.is_deleted && String(er.reporting_officer_id||'')===String(meEmpId||''));
+    const applicantRepsToMe = c.request?.applicant?.employmentRecords?.some(er=>er.is_current && !er.is_deleted && String(er.reporting_officer_id||'')===String(meEmpId||''));
+
+    if (canAccounts) {
+      // Accounts sees only HR-approved (status VERIFIED)
+      return c.status==='VERIFIED' && has('HR_APPROVED');
+    }
+    if (canHR) {
+      // HR sees only DG-approved (status APPROVED with DG_APPROVED)
+      return c.status==='APPROVED' && has('DG_APPROVED');
+    }
+    if (canDG) {
+      // DG sees recommended OR direct reports regardless of recommendation
+      const isRecommended = entries.some(e=>e.action==='RECOMMENDED');
+      return (c.status==='SUBMITTED' && isRecommended) || empRepsToMe;
+    }
+    // Others: only reportees to recommend (not yet recommended)
+    const canRecommend = c.status==='SUBMITTED' && !entries.some(e=>e.action==='RECOMMENDED') && (empRepsToMe || applicantRepsToMe);
+    return canRecommend;
+  };
+
+  const pendingFiltered = useMemo(()=> (list||[]).filter(passesRoleFilter), [list, canAccounts, canHR, canDG, meEmpId]);
+
   const filteredAll = useMemo(()=>{
-    return (allClaims||[]).filter(c => {
+    const roleScoped = (allClaims||[]).filter(passesRoleFilter);
+    return roleScoped.filter(c => {
       const q = search.trim().toLowerCase();
       if(q){
         const empName = (c.employee?.full_name||'').toLowerCase();
@@ -233,7 +257,7 @@ export default function ManageExpenseClaimApprovals(){
       if(statusFilter && c.status !== statusFilter) return false;
       return true;
     });
-  }, [allClaims, search, statusFilter]);
+  }, [allClaims, search, statusFilter, canAccounts, canHR, canDG, meEmpId]);
 
   const exportCsv = () => {
     const csv = exportExpenseClaimsToCsv(filteredAll);
@@ -264,8 +288,8 @@ export default function ManageExpenseClaimApprovals(){
           <CardContent className="p-0">
             <div className="divide-y">
               {loading && <div className="p-4 text-muted-foreground text-sm">Loading...</div>}
-              {!loading && list.length===0 && <div className="p-4 text-muted-foreground text-sm">No pending claims</div>}
-              {list.map(c => {
+              {!loading && pendingFiltered.length===0 && <div className="p-4 text-muted-foreground text-sm">No pending claims</div>}
+              {pendingFiltered.map(c => {
                 const emp = c.employee; const empJob = currentEmployment(emp);
                 const eligibility = computeEligibility(c);
                 const clickAction = async (claim, action) => {
