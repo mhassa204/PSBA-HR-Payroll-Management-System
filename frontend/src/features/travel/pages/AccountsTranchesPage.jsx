@@ -28,12 +28,8 @@ export default function AccountsTranchesPage(){
     try { const t = await createExpenseTranche({ title, notes, claimIds: selectedIds }); setTitle(''); setNotes(''); setChecked({}); await load(); await loadTranches(); alert(`Tranche ${t.code||t.id} created`); } catch(e){ alert(e?.response?.data?.error || e.message); }
   };
 
-  const exportTranche = async (id) => {
-    try { const res = await exportExpenseTranche(id); const blob = new Blob([res.data], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`tranche-${id}.csv`; a.click(); setTimeout(()=>URL.revokeObjectURL(url), 500); } catch(e){ alert(e?.response?.data?.error || e.message); }
-  };
-
   return (
-    <div className="space-y-6 w-full max-w-[1400px] mx-auto">
+    <div className="space-y-6 w-full px-2 md:px-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Accounts • Tranches</h1>
         <Button variant="outline" size="sm" onClick={load}>Refresh</Button>

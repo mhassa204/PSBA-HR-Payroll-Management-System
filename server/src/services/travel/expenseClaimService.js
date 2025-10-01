@@ -609,8 +609,22 @@ module.exports = {
   listAllForApprovers: async (ctx) => {
     // Super Admin retains full visibility
     if (ctx.isSuperAdmin) {
+      const q = ctx.query || {};
+      const andFilters = [];
+      if (q.submission_from || q.submission_to) {
+        andFilters.push({ statusEntries: { some: { action: 'SUBMITTED', createdAt: {
+          gte: q.submission_from ? new Date(q.submission_from) : undefined,
+          lte: q.submission_to ? new Date(q.submission_to) : undefined,
+        } } } });
+      }
+      if (q.depart_from || q.depart_to) {
+        andFilters.push({ OR: [
+          { from_date: { gte: q.depart_from ? new Date(q.depart_from) : undefined, lte: q.depart_to ? new Date(q.depart_to) : undefined } },
+          { request: { departure_date: { gte: q.depart_from ? new Date(q.depart_from) : undefined, lte: q.depart_to ? new Date(q.depart_to) : undefined } } }
+        ]});
+      }
       return prisma.travelClaim.findMany({
-        where: { is_deleted: false },
+        where: { is_deleted: false, ...(andFilters.length ? { AND: andFilters } : {}) },
         orderBy: { createdAt: 'desc' },
         include: {
           employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } },
@@ -632,34 +646,18 @@ module.exports = {
 
     // HR: show only DG-approved (status APPROVED with DG_APPROVED entry)
     if (ctx.isHR) {
-      orFilters.push({
-        status: 'APPROVED',
-        statusEntries: { some: { action: 'DG_APPROVED' } }
-      });
+      orFilters.push({ status: 'APPROVED', statusEntries: { some: { action: 'DG_APPROVED' } } });
     }
 
     // DG: show recommended claims and claims by direct reports (fast-track)
     if (ctx.isDG || ctx.canApproveClaimDG) {
-      orFilters.push({
-        status: 'SUBMITTED',
-        OR: [
-          { statusEntries: { some: { action: 'RECOMMENDED' } } },
-          { employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } }
-        ]
-      });
+      orFilters.push({ status: 'SUBMITTED', OR: [ { statusEntries: { some: { action: 'RECOMMENDED' } } }, { employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } } ] });
     }
 
     // Other users (non-approvers): show only reportees' claims so they can recommend
     const isApprover = ctx.isHR || ctx.isDG || ctx.isOps || ctx.isAccountsApprover || ctx.canApproveClaimOps || ctx.canApproveClaimDG;
     if (!isApprover && ctx.meEmpId) {
-      orFilters.push({
-        status: 'SUBMITTED',
-        statusEntries: { none: { action: 'RECOMMENDED' } },
-        OR: [
-          { request: { applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } } },
-          { employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } }
-        ]
-      });
+      orFilters.push({ status: 'SUBMITTED', statusEntries: { none: { action: 'RECOMMENDED' } }, OR: [ { request: { applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } } }, { employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } } ] });
     }
 
     // Always include claims where the current user has acted (approved/rejected/recommended)
@@ -669,8 +667,18 @@ module.exports = {
 
     if (orFilters.length === 0) return [];
 
+    // AND-level date filters
+    const andFilters = [];
+    const q = ctx.query || {};
+    if (q.submission_from || q.submission_to) {
+      andFilters.push({ statusEntries: { some: { action: 'SUBMITTED', createdAt: { gte: q.submission_from ? new Date(q.submission_from) : undefined, lte: q.submission_to ? new Date(q.submission_to) : undefined } } } });
+    }
+    if (q.depart_from || q.depart_to) {
+      andFilters.push({ OR: [ { from_date: { gte: q.depart_from ? new Date(q.depart_from) : undefined, lte: q.depart_to ? new Date(q.depart_to) : undefined } }, { request: { departure_date: { gte: q.depart_from ? new Date(q.depart_from) : undefined, lte: q.depart_to ? new Date(q.depart_to) : undefined } } } ] });
+    }
+
     return prisma.travelClaim.findMany({
-      where: { is_deleted: false, OR: orFilters },
+      where: { is_deleted: false, OR: orFilters, ...(andFilters.length ? { AND: andFilters } : {}) },
       orderBy: { createdAt: 'desc' },
       include: {
         employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, department: true, location: true } } } },

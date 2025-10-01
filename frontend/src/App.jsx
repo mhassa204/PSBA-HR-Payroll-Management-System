@@ -470,7 +470,16 @@ function App() {
                 </PrivateRoute>
               }
             />
-            <Route path="/travel/accounts/tranches" element={<PrivateRoute><LeftSidebarLayout><AccountsTranchesPage/></LeftSidebarLayout></PrivateRoute>} />
+            <Route
+              path="/travel/accounts/tranches"
+              element={
+                <PrivateRoute permissions={["travel.claim.approve.accounts"]}>
+                  <LeftSidebarLayout>
+                    <AccountsTranchesPage/>
+                  </LeftSidebarLayout>
+                </PrivateRoute>
+              }
+            />
           </Route>
         </Routes>
         </ConfirmationProvider>

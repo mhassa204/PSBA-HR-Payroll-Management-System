@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuthStore } from '../../auth/authStore';
-import { listPendingExpenseClaimApprovals, listAllExpenseClaimApprovals, decideExpenseClaim, exportExpenseClaimsToCsv, getTravelCapabilities, updateExpenseClaim, computeExpenseClaimTotals } from '../../../services/travelService';
+import { listPendingExpenseClaimApprovals, listAllExpenseClaimApprovals, decideExpenseClaim, getTravelCapabilities, updateExpenseClaim, computeExpenseClaimTotals } from '../../../services/travelService';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,11 @@ export default function ManageExpenseClaimApprovals(){
   const [loadingAll, setLoadingAll] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  // New: server-backed date filters for All tab
+  const [submissionFrom, setSubmissionFrom] = useState('');
+  const [submissionTo, setSubmissionTo] = useState('');
+  const [departFrom, setDepartFrom] = useState('');
+  const [departTo, setDepartTo] = useState('');
   // Inline edit state (Accounts only)
   const [editMode, setEditMode] = useState(false);
   const [editVals, setEditVals] = useState({ total_distance_km: '', rate_per_km: '', per_diem_days: '', per_diem_rate: '', fare_total: '', toll_tax_total: '' });
@@ -214,7 +219,7 @@ export default function ManageExpenseClaimApprovals(){
     }
   };
 
-  const loadAll = async () => { setLoadingAll(true); try { const rs = await listAllExpenseClaimApprovals(); setAllClaims(rs); } finally { setLoadingAll(false);} };
+  const loadAll = async () => { setLoadingAll(true); try { const rs = await listAllExpenseClaimApprovals({ submission_from: submissionFrom||undefined, submission_to: submissionTo||undefined, depart_from: departFrom||undefined, depart_to: departTo||undefined }); setAllClaims(rs); } finally { setLoadingAll(false);} };
   // extend initial load to fetch all in background
   useEffect(()=>{ load(); loadAll(); },[]);
 
@@ -238,7 +243,7 @@ export default function ManageExpenseClaimApprovals(){
       const isRecommended = entries.some(e=>e.action==='RECOMMENDED');
       return (c.status==='SUBMITTED' && isRecommended) || empRepsToMe;
     }
-    // Others: only reportees to recommend (not yet recommended)
+    // Others: only reportee to recommend (not yet recommended)
     const canRecommend = c.status==='SUBMITTED' && !entries.some(e=>e.action==='RECOMMENDED') && (empRepsToMe || applicantRepsToMe);
     return canRecommend;
   };
@@ -259,14 +264,6 @@ export default function ManageExpenseClaimApprovals(){
       return true;
     });
   }, [allClaims, search, statusFilter, canAccounts, canHR, canDG, meEmpId]);
-
-  const exportCsv = () => {
-    const csv = exportExpenseClaimsToCsv(filteredAll);
-    if(!csv){ alert('Nothing to export'); return; }
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download='expense-claims.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),500);
-  };
 
   const currentEmployment = (emp) => emp?.employmentRecords?.[0];
   const formatMoney = (v) => (v||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
@@ -337,7 +334,24 @@ export default function ManageExpenseClaimApprovals(){
                   <option value="">All Statuses</option>
                   {['DRAFT','SUBMITTED','APPROVED','VERIFIED','PROCESSED','REJECTED','PENDING_APPROVAL'].map(s=> <option key={s} value={s}>{s}</option>)}
                 </select>
-                <Button variant="outline" size="sm" onClick={exportCsv}>Export CSV</Button>
+
+                {/* New: Submission date range */}
+                <div className="flex items-center gap-2 text-xs">
+                  <label className="text-muted-foreground">Submitted From</label>
+                  <Input type="date" value={submissionFrom} onChange={(e)=>setSubmissionFrom(e.target.value)} className="w-40" />
+                  <label className="text-muted-foreground">To</label>
+                  <Input type="date" value={submissionTo} onChange={(e)=>setSubmissionTo(e.target.value)} className="w-40" />
+                </div>
+                {/* New: Departure date range (claim.from_date or request.departure_date) */}
+                <div className="flex items-center gap-2 text-xs">
+                  <label className="text-muted-foreground">Departure From</label>
+                  <Input type="date" value={departFrom} onChange={(e)=>setDepartFrom(e.target.value)} className="w-40" />
+                  <label className="text-muted-foreground">To</label>
+                  <Input type="date" value={departTo} onChange={(e)=>setDepartTo(e.target.value)} className="w-40" />
+                </div>
+
+                <Button variant="outline" size="sm" onClick={loadAll}>Apply</Button>
+                <Button variant="link" size="sm" onClick={()=>{ setSubmissionFrom(''); setSubmissionTo(''); setDepartFrom(''); setDepartTo(''); loadAll(); }}>Clear</Button>
                 <Button variant="link" size="sm" onClick={loadAll}>Refresh</Button>
               </div>
               <div className="text-[11px] text-muted-foreground">Showing {filteredAll.length} / {allClaims.length}</div>

@@ -69,17 +69,9 @@ export const submitExpenseClaim = (id) => api.post(`/travel/expense-claims/${id}
 // List pending expense claim approvals for current user
 export const listPendingExpenseClaimApprovals = () => api.get('/travel/expense-claims/pending-approvals').then(r => r.data.claims);
 // New: list all claims (for approvers history view)
-export const listAllExpenseClaimApprovals = () => api.get('/travel/expense-claims/all').then(r => r.data.claims);
+export const listAllExpenseClaimApprovals = (params) => api.get('/travel/expense-claims/all', { params }).then(r => r.data.claims);
 // Decide (approve/reject/recommend) an expense claim
 export const decideExpenseClaim = (id, action, remarks) => api.post(`/travel/expense-claims/${id}/decision`, { action, remarks }).then(r => r.data.claim);
-
-// Export helper: transform claims to CSV rows (minimal) (id,status,employee_id,travel_request_id,grand_total)
-export const exportExpenseClaimsToCsv = (claims) => {
-  if(!claims||!claims.length) return '';
-  const header = ['id','status','employee_id','travel_request_id','grand_total'];
-  const rows = claims.map(c=> [c.id, c.status, c.employee_id, c.travel_request_id, c.grand_total||0]);
-  return [header.join(','), ...rows.map(r=>r.join(','))].join('\n');
-};
 
 // ===== Legacy Travel Claims API (deprecated) stubs to prevent import errors =====
 // These map to no-ops so old components no longer break the build. Remove old pages to clean up.
