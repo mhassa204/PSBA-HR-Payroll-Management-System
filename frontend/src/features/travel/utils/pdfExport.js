@@ -45,6 +45,16 @@ async function loadTravelRequestFull(id){
   } catch { return null; }
 }
 
+// Load full claim by id (includes documents, segments, status history)
+async function loadClaimFull(id){
+  if(!id) return null;
+  const baseApi = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/?$/, '');
+  try {
+    const data = await fetchJson(`${baseApi}/travel/expense-claims/${id}`);
+    return data?.claim || null;
+  } catch { return null; }
+}
+
 // Renders multi-line text block
 function drawMultilineText(page, text, x, y, font, size, maxWidth, lineHeight){
   const content = safe(text);
@@ -72,17 +82,14 @@ function drawHeading(page, text, x, y, font, size){
   page.drawLine({ start: { x, y: y-2 }, end: { x: x+500, y: y-2 }, thickness: 0.5, color: rgb(0.7,0.7,0.7) });
 }
 
-// Convert a claim object (as used in ManageExpenseClaimApprovals modal) to PDF with embedded documents
-export async function exportClaimToPdf(claim){
-  const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  let page = pdfDoc.addPage([595.28, 841.89]); // A4 portrait (points)
-  const margin = 40;
+// Internal renderer: append a single claim into an existing PDFDocument
+async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }){
   const pageSize = [595.28, 841.89];
+  const margin = 40;
+  let page = pdfDoc.addPage(pageSize);
   let y = page.getSize().height - margin;
 
-  // Helpers for pagination
+  // Pagination helpers (per-claim scope)
   const newPage = () => { page = pdfDoc.addPage(pageSize); y = page.getSize().height - margin; };
   const ensureSpace = (needed = 16) => { if ((y - needed) < margin) newPage(); };
   const wrapLines = (text, fnt, size, maxWidth) => {
@@ -109,7 +116,6 @@ export async function exportClaimToPdf(claim){
     }
     return y;
   };
-
   const writeKV = (label, value) => {
     ensureSpace(16);
     const lbl = safe(`${label}: `);
@@ -124,7 +130,7 @@ export async function exportClaimToPdf(claim){
   page.drawText(safe(`Expense Claim #${claim.id}`), { x: margin, y, size: 18, font: bold });
   y -= 24;
 
-  // Status + totals
+  // Summary
   ensureSpace(20); drawHeading(page, 'Summary', margin, y, bold, 12); y -= 16;
   writeKV('Status', claim.status);
   writeKV('Grand Total', (claim.grand_total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}));
@@ -143,12 +149,10 @@ export async function exportClaimToPdf(claim){
   writeKV('Location', job?.location?.name || '—');
   y -= 8;
 
-  // Associated Travel Request (load full details if possible)
+  // Associated Travel Request
   const hasReqId = !!claim.travel_request_id;
   let reqData = claim.request || null;
-  if (hasReqId) {
-    try { reqData = await loadTravelRequestFull(claim.travel_request_id) || reqData; } catch(_) {}
-  }
+  if (hasReqId) { try { reqData = await loadTravelRequestFull(claim.travel_request_id) || reqData; } catch(_) {} }
   if (reqData) {
     ensureSpace(20); drawHeading(page, 'Travel Request', margin, y, bold, 12); y -= 16;
     writeKV('Request ID', claim.travel_request_id || reqData.id || '—');
@@ -165,12 +169,7 @@ export async function exportClaimToPdf(claim){
     ensureSpace(20); drawHeading(page, 'Attendees', margin, y, bold, 12); y -= 16;
     const attendees = Array.isArray(reqData.attendees) ? reqData.attendees : [];
     if(attendees.length===0){ ensureSpace(16); page.drawText(safe('No attendees'), { x: margin, y, size: 11, font }); y -= 16; }
-    else {
-      for(const a of attendees){
-        const label = `${a.employee?.full_name || '—'}${a.employee?.cnic ? ' — '+a.employee.cnic : ''}`;
-        y = drawParagraph(label, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Attendees (cont.)' }) - 2;
-      }
-    }
+    else { for(const a of attendees){ const label = `${a.employee?.full_name || '—'}${a.employee?.cnic ? ' — '+a.employee.cnic : ''}`; y = drawParagraph(label, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Attendees (cont.)' }) - 2; } }
     y -= 8;
 
     // Request Status History
@@ -208,72 +207,49 @@ export async function exportClaimToPdf(claim){
   ensureSpace(20); drawHeading(page, 'Segments', margin, y, bold, 12); y -= 16;
   const segs = claim.segments || [];
   if(segs.length===0){ ensureSpace(16); page.drawText(safe('No segments'), { x: margin, y, size: 11, font }); y -= 16; }
-  else {
-    for(const [i,s] of segs.entries()){
-      const line = `#${i+1} * ${s.mode||'—'} * ${s.departure_from||'—'} -> ${s.departure_to||'—'} * Depart ${s.depart_date?String(s.depart_date).slice(0,10):'—'} ${s.depart_time||''} * Arrive ${s.arrive_date?String(s.arrive_date).slice(0,10):'—'} ${s.arrive_time||''} * KM ${s.distance_km||0}`;
-      y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Segments (cont.)' }) - 2;
-    }
-  }
+  else { for(const [i,s] of segs.entries()){ const line = `#${i+1} * ${s.mode||'—'} * ${s.departure_from||'—'} -> ${s.departure_to||'—'} * Depart ${s.depart_date?String(s.depart_date).slice(0,10):'—'} ${s.depart_time||''} * Arrive ${s.arrive_date?String(s.arrive_date).slice(0,10):'—'} ${s.arrive_time||''} * KM ${s.distance_km||0}`; y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Segments (cont.)' }) - 2; } }
 
   // Status history
   ensureSpace(20); drawHeading(page, 'Status History', margin, y, bold, 12); y -= 16;
   const entries = claim.statusEntries || [];
   if(entries.length===0){ ensureSpace(16); page.drawText(safe('No history'), { x: margin, y, size: 11, font }); y -= 16; }
-  else {
-    for(const se of entries){
-      const actor = se.actor?.full_name || `Emp #${se.actor_employee_id}`;
-      const when = new Date(se.createdAt).toLocaleString();
-      const line = `${se.action} by ${actor} at ${when}${se.remarks?` — ${se.remarks}`:''}`;
-      y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Status History (cont.)' }) - 2;
-    }
-  }
+  else { for(const se of entries){ const actor = se.actor?.full_name || `Emp #${se.actor_employee_id}`; const when = new Date(se.createdAt).toLocaleString(); const line = `${se.action} by ${actor} at ${when}${se.remarks?` — ${se.remarks}`:''}`; y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Status History (cont.)' }) - 2; } }
 
-  // Documents: start a dedicated sequence so each document appears right under its title
+  // Documents
   const docs = claim.documents || [];
   if(docs.length>0){
     let docsHeadingDrawn = false;
     for(const d of docs){
-      const url = resolveDocUrl(d.file_path);
-      if(!url) continue;
+      const url = resolveDocUrl(d.file_path); if(!url) continue;
       const label = safe((d.category||'DOC')+': '+(d.file_path||'').split('/').pop());
       const isPdf = /\.pdf($|\?)/i.test(url);
       try {
         if(isPdf){
           const ab = await fetchArrayBuffer(url);
           const src = await PDFDocument.load(ab);
-          // Create a page for the title and draw the first PDF page content right below it
+          // Title + first page under label
           const p = pdfDoc.addPage(pageSize);
           const topY = p.getSize().height - margin;
           if(!docsHeadingDrawn){ drawHeading(p, 'Documents', margin, topY, bold, 12); }
           const labelY = (docsHeadingDrawn ? topY : topY-20) - 16;
           p.drawText(label, { x: margin, y: labelY, size: 11, font, color: rgb(0.15,0.15,0.15) });
-
-          // Embed and draw the first source page below the label, scaled to fit under it
           try {
             const firstSrcPage = src.getPage(0);
             const embeddedFirst = await pdfDoc.embedPage(firstSrcPage);
-            const epw = embeddedFirst.width;
-            const eph = embeddedFirst.height;
-            const maxW = 515;
-            const maxH = Math.max(0, labelY - 12 - margin);
+            const epw = embeddedFirst.width, eph = embeddedFirst.height;
+            const maxW = 515, maxH = Math.max(0, labelY - 12 - margin);
             const scale = Math.min(maxW/epw, maxH/eph, 1);
             const iw = epw*scale, ih = eph*scale;
             p.drawPage(embeddedFirst, { x: margin, y: Math.max(margin, labelY - 12 - ih), width: iw, height: ih });
           } catch (_) {
-            // Fallback: if embedding fails, copy and append the first page as-is
             const [firstCopy] = await pdfDoc.copyPages(src, [0]);
             pdfDoc.addPage(firstCopy);
           }
-
-          // Append the remaining pages of the PDF after the title+first-page page
           const pageCount = src.getPageCount ? src.getPageCount() : src.getPageIndices().length;
-          for(let i=1; i<pageCount; i++){
-            const [cp] = await pdfDoc.copyPages(src, [i]);
-            pdfDoc.addPage(cp);
-          }
+          for(let i=1; i<pageCount; i++){ const [cp] = await pdfDoc.copyPages(src, [i]); pdfDoc.addPage(cp); }
           docsHeadingDrawn = true;
         } else {
-          // Image: draw title and image on the same page if possible
+          // Image
           const ab = await fetchArrayBuffer(url);
           let img; let w=0; let h=0;
           try { const bytes = new Uint8Array(ab); img = await pdfDoc.embedPng(bytes); w = img.width; h = img.height; }
@@ -298,13 +274,63 @@ export async function exportClaimToPdf(claim){
       }
     }
   }
+}
 
+// Re-implement single-claim export using the renderer
+export async function exportClaimToPdf(claim){
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  await renderClaimIntoDocument(pdfDoc, claim, { font, bold });
   const bytes = await pdfDoc.save();
   const blob = new Blob([bytes], { type: 'application/pdf' });
-  // Trigger download
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `expense-claim-${claim.id}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+
+// New: Export a full tranche as a single PDF (all associated claims)
+export async function exportTrancheToPdf(tranche){
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const pageSize = [595.28, 841.89];
+  const margin = 40;
+
+  // Cover page
+  const cover = pdfDoc.addPage(pageSize);
+  let y = cover.getSize().height - margin;
+  cover.drawText(safe('Expense Claims Tranche'), { x: margin, y, size: 18, font: bold }); y -= 24;
+  const title = tranche.title || tranche.code || `Tranche #${tranche.id}`;
+  cover.drawText(safe(`Title: ${title}`), { x: margin, y, size: 12, font }); y -= 16;
+  if (tranche.code) { cover.drawText(safe(`Code: ${tranche.code}`), { x: margin, y, size: 12, font }); y -= 16; }
+  const items = tranche.items || [];
+  const total = items.reduce((s,it)=> s + Number(it.claim?.grand_total||0), 0);
+  cover.drawText(safe(`Claims: ${items.length}`), { x: margin, y, size: 12, font }); y -= 16;
+  cover.drawText(safe(`Total Amount: ${total.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`), { x: margin, y, size: 12, font }); y -= 16;
+  cover.drawLine({ start: { x: margin, y: y-8 }, end: { x: margin+500, y: y-8 }, thickness: 0.5, color: rgb(0.7,0.7,0.7) });
+
+  // Render each claim
+  for (const it of items){
+    const id = it.claim?.id || it.claim_id;
+    let claim = it.claim;
+    try {
+      const full = await loadClaimFull(id);
+      if (full) claim = full;
+    } catch {}
+    if (!claim) continue;
+    await renderClaimIntoDocument(pdfDoc, claim, { font, bold });
+  }
+
+  const bytes = await pdfDoc.save();
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const a = document.createElement('a');
+  const baseName = tranche.code || `tranche-${tranche.id}`;
+  a.href = URL.createObjectURL(blob);
+  a.download = `expense-${baseName}.pdf`;
   document.body.appendChild(a);
   a.click();
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
