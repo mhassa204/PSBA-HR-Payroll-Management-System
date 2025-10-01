@@ -1,5 +1,7 @@
 const service = require('../../services/travel/expenseClaimService');
 const { uploadTravelExpenseClaimDocs } = require('../../config/multer');
+const path = require('path');
+const fs = require('fs');
 
 module.exports = {
   eligible: async (req, res) => {
@@ -83,5 +85,24 @@ module.exports = {
   },
   exportTranche: async (req, res) => {
     try { const { csv, code } = await service.exportTrancheCsv(req.params.id); res.setHeader('Content-Type','text/csv'); res.setHeader('Content-Disposition',`attachment; filename="tranche-${code}.csv"`); res.send(csv); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+  // Proxy to stream claim documents (images/PDFs) via API (CORS/auth safe)
+  docProxy: async (req, res) => {
+    try {
+      let p = String(req.query.path||'');
+      if(!p || !/^uploads[\\\/]/i.test(p)) return res.status(400).json({ success:false, error:'Invalid path' });
+      // Normalize and map to actual Uploads directory (case-insensitive)
+      p = p.replace(/^uploads[\\\/]/i, 'Uploads/');
+      const projectRoot = path.resolve(__dirname, '../../..');
+      const uploadsRoot = path.resolve(projectRoot, 'Uploads');
+      const fullPath = path.resolve(projectRoot, p);
+      if(!fullPath.startsWith(uploadsRoot)) return res.status(400).json({ success:false, error:'Path traversal blocked' });
+      if(!fs.existsSync(fullPath)) return res.status(404).json({ success:false, error:'File not found' });
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.setHeader('Content-Disposition', 'inline');
+      return res.sendFile(fullPath);
+    } catch (e) {
+      return res.status(500).json({ success:false, error: e.message });
+    }
   }
 };

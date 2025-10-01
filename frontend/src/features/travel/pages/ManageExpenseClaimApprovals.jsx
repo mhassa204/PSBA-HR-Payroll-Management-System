@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import EnhancedModal from '@/components/ui/EnhancedModal';
+import { exportClaimToPdf } from '../utils/pdfExport';
 
 export default function ManageExpenseClaimApprovals(){
   const [list, setList] = useState([]);
@@ -330,6 +331,7 @@ export default function ManageExpenseClaimApprovals(){
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={()=>open(c)}>View</Button>
+                      <Button variant="outline" size="sm" onClick={()=>exportClaimToPdf(c)}>Export</Button>
                       <div className="flex items-center gap-1">
                         {eligibility.canRecommend && <Button size="sm" onClick={()=>clickAction(c,'RECOMMEND')}>Recommend</Button>}
                         {eligibility.canApprove && <Button size="sm" onClick={()=>clickAction(c,'APPROVE')}>Approve</Button>}
@@ -403,6 +405,7 @@ export default function ManageExpenseClaimApprovals(){
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={()=>open(c)}>View</Button>
+                      <Button variant="outline" size="sm" onClick={()=>exportClaimToPdf(c)}>Export</Button>
                       <div className="flex items-center gap-1">
                         {eligibility.canRecommend && <Button size="sm" onClick={()=>clickAction(c,'RECOMMEND')}>Recommend</Button>}
                         {eligibility.canApprove && <Button size="sm" onClick={()=>clickAction(c,'APPROVE')}>Approve</Button>}
@@ -666,6 +669,7 @@ export default function ManageExpenseClaimApprovals(){
               {(() => { const elig = computeEligibility(selected); return (
                 <div className="flex gap-2 items-center">
                   <Button type="button" variant="outline" size="sm" onClick={()=>{ setRemarks(''); close(); }}>Close</Button>
+                  <Button variant="outline" size="sm" onClick={()=>exportClaimToPdf(selected)}>Export</Button>
                   {elig.canRecommend && <Button disabled={submitting} size="sm" onClick={()=>act('RECOMMEND')}>Recommend</Button>}
                   {elig.canApprove && <Button disabled={submitting} size="sm" onClick={()=>act('APPROVE')}>Approve</Button>}
                   {elig.canReject && <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>act('REJECT')}>Reject</Button>}

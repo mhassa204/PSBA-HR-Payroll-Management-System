@@ -41,6 +41,8 @@ router.get('/expense-claims/accounts', isAuthenticated, expenseClaimController.l
 router.post('/expense-claims/tranches', isAuthenticated, expenseClaimController.createTranche);
 router.get('/expense-claims/tranches', isAuthenticated, expenseClaimController.listTranches);
 router.get('/expense-claims/tranches/:id/export', isAuthenticated, expenseClaimController.exportTranche);
+// Proxy documents for claims
+router.get('/expense-claims/document', isAuthenticated, expenseClaimController.docProxy);
 // Relax permissions: rely on service._canAccess and business rules
 router.get('/expense-claims', isAuthenticated, expenseClaimController.list);
 router.post('/expense-claims', isAuthenticated, expenseClaimController.create);
