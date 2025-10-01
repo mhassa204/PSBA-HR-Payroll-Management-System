@@ -28,8 +28,26 @@ export default function AccountsTranchesPage(){
     try { const t = await createExpenseTranche({ title, notes, claimIds: selectedIds }); setTitle(''); setNotes(''); setChecked({}); await load(); await loadTranches(); alert(`Tranche ${t.code||t.id} created`); } catch(e){ alert(e?.response?.data?.error || e.message); }
   };
 
+  // Helper to export a tranche as CSV and trigger download
+  const exportTranche = async (id) => {
+    try {
+      const res = await exportExpenseTranche(id);
+      const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `expense-tranche-${id}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e?.response?.data?.error || e.message);
+    }
+  };
+
   return (
-    <div className="space-y-6 w-full px-2 md:px-4">
+    <div className="space-y-4 w-full">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Accounts • Tranches</h1>
         <Button variant="outline" size="sm" onClick={load}>Refresh</Button>

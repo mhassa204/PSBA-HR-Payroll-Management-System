@@ -56,7 +56,7 @@ const LeftSidebarLayout = ({ children }) => {
       {/* Main Content Area */}
       <div className="lg:ml-72 min-h-screen">
         {/* Content Container */}
-        <div className="p-6 pt-20 lg:pt-6">
+        <div className="px-2 md:px-4 lg:px-4 pt-20 lg:pt-6 pb-6">
           {children || <Outlet />}
         </div>
       </div>
