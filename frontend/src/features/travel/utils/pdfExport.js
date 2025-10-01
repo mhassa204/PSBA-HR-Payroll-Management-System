@@ -28,6 +28,23 @@ export function resolveDocUrl(p){
   return `${baseApi}/travel/expense-claims/document?path=${encodeURIComponent(clean)}`;
 }
 
+// Helper: fetch JSON with credentials
+async function fetchJson(url){
+  const res = await fetch(url, { credentials: 'include' });
+  if(!res.ok) throw new Error('Failed to fetch: '+url);
+  return res.json();
+}
+
+// Load full travel request by id to include attendees and status history
+async function loadTravelRequestFull(id){
+  if(!id) return null;
+  const baseApi = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/?$/, '');
+  try {
+    const data = await fetchJson(`${baseApi}/travel/requests/${id}`);
+    return data?.request || null;
+  } catch { return null; }
+}
+
 // Renders multi-line text block
 function drawMultilineText(page, text, x, y, font, size, maxWidth, lineHeight){
   const content = safe(text);
@@ -96,14 +113,50 @@ export async function exportClaimToPdf(claim){
   writeKV('Location', job?.location?.name || '—');
   y -= 8;
 
-  // Request
-  if(claim.request){
-    drawHeading(page, 'Request', margin, y, bold, 12); y -= 16;
-    writeKV('Purpose', claim.request?.purpose || claim.request?.travel_purpose || '—');
-    writeKV('Destination', claim.request?.destination || '—');
-    writeKV('Departure', claim.request?.departure_date ? String(claim.request.departure_date).slice(0,10) : '—');
-    writeKV('Return', claim.request?.expected_return_date ? String(claim.request.expected_return_date).slice(0,10) : '—');
+  // Associated Travel Request (load full details if possible)
+  const hasReqId = !!claim.travel_request_id;
+  let reqData = claim.request || null;
+  if (hasReqId) {
+    try { reqData = await loadTravelRequestFull(claim.travel_request_id) || reqData; } catch(_) {}
+  }
+  if (reqData) {
+    drawHeading(page, 'Travel Request', margin, y, bold, 12); y -= 16;
+    writeKV('Request ID', claim.travel_request_id || reqData.id || '—');
+    writeKV('Status', reqData.status || '—');
+    writeKV('Submission Date', reqData.submission_date ? String(reqData.submission_date).slice(0,10) : '—');
+    writeKV('Purpose', reqData.purpose || reqData.travel_purpose || '—');
+    writeKV('Destination', reqData.destination || '—');
+    writeKV('Departure', reqData.departure_date ? `${String(reqData.departure_date).slice(0,10)}${reqData.departure_time? ' at '+reqData.departure_time:''}` : '—');
+    writeKV('Expected Return', reqData.expected_return_date ? String(reqData.expected_return_date).slice(0,10) : '—');
+    writeKV('Total Days', (reqData.total_days ?? '—'));
     y -= 8;
+
+    // Attendees
+    drawHeading(page, 'Attendees', margin, y, bold, 12); y -= 16;
+    const attendees = Array.isArray(reqData.attendees) ? reqData.attendees : [];
+    if(attendees.length===0){ page.drawText(safe('No attendees'), { x: margin, y, size: 11, font }); y -= 16; }
+    else {
+      for(const a of attendees){
+        const label = `${a.employee?.full_name || '—'}${a.employee?.cnic ? ' — '+a.employee.cnic : ''}`;
+        y = drawMultilineText(page, label, margin, y, font, 11, 515, 14) - 2;
+        if(y < 80){ y = page.getSize().height - margin; drawHeading(page, 'Attendees (cont.)', margin, y, bold, 12); y -= 16; }
+      }
+    }
+    y -= 8;
+
+    // Request Status History
+    const reqEntries = Array.isArray(reqData.statusEntries) ? reqData.statusEntries : [];
+    if(reqEntries.length){
+      drawHeading(page, 'Request Status History', margin, y, bold, 12); y -= 16;
+      for(const se of reqEntries){
+        const actor = se.actor?.full_name || (se.actor_employee_id ? `Emp #${se.actor_employee_id}` : '—');
+        const when = se.createdAt ? new Date(se.createdAt).toLocaleString() : '';
+        const line = `${se.action} by ${actor}${when?` at ${when}`:''}${se.remarks?` — ${se.remarks}`:''}`;
+        y = drawMultilineText(page, line, margin, y, font, 11, 515, 14) - 2;
+        if(y < 80){ y = page.getSize().height - margin; drawHeading(page, 'Request Status History (cont.)', margin, y, bold, 12); y -= 16; }
+      }
+      y -= 8;
+    }
   }
 
   // Claim details
