@@ -38,30 +38,42 @@ module.exports = {
     const selfEmp = await prisma.employee.findFirst({ where:{ id:Number(userEmpId), is_deleted:false, status:'Active', ...(search?{ OR:[ { full_name:{ contains:search, mode:'insensitive'} }, { employee_id:{ contains:search, mode:'insensitive'} }, { cnic:{ contains:search, mode:'insensitive'} }, { email:{ contains:search, mode:'insensitive'} } ] }: {}) }, include:{ employmentRecords:{ where:{ is_current:true, is_deleted:false }, include:{ designation:true, role_tag:true } } } });
     if (selfEmp && !seen.has(selfEmp.employee_id)) { list.unshift({ id:selfEmp.id, employee_id:selfEmp.employee_id, full_name:selfEmp.full_name, cnic:selfEmp.cnic, employmentRecords:[{ designation:selfEmp.employmentRecords?.[0]?.designation||null, role_tag:selfEmp.employmentRecords?.[0]?.role_tag||null }] }); seen.add(selfEmp.employee_id); }
     // recent leaves
-    const empIds = list.map(e=>e.id); const leaves = empIds.length ? await prisma.leave.findMany({ where:{ employee_id:{ in: empIds }, is_deleted:false }, orderBy:{ date:'desc' } }) : [];
-    const leavesByEmp=new Map(); for (const l of leaves){ const arr=leavesByEmp.get(l.employee_id)||[]; arr.push({ id:l.id, date:l.date, type:l.type, status:l.status, remarks:l.remarks }); leavesByEmp.set(l.employee_id, arr); }
+  const empIds = list.map(e=>e.id); const leaves = empIds.length ? await prisma.leave.findMany({ where:{ employee_id:{ in: empIds }, is_deleted:false }, orderBy:{ date:'desc' } }) : [];
+  const leavesByEmp=new Map(); for (const l of leaves){ const arr=leavesByEmp.get(l.employee_id)||[]; arr.push({ id:l.id, date:l.date, type:l.type, status:l.status, remarks:l.remarks }); leavesByEmp.set(l.employee_id, arr); }
     return list.map(e=>({ ...e, leaves: leavesByEmp.get(e.id)||[] }));
   },
   listEmployeesWithSummary: async (search) => {
     const whereEmp = { is_deleted:false, ...(search?{ OR:[ { full_name:{ contains:search, mode:'insensitive'} }, { employee_id:{ contains:search, mode:'insensitive'} }, { cnic:{ contains:search, mode:'insensitive'} }, { email:{ contains:search, mode:'insensitive'} } ] }: {}) };
-    const employees = await prisma.employee.findMany({ where: whereEmp, select:{ id:true, employee_id:true, full_name:true, cnic:true, employmentRecords:{ where:{ is_current:true, is_deleted:false }, include:{ designation:true, role_tag:true } }, leaves:{ where:{ is_deleted:false }, orderBy:{ date:'desc' } } }, orderBy:[ { full_name:'asc' }, { id:'asc' } ] });
+  const employees = await prisma.employee.findMany({ where: whereEmp, select:{ id:true, employee_id:true, full_name:true, cnic:true, employmentRecords:{ where:{ is_current:true, is_deleted:false }, include:{ designation:true, role_tag:true } }, leaves:{ where:{ is_deleted:false }, orderBy:{ date:'desc' } } }, orderBy:[ { full_name:'asc' }, { id:'asc' } ] });
     const activeBank = await getActiveLeaveBank();
     let enriched = employees; let summaryByEmp = new Map(); let leaveTypes=[];
     if (activeBank){ leaveTypes = await prisma.leaveType.findMany({ where:{ is_deleted:false, is_active:true }, orderBy:{ name:'asc' } }); const empIds=employees.map(e=>e.id); const allocations= await prisma.leaveBankAllocation.findMany({ where:{ leave_bank_id: activeBank.id, employee_id:{ in: empIds } } }); const leavesInPeriod = await prisma.leave.findMany({ where:{ is_deleted:false, employee_id:{ in: empIds }, date:{ gte: toDateOnly(activeBank.period_start), lte: toDateOnly(activeBank.period_end) } }, select:{ employee_id:true, type:true, status:true } }); summaryByEmp = buildSummaryForEmployees({ employees, leaveTypes, bank: activeBank, allocations, leavesInPeriod }); enriched = employees.map(e=>({ ...e, currentLeaveBankSummary:{ bankId: activeBank.id, title: activeBank.title, period_start: activeBank.period_start, period_end: activeBank.period_end, items: summaryByEmp.get(e.id)||[] } })); }
     return { employees: enriched, activeBank: activeBank ? { id: activeBank.id, title: activeBank.title, period_start: activeBank.period_start, period_end: activeBank.period_end } : null };
   },
   getEmployeeLeavesWithSummary: async (employeeId) => {
-    const leaves = await prisma.leave.findMany({ where:{ employee_id: employeeId, is_deleted:false }, orderBy:{ date:'desc' } });
+  const leaves = await prisma.leave.findMany({ where:{ employee_id: employeeId, is_deleted:false }, orderBy:{ date:'desc' } });
     const activeBank = await getActiveLeaveBank();
     let summary=null; if (activeBank){ const leaveTypes= await prisma.leaveType.findMany({ where:{ is_deleted:false, is_active:true }, orderBy:{ name:'asc' } }); const allocations = await prisma.leaveBankAllocation.findMany({ where:{ leave_bank_id: activeBank.id, employee_id: employeeId } }); const leavesInPeriod = await prisma.leave.findMany({ where:{ is_deleted:false, employee_id: employeeId, date:{ gte: toDateOnly(activeBank.period_start), lte: toDateOnly(activeBank.period_end) } }, select:{ employee_id:true, type:true, status:true } }); const itemsMap = buildSummaryForEmployees({ employees:[{ id:employeeId }], leaveTypes, bank: activeBank, allocations, leavesInPeriod }); summary={ bankId: activeBank.id, title: activeBank.title, period_start: activeBank.period_start, period_end: activeBank.period_end, items: itemsMap.get(employeeId)||[] }; }
     return { leaves, summary };
   },
-  createLeaves: async ({ employeeId, type, remarks, date, start, end, dates }) => {
+  createLeaves: async ({ employeeId, type, remarks, date, start, end, dates, duty_from, duty_to }) => {
     const toInsert=new Set(); if (Array.isArray(dates)&&dates.length){ for (const d of dates){ const dt=toDateOnly(d); if(dt) toInsert.add(ymd(dt)); } } else if (start && end){ const s=toDateOnly(start); const e=toDateOnly(end); if (!s||!e||s>e) throw new Error('Invalid start/end'); let cur=s; while(cur<=e){ toInsert.add(ymd(cur)); cur=addDays(cur,1);} } else if (date){ const dt=toDateOnly(date); if(!dt) throw new Error('Invalid date'); toInsert.add(ymd(dt)); } else { throw new Error('Provide date or start/end or dates[]'); }
     const list=Array.from(toInsert); if(!list.length) throw new Error('No valid dates to insert');
     const existing = await prisma.leave.findMany({ where:{ employee_id:employeeId, is_deleted:false, date:{ in: list.map(d=> new Date(d)) } }, select:{ date:true } });
     const existSet=new Set(existing.map(x=> ymd(toDateOnly(x.date))));
-    const payload = list.filter(d=> !existSet.has(d)).map(d=> ({ employee_id: employeeId, date: new Date(d), type:String(type), remarks: remarks || null }));
+    const fmt = (t) => {
+      if (!t) return null;
+      const s = String(t).trim();
+      const m = s.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+      return m ? `${m[1].padStart(2,'0')}:${m[2].padStart(2,'0')}` : null;
+    };
+    const df = fmt(duty_from);
+    const dt = fmt(duty_to);
+    const enrichRemarks = (base) => {
+      if (df && dt) return `${base ? base+ ' | ' : ''}Duty time: ${df} - ${dt}`;
+      return base || null;
+    };
+    const payload = list.filter(d=> !existSet.has(d)).map(d=> ({ employee_id: employeeId, date: new Date(d), type:String(type), remarks: enrichRemarks(remarks || null) }));
     let created=0; let skipped=list.length - payload.length; if (payload.length){ const result = await prisma.leave.createMany({ data: payload }); created = result.count || payload.length; }
     const leaves = await prisma.leave.findMany({ where:{ employee_id:employeeId, is_deleted:false }, orderBy:{ date:'desc' } });
     return { created, skipped, leaves };

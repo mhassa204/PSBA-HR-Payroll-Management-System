@@ -9,7 +9,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   const [leaves, setLeaves] = useState([]);
   const [types, setTypes] = useState([]);
   const [summary, setSummary] = useState(null);
-  const [form, setForm] = useState({ date: '', type: '', remarks: '' });
+  const [form, setForm] = useState({ date: '', type: '', remarks: '', duty_from: '', duty_to: '' });
   const [canStatus, setCanStatus] = useState(false);
   const [mode, setMode] = useState('single'); // 'single' | 'range' | 'multi'
   const [range, setRange] = useState({ start: '', end: '' });
@@ -43,7 +43,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.type) return;
-    const body = { type: form.type, remarks: form.remarks };
+  const body = { type: form.type, remarks: form.remarks, duty_from: form.duty_from || null, duty_to: form.duty_to || null };
     if (mode === 'single') {
       if (!form.date) return;
       body.date = form.date;
@@ -58,7 +58,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
 
     try {
       await axios.post(`/leaves/${employee.id}`, body);
-      setForm({ date: '', type: '', remarks: '' });
+  setForm({ date: '', type: '', remarks: '', duty_from: '', duty_to: '' });
       setRange({ start: '', end: '' });
       setMultiDates(['']);
       const { data } = await axios.get(`/leaves/${employee.id}`);
@@ -208,7 +208,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                         <th>Days</th>
                         <th>Type</th>
                         <th>Status</th>
-                        <th>Remarks</th>
+                        <th>Reason</th>
                         {canStatus && <th>Bulk Actions</th>}
                       </tr>
                     </thead>
@@ -230,7 +230,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                           )}
                         </tr>
                       ))}
-                      {!groupedLeaves.length && <tr><td colSpan={canStatus?7:6} className="text-center py-4 text-xs text-gray-500">No grouped leaves</td></tr>}
+                      {!groupedLeaves.length && <tr><td colSpan={canStatus?6:5} className="text-center py-4 text-xs text-gray-500">No grouped leaves</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -247,8 +247,16 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className="form-label text-[11px] mb-1">Remarks</label>
+                  <label className="form-label text-[11px] mb-1">Reason for availing leave</label>
                   <input className="form-input" placeholder="Optional" value={form.remarks} onChange={e=>setForm(f=>({...f, remarks: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">Duty time (from)</label>
+                  <input type="time" className="form-input" value={form.duty_from} onChange={e=>setForm(f=>({...f, duty_from: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">Duty time (to)</label>
+                  <input type="time" className="form-input" value={form.duty_to} onChange={e=>setForm(f=>({...f, duty_to: e.target.value}))} />
                 </div>
                 <div>
                   <label className="form-label text-[11px] mb-1">Mode</label>
@@ -306,7 +314,8 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                       <th>Date</th>
                       <th>Type</th>
                       <th>Status</th>
-                      <th>Remarks</th>
+                      <th>Reason</th>
+                      <th>Duty Time</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -332,10 +341,16 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                           )}
                         </td>
                         <td><input className="form-input !py-1 !px-2" value={l.remarks || ''} onChange={e=>update(l.id, { remarks: e.target.value })} /></td>
+                        <td className="min-w-[140px]">
+                          {(() => {
+                            const m = (l.remarks||'').match(/Duty time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/i);
+                            return m ? `${m[1]} - ${m[2]}` : '-';
+                          })()}
+                        </td>
                         <td><button className="btn btn-error-soft text-[11px]" onClick={()=>remove(l.id)}>Delete</button></td>
                       </tr>
                     ))}
-                    {!leaves.length && <tr><td colSpan={5} className="text-center py-6 text-xs text-gray-500">No leaves</td></tr>}
+                    {!leaves.length && <tr><td colSpan={6} className="text-center py-6 text-xs text-gray-500">No leaves</td></tr>}
                   </tbody>
                 </table>
               </div>

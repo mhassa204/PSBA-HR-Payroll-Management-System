@@ -7,7 +7,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [leaves, setLeaves] = useState([]);
   const [types, setTypes] = useState([]);
-  const [form, setForm] = useState({ date: '', type: '', remarks: '' });
+  const [form, setForm] = useState({ date: '', type: '', remarks: '', duty_from:'', duty_to:'' });
   const [mode, setMode] = useState('single');
   const [range, setRange] = useState({ start: '', end: '' });
   const [multiDates, setMultiDates] = useState(['']);
@@ -35,7 +35,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.type) return;
-    const body = { type: form.type, remarks: form.remarks };
+  const body = { type: form.type, remarks: form.remarks, duty_from: form.duty_from || null, duty_to: form.duty_to || null };
     if (mode === 'single') {
       if (!form.date) return; body.date = form.date;
     } else if (mode === 'range') {
@@ -46,7 +46,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
 
     try {
       await axios.post(`/leaves/${employee.id}`, body);
-      setForm({ date: '', type: '', remarks: '' });
+  setForm({ date: '', type: '', remarks: '', duty_from:'', duty_to:'' });
       setRange({ start: '', end: '' });
       setMultiDates(['']);
       const { data } = await axios.get(`/leaves/${employee.id}`);
@@ -90,8 +90,16 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className="form-label text-[11px] mb-1">Remarks</label>
+                  <label className="form-label text-[11px] mb-1">Reason for availing leave</label>
                   <input className="form-input" placeholder="Optional" value={form.remarks} onChange={e=>setForm(f=>({...f, remarks: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">Duty time (from)</label>
+                  <input type="time" className="form-input" value={form.duty_from} onChange={e=>setForm(f=>({...f, duty_from: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">Duty time (to)</label>
+                  <input type="time" className="form-input" value={form.duty_to} onChange={e=>setForm(f=>({...f, duty_to: e.target.value}))} />
                 </div>
                 <div>
                   <label className="form-label text-[11px] mb-1">Mode</label>
@@ -149,7 +157,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                       <th>Date</th>
                       <th>Type</th>
                       <th>Status</th>
-                      <th>Remarks</th>
+                      <th>Reason</th>
                       <th></th>
                     </tr>
                   </thead>

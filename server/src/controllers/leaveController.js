@@ -27,7 +27,7 @@ module.exports = {
   createLeaves: async (req, res) => {
     try {
       const employeeId = Number(req.params.employeeId);
-      const { date, type, remarks, start, end, dates } = req.body || {};
+  const { date, type, remarks, start, end, dates, duty_from, duty_to } = req.body || {};
       const perms = req.session?.user?.permissions || [];
       const userEmpId = req.session?.user?.employee_id || null;
       const hasCreate = perms.includes('*') || perms.includes('leaves.create');
@@ -38,7 +38,7 @@ module.exports = {
         if (!ok) return res.status(403).json({ success:false, error:'Forbidden' });
       }
       if (!type) return res.status(400).json({ success:false, error:'type is required' });
-      const result = await leaveService.createLeaves({ employeeId, type, remarks, date, start, end, dates });
+  const result = await leaveService.createLeaves({ employeeId, type, remarks, date, start, end, dates, duty_from, duty_to });
       res.status(201).json({ success:true, ...result });
     } catch(e){
       const clientErrors = ['Invalid start/end','Invalid date','Provide date or start/end or dates[]','No valid dates to insert'];
@@ -48,7 +48,8 @@ module.exports = {
     }
   },
   updateLeave: async (req, res) => {
-    try { const id = Number(req.params.id); const { date, type, remarks } = req.body || {}; const data = {}; if (date) data.date = new Date(date); if (type) data.type=String(type); if (remarks!==undefined) data.remarks=remarks; const updated = await leaveService.updateLeave(id, data); res.json({ success:true, leave: updated }); }
+    try { const id = Number(req.params.id); const { date, type, remarks, duty_from, duty_to } = req.body || {}; const data = {}; if (date) data.date = new Date(date); if (type) data.type=String(type); if (remarks!==undefined) data.remarks=remarks; // duty_from/to are not stored separately in DB yet
+      const updated = await leaveService.updateLeave(id, data); res.json({ success:true, leave: updated }); }
     catch(e){ res.status(500).json({ success:false, error:e.message }); }
   },
   updateStatus: async (req, res) => {
