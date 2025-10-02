@@ -257,7 +257,8 @@ const LeftSidebar = () => {
         { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isAccountsApprover) },
         { name: 'Expense Claims', href: '/travel/expense-claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') },
         { name: 'Claim Approvals', href: '/travel/expense-claim-approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isHR || travelCaps.isAccountsApprover) },
-        { name: 'Accounts Tranches', href: '/travel/accounts/tranches', icon: ViewColumnsIcon, show: () => (travelCaps.isAccountsApprover || can('travel.claim.approve.accounts')) }
+        { name: 'Accounts Tranches', href: '/travel/accounts/tranches', icon: ViewColumnsIcon, show: () => (travelCaps.isAccountsApprover || can('travel.claim.approve.accounts')) },
+        { name: 'TADA Manual Entry', href: '/travel/manual', icon: ViewColumnsIcon, show: () => (travelCaps.isAccountsApprover || travelCaps.isSuperAdmin) }
       ]
     }
   ];

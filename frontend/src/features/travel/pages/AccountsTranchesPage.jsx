@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { listVerifiedClaimsForAccounts, createExpenseTranche, listExpenseTranches, exportExpenseTranche } from '../../../services/travelService';
+import { exportTrancheToPdf } from '../utils/pdfExport';
 
 export default function AccountsTranchesPage(){
   const [filters, setFilters] = useState({ employee_cnic:'', employee_name:'', from_date:'', to_date:'', claim_from:'', claim_to:'', statuses:['VERIFIED'] });
@@ -141,6 +142,7 @@ export default function AccountsTranchesPage(){
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={()=>exportTranche(t.id)}>Export CSV</Button>
+                    <Button size="sm" onClick={()=>exportTrancheToPdf(t)}>Export PDF</Button>
                   </div>
                 </div>
               );

@@ -6,6 +6,9 @@ const expenseClaimController = require('../controllers/travel/expenseClaimContro
 
 // Return reportees + self for logged-in user (for employee selector)
 router.get('/employees/reportees', isAuthenticated, travelRequestController.reportees);
+router.get('/employees/search', isAuthenticated, travelRequestController.searchEmployees); // New route for employee search
+// New: reportees of a specific employee (used by manual entry after selecting applicant)
+router.get('/employees/:id/reportees', isAuthenticated, travelRequestController.reporteesOfApplicant);
 
 // Travel Requests CRUD (simplified fields)
 router.get('/requests', isAuthenticated, travelRequestController.listManage);
@@ -32,6 +35,12 @@ router.get('/me/capabilities', isAuthenticated, travelRequestController.capabili
 // Flexible status update (dropdown driven) allowing Ops/DG to toggle CREATED/APPROVED/REJECTED within their scope
 router.patch('/requests/:id/status', isAuthenticated, travelRequestController.updateStatusFlexible);
 
+// ================= Accounts Manual Entry (TADA) =================
+// Create a request on behalf of any employee
+router.post('/requests/manual', isAuthenticated, travelRequestController.manualCreate);
+// Record recommendation/approval with selected actor identity
+router.post('/requests/:id/manual/decision', isAuthenticated, travelRequestController.manualDecision);
+
 // Expense Claims
 router.get('/expense-claims/eligible', isAuthenticated, expenseClaimController.eligible);
 router.get('/expense-claims/pending-approvals', isAuthenticated, expenseClaimController.listPendingApprovals);
@@ -55,7 +64,7 @@ router.post('/expense-claims/:id/segments', isAuthenticated, expenseClaimControl
 router.put('/expense-claims/:id/segments/:segmentId', isAuthenticated, expenseClaimController.updateSegment);
 router.delete('/expense-claims/:id/segments/:segmentId', isAuthenticated, expenseClaimController.deleteSegment);
 
-// Documents now exclude TICKET category
+// Documents upload: allow any category (FUEL, TOLL, PICTURE, REPORT, OTHER); supports multi-file upload
 router.post('/expense-claims/:id/documents', isAuthenticated, expenseClaimController.uploadDocuments);
 router.delete('/expense-claims/:id/documents/:docId', isAuthenticated, expenseClaimController.deleteDocument);
 
