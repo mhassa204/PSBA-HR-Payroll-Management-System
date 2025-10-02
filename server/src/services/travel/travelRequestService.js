@@ -144,6 +144,16 @@ module.exports = {
   // New: on-behalf request creation
   createRequestOnBehalf: async (ctx, data, attendeeIds, totalDays, createdByEmpId) => {
     // ctx.meEmpId is replaced with applicant_id so created request belongs to that employee
+    const submissionDateTime = (() => {
+      try {
+        if (data.submission_date) {
+          const date = String(data.submission_date);
+          const time = String(data.submission_time||'00:00');
+          return new Date(`${date}T${time}:00`);
+        }
+      } catch(_){}
+      return undefined;
+    })();
     const created = await prisma.travelRequest.create({
       data: {
         applicant_id: Number(ctx.meEmpId),
@@ -153,7 +163,8 @@ module.exports = {
         purpose: data.purpose || null,
         destination: data.destination || null,
         total_days: totalDays,
-        status: 'CREATED'
+        status: 'CREATED',
+        ...(submissionDateTime ? { submission_date: submissionDateTime } : {})
       }
     });
     if (attendeeIds.length) {
@@ -198,7 +209,7 @@ module.exports = {
 
   // New: decision API for recommendation/clear without changing status
   recommendOrClear: async (id, actorEmpId, action, ctx) => {
-    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { statusEntries: true, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } });
+    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { statusEntries: true, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } }, statusEntries: true } });
     if (!req || req.is_deleted) throw new Error('Not found');
     if (req.status !== 'CREATED') throw new Error('Only CREATED requests can be actioned');
     // Check recommender eligibility

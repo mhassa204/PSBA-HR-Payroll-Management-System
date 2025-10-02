@@ -7,6 +7,8 @@ const expenseClaimController = require('../controllers/travel/expenseClaimContro
 // Return reportees + self for logged-in user (for employee selector)
 router.get('/employees/reportees', isAuthenticated, travelRequestController.reportees);
 router.get('/employees/search', isAuthenticated, travelRequestController.searchEmployees); // New route for employee search
+// New: reportees of a specific employee (used by manual entry after selecting applicant)
+router.get('/employees/:id/reportees', isAuthenticated, travelRequestController.reporteesOfApplicant);
 
 // Travel Requests CRUD (simplified fields)
 router.get('/requests', isAuthenticated, travelRequestController.listManage);

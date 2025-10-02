@@ -199,6 +199,20 @@ module.exports = {
     }
   },
 
+  // For manual entry: list reportees of a selected applicant
+  reporteesOfApplicant: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) return res.status(403).json({ success:false, error:'Forbidden' });
+      const applicantId = Number(req.params.id);
+      if (!applicantId) return res.status(400).json({ success:false, error:'Invalid applicant id' });
+      const officerKey = String(applicantId);
+      const employments = await prisma.employment.findMany({ where: { is_deleted: false, is_current: true, reporting_officer_id: officerKey }, include: { employee: true } });
+      const reportees = employments.map(e => e.employee).filter(Boolean).map(e => ({ id: e.id, full_name: e.full_name, cnic: e.cnic || '' }));
+      res.json({ success:true, employees: reportees });
+    } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+  },
+
   // ================= Accounts Manual Entry (TADA) =================
   searchEmployees: async (req, res) => {
     try {
