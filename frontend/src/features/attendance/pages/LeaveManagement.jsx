@@ -1,19 +1,25 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import axios from '../../../lib/axios';
-import LoadingSpinner from '../../../components/ui/LoadingSpinner';
-import { toastBus } from '../../../utils/toastBus';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "../../../lib/axios";
+import LoadingSpinner from "../../../components/ui/LoadingSpinner";
+import { toastBus } from "../../../utils/toastBus";
+import { useNavigate } from "react-router-dom";
 
 const LeaveDialog = ({ employee, open, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [leaves, setLeaves] = useState([]);
   const [types, setTypes] = useState([]);
   const [summary, setSummary] = useState(null);
-  const [form, setForm] = useState({ date: '', type: '', remarks: '', duty_from: '', duty_to: '' });
+  const [form, setForm] = useState({
+    date: "",
+    type: "",
+    remarks: "",
+    duty_from: "",
+    duty_to: "",
+  });
   const [canStatus, setCanStatus] = useState(false);
-  const [mode, setMode] = useState('single'); // 'single' | 'range' | 'multi'
-  const [range, setRange] = useState({ start: '', end: '' });
-  const [multiDates, setMultiDates] = useState(['']);
+  const [mode, setMode] = useState("single"); // 'single' | 'range' | 'multi'
+  const [range, setRange] = useState({ start: "", end: "" });
+  const [multiDates, setMultiDates] = useState([""]);
   const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => {
@@ -22,35 +28,45 @@ const LeaveDialog = ({ employee, open, onClose }) => {
     const load = async () => {
       try {
         setLoading(true);
-        const me = await axios.get('/me');
+        const me = await axios.get("/me");
         const perms = me?.data?.user?.permissions || [];
-        setCanStatus(perms.includes('*') || perms.includes('leaves.status'));
+        setCanStatus(perms.includes("*") || perms.includes("leaves.status"));
         const [{ data: leavesRes }, { data: typesRes }] = await Promise.all([
           axios.get(`/leaves/${employee.id}`),
-          axios.get('/leave-banks/types')
+          axios.get("/leave-banks/types"),
         ]);
         if (ignore) return;
         setLeaves(leavesRes.leaves || []);
         setSummary(leavesRes.summary || null);
         setTypes(typesRes.types || []);
-      } catch {}
-      finally { setLoading(false); }
+      } catch {
+      } finally {
+        setLoading(false);
+      }
     };
     load();
-    return () => { ignore = true; };
+    return () => {
+      ignore = true;
+    };
   }, [open, employee?.id]);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!form.type) return;
-  const body = { type: form.type, remarks: form.remarks, duty_from: form.duty_from || null, duty_to: form.duty_to || null };
-    if (mode === 'single') {
+    const body = {
+      type: form.type,
+      remarks: form.remarks,
+      duty_from: form.duty_from || null,
+      duty_to: form.duty_to || null,
+    };
+    if (mode === "single") {
       if (!form.date) return;
       body.date = form.date;
-    } else if (mode === 'range') {
+    } else if (mode === "range") {
       if (!range.start || !range.end) return;
-      body.start = range.start; body.end = range.end;
-    } else if (mode === 'multi') {
+      body.start = range.start;
+      body.end = range.end;
+    } else if (mode === "multi") {
       const dates = multiDates.filter(Boolean);
       if (!dates.length) return;
       body.dates = dates;
@@ -58,15 +74,18 @@ const LeaveDialog = ({ employee, open, onClose }) => {
 
     try {
       await axios.post(`/leaves/${employee.id}`, body);
-  setForm({ date: '', type: '', remarks: '', duty_from: '', duty_to: '' });
-      setRange({ start: '', end: '' });
-      setMultiDates(['']);
+      setForm({ date: "", type: "", remarks: "", duty_from: "", duty_to: "" });
+      setRange({ start: "", end: "" });
+      setMultiDates([""]);
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
       setSummary(data.summary || null);
-      toastBus.emit({ type: 'success', message: 'Leaves added' });
+      toastBus.emit({ type: "success", message: "Leaves added" });
     } catch (e) {
-      toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to add leaves' });
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to add leaves",
+      });
     }
   };
 
@@ -76,9 +95,12 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
       setSummary(data.summary || null);
-      toastBus.emit({ type: 'success', message: 'Leave updated' });
+      toastBus.emit({ type: "success", message: "Leave updated" });
     } catch (e) {
-      toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to update leave' });
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to update leave",
+      });
     }
   };
 
@@ -88,9 +110,12 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
       setSummary(data.summary || null);
-      toastBus.emit({ type: 'success', message: 'Leave status updated' });
+      toastBus.emit({ type: "success", message: "Leave status updated" });
     } catch (e) {
-      toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to update status' });
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to update status",
+      });
     }
   };
 
@@ -100,9 +125,12 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
       setSummary(data.summary || null);
-      toastBus.emit({ type: 'success', message: 'Leave deleted' });
+      toastBus.emit({ type: "success", message: "Leave deleted" });
     } catch (e) {
-      toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to delete leave' });
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to delete leave",
+      });
     }
   };
 
@@ -110,18 +138,27 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   const groupedLeaves = useMemo(() => {
     if (!leaves?.length) return [];
     // sort by date ascending
-    const sorted = [...leaves].sort((a,b)=>new Date(a.date) - new Date(b.date));
+    const sorted = [...leaves].sort(
+      (a, b) => new Date(a.date) - new Date(b.date)
+    );
     const groups = [];
-    const ONE_DAY = 24*60*60*1000;
+    const ONE_DAY = 24 * 60 * 60 * 1000;
     let current = null;
     for (const lv of sorted) {
       const d = new Date(lv.date);
       if (!current) {
-        current = { type: lv.type, leaves:[lv], start: lv.date, end: lv.date, statuses: new Set([lv.status]), remarksSet: new Set([lv.remarks||'']) };
+        current = {
+          type: lv.type,
+          leaves: [lv],
+          start: lv.date,
+          end: lv.date,
+          statuses: new Set([lv.status]),
+          remarksSet: new Set([lv.remarks || ""]),
+        };
         continue;
       }
       const prevDate = new Date(current.end);
-      const contiguous = (d - prevDate) === ONE_DAY;
+      const contiguous = d - prevDate === ONE_DAY;
       if (contiguous && lv.type === current.type) {
         current.leaves.push(lv);
         current.end = lv.date;
@@ -129,19 +166,26 @@ const LeaveDialog = ({ employee, open, onClose }) => {
         if (lv.remarks) current.remarksSet.add(lv.remarks);
       } else {
         groups.push(current);
-        current = { type: lv.type, leaves:[lv], start: lv.date, end: lv.date, statuses: new Set([lv.status]), remarksSet: new Set([lv.remarks||'']) };
+        current = {
+          type: lv.type,
+          leaves: [lv],
+          start: lv.date,
+          end: lv.date,
+          statuses: new Set([lv.status]),
+          remarksSet: new Set([lv.remarks || ""]),
+        };
       }
     }
     if (current) groups.push(current);
-    return groups.map((g,i)=>({
+    return groups.map((g, i) => ({
       key: `${g.start}_${g.end}_${g.type}_${i}`,
       type: g.type,
       start: g.start,
       end: g.end,
       count: g.leaves.length,
-      status: g.statuses.size === 1 ? Array.from(g.statuses)[0] : 'MIXED',
-      remarks: g.remarksSet.size === 1 ? Array.from(g.remarksSet)[0] : '',
-      leaveIds: g.leaves.map(l=>l.id)
+      status: g.statuses.size === 1 ? Array.from(g.statuses)[0] : "MIXED",
+      remarks: g.remarksSet.size === 1 ? Array.from(g.remarksSet)[0] : "",
+      leaveIds: g.leaves.map((l) => l.id),
     }));
   }, [leaves]);
 
@@ -150,14 +194,26 @@ const LeaveDialog = ({ employee, open, onClose }) => {
     try {
       setBulkBusy(true);
       // perform parallel status updates
-      await Promise.all(group.leaveIds.map(id => axios.patch(`/leaves/${id}/status`, { status })));
+      await Promise.all(
+        group.leaveIds.map((id) =>
+          axios.patch(`/leaves/${id}/status`, { status })
+        )
+      );
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
       setSummary(data.summary || null);
-      toastBus.emit({ type: 'success', message: `Updated ${group.leaveIds.length} leaves (${group.start} to ${group.end}) to ${status}` });
+      toastBus.emit({
+        type: "success",
+        message: `Updated ${group.leaveIds.length} leaves (${group.start} to ${group.end}) to ${status}`,
+      });
     } catch (e) {
-      toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Bulk status update failed' });
-    } finally { setBulkBusy(false); }
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Bulk status update failed",
+      });
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   if (!open) return null;
@@ -165,29 +221,54 @@ const LeaveDialog = ({ employee, open, onClose }) => {
     <div className="fixed inset-0 backdrop-fade bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="modal-surface w-full max-w-5xl max-h-[90vh] overflow-y-auto custom-thin-scroll">
         <div className="modal-header">
-          <h2 className="text-sm font-semibold tracking-wide">Manage Leaves - {employee.full_name}</h2>
-          <button onClick={onClose} className="btn btn-outline btn-sm text-xs">Close</button>
+          <h2 className="text-sm font-semibold tracking-wide">
+            Manage Leaves - {employee.full_name}
+          </h2>
+          <button onClick={onClose} className="btn btn-outline btn-sm text-xs">
+            Close
+          </button>
         </div>
         {loading ? (
-          <div className="py-12 flex items-center justify-center"><LoadingSpinner /></div>
+          <div className="py-12 flex items-center justify-center">
+            <LoadingSpinner />
+          </div>
         ) : (
           <div className="p-4 space-y-6">
             {summary && (
               <div className="card-soft p-4 space-y-3">
-                <div className="text-xs font-semibold text-gray-700">Current Leave Bank: {summary.title || `#${summary.bankId}`} ({String(summary.period_start).slice(0,10)} to {String(summary.period_end).slice(0,10)})</div>
+                <div className="text-xs font-semibold text-gray-700">
+                  Current Leave Bank: {summary.title || `#${summary.bankId}`} (
+                  {String(summary.period_start).slice(0, 10)} to{" "}
+                  {String(summary.period_end).slice(0, 10)})
+                </div>
                 <div className="grid md:grid-cols-4 sm:grid-cols-3 grid-cols-2 gap-3">
-                  {(summary.items || []).map(it => (
-                    <div key={it.typeId} className="rounded border border-gray-200 bg-white p-2 shadow-sm">
-                      <div className="text-[11px] font-semibold text-gray-700 mb-1">{it.typeName}</div>
+                  {(summary.items || []).map((it) => (
+                    <div
+                      key={it.typeId}
+                      className="rounded border border-gray-200 bg-white p-2 shadow-sm"
+                    >
+                      <div className="text-[11px] font-semibold text-gray-700 mb-1">
+                        {it.typeName}
+                      </div>
                       <div className="flex flex-col gap-0.5 text-[10px] text-gray-600">
                         <span>Allocated: {it.allocated}</span>
-                        <span className="text-green-700">Approved: {it.approvedUsed}</span>
-                        <span className="text-amber-700">Pending: {it.pending}</span>
-                        <span className="text-blue-700 font-medium">Available: {it.available}</span>
+                        <span className="text-green-700">
+                          Approved: {it.approvedUsed}
+                        </span>
+                        <span className="text-amber-700">
+                          Pending: {it.pending}
+                        </span>
+                        <span className="text-blue-700 font-medium">
+                          Available: {it.available}
+                        </span>
                       </div>
                     </div>
                   ))}
-                  {!summary.items?.length && <div className="text-xs text-gray-500">No types configured</div>}
+                  {!summary.items?.length && (
+                    <div className="text-xs text-gray-500">
+                      No types configured
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -197,7 +278,9 @@ const LeaveDialog = ({ employee, open, onClose }) => {
               <div className="card-soft p-0 overflow-hidden">
                 <div className="card-soft-header flex justify-between items-center">
                   <span>Grouped Consecutive Leaves</span>
-                  <span className="text-[10px] text-gray-500 font-normal">(Same type, adjacent dates)</span>
+                  <span className="text-[10px] text-gray-500 font-normal">
+                    (Same type, adjacent dates)
+                  </span>
                 </div>
                 <div className="table-shell overflow-auto max-h-[35vh] custom-thin-scroll">
                   <table className="table-enhanced text-[11px]">
@@ -213,24 +296,62 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {groupedLeaves.map(g => (
+                      {groupedLeaves.map((g) => (
                         <tr key={g.key}>
-                          <td>{g.start?.slice(0,10)}</td>
-                          <td>{g.end?.slice(0,10)}</td>
+                          <td>{g.start?.slice(0, 10)}</td>
+                          <td>{g.end?.slice(0, 10)}</td>
                           <td>{g.count}</td>
                           <td>{g.type}</td>
                           <td>{g.status}</td>
-                          <td className="text-left whitespace-nowrap max-w-[160px] overflow-hidden text-ellipsis" title={g.remarks}>{g.remarks || '-'}</td>
+                          <td
+                            className="text-left whitespace-nowrap max-w-[160px] overflow-hidden text-ellipsis"
+                            title={g.remarks}
+                          >
+                            {g.remarks || "-"}
+                          </td>
                           {canStatus && (
                             <td className="space-x-1">
-                              <button disabled={bulkBusy} onClick={()=>bulkUpdateGroupStatus(g,'APPROVED')} className="btn btn-success text-[10px]">Approve</button>
-                              <button disabled={bulkBusy} onClick={()=>bulkUpdateGroupStatus(g,'REJECTED')} className="btn btn-error-soft text-[10px]">Reject</button>
-                              <button disabled={bulkBusy} onClick={()=>bulkUpdateGroupStatus(g,'PENDING')} className="btn btn-outline text-[10px]">Pending</button>
+                              <button
+                                disabled={bulkBusy}
+                                onClick={() =>
+                                  bulkUpdateGroupStatus(g, "APPROVED")
+                                }
+                                className="btn btn-success text-[10px]"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                disabled={bulkBusy}
+                                onClick={() =>
+                                  bulkUpdateGroupStatus(g, "REJECTED")
+                                }
+                                className="btn btn-error-soft text-[10px]"
+                              >
+                                Reject
+                              </button>
+                              <button
+                                disabled={bulkBusy}
+                                onClick={() =>
+                                  bulkUpdateGroupStatus(g, "PENDING")
+                                }
+                                className="btn btn-outline text-[10px]"
+                              >
+                                Pending
+                              </button>
                             </td>
                           )}
                         </tr>
                       ))}
-                      {!groupedLeaves.length && <tr><td colSpan={canStatus?6:5} className="text-center py-4 text-xs text-gray-500">No grouped leaves</td></tr>}
+                      {!groupedLeaves.length && (
+                        <tr>
+                          <td
+                            colSpan={canStatus ? 6 : 5}
+                            className="text-center py-4 text-xs text-gray-500"
+                          >
+                            No grouped leaves
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -241,26 +362,67 @@ const LeaveDialog = ({ employee, open, onClose }) => {
               <div className="filter-panel compact">
                 <div>
                   <label className="form-label text-[11px] mb-1">Type</label>
-                  <select className="form-input" value={form.type} onChange={e=>setForm(f=>({...f, type: e.target.value}))}>
+                  <select
+                    className="form-input"
+                    value={form.type}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, type: e.target.value }))
+                    }
+                  >
                     <option value="">Select type</option>
-                    {types.map(t => (<option key={t.id} value={t.name}>{t.name}</option>))}
+                    {types.map((t) => (
+                      <option key={t.id} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className="form-label text-[11px] mb-1">Reason for availing leave</label>
-                  <input className="form-input" placeholder="Optional" value={form.remarks} onChange={e=>setForm(f=>({...f, remarks: e.target.value}))} />
+                  <label className="form-label text-[11px] mb-1">
+                    Reason for availing leave
+                  </label>
+                  <input
+                    className="form-input"
+                    placeholder="Optional"
+                    value={form.remarks}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, remarks: e.target.value }))
+                    }
+                  />
                 </div>
                 <div>
-                  <label className="form-label text-[11px] mb-1">Duty time (from)</label>
-                  <input type="time" className="form-input" value={form.duty_from} onChange={e=>setForm(f=>({...f, duty_from: e.target.value}))} />
+                  <label className="form-label text-[11px] mb-1">
+                    Duty time (from)
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={form.duty_from}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, duty_from: e.target.value }))
+                    }
+                  />
                 </div>
                 <div>
-                  <label className="form-label text-[11px] mb-1">Duty time (to)</label>
-                  <input type="time" className="form-input" value={form.duty_to} onChange={e=>setForm(f=>({...f, duty_to: e.target.value}))} />
+                  <label className="form-label text-[11px] mb-1">
+                    Duty time (to)
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={form.duty_to}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, duty_to: e.target.value }))
+                    }
+                  />
                 </div>
                 <div>
                   <label className="form-label text-[11px] mb-1">Mode</label>
-                  <select className="form-input" value={mode} onChange={e=>setMode(e.target.value)}>
+                  <select
+                    className="form-input"
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value)}
+                  >
                     <option value="single">Single Date</option>
                     <option value="range">Date Range</option>
                     <option value="multi">Multiple Dates</option>
@@ -268,41 +430,91 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                 </div>
               </div>
 
-              {mode === 'single' && (
+              {mode === "single" && (
                 <div>
                   <label className="form-label text-[11px] mb-1">Date</label>
-                  <input type="date" className="form-input" value={form.date} onChange={e=>setForm(f=>({...f, date: e.target.value}))} />
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={form.date}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, date: e.target.value }))
+                    }
+                  />
                 </div>
               )}
 
-              {mode === 'range' && (
+              {mode === "range" && (
                 <div className="flex flex-wrap gap-4">
                   <div className="flex-1 min-w-[140px]">
                     <label className="form-label text-[11px] mb-1">Start</label>
-                    <input type="date" className="form-input" value={range.start} onChange={e=>setRange(r=>({...r, start: e.target.value}))} />
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={range.start}
+                      onChange={(e) =>
+                        setRange((r) => ({ ...r, start: e.target.value }))
+                      }
+                    />
                   </div>
                   <div className="flex-1 min-w-[140px]">
                     <label className="form-label text-[11px] mb-1">End</label>
-                    <input type="date" className="form-input" value={range.end} onChange={e=>setRange(r=>({...r, end: e.target.value}))} />
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={range.end}
+                      onChange={(e) =>
+                        setRange((r) => ({ ...r, end: e.target.value }))
+                      }
+                    />
                   </div>
                 </div>
               )}
 
-              {mode === 'multi' && (
+              {mode === "multi" && (
                 <div className="space-y-2">
                   <label className="form-label text-[11px] mb-1">Dates</label>
                   {multiDates.map((d, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <input type="date" className="form-input !py-1 !px-2" value={d} onChange={e=>setMultiDates(arr=>{ const c=[...arr]; c[idx]=e.target.value; return c; })} />
-                      <button type="button" className="btn btn-error-soft text-[11px]" onClick={()=>setMultiDates(arr=>arr.filter((_,i)=>i!==idx))}>Remove</button>
+                      <input
+                        type="date"
+                        className="form-input !py-1 !px-2"
+                        value={d}
+                        onChange={(e) =>
+                          setMultiDates((arr) => {
+                            const c = [...arr];
+                            c[idx] = e.target.value;
+                            return c;
+                          })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-error-soft text-[11px]"
+                        onClick={() =>
+                          setMultiDates((arr) =>
+                            arr.filter((_, i) => i !== idx)
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
                     </div>
                   ))}
-                  <button type="button" className="btn btn-outline text-[11px]" onClick={()=>setMultiDates(arr=>[...arr, ''])}>Add another date</button>
+                  <button
+                    type="button"
+                    className="btn btn-outline text-[11px]"
+                    onClick={() => setMultiDates((arr) => [...arr, ""])}
+                  >
+                    Add another date
+                  </button>
                 </div>
               )}
 
               <div>
-                <button type="submit" className="btn btn-success text-xs">Save</button>
+                <button type="submit" className="btn btn-success text-xs">
+                  Save
+                </button>
               </div>
             </form>
 
@@ -320,18 +532,45 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {leaves.map(l => (
+                    {leaves.map((l) => (
                       <tr key={l.id}>
-                        <td><input type="date" className="form-input !py-1 !px-2" value={l.date?.slice(0,10)} onChange={e=>update(l.id, { date: e.target.value })} /></td>
                         <td>
-                          <select className="form-input !py-1 !px-2" value={l.type} onChange={e=>update(l.id, { type: e.target.value })}>
-                            {types.map(t => (<option key={t.id} value={t.name}>{t.name}</option>))}
-                            {!types.length && <option value={l.type}>{l.type}</option>}
+                          <input
+                            type="date"
+                            className="form-input !py-1 !px-2"
+                            value={l.date?.slice(0, 10)}
+                            onChange={(e) =>
+                              update(l.id, { date: e.target.value })
+                            }
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="form-input !py-1 !px-2"
+                            value={l.type}
+                            onChange={(e) =>
+                              update(l.id, { type: e.target.value })
+                            }
+                          >
+                            {types.map((t) => (
+                              <option key={t.id} value={t.name}>
+                                {t.name}
+                              </option>
+                            ))}
+                            {!types.length && (
+                              <option value={l.type}>{l.type}</option>
+                            )}
                           </select>
                         </td>
                         <td>
                           {canStatus ? (
-                            <select className="form-input !py-1 !px-2" value={l.status} onChange={e=>updateStatus(l.id, e.target.value)}>
+                            <select
+                              className="form-input !py-1 !px-2"
+                              value={l.status}
+                              onChange={(e) =>
+                                updateStatus(l.id, e.target.value)
+                              }
+                            >
                               <option value="PENDING">PENDING</option>
                               <option value="APPROVED">APPROVED</option>
                               <option value="REJECTED">REJECTED</option>
@@ -340,17 +579,43 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                             <span className="badge badge-gray">{l.status}</span>
                           )}
                         </td>
-                        <td><input className="form-input !py-1 !px-2" value={l.remarks || ''} onChange={e=>update(l.id, { remarks: e.target.value })} /></td>
+                        <td>
+                          <input
+                            className="form-input !py-1 !px-2"
+                            value={l.remarks || ""}
+                            onChange={(e) =>
+                              update(l.id, { remarks: e.target.value })
+                            }
+                          />
+                        </td>
                         <td className="min-w-[140px]">
                           {(() => {
-                            const m = (l.remarks||'').match(/Duty time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/i);
-                            return m ? `${m[1]} - ${m[2]}` : '-';
+                            const m = (l.remarks || "").match(
+                              /Duty time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/i
+                            );
+                            return m ? `${m[1]} - ${m[2]}` : "-";
                           })()}
                         </td>
-                        <td><button className="btn btn-error-soft text-[11px]" onClick={()=>remove(l.id)}>Delete</button></td>
+                        <td>
+                          <button
+                            className="btn btn-error-soft text-[11px]"
+                            onClick={() => remove(l.id)}
+                          >
+                            Delete
+                          </button>
+                        </td>
                       </tr>
                     ))}
-                    {!leaves.length && <tr><td colSpan={6} className="text-center py-6 text-xs text-gray-500">No leaves</td></tr>}
+                    {!leaves.length && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="text-center py-6 text-xs text-gray-500"
+                        >
+                          No leaves
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -367,26 +632,32 @@ const LeaveManagement = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
-  const [search, setSearch] = useState('');
-  const [cnicFilter, setCnicFilter] = useState('');
+  const [search, setSearch] = useState("");
+  const [cnicFilter, setCnicFilter] = useState("");
   const [selected, setSelected] = useState(null);
 
   const load = async () => {
     try {
       setLoading(true);
-      const { data } = await axios.get('/leaves/employees', { params: { search } });
+      const { data } = await axios.get("/leaves/employees", {
+        params: { search },
+      });
       setEmployees(data.employees || []);
-    } catch (e) {}
-    finally { setLoading(false); }
+    } catch (e) {
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const filtered = useMemo(() => {
-    const norm = (s) => (s || '').toString().toLowerCase();
-    const normDigits = (s) => (s || '').toString().replace(/\D/g, '');
+    const norm = (s) => (s || "").toString().toLowerCase();
+    const normDigits = (s) => (s || "").toString().replace(/\D/g, "");
     const cnicTerm = normDigits(cnicFilter);
-    return employees.filter(emp => {
+    return employees.filter((emp) => {
       if (!cnicTerm) return true;
       const empCnicDigits = normDigits(emp.cnic);
       return empCnicDigits.includes(cnicTerm);
@@ -396,16 +667,37 @@ const LeaveManagement = () => {
   return (
     <div className="p-6 space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-xl font-semibold tracking-tight text-primary">Leave Management</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-primary">
+          Leave Management
+        </h1>
         <div className="actions-inline">
-          <button className="btn btn-outline text-xs" onClick={() => navigate('/attendance/leave-bank')}>Leave Bank</button>
-          <input className="form-input !py-1 !px-2 text-xs w-48" placeholder="Search employees" value={search} onChange={e=>setSearch(e.target.value)} />
-          <input className="form-input !py-1 !px-2 text-xs w-40" placeholder="Filter CNIC" value={cnicFilter} onChange={e=>setCnicFilter(e.target.value)} />
-          <button className="btn btn-secondary text-xs" onClick={load}>Search</button>
+          <button
+            className="btn btn-outline text-xs"
+            onClick={() => navigate("/attendance/leave-bank")}
+          >
+            Leave Bank
+          </button>
+          <input
+            className="form-input !py-1 !px-2 text-xs w-48"
+            placeholder="Search employees"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <input
+            className="form-input !py-1 !px-2 text-xs w-40"
+            placeholder="Filter CNIC"
+            value={cnicFilter}
+            onChange={(e) => setCnicFilter(e.target.value)}
+          />
+          <button className="btn btn-secondary text-xs" onClick={load}>
+            Search
+          </button>
         </div>
       </div>
       {loading ? (
-        <div className="py-20 flex items-center justify-center"><LoadingSpinner /></div>
+        <div className="py-20 flex items-center justify-center">
+          <LoadingSpinner />
+        </div>
       ) : (
         <div className="table-shell card-soft p-0 overflow-auto custom-thin-scroll">
           <table className="table-enhanced">
@@ -421,46 +713,94 @@ const LeaveManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(emp => (
+              {filtered.map((emp) => (
                 <tr key={emp.id}>
-                  <td>{emp.employee_id || '-'}</td>
-                  <td>{emp.cnic || '-'}</td>
+                  <td>{emp.employee_id || "-"}</td>
+                  <td>{emp.cnic || "-"}</td>
                   <td className="text-left">{emp.full_name}</td>
-                  <td className="text-left">{emp.employmentRecords?.[0]?.designation?.title || '-'}</td>
+                  <td className="text-left">
+                    {emp.employmentRecords?.[0]?.designation?.title || "-"}
+                  </td>
                   <td className="text-left">
                     {emp.currentLeaveBankSummary ? (
                       <div className="space-y-1 text-[10px]">
-                        <div className="font-semibold text-gray-700">{emp.currentLeaveBankSummary.title || `#${emp.currentLeaveBankSummary.bankId}`}</div>
-                        <div className="text-gray-500">{String(emp.currentLeaveBankSummary.period_start).slice(0,10)} to {String(emp.currentLeaveBankSummary.period_end).slice(0,10)}</div>
+                        <div className="font-semibold text-gray-700">
+                          {emp.currentLeaveBankSummary.title ||
+                            `#${emp.currentLeaveBankSummary.bankId}`}
+                        </div>
+                        <div className="text-gray-500">
+                          {String(
+                            emp.currentLeaveBankSummary.period_start
+                          ).slice(0, 10)}{" "}
+                          to{" "}
+                          {String(emp.currentLeaveBankSummary.period_end).slice(
+                            0,
+                            10
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {(emp.currentLeaveBankSummary.items || []).map(it => (
-                            <span key={it.typeId} className="badge badge-blue">{it.typeName}: {it.approvedUsed}/{it.allocated}</span>
-                          ))}
+                          {(emp.currentLeaveBankSummary.items || []).map(
+                            (it) => (
+                              <span
+                                key={it.typeId}
+                                className="badge badge-blue"
+                              >
+                                {it.typeName}: {it.approvedUsed}/{it.allocated}
+                              </span>
+                            )
+                          )}
                         </div>
                       </div>
                     ) : (
-                      <span className="text-[10px] text-gray-500">No active leave bank</span>
+                      <span className="text-[10px] text-gray-500">
+                        No active leave bank
+                      </span>
                     )}
                   </td>
                   <td>
                     <div className="max-h-24 overflow-y-auto pr-1 space-y-1 custom-thin-scroll text-[10px]">
-                      {(emp.leaves || []).map(l => (
-                        <div key={l.id} className="text-gray-700">{l.date?.slice(0,10)} - {l.type} ({l.status})</div>
+                      {(emp.leaves || []).map((l) => (
+                        <div key={l.id} className="text-gray-700">
+                          {l.date?.slice(0, 10)} - {l.type} ({l.status})
+                        </div>
                       ))}
-                      {!emp.leaves?.length && <span className="text-gray-400">No leaves</span>}
+                      {!emp.leaves?.length && (
+                        <span className="text-gray-400">No leaves</span>
+                      )}
                     </div>
                   </td>
                   <td>
-                    <button className="btn btn-secondary text-[11px]" onClick={()=>setSelected(emp)}>Manage</button>
+                    <button
+                      className="btn btn-secondary text-[11px]"
+                      onClick={() => setSelected(emp)}
+                    >
+                      Manage
+                    </button>
                   </td>
                 </tr>
               ))}
-              {!filtered.length && <tr><td colSpan={7} className="text-center py-6 text-xs text-gray-500">No employees found</td></tr>}
+              {!filtered.length && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="text-center py-6 text-xs text-gray-500"
+                  >
+                    No employees found
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       )}
-      <LeaveDialog open={!!selected} employee={selected} onClose={() => { setSelected(null); load(); }} />
+      <LeaveDialog
+        open={!!selected}
+        employee={selected}
+        onClose={() => {
+          setSelected(null);
+          load();
+        }}
+      />
     </div>
   );
 };
