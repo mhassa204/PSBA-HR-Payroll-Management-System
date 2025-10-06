@@ -85,7 +85,7 @@ export default function TravelManualEntryPage(){
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">TADA Manual Entry</h1>
+        <h1 className="text-2xl font-bold">TADA Managed Entry</h1>
         <div className="flex items-center gap-2">
           <Input placeholder="Search employees" value={search} onChange={e=>setSearch(e.target.value)} className="w-60" />
           <Button variant="outline" size="sm" onClick={loadEmployees}>Search</Button>
