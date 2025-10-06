@@ -29,7 +29,8 @@ module.exports = {
 
     const managesAnyLocation = meUserId ? !!(await prisma.location.findFirst({ where: { manager_user_id: meUserId, is_deleted: false, is_active: true }, select: { id: true } })) : false;
     const isBps17Plus = scaleLevel >= 17;
-    const canCreateOrOwn = (locType === 'BAZAAR') ? managesAnyLocation : (locType === 'HEAD_OFFICE' ? isBps17Plus : false);
+    // New rule: only BPS ≥ 17 can create/own their own requests/claims via personal accounts
+    const canCreateOrOwn = !!meEmpId && isBps17Plus;
     const canViewAll = (isHR || isOps || isDG);
     const isSuperAdmin = (req.session.user?.role?.name === 'Super Admin') || perms.includes('*');
     return { meEmpId, meUserId, employment, deptName, desigTitle, locType, scaleLevel, isOps, isDG, isHR, isAccountsApprover, canApproveClaimOps, canApproveClaimDG, managesAnyLocation, isBps17Plus, canCreateOrOwn, canViewAll, isSuperAdmin };
@@ -66,18 +67,64 @@ module.exports = {
   listPendingApprovals: async (ctx) => {
     const filters = [];
 
-    // New: Recommendation stage for immediate in-charge of applicant
-    // Skip creating recommender tasks for DG; if applicant reports directly to DG, the recommender stage is bypassed
+    // Determine requests awaiting recommendation
     if (ctx.meEmpId && !ctx.isDG) {
+      // A) Immediate in-charge of applicant (legacy path for BPS ≥ 17 personal flows)
       filters.push({
         is_deleted: false,
         status: 'CREATED',
         applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) } } },
         statusEntries: { none: { action: 'RECOMMENDED' } }
       });
+
+      // B) Department Head (HoD) for low-BPS applicants
+      filters.push({
+        is_deleted: false,
+        status: 'CREATED',
+        applicant: {
+          employmentRecords: {
+            some: {
+              is_current: true,
+              is_deleted: false,
+              // applicant's current department is headed by me
+              department: { is: { head_employee_id: ctx.meEmpId } },
+              // ensure low-BPS applicant
+              scale_grade: { is: { category: 'BPS', level: { lt: 17 } } }
+            }
+          }
+        },
+        statusEntries: { none: { action: 'RECOMMENDED' } }
+      });
+
+      // C) Reporting officer of HoD for low-BPS applicants (second recommender window)
+      filters.push({
+        is_deleted: false,
+        status: 'CREATED',
+        applicant: {
+          employmentRecords: {
+            some: {
+              is_current: true,
+              is_deleted: false,
+              department: {
+                is: {
+                  head: {
+                    is: {
+                      employmentRecords: {
+                        some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) }
+                      }
+                    }
+                  }
+                }
+              },
+              scale_grade: { is: { category: 'BPS', level: { lt: 17 } } }
+            }
+          }
+        },
+        statusEntries: { none: { action: 'RECOMMENDED' } }
+      });
     }
 
-    // Ops/DG see CREATED but only after recommendation exists
+    // Ops/DG approval filters after recommendation exists
     const allowedTypes = [];
     if (ctx.isSuperAdmin) { allowedTypes.push('BAZAAR','HEAD_OFFICE'); }
     else {
@@ -93,7 +140,7 @@ module.exports = {
       });
     }
 
-    // Additional DG fast-track: If applicant reports directly to DG, allow DG to see without recommendation
+    // Additional DG fast-track (unchanged)
     if (ctx.isDG && ctx.meEmpId) {
       filters.push({
         is_deleted: false,
@@ -108,7 +155,7 @@ module.exports = {
     return prisma.travelRequest.findMany({
       where: { OR: filters },
       orderBy: { createdAt: 'desc' },
-      include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } }, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } }
+      include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } }, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { department: { include: { head: true } } } } } } }
     });
   },
 
@@ -209,12 +256,22 @@ module.exports = {
 
   // New: decision API for recommendation/clear without changing status
   recommendOrClear: async (id, actorEmpId, action, ctx) => {
-    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { statusEntries: true, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } }, statusEntries: true } });
+    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { statusEntries: true, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { department: { include: { head: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } }, scale_grade: true } } } } } } });
     if (!req || req.is_deleted) throw new Error('Not found');
     if (req.status !== 'CREATED') throw new Error('Only CREATED requests can be actioned');
+    const applicantER = req.applicant?.employmentRecords?.[0];
+    const isLowBps = applicantER?.scale_grade?.category === 'BPS' && Number(applicantER?.scale_grade?.level||0) < 17;
     // Check recommender eligibility
-    const canRecommend = ctx.isSuperAdmin || (req.applicant?.employmentRecords||[]).some(er => String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
-    if (!canRecommend) throw new Error('Not authorized');
+    let canRecommend = false;
+    // Legacy: immediate in-charge
+    canRecommend = canRecommend || (req.applicant?.employmentRecords||[]).some(er => String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
+    if (isLowBps) {
+      const hodId = applicantER?.department?.head?.id;
+      const hodRO = (applicantER?.department?.head?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted)?.reporting_officer_id;
+      if (String(hodId||'') === String(ctx.meEmpId||'')) canRecommend = true;
+      if (String(hodRO||'') === String(ctx.meEmpId||'')) canRecommend = true;
+    }
+    if (!canRecommend && !ctx.isSuperAdmin) throw new Error('Not authorized');
     const last = req.statusEntries[req.statusEntries.length-1];
     const act = String(action||'').toUpperCase();
     if (act === 'RECOMMEND') {
@@ -222,10 +279,6 @@ module.exports = {
       await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId } });
       return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
     } else if (act === 'REJECT') {
-      // recommender rejection
-      if (last && last.action==='RECOMMENDED' && last.actor_employee_id!==actorEmpId && !ctx.isSuperAdmin) {
-        // If someone else recommended, allow rejection as recommender still? For simplicity require same actor or super admin.
-      }
       await prisma.travelRequest.update({ where: { id: req.id }, data: { status: 'REJECTED' } });
       await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED_REJECTED', actor_employee_id: actorEmpId } });
       return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });

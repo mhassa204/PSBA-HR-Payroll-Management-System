@@ -39,18 +39,38 @@ module.exports = {
   },
   create: async (req, res) => {
     const ctx = await travelService.getAuthContext(req);
-    if (!ctx.meEmpId) return res.status(400).json({ success: false, error: 'Applicant not linked to user' });
-    if (!ctx.canCreateOrOwn) return res.status(403).json({ success: false, error: 'Forbidden' });
     const data = req.body || {};
-    if (!data.departure_date) return res.status(400).json({ success: false, error: 'departure_date is required' });
-    if (!data.expected_return_date) return res.status(400).json({ success: false, error: 'expected_return_date is required' });
-    const computedDays = travelService.computeTotalDays(data.departure_date, data.departure_time, data.expected_return_date);
-    if (data.total_days != null && data.total_days !== '' && Number(data.total_days) !== computedDays) {
-      return res.status(400).json({ success: false, error: `total_days (${data.total_days}) does not match date range (${computedDays})` });
+    try {
+      if (ctx.meEmpId) {
+        if (!ctx.canCreateOrOwn) return res.status(403).json({ success: false, error: 'Forbidden' });
+        if (!data.departure_date) return res.status(400).json({ success: false, error: 'departure_date is required' });
+        if (!data.expected_return_date) return res.status(400).json({ success: false, error: 'expected_return_date is required' });
+        const computedDays = travelService.computeTotalDays(data.departure_date, data.departure_time, data.expected_return_date);
+        if (data.total_days != null && data.total_days !== '' && Number(data.total_days) !== computedDays) {
+          return res.status(400).json({ success: false, error: `total_days (${data.total_days}) does not match date range (${computedDays})` });
+        }
+        const attendeeIds = Array.isArray(data.employee_ids) ? data.employee_ids.map(Number).filter(Boolean) : [];
+        const full = await travelService.createRequest(ctx, data, attendeeIds, computedDays);
+        return res.json({ success: true, request: full });
+      }
+
+      // Department account path (no employee linked)
+      const applicant_id = Number(data.applicant_id);
+      if (!applicant_id) return res.status(400).json({ success:false, error: 'applicant_id is required for department account' });
+      if (!data.departure_date) return res.status(400).json({ success:false, error: 'departure_date is required' });
+      if (!data.expected_return_date) return res.status(400).json({ success:false, error: 'expected_return_date is required' });
+      // Ensure applicant is BPS < 17
+      const emp = await prisma.employment.findFirst({ where: { employee_id: applicant_id, is_current: true, is_deleted: false }, include: { scale_grade: true } });
+      const isLowBps = !!(emp?.scale_grade && emp.scale_grade.category === 'BPS' && Number(emp.scale_grade.level||0) < 17);
+      if (!isLowBps) return res.status(403).json({ success:false, error: 'Only BPS < 17 applicants can be created via department account' });
+      const computedDays = travelService.computeTotalDays(data.departure_date, data.departure_time, data.expected_return_date);
+      const attendeeIds = Array.isArray(data.employee_ids) ? data.employee_ids.map(Number).filter(Boolean) : [];
+      const full = await travelService.createRequestOnBehalf({ ...ctx, meEmpId: applicant_id }, data, attendeeIds, computedDays, null);
+      return res.json({ success:true, request: full });
+    } catch (e) {
+      console.error('Create request error', e);
+      return res.status(400).json({ success:false, error: e.message });
     }
-    const attendeeIds = Array.isArray(data.employee_ids) ? data.employee_ids.map(Number).filter(Boolean) : [];
-    const full = await travelService.createRequest(ctx, data, attendeeIds, computedDays);
-    res.json({ success: true, request: full });
   },
   update: async (req, res) => {
     const ctx = await travelService.getAuthContext(req);

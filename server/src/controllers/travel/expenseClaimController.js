@@ -2,6 +2,9 @@ const service = require('../../services/travel/expenseClaimService');
 const { uploadTravelExpenseClaimDocs } = require('../../config/multer');
 const path = require('path');
 const fs = require('fs');
+const travelReqService = require('../../services/travel/travelRequestService');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 module.exports = {
   eligible: async (req, res) => {
@@ -20,9 +23,24 @@ module.exports = {
   },
   create: async (req, res) => {
     try {
-      const { employee_id } = await service.getAuthContext(req);
-      const claim = await service.createClaim(employee_id, req.body||{});
-      res.json({ success: true, claim });
+      const ctx = await travelReqService.getAuthContext(req);
+      const data = req.body || {};
+      // Personal account (linked to employee)
+      if (ctx.meEmpId) {
+        // Enforce BPS ≥ 17 for personal account claim creation
+        if (!ctx.isBps17Plus) return res.status(403).json({ success:false, error: 'Only BPS ≥ 17 employees can create claims from personal accounts' });
+        const claim = await service.createClaim(ctx.meEmpId, data);
+        return res.json({ success: true, claim });
+      }
+      // Department account path: must provide employee_id and it must be BPS < 17
+      const employee_id = Number(data.employee_id);
+      if (!employee_id) return res.status(400).json({ success:false, error: 'employee_id is required for department account' });
+      const emp = await prisma.employment.findFirst({ where: { employee_id, is_current: true, is_deleted: false }, include: { scale_grade: true } });
+      const isLowBps = !!(emp?.scale_grade && emp.scale_grade.category === 'BPS' && Number(emp.scale_grade.level||0) < 17);
+      if (!isLowBps) return res.status(403).json({ success:false, error: 'Only BPS < 17 employees are allowed via department account' });
+      // Call service as if the applicant is the low-BPS employee
+      const claim = await service.createClaim(employee_id, data);
+      return res.json({ success: true, claim });
     } catch (e) { res.status(400).json({ success:false, error: e.message }); }
   },
   getOne: async (req, res) => {
