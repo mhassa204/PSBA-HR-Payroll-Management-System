@@ -22,6 +22,10 @@ class UserService {
               full_name: true,
               employee_id: true
             }
+          },
+          // New: include linked department if any
+          department: {
+            select: { id: true, name: true, code: true }
           }
         },
         orderBy: {
@@ -58,7 +62,9 @@ class UserService {
               employee_id: true,
               email: true
             }
-          }
+          },
+          // New: include department
+          department: { select: { id: true, name: true, code: true } }
         }
       });
       
@@ -102,6 +108,18 @@ class UserService {
         }
       }
 
+      // Validate department if provided
+      let departmentId = null;
+      if (userData.department_id != null && String(userData.department_id).trim() !== '') {
+        const depIdParsed = parseInt(userData.department_id);
+        if (!Number.isInteger(depIdParsed) || depIdParsed <= 0) {
+          throw new Error('Invalid department');
+        }
+        const dep = await prisma.department.findFirst({ where: { id: depIdParsed, is_deleted: false } });
+        if (!dep) throw new Error('Department not found');
+        departmentId = depIdParsed;
+      }
+
       // Encrypt password
       const encryptedPassword = encrypt(userData.password);
 
@@ -109,7 +127,8 @@ class UserService {
         email: userData.email,
         password: encryptedPassword,
         role_id: parseInt(userData.role_id),
-        employee_id: null // Always set to null initially
+        employee_id: null, // Always set to null initially
+        department_id: departmentId
       };
 
       // Only set employee_id if it's provided and not null/empty
@@ -134,7 +153,8 @@ class UserService {
               full_name: true,
               employee_id: true
             }
-          }
+          },
+          department: { select: { id: true, name: true, code: true } }
         }
       });
       
@@ -196,10 +216,23 @@ class UserService {
         }
       }
 
+      // Validate department if provided (empty clears it)
+      let departmentId = null;
+      if (userData.department_id != null && String(userData.department_id).trim() !== '') {
+        const depIdParsed = parseInt(userData.department_id);
+        if (!Number.isInteger(depIdParsed) || depIdParsed <= 0) {
+          throw new Error('Invalid department');
+        }
+        const dep = await prisma.department.findFirst({ where: { id: depIdParsed, is_deleted: false } });
+        if (!dep) throw new Error('Department not found');
+        departmentId = depIdParsed;
+      }
+
       const updateData = {
         email: userData.email,
         role_id: parseInt(userData.role_id),
-        employee_id: null // Always set to null initially
+        employee_id: null, // Always set to null initially
+        department_id: departmentId
       };
 
       // Only set employee_id if it's provided and not null/empty
@@ -228,7 +261,8 @@ class UserService {
               full_name: true,
               employee_id: true
             }
-          }
+          },
+          department: { select: { id: true, name: true, code: true } }
         }
       });
       

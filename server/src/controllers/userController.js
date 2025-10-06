@@ -49,7 +49,7 @@ class UserController {
       const result = await userService.createUser(userData);
       res.status(201).json(result);
     } catch (error) {
-      if (error.message === 'Email already exists' || error.message === 'Employee is already assigned to another user') {
+      if (error.message === 'Email already exists' || error.message === 'Employee is already assigned to another user' || error.message === 'Department not found' || error.message === 'Invalid department') {
         res.status(400).json({ error: error.message });
       } else {
         res.status(500).json({ error: error.message });
@@ -90,7 +90,7 @@ class UserController {
     } catch (error) {
       if (error.message === 'User not found') {
         res.status(404).json({ error: error.message });
-      } else if (error.message === 'Email already exists' || error.message === 'Employee is already assigned to another user') {
+      } else if (error.message === 'Email already exists' || error.message === 'Employee is already assigned to another user' || error.message === 'Department not found' || error.message === 'Invalid department') {
         res.status(400).json({ error: error.message });
       } else {
         res.status(500).json({ error: error.message });
@@ -196,7 +196,14 @@ class UserController {
         orderBy: { full_name: 'asc' }
       });
 
-      res.json({ roles, employees: availableEmployees });
+      // New: departments dropdown options
+      const departments = await prisma.department.findMany({
+        where: { is_deleted: false },
+        select: { id: true, name: true, code: true },
+        orderBy: { name: 'asc' }
+      });
+
+      res.json({ roles, employees: availableEmployees, departments });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

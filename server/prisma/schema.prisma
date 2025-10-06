@@ -84,6 +84,8 @@ model Department {
   // New: optional Head of Department
   head_employee_id  Int?
   head              Employee?     @relation("DepartmentHead", fields: [head_employee_id], references: [id])
+  // Back-relation: users optionally linked to this department
+  users             User[]
 
   @@index([head_employee_id])
 }
@@ -347,11 +349,14 @@ model User {
   password     String
   role_id      Int
   employee_id  Int?      @unique
+  // Optional: link user to a department
+  department_id Int?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   is_deleted   Boolean   @default(false)
   role         Role      @relation(fields: [role_id], references: [id])
   employee     Employee? @relation(fields: [employee_id], references: [id])
+  department    Department? @relation(fields: [department_id], references: [id])
   // back relation for settings updates
   updatedSettings SystemSetting[] @relation("UserUpdatedSettings")
   // back relation for managed locations
@@ -362,6 +367,8 @@ model User {
   createdLeaveBanks LeaveBank[]
   // Back-relation: accounts tranches created by this user
   createdTranches TravelClaimTranche[]
+
+  @@index([department_id])
 }
 
 model Session {

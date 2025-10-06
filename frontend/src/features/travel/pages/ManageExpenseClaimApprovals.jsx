@@ -293,6 +293,16 @@ export default function ManageExpenseClaimApprovals(){
   const formatMoney = (v) => (v||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
   const fmtDate = (v) => v ? new Date(v).toISOString().slice(0,10) : '—';
 
+  // New: label helper for recommendation stage context
+  const getRecommendLabel = (claim) => {
+    const empJob = currentEmployment(claim?.employee);
+    const isHoDMe = String(empJob?.department?.head_employee_id || '') === String(meEmpId || '');
+    const recCount = (claim?.statusEntries || []).filter(se => se.action === 'RECOMMENDED').length;
+    if (recCount === 0 && isHoDMe) return "HoD Recommend";
+    if (recCount === 1) return "HoD’s RO Recommend";
+    return "Recommend";
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -320,6 +330,7 @@ export default function ManageExpenseClaimApprovals(){
                   try { await decideExpenseClaim(claim.id, action, ''); await load(); await loadAll(); } catch(e){ alert(e?.response?.data?.error || e.message); }
                 };
                 const reqPart = c.travel_request_id ? ` • Req #${c.travel_request_id}` : '';
+                const recLabel = getRecommendLabel(c);
                 return (
                   <div key={c.id} className="p-4 flex items-center justify-between text-sm">
                     <div className="space-y-0.5">
@@ -333,7 +344,7 @@ export default function ManageExpenseClaimApprovals(){
                       <Button variant="outline" size="sm" onClick={()=>open(c)}>View</Button>
                       <Button variant="outline" size="sm" onClick={()=>exportClaimToPdf(c)}>Export</Button>
                       <div className="flex items-center gap-1">
-                        {eligibility.canRecommend && <Button size="sm" onClick={()=>clickAction(c,'RECOMMEND')}>Recommend</Button>}
+                        {eligibility.canRecommend && <Button size="sm" onClick={()=>clickAction(c,'RECOMMEND')}>{recLabel}</Button>}
                         {eligibility.canApprove && <Button size="sm" onClick={()=>clickAction(c,'APPROVE')}>Approve</Button>}
                         {eligibility.canReject && <Button size="sm" variant="destructive" onClick={()=>clickAction(c,'REJECT')}>Reject</Button>}
                         {eligibility.canClear && <Button size="sm" variant="secondary" onClick={()=>clickAction(c,'CLEAR')}>Undo</Button>}
@@ -394,20 +405,21 @@ export default function ManageExpenseClaimApprovals(){
                 };
                 const reqBadge = c.status && <Badge variant="outline" className="ml-2 text-[10px]">{c.status}</Badge>;
                 const reqPart = c.travel_request_id ? <span> • Req #{c.travel_request_id}</span> : null;
+                const recLabel = getRecommendLabel(c);
                 return (
                   <div key={c.id} className="p-4 flex items-center justify-between text-sm">
                     <div className="space-y-0.5">
                       <div className="font-medium flex flex-wrap items-center gap-1">Claim #{c.id}{reqPart} • {emp?.full_name || 'Employee'} <span className="text-muted-foreground">({empJob?.designation?.title || '—'})</span> {reqBadge}</div>
                       <div className="text-muted-foreground">Distance {c.total_distance_km||0} km • Grand {(c.grand_total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                       <div className="flex flex-wrap gap-1">
-                        {(c.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[10px]" title={new Date(se.createdAt).toLocaleString()}>{se.action}</Badge>)}
+                        {(c.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[10px]">{se.action}</Badge>)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={()=>open(c)}>View</Button>
                       <Button variant="outline" size="sm" onClick={()=>exportClaimToPdf(c)}>Export</Button>
                       <div className="flex items-center gap-1">
-                        {eligibility.canRecommend && <Button size="sm" onClick={()=>clickAction(c,'RECOMMEND')}>Recommend</Button>}
+                        {eligibility.canRecommend && <Button size="sm" onClick={()=>clickAction(c,'RECOMMEND')}>{recLabel}</Button>}
                         {eligibility.canApprove && <Button size="sm" onClick={()=>clickAction(c,'APPROVE')}>Approve</Button>}
                         {eligibility.canReject && <Button size="sm" variant="destructive" onClick={()=>clickAction(c,'REJECT')}>Reject</Button>}
                         {eligibility.canClear && <Button size="sm" variant="secondary" onClick={()=>clickAction(c,'CLEAR')}>Undo</Button>}

@@ -312,12 +312,11 @@ module.exports = {
     // Adjusted to support recommender stage for within-city (no request)
     const stageFilters = [];
 
-    // Recommendation stage for immediate in-charge
-    // Skip assigning recommender tasks to DG; DG’s direct reports bypass recommendation entirely
+    // Recommendation stages
     if (ctx.meEmpId && !ctx.isDG) {
+      // Existing: immediate in-charge (applicant for request-linked)
       stageFilters.push({
         status: 'SUBMITTED',
-        // Existing: request applicant's in-charge
         request: {
           applicant: {
             employmentRecords: {
@@ -327,16 +326,54 @@ module.exports = {
         },
         statusEntries: { none: { action: 'RECOMMENDED' } }
       });
-      // New: within-city — employee's in-charge
+      // Existing: within-city — employee's in-charge
       stageFilters.push({
         status: 'SUBMITTED',
         employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) } } },
         request: null,
         statusEntries: { none: { action: 'RECOMMENDED' } }
       });
+
+      // New: HoD-first recommendation for low-BPS claimants
+      stageFilters.push({
+        status: 'SUBMITTED',
+        statusEntries: { none: { action: 'RECOMMENDED' } },
+        employee: {
+          employmentRecords: {
+            some: {
+              is_current: true,
+              is_deleted: false,
+              scale_grade: { category: 'BPS', level: { lt: 17 } },
+              department: { head_employee_id: Number(ctx.meEmpId) }
+            }
+          }
+        }
+      });
+
+      // New: HoD’s RO second recommendation for low-BPS claimants (after first recommendation)
+      stageFilters.push({
+        status: 'SUBMITTED',
+        statusEntries: { some: { action: 'RECOMMENDED' } },
+        employee: {
+          employmentRecords: {
+            some: {
+              is_current: true,
+              is_deleted: false,
+              scale_grade: { category: 'BPS', level: { lt: 17 } },
+              department: {
+                head: {
+                  employmentRecords: {
+                    some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
     }
 
-    // First stage (OPS/DG) requires recommendation
+    // First stage (OPS/DG) requires recommendation(s)
     const firstStageNone = { action: { in: ['OPS_APPROVED','OPS_REJECTED','DG_APPROVED','DG_REJECTED'] } };
     if (ctx.isOps || ctx.canApproveClaimOps) {
       stageFilters.push({
@@ -410,6 +447,7 @@ module.exports = {
     });
     if (!claim || claim.is_deleted) throw new Error('Not found');
 
+    // Determine claimant location and first-stage branch
     const getClaimerLocationType = () => claim.employee?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
     const deriveFirstStage = () => {
       const hasOpsDecision = claim.statusEntries.some(e => e.action.startsWith('OPS_'));
@@ -424,16 +462,49 @@ module.exports = {
     };
     const FIRST_STAGE_ACTOR = deriveFirstStage();
 
+    // New: compute HoD chain for low-BPS claimants
+    const sg = await getEmployeeScaleGrade(claim.employee_id);
+    const isLowBps = !!(sg?.grade && sg.grade.category === 'BPS' && Number(sg.grade.level||0) < 17);
+    const currentEmp = (claim.employee?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted) || claim.employee?.employmentRecords?.[0] || null;
+    const hodId = currentEmp?.department?.head_employee_id ? Number(currentEmp.department.head_employee_id) : null;
+    const hodEmployment = hodId ? await prisma.employment.findFirst({ where: { employee_id: hodId, is_current: true, is_deleted: false } }) : null;
+    const hodRoId = hodEmployment?.reporting_officer_id ? Number(hodEmployment.reporting_officer_id) : null;
+    const recommendationCount = (claim.statusEntries||[]).filter(e => e.action === 'RECOMMENDED').length;
+
     const rejectionMap = { OPS: 'OPS_REJECTED', DG: 'DG_REJECTED', HR: 'HR_REJECTED', ACCOUNTS: 'ACCOUNTS_REJECTED', RECOMMENDER: 'RECOMMENDER_REJECTED' };
+
+    // Helper: DG direct-report bypass
+    const isDirectReportToDG = () => ctx.isDG && (claim.employee?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
+
+    // Determine who is allowed to recommend at this moment
+    const me = Number(ctx.meEmpId || 0);
+    const applicantEmps = claim.request?.applicant?.employmentRecords || [];
+    const employeeEmps = claim.employee?.employmentRecords || [];
+
+    // Expected recommendation chain:
+    // - For low-BPS and HoD set: HoD first, then HoD's RO; DG direct reports bypass recommender
+    // - Else (high-BPS or no HoD): immediate in-charge of applicant (request-linked) or employee (within-city)
+    const expectedRecommenderId = (() => {
+      if (isLowBps && hodId && !isDirectReportToDG()) {
+        if (recommendationCount === 0) return hodId;
+        if (recommendationCount === 1) return hodRoId || null;
+        return null; // already completed recommendations
+      }
+      // Fallback to immediate in-charge
+      const appRo = applicantEmps.find(er => er.is_current && !er.is_deleted)?.reporting_officer_id;
+      const empRo = employeeEmps.find(er => er.is_current && !er.is_deleted)?.reporting_officer_id;
+      // Prefer applicant's RO for request-linked; otherwise employee's RO
+      return claim.request ? (appRo ? Number(appRo) : (empRo ? Number(empRo) : null)) : (empRo ? Number(empRo) : null);
+    })();
+
     const canActStage = (stageKey) => {
       if (ctx.isSuperAdmin) return true;
       if (stageKey === 'RECOMMENDER') {
-        // Allow recommendation by immediate in-charge of applicant (request-linked) or the employee (within-city)
-        const applicantEmps = claim.request?.applicant?.employmentRecords || [];
-        const employeeEmps = claim.employee?.employmentRecords || [];
-        const me = String(ctx.meEmpId||'');
-        return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === me)
-            || employeeEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === me);
+        if (expectedRecommenderId) return me === Number(expectedRecommenderId);
+        // If no explicit expected recommender (e.g., no HoD or all recommendations done), allow legacy immediate in-charge checks
+        const meStr = String(me||'');
+        return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === meStr)
+            || employeeEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === meStr);
       }
       if (stageKey === 'OPS') return (ctx.isOps || ctx.canApproveClaimOps);
       if (stageKey === 'DG') return (ctx.isDG || ctx.canApproveClaimDG);
@@ -441,15 +512,8 @@ module.exports = {
       if (stageKey === 'ACCOUNTS') return ctx.isAccountsApprover;
       return false;
     };
+
     const currentStatus = claim.status;
-    const hasRecommended = claim.statusEntries.some(e => e.action === 'RECOMMENDED');
-    const isDirectReportToDG = () => ctx.isDG && (claim.employee?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
-    const determineNextStage = () => {
-      if (currentStatus === 'SUBMITTED') return (hasRecommended || isDirectReportToDG()) ? FIRST_STAGE_ACTOR : 'RECOMMENDER'; // bypass recommender for DG direct reports
-      if (currentStatus === 'APPROVED') return 'HR';               // leads to VERIFIED
-      if (currentStatus === 'VERIFIED') return 'ACCOUNTS';         // leads to PROCESSED
-      return null;
-    };
     const lastEntry = claim.statusEntries[claim.statusEntries.length - 1];
     const actionUpper = action.toUpperCase();
 
@@ -491,6 +555,9 @@ module.exports = {
     // Map a status entry action to its stage key
     const mapActionToStage = (act) => act.startsWith('OPS_') ? 'OPS' : act.startsWith('DG_') ? 'DG' : act.startsWith('HR_') ? 'HR' : act.startsWith('ACCOUNTS_') ? 'ACCOUNTS' : (act==='RECOMMENDED' ? 'RECOMMENDER' : (act==='RECOMMENDER_REJECTED' ? 'RECOMMENDER' : null));
 
+    // Determine how many recommendations are needed before first-stage approval
+    const neededRecommendations = (isLowBps && hodId && !isDirectReportToDG()) ? (hodRoId ? 2 : 1) : 1;
+
     const assertAuthorized = (stage, intent) => {
       const userIsLastApprover = lastEntry && lastEntry.actor_employee_id === actorEmpId && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED' || lastEntry.action==='RECOMMENDER_REJECTED') && (isApprovalAction(lastEntry.action) ? approvalStatusMap[lastEntry.action].includes(claim.status) : (lastEntry.action==='RECOMMENDED' ? claim.status==='SUBMITTED' : REJECTION_STATUSES.has(claim.status)));
       if (!canActStage(stage)) {
@@ -502,12 +569,21 @@ module.exports = {
       }
     };
 
+    const determineNextStage = () => {
+      if (currentStatus === 'SUBMITTED') {
+        return (recommendationCount >= neededRecommendations) ? FIRST_STAGE_ACTOR : 'RECOMMENDER';
+      }
+      if (currentStatus === 'APPROVED') return 'HR';               // leads to VERIFIED
+      if (currentStatus === 'VERIFIED') return 'ACCOUNTS';         // leads to PROCESSED
+      return null;
+    };
+
     try {
       if (actionUpper === 'RECOMMEND') {
         if (currentStatus !== 'SUBMITTED') throw new Error('Only SUBMITTED claims can be recommended');
-        if (hasRecommended) return claim;
+        if (recommendationCount >= neededRecommendations) return claim; // already enough recommendations
         // If DG’s direct report, bypass recommender entirely
-        if (isDirectReportToDG()) return claim;
+        if ((isLowBps && hodId && isDirectReportToDG()) || (!isLowBps && isDirectReportToDG())) return claim;
         assertAuthorized('RECOMMENDER', 'RECOMMEND');
         await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: remarks || null } });
         return reload();
@@ -525,8 +601,8 @@ module.exports = {
         }
         assertAuthorized(stage, 'APPROVE');
         if (stage === 'RECOMMENDER') {
-          // Recommendation does not change status; only insert a status entry
-          if (lastEntry && lastEntry.action === 'RECOMMENDED' && claim.status==='SUBMITTED') return claim; // idempotent
+          // Insert recommendation entry (supports HoD then HoD’s RO)
+          if (recommendationCount >= neededRecommendations && claim.status==='SUBMITTED') return claim; // idempotent
           await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: remarks || null } });
           return reload();
         }
@@ -561,8 +637,8 @@ module.exports = {
           await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDER_REJECTED', actor_employee_id: actorEmpId, remarks: remarks || null } });
           return reload();
         }
-        assertAuthorized(stage, 'REJECT');
         const rejectionAction = rejectionMap[stage];
+        assertAuthorized(stage, 'REJECT');
         let rejectedStatus = stage === 'OPS' ? 'REJECTED_OPS' : stage === 'DG' ? 'REJECTED_DG' : stage === 'HR' ? 'REJECTED_HR' : 'REJECTED_ACCOUNTS';
         await updateStatusSafe(rejectedStatus, ['REJECTED']);
         await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: rejectionAction, actor_employee_id: actorEmpId, remarks: remarks || null } });
