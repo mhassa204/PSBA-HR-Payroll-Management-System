@@ -67,6 +67,8 @@ model Employee {
   travelRequestStatusActions TravelRequestStatusEntry[]
   // Add missing back relation for travel claim status entries
   travelClaimStatusEntries TravelClaimStatusEntry[]
+  // New: back relation for departments headed by this employee
+  headedDepartments       Department[]            @relation("DepartmentHead")
 }
 
 model Department {
@@ -79,6 +81,11 @@ model Department {
   is_deleted        Boolean       @default(false)
   designations      Designation[]
   employmentRecords Employment[]
+  // New: optional Head of Department
+  head_employee_id  Int?
+  head              Employee?     @relation("DepartmentHead", fields: [head_employee_id], references: [id])
+
+  @@index([head_employee_id])
 }
 
 model Designation {
@@ -518,7 +525,7 @@ model Leave {
   status       LeaveStatus  @default(PENDING)
   remarks      String?
   createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  updatedAt    DateTime     @default(now())
   is_deleted   Boolean      @default(false)
 
   employee     Employee     @relation(fields: [employee_id], references: [id], onDelete: Cascade)
@@ -692,7 +699,7 @@ model TravelClaim {
   notes              String?
   status             TravelClaimStatus @default(DRAFT)
   createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  updatedAt          DateTime          @default(now())
   is_deleted         Boolean           @default(false)
   employee           Employee          @relation(fields: [employee_id], references: [id])
   request            TravelRequest?    @relation(fields: [travel_request_id], references: [id])

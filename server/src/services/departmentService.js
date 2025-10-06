@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 const departmentService = {
   // Create new department
   createDepartment: async (data) => {
-    const { name, code, description } = data;
+    const { name, code, description, head_employee_id } = data;
 
     // Check if department with same name or code already exists
     const existingDepartment = await prisma.department.findFirst({
@@ -25,10 +25,12 @@ const departmentService = {
       data: {
         name,
         code,
-        description
+        description,
+        head_employee_id: head_employee_id ? Number(head_employee_id) : null
       },
       include: {
         designations: true,
+        head: { select: { id: true, full_name: true } },
         _count: {
           select: {
             designations: true,
@@ -47,6 +49,7 @@ const departmentService = {
         designations: {
           orderBy: { level: 'asc' }
         },
+        head: { select: { id: true, full_name: true } },
         _count: {
           select: {
             designations: true,
@@ -69,6 +72,7 @@ const departmentService = {
         designations: {
           orderBy: { level: 'asc' }
         },
+        head: { select: { id: true, full_name: true } },
         _count: {
           select: {
             designations: true,
@@ -81,7 +85,7 @@ const departmentService = {
 
   // Update department
   updateDepartment: async (id, data) => {
-    const { name, code, description } = data;
+    const { name, code, description, head_employee_id } = data;
 
     // Check if another department with same name or code exists
     if (name || code) {
@@ -109,6 +113,7 @@ const departmentService = {
     if (name !== undefined) updateData.name = name;
     if (code !== undefined) updateData.code = code;
     if (description !== undefined) updateData.description = description;
+    if (head_employee_id !== undefined) updateData.head_employee_id = head_employee_id ? Number(head_employee_id) : null;
 
     return prisma.department.update({
       where: { id: parseInt(id) },
@@ -117,6 +122,7 @@ const departmentService = {
         designations: {
           orderBy: { level: 'asc' }
         },
+        head: { select: { id: true, full_name: true } },
         _count: {
           select: {
             designations: true,

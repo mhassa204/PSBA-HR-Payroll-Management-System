@@ -18,6 +18,8 @@ async function main() {
   let salaryRecords = [];
   let contractRecords = [];
   let employmentDocuments = [];
+  // NEW: master locations collection
+  let createdLocations = [];
 
   // Clear existing data using hard delete utility
   console.log('🧹 Cleaning existing data using hard delete...');
@@ -539,19 +541,12 @@ async function main() {
   // Seed users (mapped by full_name for stability)
   const findEmpId = (name) => createdEmployees.find(e => e.full_name === name)?.id;
   const users = [
-    { email: "admin@psba.gop.pk", password: encrypt("admin123"), role_id: createdRoles[0].id, employee_id: findEmpId("Muhammad Ali Hassan"), is_deleted: false },
-    { email: "hr@psba.gop.pk", password: encrypt("hr123"), role_id: createdRoles[1].id, employee_id: findEmpId("Mariya Iqbal"), is_deleted: false },
-    { email: "officer@psba.gop.pk", password: encrypt("officer123"), role_id: createdRoles[2].id, employee_id: findEmpId("Muhammad Ahmad"), is_deleted: false },
-    // Added: DG (approves Head Office requests)
-    { email: "dg@psba.gop.pk", password: encrypt("dg123"), role_id: (createdRoles.find(r => r.name === 'Manager')?.id || createdRoles[2].id), employee_id: findEmpId("Naveed Rafaqat Ahmad"), is_deleted: false },
-    // Added: Ops approver (department contains Operations)
-    { email: "ops@psba.gop.pk", password: encrypt("ops123"), role_id: (createdRoles.find(r => r.name === 'Manager')?.id || createdRoles[2].id), employee_id: findEmpId("Muhammad Ali"), is_deleted: false },
-    // Added: Bazaar Manager (manager of a Bazaar location)
-    { email: "bazaar@psba.gop.pk", password: encrypt("bazaar123"), role_id: (createdRoles.find(r => r.name === 'Manager')?.id || createdRoles[2].id), employee_id: findEmpId("Bazaar Manager One"), is_deleted: false },
-    // Added: Head Office staff (should NOT be able to create TADA due to grade < 17)
-    { email: "hostaff@psba.gop.pk", password: encrypt("staff123"), role_id: (createdRoles.find(r => r.name === 'Employee')?.id || createdRoles[4].id), employee_id: findEmpId("Head Office Staff"), is_deleted: false },
-    // Added: HR viewer (can view/manage list but cannot approve)
-    { email: "hrviewer@psba.gop.pk", password: encrypt("hrviewer123"), role_id: (createdRoles.find(r => r.name === 'HR Officer')?.id || createdRoles[2].id), employee_id: findEmpId("HR Viewer Test"), is_deleted: false }
+    // Personal accounts only for employees at BPS-17 or below
+    { email: "admin@psba.gop.pk", password: encrypt("admin123"), role_id: createdRoles[0].id, employee_id: findEmpId("Muhammad Ali Hassan"), is_deleted: false }, // Super Admin (BPS-17)
+    { email: "hr@psba.gop.pk", password: encrypt("hr123"), role_id: createdRoles[1].id, employee_id: findEmpId("Mariya Iqbal"), is_deleted: false }, // HR Admin (BPS-17)
+    { email: "officer@psba.gop.pk", password: encrypt("officer123"), role_id: createdRoles[2].id, employee_id: findEmpId("Muhammad Ahmad"), is_deleted: false }, // HR Officer (BPS-17)
+    { email: "ops@psba.gop.pk", password: encrypt("ops123"), role_id: (createdRoles.find(r => r.name === 'Manager')?.id || createdRoles[2].id), employee_id: findEmpId("Muhammad Ali"), is_deleted: false }, // Manager (BPS-17)
+    { email: "accounts@psba.gop.pk", password: encrypt("accounts123"), role_id: (createdRoles.find(r => r.name === 'Accounts Approver')?.id || createdRoles[2].id), employee_id: findEmpId("Kashif Rasheed"), is_deleted: false } // Accounts (BPS-17)
   ];
 
   console.log('👤 Seeding users...');
@@ -561,7 +556,22 @@ async function main() {
     createdUsers.push(createdUser);
   }
 
-  // New: Seed master locations (Location table)
+  // New: Create one generic account per department
+  console.log('🏢 Seeding department accounts (one per department)...');
+  const managerRoleId = (createdRoles.find(r => r.name === 'Manager')?.id || createdRoles[2].id);
+  const slugify = (txt) => String(txt || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  for (const dept of createdDepartments) {
+    const handle = dept.code ? dept.code.toLowerCase() : slugify(dept.name);
+    const email = `dept.${handle}@psba.gop.pk`;
+    const exists = await prisma.user.findUnique({ where: { email } });
+    if (!exists) {
+      const u = await prisma.user.create({ data: { email, password: encrypt('dept123'), role_id: managerRoleId, employee_id: null, is_deleted: false } });
+      createdUsers.push(u);
+      console.log(`  • Department account created: ${email}`);
+    }
+  }
+
+  // 📍 Seeding master locations...
   console.log('📍 Seeding master locations...');
   const masterLocations = [
     {
@@ -571,7 +581,7 @@ async function main() {
       city: 'Lahore',
       full_address: 'Johar Town Phase 1, Lahore',
       is_active: true,
-      manager_user_id: createdUsers[0]?.id || null
+      manager_user_id: (createdUsers.find(u => u.email === 'admin@psba.gop.pk')?.id) || null
     },
     {
       name: 'Sahulat Bazaar Mian Plaza',
@@ -580,7 +590,7 @@ async function main() {
       city: 'Lahore',
       full_address: 'Mian Plaza, Johar Town, Lahore',
       is_active: true,
-      manager_user_id: (createdUsers.find(u => u.email === 'bazaar@psba.gop.pk')?.id) || null
+      manager_user_id: (createdUsers.find(u => u.email === 'ops@psba.gop.pk')?.id) || null
     },
     {
       name: 'Sahulat Bazaar Township Bazaar',
@@ -619,7 +629,6 @@ async function main() {
       manager_user_id: null
     }
   ];
-  const createdLocations = [];
   for (const loc of masterLocations) {
     const dist = createdDistricts.find(d => d.name === loc.district);
     const city = createdCities.find(c => c.name === loc.city && (!dist || c.district_id === dist.id)) || createdCities.find(c => c.name === loc.city);
@@ -802,37 +811,38 @@ async function main() {
     }
   }
 
-  // 👤 Seeding users (additional)...
-  const findEmpIdLater = (name) => createdEmployees.find(e => e.full_name === name)?.id;
-  const extraUsers = [];
-  if(!createdUsers.find(u => u.email === 'hrapprover@psba.gop.pk')){
-    extraUsers.push({ email: 'hrapprover@psba.gop.pk', password: encrypt('hrapp123'), role_id: (createdRoles.find(r => r.name === 'HR Admin')?.id || createdRoles[1].id), employee_id: findEmpIdLater('HR Approver'), is_deleted: false });
-  }
-  if(!createdUsers.find(u => u.email === 'accounts@psba.gop.pk')){
-    // Use Accounts Approver role so this user can access tranches UI and APIs
-    const accountsRoleId = (createdRoles.find(r => r.name === 'Accounts Approver')?.id || createdRoles[2].id);
-    extraUsers.push({ email: 'accounts@psba.gop.pk', password: encrypt('accounts123'), role_id: accountsRoleId, employee_id: findEmpIdLater('Kashif Rasheed'), is_deleted: false });
-  }
-  for(const u of extraUsers){ const cu = await prisma.user.create({ data: u }); createdUsers.push(cu); console.log('✅ Created User:', cu.email); }
-
-
-
-  // Ensure employment record for HR Approver (after base employment seeding)
-  const hrDept = createdDepartments.find(d=> d.name==='HR');
-  const hrManagerDesig = createdDesignations.find(d=> d.title==='HR Manager' && d.department_id===hrDept?.id) || createdDesignations.find(d=> d.title==='HR Officer' && d.department_id===hrDept?.id);
-  const scaleBps18 = await prisma.scaleGrade.findFirst({ where: { name: 'BPS-18' } });
-  const hrApproverEmpId = findEmpIdLater('HR Approver');
-  if(hrApproverEmpId && !await prisma.employment.findFirst({ where: { employee_id: hrApproverEmpId, is_current: true } })){
-    const locHQ = await prisma.location.findFirst({ where: { type: 'HEAD_OFFICE' } });
-    const hrEmp = await prisma.employment.create({ data: { employee_id: hrApproverEmpId, organization: 'PSBA', department_id: hrDept?.id, designation_id: hrManagerDesig?.id, employment_type: 'Regular', effective_from: new Date('2022-05-01'), office_location: 'Head Quarter', remarks: 'HR Approver Seed', scale_grade_id: scaleBps18?.id, employment_status: 'active', is_current: true, filer_status: 'filer', location_id: locHQ?.id, is_deleted: false } });
-    createdEmployments.push(hrEmp);
-    console.log('✅ Created Employment: HR Approver');
+  // 🔐 Create personal user accounts for all employees with BPS scale <= 17
+  console.log('👤 Seeding personal user accounts for BPS ≤ 17...');
+  const employeeRoleId = (createdRoles.find(r => r.name === 'Employee')?.id || createdRoles[createdRoles.length - 1].id);
+  const bps17OrBelow = await prisma.employment.findMany({
+    where: {
+      is_current: true,
+      scale_grade_id: { not: null },
+      scale_grade: { is: { category: 'BPS', level: { lte: 17 } } }
+    },
+    include: { employee: true, scale_grade: true }
+  });
+  for (const rec of bps17OrBelow) {
+    const emp = rec.employee;
+    if (!emp) continue;
+    const existing = await prisma.user.findFirst({ where: { employee_id: emp.id } });
+    if (existing) continue;
+    const email = emp.email && emp.email.includes('@') ? emp.email : `emp${emp.id}@psba.gop.pk`;
+    try {
+      const u = await prisma.user.create({ data: { email, password: encrypt('emp123'), role_id: employeeRoleId, employee_id: emp.id, is_deleted: false } });
+      createdUsers.push(u);
+      console.log(`  • Personal account created: ${email} (Employee ${emp.full_name})`);
+    } catch (e) {
+      console.warn('  ! Skipped creating personal account for', emp.full_name, '-', e.message);
+    }
   }
 
   // Seed EmploymentSalary bank info for tranche CSV
   console.log('🏦 Seeding employment salaries for tranche testing...');
+  // Helper: get employee id by full name
+  const findEmpIdByName = (n) => createdEmployees.find(e => e.full_name === n)?.id;
   const ensureSalary = async (empName, bank, account) => {
-    const eid = findEmpIdLater(empName);
+    const eid = findEmpIdByName(empName);
     if (!eid) return;
     const empRec = await prisma.employment.findFirst({ where: { employee_id: eid, is_current: true } });
     if (!empRec) return;

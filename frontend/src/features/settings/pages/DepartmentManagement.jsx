@@ -7,7 +7,8 @@ import {
   Trash2, 
   ArrowLeft,
   Users,
-  Briefcase
+  Briefcase,
+  UserCircle
 } from 'lucide-react';
 import { useConfirmationContext } from '../../../components/ui/ConfirmationProvider';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
@@ -228,6 +229,13 @@ const DepartmentManagement = () => {
                       <p className="text-sm mb-4" style={{ color: "var(--color-text-secondary)" }}>
                         {department.description}
                       </p>
+                    )}
+
+                    {department.head && (
+                      <div className="flex items-center gap-2 text-sm mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+                        <UserCircle className="w-4 h-4" />
+                        <span>Head: {department.head.full_name}</span>
+                      </div>
                     )}
 
                     <div className="flex items-center gap-4 text-sm" style={{ color: "var(--color-text-tertiary)" }}>
