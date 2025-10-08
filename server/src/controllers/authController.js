@@ -18,7 +18,7 @@ const authController = {
         is_deleted: false,
         role: { is: { is_deleted: false, enabled: true } },
       },
-      include: { role: true, employee: true },
+      include: { role: true, employee: true, department: true },
     });
 
     if (!user || decrypt(user.password) !== password) {
@@ -47,6 +47,8 @@ const authController = {
       permissions,
       employee_id: user.employee?.id || null,
       employee_code: user.employee?.employee_id || null,
+      // New: persist department linkage for department-based accounts
+      department_id: user.department_id || null,
     };
 
     res.json({ success: true, message: "Logged in", user: req.session.user });
@@ -76,7 +78,7 @@ const authController = {
           is_deleted: false,
           role: { is: { is_deleted: false, enabled: true } },
         },
-        include: { role: true, employee: true },
+        include: { role: true, employee: true, department: true },
       });
 
       if (!dbUser) {
@@ -106,6 +108,8 @@ const authController = {
         permissions,
         employee_id: dbUser.employee?.id || null,
         employee_code: dbUser.employee?.employee_id || null,
+        // New: persist department linkage for department-based accounts
+        department_id: dbUser.department_id || null,
       };
       return res.json({ success: true, user: req.session.user });
     } catch (e) {

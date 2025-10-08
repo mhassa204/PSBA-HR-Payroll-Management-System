@@ -4,14 +4,32 @@ const prisma = new PrismaClient();
 
 module.exports = {
   reportees: async (req, res) => {
-    const ctx = await travelService.getAuthContext(req);
-    if (!ctx.meEmpId) return res.json({ success: true, employees: [] });
-    // Relaxed: do not gate by canCreateOrOwn; allow any logged-in employee to fetch self + direct reportees
     try {
+      // Department-based account path: no personal employee_id but has department_id
+      const meEmpId = Number(req.session.user?.employee_id || 0);
+      const deptId = Number(req.session.user?.department_id || 0);
+      if (!meEmpId && deptId) {
+        const dept = await prisma.department.findFirst({ where: { id: deptId, is_deleted: false }, include: { head: true } });
+        const hodId = dept?.head?.id || 0;
+        const employees = await prisma.employee.findMany({
+          where: {
+            is_deleted: false,
+            employmentRecords: { some: { is_current: true, is_deleted: false, department_id: deptId } },
+            id: { not: hodId }
+          },
+          orderBy: { full_name: 'asc' },
+          select: { id: true, full_name: true, cnic: true }
+        });
+        return res.json({ success: true, employees });
+      }
+
+      // Default: personal account path returns self + direct reportees
+      const ctx = await travelService.getAuthContext(req);
+      if (!ctx.meEmpId) return res.json({ success: true, employees: [] });
       const employees = await travelService.listReporteesPlusSelf(ctx.meEmpId);
-      res.json({ success: true, employees });
+      return res.json({ success: true, employees });
     } catch (e) {
-      res.status(500).json({ success: false, error: e.message });
+      return res.status(500).json({ success: false, error: e.message });
     }
   },
   listManage: async (req, res) => {

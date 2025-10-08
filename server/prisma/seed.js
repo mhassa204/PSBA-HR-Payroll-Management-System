@@ -332,14 +332,21 @@ async function main() {
         // granular claim approval permissions
         "travel.request.approve.ops","travel.request.approve.dg","travel.claim.approve.ops","travel.claim.approve.dg","travel.claim.approve.hr","travel.claim.approve.accounts"
       ], enabled: true, fields: ["employee_personal", "employee_employment", "employee_salary", "employee_documents"] },
-    { name: "HR Officer", type: "custom", allowed_actions: ["employees.read","employees.create","employees.update","reports.read","travel.read","travel.claim.read","travel.claim.approve.hr"], enabled: true, fields: ["employee_personal", "employee_employment"] },
+    // Updated: allow HR Officer to open Travel Requests and Expense Claims screens
+    { name: "HR Officer", type: "custom", allowed_actions: ["employees.read","employees.create","employees.update","reports.read","travel.read","travel.create","travel.claim.read","travel.claim.create","travel.claim.approve.hr"], enabled: true, fields: ["employee_personal", "employee_employment"] },
     { name: "Manager", type: "custom", allowed_actions: ["employees.read","reports.read","requests.approve","roster.read","roster.create","roster.update","travel.read","travel.claim.read","travel.request.approve.ops","travel.claim.approve.ops"], enabled: true, fields: ["employee_basic", "employee_employment"] },
     // Expanded Accounts permissions to cover list/status/export contexts
     { name: "Accounts Approver", type: "custom", allowed_actions: [
-        "travel.read","travel.claim.read","travel.claim.status","travel.claim.settle","travel.rates.read","reports.read",
+        // Updated: add claim.create so the Expense Claims screen is accessible
+        "travel.read","travel.claim.read","travel.claim.create","travel.claim.status","travel.claim.settle","travel.rates.read","reports.read",
         "travel.claim.approve.accounts"
       ], enabled: true, fields: ["employee_basic"] },
-    { name: "Employee", type: "custom", allowed_actions: ["profile.read","profile.update"], enabled: true, fields: ["own_personal", "own_employment"] }
+    // Updated: Grant all employees access to Travel Requests and Expense Claims screens
+    { name: "Employee", type: "custom", allowed_actions: [
+        "profile.read","profile.update",
+        "travel.read","travel.create",
+        "travel.claim.read","travel.claim.create"
+      ], enabled: true, fields: ["own_personal", "own_employment"] }
   ];
 
   console.log('🛡️ Seeding roles...');

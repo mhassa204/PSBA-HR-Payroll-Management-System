@@ -16,11 +16,15 @@ const UserForm = ({ user, onSubmit, onCancel }) => {
     email: '',
     password: '',
     role_id: '',
-    employee_id: ''
+    employee_id: '',
+    // New optional department field
+    department_id: ''
   });
 
   const [roles, setRoles] = useState([]);
   const [availableEmployees, setAvailableEmployees] = useState([]);
+  // New: departments list
+  const [departments, setDepartments] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -34,10 +38,11 @@ const UserForm = ({ user, onSubmit, onCancel }) => {
   const loadFormData = async () => {
     try {
       setIsLoadingData(true);
-      // Use single endpoint to fetch roles + employees (respecting permissions and Super Admin hiding)
-      const { roles = [], employees = [] } = await userService.getFormOptions();
+      // Use single endpoint to fetch roles + employees (+ departments)
+      const { roles = [], employees = [], departments = [] } = await userService.getFormOptions();
       setRoles(roles);
       setAvailableEmployees(employees);
+      setDepartments(departments);
 
       // If editing, add current user's employee to the list
       if (user?.employee) {
@@ -50,13 +55,25 @@ const UserForm = ({ user, onSubmit, onCancel }) => {
         });
       }
 
+      // If editing, add current user's department to the list if missing
+      if (user?.department) {
+        setDepartments(prev => {
+          const exists = prev.find(dep => dep.id === user.department.id);
+          if (!exists) {
+            return [...prev, user.department];
+          }
+          return prev;
+        });
+      }
+
       // Set form data if editing
       if (user) {
         setFormData({
           email: user.email || '',
           password: '',
           role_id: user.role?.id?.toString() || '',
-          employee_id: user.employee?.id?.toString() || ''
+          employee_id: user.employee?.id?.toString() || '',
+          department_id: user.department?.id?.toString() || ''
         });
 
         if (user.role?.name === 'Super Admin') {
@@ -101,7 +118,9 @@ const UserForm = ({ user, onSubmit, onCancel }) => {
       const submitData = {
         email: formData.email.trim(),
         role_id: formData.role_id,
-        employee_id: formData.employee_id && formData.employee_id.toString().trim() !== '' ? formData.employee_id : null
+        employee_id: formData.employee_id && formData.employee_id.toString().trim() !== '' ? formData.employee_id : null,
+        // Include optional department assignment
+        department_id: formData.department_id && formData.department_id.toString().trim() !== '' ? formData.department_id : null
       };
 
       if (formData.password.trim()) {
@@ -135,6 +154,15 @@ const UserForm = ({ user, onSubmit, onCancel }) => {
       value: employee.id.toString(),
       label: `${employee.full_name} - ${employee.cnic || employee.employee_id}`,
       description: `Employee ID: ${employee.employee_id}${employee.email ? ` | ${employee.email}` : ''}`
+    }));
+  };
+
+  // New: build department options
+  const getDepartmentOptions = () => {
+    return departments.map(dept => ({
+      value: dept.id.toString(),
+      label: `${dept.name}${dept.code ? ` (${dept.code})` : ''}`,
+      description: dept.code ? `Code: ${dept.code}` : undefined
     }));
   };
 
@@ -317,6 +345,34 @@ const UserForm = ({ user, onSubmit, onCancel }) => {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Department Assignment */}
+        <div className="space-y-6 mb-8">
+          <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+            <div className="p-2 bg-indigo-100 rounded-lg">
+              <Shield className="w-6 h-6 text-indigo-600" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900">Department Assignment</h3>
+          </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Assign to Department (Optional)
+              </label>
+              <SearchableSelect
+                options={getDepartmentOptions()}
+                value={formData.department_id}
+                onChange={(value) => handleInputChange('department_id', value)}
+                placeholder="Select a department to link with this user account"
+                allowClear
+                data-dropdown-type="department"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                This is optional and can be changed anytime. Useful for department accounts or scoping permissions.
+              </p>
             </div>
           </div>
         </div>

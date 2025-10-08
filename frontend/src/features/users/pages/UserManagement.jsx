@@ -8,7 +8,8 @@ import {
   ArrowLeft,
   Mail,
   Shield,
-  User
+  User,
+  Building2
 } from 'lucide-react';
 import { useConfirmationContext } from '../../../components/ui/ConfirmationProvider';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
@@ -205,6 +206,9 @@ const UserManagement = () => {
                           Employee
                         </th>
                         <th className="text-left py-3 px-4 font-medium" style={{ color: "var(--color-text-primary)" }}>
+                          Department
+                        </th>
+                        <th className="text-left py-3 px-4 font-medium" style={{ color: "var(--color-text-primary)" }}>
                           Status
                         </th>
                         {canManage && (
@@ -253,6 +257,25 @@ const UserManagement = () => {
                               </div>
                             ) : (
                               <span className="text-sm text-gray-500">No employee assigned</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {user.department ? (
+                              <div className="flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-indigo-600" />
+                                <div>
+                                  <div className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                                    {user.department.name}
+                                  </div>
+                                  {user.department.code && (
+                                    <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                                      {user.department.code}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-500">No department</span>
                             )}
                           </td>
                           <td className="py-3 px-4">

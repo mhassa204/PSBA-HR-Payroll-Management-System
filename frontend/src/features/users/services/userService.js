@@ -63,7 +63,8 @@ export const userService = {
   async getFormOptions() {
     try {
       const response = await axios.get(`${API_BASE_URL}/form-options`);
-      return response.data; // { roles, employees }
+      // Returns { roles, employees, departments }
+      return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.error || 'Failed to load form options');
     }
