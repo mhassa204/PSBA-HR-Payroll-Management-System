@@ -250,11 +250,13 @@ const LeftSidebar = () => {
       icon: PlaneIcon,
       description: 'TADA',
       color: 'bg-fuchsia-600',
-      show: () => (travelCaps.canCreateOrOwn || travelCaps.canViewAll || can('travel.claim.read') || travelCaps.isHR),
+      show: () => (
+        travelCaps.canCreateOrOwn || can('travel.create') || travelCaps.canViewAll || can('travel.claim.read') || travelCaps.isHR || travelCaps.isDG
+      ),
       children: [
-        { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => (travelCaps.canCreateOrOwn || travelCaps.isAccountsApprover) },
-        { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => (travelCaps.canViewAll || travelCaps.isAccountsApprover) },
-        { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isAccountsApprover) },
+        { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => (travelCaps.canCreateOrOwn || can('travel.create') || travelCaps.isAccountsApprover) },
+  { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => (travelCaps.canViewAll || travelCaps.isAccountsApprover || travelCaps.isDG || travelCaps.isHR) },
+  { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isAccountsApprover || travelCaps.isHR) },
         { name: 'Expense Claims', href: '/travel/expense-claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') },
         { name: 'Claim Approvals', href: '/travel/expense-claim-approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isHR || travelCaps.isAccountsApprover) },
         { name: 'Accounts Tranches', href: '/travel/accounts/tranches', icon: ViewColumnsIcon, show: () => (travelCaps.isAccountsApprover || can('travel.claim.approve.accounts')) },

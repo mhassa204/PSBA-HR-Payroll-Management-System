@@ -17,8 +17,6 @@ export default function TravelRequestsPage() {
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]); // array of ids
   const [caps, setCaps] = useState({ isBps17Plus: false, canCreateOrOwn: false });
-  // New: applicant for department-based account
-  const [applicantId, setApplicantId] = useState('');
 
   // detail state
   const [open, setOpen] = useState(false);
@@ -70,14 +68,6 @@ export default function TravelRequestsPage() {
   }, [form.departure_date, form.departure_time, form.expected_return_date]);
 
   const onCreate = async () => {
-    // Validate applicant for department-based accounts
-    const meId = Number(authUser?.employee_id || 0);
-    const isDeptBased = !meId && Number(authUser?.department_id || 0);
-    if (isDeptBased && !applicantId) {
-      alert('Please select an applicant');
-      return;
-    }
-
     const payload = {
       purpose: form.purpose || null,
       destination: form.destination || null,
@@ -85,14 +75,11 @@ export default function TravelRequestsPage() {
       departure_time: form.departure_time || null,
       expected_return_date: form.expected_return_date,
       total_days: previewDays ? Number(previewDays) : null,
-      // Exclude applicant from attendees if present
-      employee_ids: selectedEmployees.filter(id => String(id) !== String(applicantId)),
-      ...(isDeptBased ? { applicant_id: Number(applicantId) } : {})
+      employee_ids: selectedEmployees
     };
     await createTravelRequest(payload);
     setForm({ purpose: '', destination: '', departure_date: '', departure_time: '', expected_return_date: '', total_days: '' });
     setSelectedEmployees([]);
-    setApplicantId('');
     await load();
   };
 
@@ -112,10 +99,13 @@ export default function TravelRequestsPage() {
   };
 
   const labelAction = (a) => a === 'RECOMMENDED' ? 'Recommended' : a;
+  const extractEmail = (remarks, fallback) => {
+    const r = String(remarks||'');
+    const m = r.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return m ? m[0] : (remarks || fallback || '—');
+  };
 
   // Determine account type
-  const meId = Number(authUser?.employee_id || 0);
-  const isDeptBased = !meId && Number(authUser?.department_id || 0);
 
   // For department-based account: server already excludes HoD from options
   const filteredEmployeeOptions = useMemo(() => employeeOptions, [employeeOptions]);
@@ -136,19 +126,6 @@ export default function TravelRequestsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Department-based: choose applicant */}
-              {isDeptBased ? (
-                <div className="md:col-span-2">
-                  <label className="text-sm text-muted-foreground">Applicant</label>
-                  <SearchableSelect
-                    options={filteredEmployeeOptions}
-                    value={String(applicantId || '')}
-                    onChange={(val) => setApplicantId(val)}
-                    placeholder="Select applicant (BPS < 17)"
-                  />
-                </div>
-              ) : null}
-
               {/* Always allow adding attendees (optional) */}
               <div className="md:col-span-2">
                 <label className="text-sm text-muted-foreground">Employees (multi-select, optional)</label>
@@ -169,11 +146,9 @@ export default function TravelRequestsPage() {
                   onChange={(val) => {
                     const id = Number(val);
                     if (!id) return;
-                    // Skip if same as applicant when department-based
-                    if (isDeptBased && String(id) === String(applicantId)) return;
                     setSelectedEmployees(prev => prev.includes(id) ? prev : [...prev, id]);
                   }}
-                  placeholder={isDeptBased ? 'Type to search department employees...' : 'Type to search employees...'}
+                  placeholder={'Type to search employees...'}
                   allowClear
                 />
               </div>
@@ -290,7 +265,7 @@ export default function TravelRequestsPage() {
                     <div key={s.id} className="p-3 flex items-center justify-between">
                       <div>
                         <div className="font-medium">{labelAction(s.action)}</div>
-                        <div className="text-xs text-muted-foreground">by {s.actor?.full_name || '—'} at {new Date(s.createdAt).toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">by {extractEmail(s.remarks, s.actor?.full_name)} at {new Date(s.createdAt).toLocaleString()}</div>
                       </div>
                     </div>
                   ))}

@@ -75,6 +75,11 @@ export default function ManageTravelRequests() {
   };
 
   const labelAction = (a) => a === 'RECOMMENDED' ? 'Recommended' : a;
+  const extractEmail = (remarks, fallback) => {
+    const r = String(remarks||'');
+    const m = r.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return m ? m[0] : (remarks || fallback || '—');
+  };
 
   return (
     <div className="space-y-6">
@@ -177,7 +182,7 @@ export default function ManageTravelRequests() {
                     <div key={s.id} className="p-3 flex items-center justify-between">
                       <div>
                         <div className="font-medium">{labelAction(s.action)}</div>
-                        <div className="text-xs text-muted-foreground">by {s.actor?.full_name || '—'} at {new Date(s.createdAt).toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">by {extractEmail(s.remarks, s.actor?.full_name)} at {new Date(s.createdAt).toLocaleString()}</div>
                       </div>
                     </div>
                   ))}

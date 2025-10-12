@@ -34,12 +34,18 @@ export default function TravelApprovalsPage() {
   };
 
   const hasRecommended = (r) => (r.statusEntries||[]).some(se => se.action === 'RECOMMENDED');
+  const recCount = (r) => (r.statusEntries||[]).filter(se => se.action === 'RECOMMENDED').length;
   const lastEntry = (r) => (r.statusEntries||[])[(r.statusEntries||[]).length-1];
   const canUndoRecommendation = (r) => {
     const last = lastEntry(r);
     return r.status==='CREATED' && last && last.action==='RECOMMENDED' && String(last.actor_employee_id)===String(meEmpId);
   };
   const labelAction = (a) => a === 'RECOMMENDED' ? 'Recommended' : a;
+  const extractEmail = (remarks, fallback) => {
+    const r = String(remarks||'');
+    const m = r.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return m ? m[0] : (remarks || fallback || '—');
+  };
 
   const doAction = async (r, action) => {
     if(!r) return;
@@ -66,6 +72,55 @@ export default function TravelApprovalsPage() {
     const ers = req?.applicant?.employmentRecords || [];
     return ers.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(meEmpId||''));
   };
+  const isDeptOrigin = (r) => (r.statusEntries||[]).some(se => se.action==='CREATED' && /\[DEPT\]/i.test(String(se.remarks||'')));
+  const isHoDFor = (r) => {
+    const er = (r?.applicant?.employmentRecords||[]).find(x => x.is_current && !x.is_deleted);
+    const hodId = Number(er?.department?.head?.id || 0);
+    return meEmpId && Number(meEmpId) === hodId;
+  };
+  const hodROFor = (r) => {
+    const er = (r?.applicant?.employmentRecords||[]).find(x => x.is_current && !x.is_deleted);
+    const hodER = (er?.department?.head?.employmentRecords||[]).find(x => x.is_current && !x.is_deleted);
+    const ro = hodER?.reporting_officer_id ? Number(hodER.reporting_officer_id) : null;
+    return ro;
+  };
+  const applicantLocType = (r) => {
+    const er = (r?.applicant?.employmentRecords||[]).find(x => x.is_current && !x.is_deleted);
+    return er?.location?.type || 'HEAD_OFFICE';
+  };
+  const canRecommendMe = (r) => {
+    if (!meEmpId) return false;
+    const recs = recCount(r);
+    if (isDeptOrigin(r)) {
+      if (recs === 0) return isHoDFor(r);
+      if (recs === 1) return Number(meEmpId) === Number(hodROFor(r) || 0);
+      return false;
+    }
+    // Non-dept-origin: immediate RO of applicant, first recommendation only
+    return recs === 0 && isDirectReportToMe(r);
+  };
+
+  // Only DG/Ops can approve; Ops cannot approve department-origin; DG can fast-track direct reports at head office
+  const canApproveMe = (r) => {
+    const recs = recCount(r);
+    const deptOrigin = isDeptOrigin(r);
+    const locType = applicantLocType(r);
+    // For department-origin, if HoD has a RO, require two recommendations before DG approval
+    const neededRecs = deptOrigin && hodROFor(r) ? 2 : 1;
+    const isDG = !!(caps?.isDG);
+    const isOps = !!(caps?.isOps);
+    const fastTrackDG = isDG && locType === 'HEAD_OFFICE' && isDirectReportToMe(r);
+    if (isDG) {
+      if (fastTrackDG) return true;
+      if (locType === 'HEAD_OFFICE' && recs >= neededRecs) return true;
+      return false;
+    }
+    if (isOps) {
+      if (locType === 'BAZAAR' && !deptOrigin && recs >= 1) return true;
+      return false;
+    }
+    return false;
+  };
 
   return (
     <div className="space-y-6">
@@ -83,7 +138,8 @@ export default function TravelApprovalsPage() {
             {list.map(r => {
               const recommended = hasRecommended(r);
               const canUndo = canUndoRecommendation(r);
-              const fastTrackDG = !!(caps?.isDG) && isDirectReportToMe(r);
+              const showRecommenderActions = !canUndo && !recommended && canRecommendMe(r);
+              const showApproveActions = !canUndo && canApproveMe(r);
               return (
                 <div key={r.id} className="p-4 flex items-center justify-between text-sm">
                   <div className="space-y-0.5">
@@ -99,13 +155,13 @@ export default function TravelApprovalsPage() {
                       {canUndo && (
                         <Button disabled={submitting} size="sm" variant="secondary" onClick={()=>doAction(r,'UNDO_RECOMMEND')}>Undo</Button>
                       )}
-                      {!canUndo && !recommended && !fastTrackDG && (
+                      {showRecommenderActions && (
                         <>
                           <Button disabled={submitting} size="sm" onClick={()=>doAction(r,'RECOMMEND')}>Recommend</Button>
                           <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(r,'RECOMMENDER_REJECT')}>Reject</Button>
                         </>
                       )}
-                      {!canUndo && (recommended || fastTrackDG) && (
+                      {!canUndo && showApproveActions && (
                         <>
                           <Button disabled={submitting} size="sm" onClick={()=>doAction(r,'APPROVE')}>Approve</Button>
                           <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(r,'REJECT')}>Reject</Button>
@@ -170,7 +226,7 @@ export default function TravelApprovalsPage() {
                     <div key={s.id} className="p-3 flex items-center justify-between">
                       <div>
                         <div className="font-medium">{labelAction(s.action)}</div>
-                        <div className="text-slate-500 text-xs">by {s.actor?.full_name || '—'} at {new Date(s.createdAt).toLocaleString()}</div>
+                        <div className="text-slate-500 text-xs">by {extractEmail(s.remarks, s.actor?.full_name)} at {new Date(s.createdAt).toLocaleString()}</div>
                       </div>
                     </div>
                   ))}

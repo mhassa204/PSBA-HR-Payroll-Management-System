@@ -220,6 +220,12 @@ export default function ManageExpenseClaimApprovals(){
     }
   };
 
+  const extractEmail = (remarks, fallback) => {
+    const r = String(remarks||'');
+    const m = r.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return m ? m[0] : (remarks || fallback || '—');
+  };
+
   const loadAll = async () => { setLoadingAll(true); try { const rs = await listAllExpenseClaimApprovals({ submission_from: submissionFrom||undefined, submission_to: submissionTo||undefined, depart_from: departFrom||undefined, depart_to: departTo||undefined }); setAllClaims(rs); } finally { setLoadingAll(false);} };
   // extend initial load to fetch all in background
   useEffect(()=>{ load(); loadAll(); },[]);
@@ -664,8 +670,8 @@ export default function ManageExpenseClaimApprovals(){
                   <div key={se.id} className="flex items-start gap-2 text-xs border rounded p-2 bg-accent/20">
                     <div className="font-mono text-[10px] px-1 py-0.5 bg-background rounded border">{se.action}</div>
                     <div className="flex-1">
-                      <div className="font-medium">{se.actor?.full_name || '—'} <span className="text-muted-foreground">#{se.actor_employee_id}</span> {actorJob?.designation?.title && <span className="text-muted-foreground">({actorJob.designation.title})</span>}</div>
-                      <div className="text-muted-foreground">at {new Date(se.createdAt).toLocaleString()} {se.remarks && <span className="italic">— {se.remarks}</span>}</div>
+                      <div className="font-medium">{extractEmail(se.remarks, se.actor?.full_name || '—')}</div>
+                      <div className="text-muted-foreground">at {new Date(se.createdAt).toLocaleString()}</div>
                     </div>
                   </div>
                 ); })}

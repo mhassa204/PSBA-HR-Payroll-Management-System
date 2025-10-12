@@ -82,6 +82,12 @@ export default function TravelManualEntryPage(){
     } catch(e){ alert(e?.response?.data?.error || e.message); }
   };
 
+  const extractEmail = (remarks, fallback) => {
+    const r = String(remarks||'');
+    const m = r.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    return m ? m[0] : (remarks || fallback || '—');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -232,7 +238,7 @@ export default function TravelManualEntryPage(){
                 {(created.statusEntries||[]).map(se => (
                   <div key={se.id} className="p-2 flex items-center justify-between">
                     <div className="text-xs">{se.action}</div>
-                    <div className="text-xs text-muted-foreground">{se.actor?.full_name || `Emp #${se.actor_employee_id}`}</div>
+                    <div className="text-xs text-muted-foreground">{extractEmail(se.remarks, se.actor?.full_name || `Emp #${se.actor_employee_id}`)}</div>
                     <div className="text-[11px] text-muted-foreground">{new Date(se.createdAt).toLocaleString()}</div>
                   </div>
                 ))}

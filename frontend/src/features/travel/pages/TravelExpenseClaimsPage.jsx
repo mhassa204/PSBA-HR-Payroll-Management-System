@@ -218,14 +218,13 @@ export default function TravelExpenseClaimsPage(){
         <Card>
           <CardHeader className="border-b">
             <div className="flex gap-2 flex-wrap">
-              <Button variant={tab==='eligible'? 'default':'outline'} size="sm" onClick={()=>{ setTab('eligible'); setWithinCityTab('with-request'); }}>Create New (Eligible Requests)</Button>
+              <Button variant={tab==='eligible'? 'default':'outline'} size="sm" onClick={()=>{ setTab('eligible'); setWithinCityTab('with-request'); }}>Create New</Button>
               <Button variant={tab==='existing'? 'default':'outline'} size="sm" onClick={()=>setTab('existing')}>Existing Claims</Button>
               <Button variant={tab==='eligible' && withinCityTab==='within-city'? 'default':'outline'} size="sm" onClick={()=>{ setTab('eligible'); setWithinCityTab('within-city'); }}>Create Within City</Button>
             </div>
           </CardHeader>
           {tab==='eligible' && withinCityTab==='with-request' && (
             <CardContent className="space-y-2">
-              <div className="font-semibold">Eligible Approved Requests (last 15 days)</div>
               {loadingEligible && <div className="text-sm text-muted-foreground">Loading...</div>}
               {!loadingEligible && eligible.length===0 && <div className="text-sm text-muted-foreground">No approved recent requests.</div>}
               <div className="divide-y">

@@ -29,7 +29,7 @@ const authController = {
 
     // Load permissions for the user's role (normalized RBAC)
     let permissions = [];
-    if (user.role?.name === "Super Admin") {
+    if (user.role?.name === "Super Admin" || user.role?.name === "Director General") {
       permissions = ["*"];
     } else {
       const rolePerms = await prisma.rolePermission.findMany({
@@ -89,8 +89,8 @@ const authController = {
       }
 
       let permissions = req.session.user.permissions || [];
-      if (!permissions || permissions.length === 0) {
-        if (dbUser.role?.name === "Super Admin") {
+      if (!permissions || permissions.length === 0 || dbUser.role?.name === "Director General") {
+        if (dbUser.role?.name === "Super Admin" || dbUser.role?.name === "Director General") {
           permissions = ["*"];
         } else {
           const rolePerms = await prisma.rolePermission.findMany({

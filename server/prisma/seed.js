@@ -309,7 +309,7 @@ async function main() {
   // Seed roles - Updated for RBAC hierarchy: DG (BPS 19-20), Senior Management (BPS 18), Management (BPS 17)
   const roles = [
     // System Role - Super Admin (for system maintenance)
-    { name: "Super Admin", type: "system", allowed_actions: ["*"], enabled: true, fields: ["*"] },
+  { name: "Super Admin", type: "system", allowed_actions: ["*", "travel.read", "travel.create"], enabled: true, fields: ["*"] },
     
     // DG Role (BPS 19-20) - Director General with full access
     { name: "Director General", type: "executive", allowed_actions: [
@@ -355,7 +355,8 @@ async function main() {
         "attendance.read","attendance.fetch",
         "reports.read",
         "roster.read","roster.create","roster.update","roster.delete","roster.status",
-        "travel.read","travel.create","travel.update","travel.submit","travel.status",
+        "travel.read","travel.create",
+        "travel.update","travel.submit","travel.status",
         "travel.claim.read","travel.claim.create","travel.claim.update","travel.claim.submit","travel.claim.status",
         "travel.rates.read"
       ], enabled: true, fields: ["employee_personal", "employee_employment"] },
@@ -371,7 +372,8 @@ async function main() {
         "attendance.read","attendance.fetch",
         "reports.read",
         "roster.read","roster.create","roster.update","roster.delete","roster.status",
-        "travel.read","travel.create","travel.update","travel.submit","travel.status",
+        "travel.read","travel.create",
+        "travel.update","travel.submit","travel.status",
         "travel.claim.read","travel.claim.create","travel.claim.update","travel.claim.submit","travel.claim.status","travel.claim.settle",
         "travel.rates.read","travel.rates.manage",
         "travel.claim.approve.accounts",
@@ -383,17 +385,22 @@ async function main() {
     // Accounts User (For other users in Accounts department)
     { name: "Accounts User", type: "department", allowed_actions: [
         "employees.read","reports.read",
-        "travel.read","travel.create",
-        "travel.claim.read","travel.claim.create","travel.claim.status","travel.claim.settle",
-        "travel.rates.read",
-        "accounts.tranches.access" // Access to Accounts Tranches screen
+        "travel.read","travel.create","travel.update","travel.submit","travel.status",
+        "travel.claim.read","travel.claim.create","travel.claim.update","travel.claim.submit","travel.claim.status","travel.claim.settle",
+        "travel.rates.read","travel.rates.manage",
+        "travel.claim.approve.accounts",
+        "tada.managed.entry",
+        "accounts.tranches.access"
       ], enabled: true, fields: ["employee_basic"] },
     
     // Employee Role (for all other staff)
     { name: "Employee", type: "general", allowed_actions: [
         "profile.read","profile.update",
-        "travel.read","travel.create",
-        "travel.claim.read","travel.claim.create"
+        "travel.read","travel.create","travel.update","travel.submit","travel.status",
+        "travel.claim.read","travel.claim.create","travel.claim.update","travel.claim.submit","travel.claim.status","travel.claim.settle",
+        "travel.rates.read","travel.rates.manage",
+        "tada.managed.entry",
+        "accounts.tranches.access"
       ], enabled: true, fields: ["own_personal", "own_employment"] }
   ];
 
@@ -563,6 +570,10 @@ async function main() {
     { employee_id: "EMPHO001", full_name: "Head Office Staff", father_husband_name: "Rashid Khan", relationship_type: "father", mother_name: "Saira", cnic: "3520212345918", cnic_issue_date: new Date("2020-02-02"), cnic_expire_date: new Date("2040-02-01"), date_of_birth: new Date("1996-05-10"), gender: "Male", marital_status: "Single", nationality: "Pakistani", religion: "Islam", mobile_number: "03221234567", whatsapp_number: "03221234567", email: "hostaff.emp@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
     // Added: HR viewer (for Manage view)
     { employee_id: "EMPHR001", full_name: "HR Viewer Test", father_husband_name: "Ijaz Ahmed", relationship_type: "father", mother_name: "Samina", cnic: "3520212345926", cnic_issue_date: new Date("2018-03-03"), cnic_expire_date: new Date("2038-03-02"), date_of_birth: new Date("1993-07-21"), gender: "Female", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03231234567", whatsapp_number: "03231234567", email: "hr.viewer@psba.gop.pk", present_address: "Lahore", permanent_address: "Lahore", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false }
+    ,
+    // Dummy employees for department testing
+    { employee_id: "EMPDUMMY01", full_name: "Dummy Employee One", father_husband_name: "Test Father", relationship_type: "father", mother_name: "Test Mother", cnic: "3520212399991", cnic_issue_date: new Date("2020-01-01"), cnic_expire_date: new Date("2040-01-01"), date_of_birth: new Date("1990-01-01"), gender: "Male", marital_status: "Single", nationality: "Pakistani", religion: "Islam", mobile_number: "03009999991", whatsapp_number: "03009999991", email: "dummy.one@psba.gop.pk", present_address: "Test Address", permanent_address: "Test Address", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false },
+    { employee_id: "EMPDUMMY02", full_name: "Dummy Employee Two", father_husband_name: "Test Father", relationship_type: "father", mother_name: "Test Mother", cnic: "3520212399992", cnic_issue_date: new Date("2020-01-02"), cnic_expire_date: new Date("2040-01-02"), date_of_birth: new Date("1991-02-02"), gender: "Female", marital_status: "Married", nationality: "Pakistani", religion: "Islam", mobile_number: "03009999992", whatsapp_number: "03009999992", email: "dummy.two@psba.gop.pk", present_address: "Test Address", permanent_address: "Test Address", district: "Lahore", city: "Lahore", status: "Active", is_deleted: false }
   ];
 
   console.log('👥 Seeding employees...');
@@ -607,33 +618,39 @@ async function main() {
   
   const users = [
     // System Admin - generic admin account not tied to specific employee
-    { email: "admin@psba.gop.pk", password: encrypt("admin123"), role_id: getRoleId("Super Admin"), employee_id: null, department_id: getDeptId("IT"), is_deleted: false },
+    { email: "admin@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Super Admin"), employee_id: null, department_id: getDeptId("IT"), is_deleted: false },
+      // Department-specific users (no employee_id, only department_id)
+      { email: "establishment@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Employee"), employee_id: null, department_id: getDeptId("Establishment"), is_deleted: false },
+      { email: "accounts@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Employee"), employee_id: null, department_id: getDeptId("Accounts"), is_deleted: false },
+      { email: "operations@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Employee"), employee_id: null, department_id: getDeptId("Operations"), is_deleted: false },
+      { email: "it@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Employee"), employee_id: null, department_id: getDeptId("IT"), is_deleted: false },
+      { email: "devops@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Employee"), employee_id: null, department_id: getDeptId("Software Development & Operations"), is_deleted: false },
     
     // DG (BPS 19-20) - Director General
-    { email: "dg@psba.gop.pk", password: encrypt("dg123"), role_id: getRoleId("Director General"), employee_id: findEmpId("Naveed Rafaqat Ahmad"), department_id: getDeptId("Authority"), is_deleted: false },
+    { email: "dg@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Director General"), employee_id: findEmpId("Naveed Rafaqat Ahmad"), department_id: getDeptId("Authority"), is_deleted: false },
     
     // Senior Management (BPS 18) - Additional Directors
-    { email: "add.dir.ame@psba.gop.pk", password: encrypt("senior123"), role_id: getRoleId("Senior Management"), employee_id: findEmpId("Farhan Dilawar Sheikh"), department_id: null, is_deleted: false }, // Additional Director Audit, Monitoring & Evaluation
-    { email: "add.dir.ppi@psba.gop.pk", password: encrypt("senior123"), role_id: getRoleId("Senior Management"), employee_id: findEmpId("Roshan Zameer"), department_id: null, is_deleted: false }, // Additional Director Projects, Planning & Special Initiatives
-    { email: "add.dir.ops@psba.gop.pk", password: encrypt("senior123"), role_id: getRoleId("Senior Management"), employee_id: findEmpId("Sadam Hussain"), department_id: null, is_deleted: false }, // Additional Director Operations & Revenue
-    { email: "sr.eng.civil@psba.gop.pk", password: encrypt("senior123"), role_id: getRoleId("Senior Management"), employee_id: findEmpId("Asad Abbas"), department_id: null, is_deleted: false }, // Sr. Engineer Civil
+    { email: "add.dir.ame@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Senior Management"), employee_id: findEmpId("Farhan Dilawar Sheikh"), department_id: null, is_deleted: false }, // Additional Director Audit, Monitoring & Evaluation
+    { email: "add.dir.ppi@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Senior Management"), employee_id: findEmpId("Roshan Zameer"), department_id: null, is_deleted: false }, // Additional Director Projects, Planning & Special Initiatives
+    { email: "add.dir.ops@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Senior Management"), employee_id: findEmpId("Sadam Hussain"), department_id: null, is_deleted: false }, // Additional Director Operations & Revenue
+    { email: "sr.eng.civil@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Senior Management"), employee_id: findEmpId("Asad Abbas"), department_id: null, is_deleted: false }, // Sr. Engineer Civil
     
     // Department Heads (BPS 17) - Assistant Directors with special roles
-    { email: "ad.est@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Maria Iqbal"), department_id: null, is_deleted: false }, // Assistant Director Establishment
-    { email: "ad.acc@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Accounts Manager"), employee_id: findEmpId("Kashif Rasheed"), department_id: null, is_deleted: false }, // Assistant Director Accounts - Special access to TADA Managed Entry
-    { email: "ad.ops@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Usman Badar"), department_id: null, is_deleted: false }, // Assistant Director Operations
+    { email: "ad.est@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Maria Iqbal"), department_id: null, is_deleted: false }, // Assistant Director Establishment
+    { email: "ad.acc@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Accounts Manager"), employee_id: findEmpId("Kashif Rasheed"), department_id: null, is_deleted: false }, // Assistant Director Accounts - Special access to TADA Managed Entry
+    { email: "ad.ops@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Usman Badar"), department_id: null, is_deleted: false }, // Assistant Director Operations
     
     // Other Management (BPS 17) - Assistant Directors
-    { email: "ad.audit@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Moeen Chishti"), department_id: null, is_deleted: false }, // Assistant Director Audit, Compliance & Control
-    { email: "ad.ppi@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Rizwan Haider Shah"), department_id: null, is_deleted: false }, // Assistant Director Projects, Planning & Initiatives
-    { email: "ad.it@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Ahmad"), department_id: null, is_deleted: false }, // Assistant Director IT
-    { email: "ad.sdo@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Ali Hassan"), department_id: null, is_deleted: false }, // Assistant Director Software Development & Operations
-    { email: "sde@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Barkat Ali Laghari"), department_id: null, is_deleted: false }, // Structural Design Engineer
-    { email: "architect@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Amir"), department_id: null, is_deleted: false }, // Architect
-    { email: "ad.legal@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Rab Nawaz Baloch"), department_id: null, is_deleted: false }, // Assistant Director Legal
-    { email: "ad.security@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Asim Shahbaz"), department_id: null, is_deleted: false }, // Assistant Director Security & Surveillance
-    { email: "ad.bft@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Iqbal"), department_id: null, is_deleted: false }, // Assistant Director Budget, Finance & Taxation
-    { email: "ad.hq@psba.gop.pk", password: encrypt("mgmt123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Ali"), department_id: null, is_deleted: false } // Assistant Director HQ Admin/Operations
+    { email: "ad.audit@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Moeen Chishti"), department_id: null, is_deleted: false }, // Assistant Director Audit, Compliance & Control
+    { email: "ad.ppi@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Rizwan Haider Shah"), department_id: null, is_deleted: false }, // Assistant Director Projects, Planning & Initiatives
+    { email: "ad.it@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Ahmad"), department_id: null, is_deleted: false }, // Assistant Director IT
+    { email: "ad.sdo@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Ali Hassan"), department_id: null, is_deleted: false }, // Assistant Director Software Development & Operations
+    { email: "sde@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Barkat Ali Laghari"), department_id: null, is_deleted: false }, // Structural Design Engineer
+    { email: "architect@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Amir"), department_id: null, is_deleted: false }, // Architect
+    { email: "ad.legal@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Rab Nawaz Baloch"), department_id: null, is_deleted: false }, // Assistant Director Legal
+    { email: "ad.security@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Asim Shahbaz"), department_id: null, is_deleted: false }, // Assistant Director Security & Surveillance
+    { email: "ad.bft@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Iqbal"), department_id: null, is_deleted: false }, // Assistant Director Budget, Finance & Taxation
+    { email: "ad.hq@psba.gop.pk", password: encrypt("abc123"), role_id: getRoleId("Management"), employee_id: findEmpId("Muhammad Ali"), department_id: null, is_deleted: false } // Assistant Director HQ Admin/Operations
   ];
 
   console.log('👤 Seeding users...');
@@ -874,6 +891,10 @@ async function main() {
     { employee_id: empId('Head Office Staff'), organization: 'PSBA', department_id: deptId('Engineering'), designation_id: desigId('Junior Engineer', 'Engineering'), employment_type: 'Regular', effective_from: new Date('2022-02-01'), office_location: 'Head Quarter', remarks: 'HO staff with Level-3 (below BPS-17)', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'Level-3').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Asad Abbas')), location_id: findLocationId('Head Quarter'), is_deleted: false },
     // Added: HR viewer in HR department at Head Office
     { employee_id: empId('HR Viewer Test'), organization: 'PSBA', department_id: deptId('HR'), designation_id: desigId('HR Officer', 'HR'), employment_type: 'Regular', effective_from: new Date('2022-03-01'), office_location: 'Head Quarter', remarks: 'HR viewer for Manage list', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'Level-3').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', reporting_officer_id: String(empId('Naveed Rafaqat Ahmad')), location_id: findLocationId('Head Quarter'), is_deleted: false }
+    ,
+    // Dummy employment records for department association testing
+    { employee_id: empId('Dummy Employee One'), organization: 'PSBA', department_id: deptId('IT'), designation_id: desigId('Software Developer', 'IT'), employment_type: 'Contract', effective_from: new Date('2023-01-01'), office_location: 'Head Quarter', remarks: 'Dummy employee for IT department testing', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'Grade-A').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', location_id: findLocationId('Head Quarter'), is_deleted: false },
+    { employee_id: empId('Dummy Employee Two'), organization: 'PSBA', department_id: deptId('Accounts'), designation_id: desigId('Assistant Director', 'Accounts'), employment_type: 'Contract', effective_from: new Date('2023-02-01'), office_location: 'Head Quarter', remarks: 'Dummy employee for Accounts department testing', scale_grade_id: createdScaleGrades.find(sg => sg.name === 'Grade-B').id, employment_status: 'active', is_current: true, filer_status: 'non_filer', location_id: findLocationId('Head Quarter'), is_deleted: false }
   ];
 
   // NEW: Persist employment records
@@ -893,7 +914,9 @@ async function main() {
   const departmentHeads = [
     { deptName: 'Establishment', headName: 'Maria Iqbal' },
     { deptName: 'Accounts', headName: 'Kashif Rasheed' },
-    { deptName: 'Operations', headName: 'Usman Badar' }
+    { deptName: 'Operations', headName: 'Usman Badar' },
+    { deptName: 'IT', headName: 'Muhammad Ahmad' },
+    { deptName: 'Software Development & Operations', headName: 'Muhammad Ali Hassan' }
   ];
   
   for (const { deptName, headName } of departmentHeads) {

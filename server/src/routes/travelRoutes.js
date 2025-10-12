@@ -25,7 +25,8 @@ router.post('/requests/:id/recommend/decision', isAuthenticated, travelRequestCo
 router.get('/requests/mine', isAuthenticated, travelRequestController.listMine);
 router.post('/requests', isAuthenticated, travelRequestController.create);
 router.put('/requests/:id', isAuthenticated, authorizeAny(['travel.manage','travel.update']), travelRequestController.update);
-router.delete('/requests/:id', isAuthenticated, authorizeAny(['travel.manage','travel.delete']), travelRequestController.remove);
+// Relax delete guard: controller enforces business rules (own applicant or same department for department accounts) and status CREATED
+router.delete('/requests/:id', isAuthenticated, travelRequestController.remove);
 router.get('/requests/:id', isAuthenticated, travelRequestController.getOne);
 router.post('/requests/:id/decision', isAuthenticated, travelRequestController.legacyDecision);
 

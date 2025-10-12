@@ -81,7 +81,23 @@ module.exports = {
     try { const { employee_id, isSuperAdmin } = await service.getAuthContext(req); const result = await service.deleteClaim(req.params.id, employee_id, isSuperAdmin); res.json(result); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
   },
   submit: async (req, res) => {
-    try { const { employee_id, isSuperAdmin } = await service.getAuthContext(req); const claim = await service.submitClaim(req.params.id, employee_id, isSuperAdmin); res.json({ success:true, claim }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }
+    try {
+      // Prefer employee_id from context; if missing (department account), use department head as actor
+      const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req);
+      let actorEmpId = ctx.meEmpId || null;
+      if (!actorEmpId && req.session.user?.department_id) {
+        const deptId = Number(req.session.user.department_id);
+        const dept = await prisma.department.findFirst({ where: { id: deptId, is_deleted: false }, include: { head: true } });
+        actorEmpId = Number(dept?.head?.id || 0) || null;
+        if (!actorEmpId) return res.status(400).json({ success:false, error:'Department head not set; cannot record actor for submission' });
+      }
+  const deptName = (req.session.user?.department_id && await prisma.department.findFirst({ where: { id: Number(req.session.user.department_id), is_deleted: false } }))?.name;
+  const email = String(req.session.user?.email||'');
+  // Include [DEPT] when department account submits; always include email
+  const actorLabel = `${deptName ? `[DEPT] ${deptName} Department` : ''}${email ? `${deptName ? ' | ' : ''}submitted by ${email}` : ''}` || null;
+  const claim = await service.submitClaim(req.params.id, actorEmpId, ctx.isSuperAdmin, actorLabel);
+      res.json({ success:true, claim });
+    } catch(e){ res.status(400).json({ success:false, error: e.message }); }
   },
   listPendingApprovals: async (req, res) => {
     try { const ctx = await require('../../services/travel/travelRequestService').getAuthContext(req); const claims = await service.listPendingApprovals(ctx); res.json({ success:true, claims }); } catch(e){ res.status(400).json({ success:false, error: e.message }); }

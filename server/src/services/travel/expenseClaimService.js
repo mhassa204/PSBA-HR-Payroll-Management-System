@@ -293,7 +293,7 @@ module.exports = {
     await prisma.travelClaim.delete({ where: { id: claim.id } });
     return { success: true };
   },
-  submitClaim: async (id, employee_id, isSuperAdmin) => {
+  submitClaim: async (id, employee_id, isSuperAdmin, actorLabel) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
       include: { documents: true, request: true, employee: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } }
@@ -304,8 +304,8 @@ module.exports = {
     const isWithinCity = !claim.travel_request_id;
     const hasReport = (claim.documents||[]).some(d=>d.category==='REPORT');
     if(!isWithinCity && !hasReport) throw new Error('Report document required before submission');
-    await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'SUBMITTED' } });
-    await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'SUBMITTED', actor_employee_id: employee_id } });
+  await prisma.travelClaim.update({ where: { id: claim.id }, data: { status: 'SUBMITTED' } });
+  await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'SUBMITTED', actor_employee_id: employee_id, remarks: actorLabel || null } });
     return prisma.travelClaim.findUnique({ where: { id: claim.id }, include: { documents: true, segments: true, request: true, employee: true, statusEntries: { orderBy: { createdAt: 'asc' } } } });
   },
   listPendingApprovals: async (ctx) => {
@@ -314,7 +314,7 @@ module.exports = {
 
     // Recommendation stages
     if (ctx.meEmpId && !ctx.isDG) {
-      // Existing: immediate in-charge (applicant for request-linked)
+      // Personal/standard path: immediate in-charge of applicant (request-linked)
       stageFilters.push({
         status: 'SUBMITTED',
         request: {
@@ -326,7 +326,7 @@ module.exports = {
         },
         statusEntries: { none: { action: 'RECOMMENDED' } }
       });
-      // Existing: within-city — employee's in-charge
+      // Within-city — employee's in-charge
       stageFilters.push({
         status: 'SUBMITTED',
         employee: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) } } },
@@ -334,42 +334,18 @@ module.exports = {
         statusEntries: { none: { action: 'RECOMMENDED' } }
       });
 
-      // New: HoD-first recommendation for low-BPS claimants
+      // Department-originated: HoD-first recommendation
       stageFilters.push({
         status: 'SUBMITTED',
-        statusEntries: { none: { action: 'RECOMMENDED' } },
-        employee: {
-          employmentRecords: {
-            some: {
-              is_current: true,
-              is_deleted: false,
-              scale_grade: { category: 'BPS', level: { lt: 17 } },
-              department: { head_employee_id: Number(ctx.meEmpId) }
-            }
-          }
-        }
+        statusEntries: { none: { action: 'RECOMMENDED' }, some: { action: 'SUBMITTED', remarks: { contains: '[DEPT]', mode: 'insensitive' } } },
+        employee: { employmentRecords: { some: { is_current: true, is_deleted: false, department: { head_employee_id: Number(ctx.meEmpId) } } } }
       });
 
-      // New: HoD’s RO second recommendation for low-BPS claimants (after first recommendation)
+      // Department-originated: HoD’s RO as second recommendation (after first recommendation)
       stageFilters.push({
         status: 'SUBMITTED',
-        statusEntries: { some: { action: 'RECOMMENDED' } },
-        employee: {
-          employmentRecords: {
-            some: {
-              is_current: true,
-              is_deleted: false,
-              scale_grade: { category: 'BPS', level: { lt: 17 } },
-              department: {
-                head: {
-                  employmentRecords: {
-                    some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) }
-                  }
-                }
-              }
-            }
-          }
-        }
+        statusEntries: { some: { action: 'RECOMMENDED' }, some: { action: 'SUBMITTED', remarks: { contains: '[DEPT]', mode: 'insensitive' } } },
+        employee: { employmentRecords: { some: { is_current: true, is_deleted: false, department: { head: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: String(ctx.meEmpId) } } } } } } }
       });
     }
 
@@ -379,22 +355,27 @@ module.exports = {
       stageFilters.push({
         status: 'SUBMITTED',
         employee: { employmentRecords: { some: { is_current: true, location: { type: 'BAZAAR' } } } },
-        statusEntries: { none: firstStageNone, some: { action: 'RECOMMENDED' } }
+        statusEntries: { none: firstStageNone, some: { action: 'RECOMMENDED' }, none: { action: 'SUBMITTED', remarks: { contains: '[DEPT]', mode: 'insensitive' } } }
       });
     }
     if (ctx.isDG || ctx.canApproveClaimDG) {
-      // Standard DG path (requires recommendation)
+      // DG sees standard claims requiring recommendation
       stageFilters.push({
         status: 'SUBMITTED',
         employee: { employmentRecords: { some: { is_current: true, location: { type: 'HEAD_OFFICE' } } } },
-        statusEntries: { none: firstStageNone, some: { action: 'RECOMMENDED' } }
+        statusEntries: { none: firstStageNone, some: { action: 'RECOMMENDED' }, none: { action: 'SUBMITTED', remarks: { contains: '[DEPT]', mode: 'insensitive' } } }
       });
-      // Fast-track for DG direct reports (skip recommendation)
+      // Department-originated: DG sees after recommendations
+      stageFilters.push({
+        status: 'SUBMITTED',
+        statusEntries: { some: { action: 'RECOMMENDED' }, some: { action: 'SUBMITTED', remarks: { contains: '[DEPT]', mode: 'insensitive' } }, none: firstStageNone }
+      });
+      // Fast-track for DG direct reports (skip recommendation) remains
       if (ctx.meEmpId) {
         stageFilters.push({
           status: 'SUBMITTED',
           employee: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'HEAD_OFFICE' }, reporting_officer_id: String(ctx.meEmpId) } } },
-          statusEntries: { none: firstStageNone }
+          statusEntries: { none: firstStageNone, none: { action: 'SUBMITTED', remarks: { contains: '[DEPT]', mode: 'insensitive' } } }
         });
       }
     }
@@ -463,8 +444,10 @@ module.exports = {
     const FIRST_STAGE_ACTOR = deriveFirstStage();
 
     // New: compute HoD chain for low-BPS claimants
-    const sg = await getEmployeeScaleGrade(claim.employee_id);
-    const isLowBps = !!(sg?.grade && sg.grade.category === 'BPS' && Number(sg.grade.level||0) < 17);
+  const sg = await getEmployeeScaleGrade(claim.employee_id);
+  const isLowBps = !!(sg?.grade && sg.grade.category === 'BPS' && Number(sg.grade.level||0) < 17);
+  // Department-originated detection: SUBMITTED entry remarks contain [DEPT]
+  const isDeptOrigin = (claim.statusEntries||[]).some(e => e.action==='SUBMITTED' && e.remarks && /\[DEPT\]/i.test(String(e.remarks)));
     const currentEmp = (claim.employee?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted) || claim.employee?.employmentRecords?.[0] || null;
     const hodId = currentEmp?.department?.head_employee_id ? Number(currentEmp.department.head_employee_id) : null;
     const hodEmployment = hodId ? await prisma.employment.findFirst({ where: { employee_id: hodId, is_current: true, is_deleted: false } }) : null;
@@ -485,15 +468,19 @@ module.exports = {
     // - For low-BPS and HoD set: HoD first, then HoD's RO; DG direct reports bypass recommender
     // - Else (high-BPS or no HoD): immediate in-charge of applicant (request-linked) or employee (within-city)
     const expectedRecommenderId = (() => {
-      if (isLowBps && hodId && !isDirectReportToDG()) {
+      if (isDeptOrigin && hodId && !isDirectReportToDG()) {
         if (recommendationCount === 0) return hodId;
         if (recommendationCount === 1) return hodRoId || null;
         return null; // already completed recommendations
       }
+      if (isLowBps && hodId && !isDirectReportToDG()) {
+        if (recommendationCount === 0) return hodId;
+        if (recommendationCount === 1) return hodRoId || null;
+        return null;
+      }
       // Fallback to immediate in-charge
       const appRo = applicantEmps.find(er => er.is_current && !er.is_deleted)?.reporting_officer_id;
       const empRo = employeeEmps.find(er => er.is_current && !er.is_deleted)?.reporting_officer_id;
-      // Prefer applicant's RO for request-linked; otherwise employee's RO
       return claim.request ? (appRo ? Number(appRo) : (empRo ? Number(empRo) : null)) : (empRo ? Number(empRo) : null);
     })();
 
@@ -556,7 +543,7 @@ module.exports = {
     const mapActionToStage = (act) => act.startsWith('OPS_') ? 'OPS' : act.startsWith('DG_') ? 'DG' : act.startsWith('HR_') ? 'HR' : act.startsWith('ACCOUNTS_') ? 'ACCOUNTS' : (act==='RECOMMENDED' ? 'RECOMMENDER' : (act==='RECOMMENDER_REJECTED' ? 'RECOMMENDER' : null));
 
     // Determine how many recommendations are needed before first-stage approval
-    const neededRecommendations = (isLowBps && hodId && !isDirectReportToDG()) ? (hodRoId ? 2 : 1) : 1;
+  const neededRecommendations = ((isDeptOrigin || isLowBps) && hodId && !isDirectReportToDG()) ? (hodRoId ? 2 : 1) : 1;
 
     const assertAuthorized = (stage, intent) => {
       const userIsLastApprover = lastEntry && lastEntry.actor_employee_id === actorEmpId && (isApprovalAction(lastEntry.action) || lastEntry.action==='RECOMMENDED' || lastEntry.action==='RECOMMENDER_REJECTED') && (isApprovalAction(lastEntry.action) ? approvalStatusMap[lastEntry.action].includes(claim.status) : (lastEntry.action==='RECOMMENDED' ? claim.status==='SUBMITTED' : REJECTION_STATUSES.has(claim.status)));
@@ -585,7 +572,7 @@ module.exports = {
         // If DG’s direct report, bypass recommender entirely
         if ((isLowBps && hodId && isDirectReportToDG()) || (!isLowBps && isDirectReportToDG())) return claim;
         assertAuthorized('RECOMMENDER', 'RECOMMEND');
-        await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: remarks || null } });
+        await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: (ctx.userEmail || remarks || null) } });
         return reload();
       } else if (actionUpper === 'APPROVE') {
         if (REJECTION_STATUSES.has(currentStatus)) throw new Error('Cannot approve rejected claim. Clear rejection first.');
@@ -603,11 +590,15 @@ module.exports = {
         if (stage === 'RECOMMENDER') {
           // Insert recommendation entry (supports HoD then HoD’s RO)
           if (recommendationCount >= neededRecommendations && claim.status==='SUBMITTED') return claim; // idempotent
-          await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: remarks || null } });
+          await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: (ctx.userEmail || remarks || null) } });
           return reload();
         }
         let approvalAction; let targetStatus; let fallbacks = [];
-        if (stage === 'OPS') { approvalAction = 'OPS_APPROVED'; targetStatus = 'APPROVED'; }
+        if (stage === 'OPS') { 
+          // Department-originated should not be approved by OPS; require DG
+          if (isDeptOrigin) throw new Error('Department-originated claims require DG approval');
+          approvalAction = 'OPS_APPROVED'; targetStatus = 'APPROVED'; 
+        }
         else if (stage === 'DG') { approvalAction = 'DG_APPROVED'; targetStatus = 'APPROVED'; }
         else if (stage === 'HR') { approvalAction = 'HR_APPROVED'; targetStatus = 'VERIFIED'; }
         else if (stage === 'ACCOUNTS') {
@@ -634,7 +625,7 @@ module.exports = {
         if (stage === 'RECOMMENDER') {
           assertAuthorized('RECOMMENDER', 'REJECT');
           await updateStatusSafe('REJECTED');
-          await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDER_REJECTED', actor_employee_id: actorEmpId, remarks: remarks || null } });
+          await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: 'RECOMMENDER_REJECTED', actor_employee_id: actorEmpId, remarks: (ctx.userEmail || remarks || null) } });
           return reload();
         }
         const rejectionAction = rejectionMap[stage];

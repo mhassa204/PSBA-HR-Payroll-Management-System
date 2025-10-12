@@ -50,10 +50,17 @@ module.exports = {
   },
   listMine: async (req, res) => {
     const ctx = await travelService.getAuthContext(req);
-    if (!ctx.meEmpId) return res.json({ success: true, requests: [] });
     if (!ctx.canCreateOrOwn) return res.status(403).json({ success: false, error: 'Forbidden' });
-    const list = await travelService.listMine(ctx.meEmpId);
-    res.json({ success: true, requests: list });
+    // For personal accounts, show own
+    if (ctx.meEmpId) {
+      const list = await travelService.listMine(ctx.meEmpId);
+      return res.json({ success: true, requests: list });
+    }
+    // For department accounts, show department's applicants (current employment in same department)
+    const deptId = Number(req.session.user?.department_id || 0);
+    if (!deptId) return res.json({ success: true, requests: [] });
+    const list = await travelService.listDepartmentApplicants(deptId);
+    return res.json({ success: true, requests: list });
   },
   create: async (req, res) => {
     const ctx = await travelService.getAuthContext(req);
@@ -68,22 +75,35 @@ module.exports = {
           return res.status(400).json({ success: false, error: `total_days (${data.total_days}) does not match date range (${computedDays})` });
         }
         const attendeeIds = Array.isArray(data.employee_ids) ? data.employee_ids.map(Number).filter(Boolean) : [];
-        const full = await travelService.createRequest(ctx, data, attendeeIds, computedDays);
+        const email = String(req.session.user?.email||'');
+        const label = email ? `created by ${email}` : null;
+        const full = await travelService.createRequest(ctx, data, attendeeIds, computedDays, label);
         return res.json({ success: true, request: full });
       }
 
-      // Department account path (no employee linked)
-      const applicant_id = Number(data.applicant_id);
-      if (!applicant_id) return res.status(400).json({ success:false, error: 'applicant_id is required for department account' });
+  // Department account path (no employee linked)
+      if (!ctx.canCreateOrOwn) return res.status(403).json({ success:false, error: 'Forbidden' });
+      let applicant_id = Number(data.applicant_id || 0);
+      // Auto-assign to department head if not provided
+      if (!applicant_id) {
+        const deptId = Number(req.session.user?.department_id || 0);
+        if (!deptId) return res.status(400).json({ success:false, error: 'No department linked to account and no applicant_id provided' });
+        const dept = await prisma.department.findFirst({ where: { id: deptId, is_deleted: false }, include: { head: true } });
+        applicant_id = Number(dept?.head?.id || 0);
+        if (!applicant_id) return res.status(400).json({ success:false, error: 'Department head not set. Please assign a head to the department or provide applicant_id.' });
+      }
       if (!data.departure_date) return res.status(400).json({ success:false, error: 'departure_date is required' });
       if (!data.expected_return_date) return res.status(400).json({ success:false, error: 'expected_return_date is required' });
-      // Ensure applicant is BPS < 17
-      const emp = await prisma.employment.findFirst({ where: { employee_id: applicant_id, is_current: true, is_deleted: false }, include: { scale_grade: true } });
-      const isLowBps = !!(emp?.scale_grade && emp.scale_grade.category === 'BPS' && Number(emp.scale_grade.level||0) < 17);
-      if (!isLowBps) return res.status(403).json({ success:false, error: 'Only BPS < 17 applicants can be created via department account' });
       const computedDays = travelService.computeTotalDays(data.departure_date, data.departure_time, data.expected_return_date);
       const attendeeIds = Array.isArray(data.employee_ids) ? data.employee_ids.map(Number).filter(Boolean) : [];
-      const full = await travelService.createRequestOnBehalf({ ...ctx, meEmpId: applicant_id }, data, attendeeIds, computedDays, null);
+  // createdByEmpId should be the department head (manager) so status history shows their name
+  const deptId = Number(req.session.user?.department_id || 0);
+  const dept = deptId ? await prisma.department.findFirst({ where: { id: deptId, is_deleted: false }, include: { head: true } }) : null;
+  const createdByEmpId = Number(dept?.head?.id || 0) || applicant_id; // fallback to applicant if no HoD
+  const email = String(req.session.user?.email||'');
+  // Include [DEPT] to mark department-origin robustly, plus the creating user's email
+  const createdByLabel = `${dept?.name ? `[DEPT] ${dept.name} Department` : '[DEPT] Department'}${email ? ` | created by ${email}` : ''}`;
+  const full = await travelService.createRequestOnBehalf({ ...ctx, meEmpId: applicant_id }, data, attendeeIds, computedDays, createdByEmpId, createdByLabel);
       return res.json({ success:true, request: full });
     } catch (e) {
       console.error('Create request error', e);
@@ -119,7 +139,20 @@ module.exports = {
     const row = await travelService.getById(id);
     if (!row || row.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
     const hasManage = (req.session.user?.permissions || []).includes('travel.manage') || ctx.isSuperAdmin;
-    if (!hasManage && row.applicant_id !== ctx.meEmpId) return res.status(403).json({ success: false, error: 'Forbidden' });
+    if (!hasManage) {
+      // Personal account can delete own CREATED
+      const isOwn = ctx.meEmpId && row.applicant_id === ctx.meEmpId;
+      // Department account can delete if applicant is in same department and user has travel.create
+      const hasCreate = (req.session.user?.permissions || []).includes('travel.create') || (req.session.user?.permissions || []).includes('*');
+      let sameDept = false;
+      if (!ctx.meEmpId && req.session.user?.department_id) {
+        const deptId = Number(req.session.user.department_id);
+        sameDept = !!(row.applicant?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && Number(er.department_id) === deptId);
+      }
+      if (!(isOwn || (hasCreate && sameDept))) {
+        return res.status(403).json({ success: false, error: 'Forbidden' });
+      }
+    }
     if (row.status !== 'CREATED') return res.status(400).json({ success: false, error: 'Only CREATED requests can be deleted' });
     await travelService.softDelete(id);
     res.json({ success: true });
@@ -133,7 +166,13 @@ module.exports = {
       const me = ctx.meEmpId;
       const isApplicant = row.applicant_id === me;
       const isAttendee = (row.attendees || []).some(a => a.employee_id === me);
-      if (!isApplicant && !isAttendee) return res.status(403).json({ success: false, error: 'Forbidden' });
+      // Department account access: allow if applicant is currently in same department
+      let sameDept = false;
+      if (!me && req.session.user?.department_id) {
+        const deptId = Number(req.session.user.department_id);
+        sameDept = !!(row.applicant?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && Number(er.department_id) === deptId);
+      }
+      if (!isApplicant && !isAttendee && !sameDept) return res.status(403).json({ success: false, error: 'Forbidden' });
     }
     res.json({ success: true, request: row });
   },
@@ -146,6 +185,7 @@ module.exports = {
     const request = await travelService.getById(id);
     if (!request || request.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
     if (request.status !== 'CREATED') return res.status(400).json({ success: false, error: 'Only CREATED requests can be decided' });
+  const isDeptOrigin = !!(request.statusEntries||[]).some(e => e.action==='CREATED' && e.remarks && /\[DEPT\]/i.test(String(e.remarks)));
     const applicantEmployment = await prisma.employment.findFirst({ where: { employee_id: request.applicant_id, is_current: true, is_deleted: false }, include: { location: true } });
     const applicantLocType = applicantEmployment?.location?.type || 'HEAD_OFFICE';
     const approverEmployment = await prisma.employment.findFirst({ where: { employee_id: meEmpId, is_current: true, is_deleted: false }, include: { department: true, designation: true } });
@@ -153,8 +193,12 @@ module.exports = {
     const desigTitle = approverEmployment?.designation?.title || '';
     const isOps = /operations/i.test(deptName);
     const isDG = /^director\s+general$/i.test(desigTitle);
-    if (applicantLocType === 'BAZAAR') { if (!isOps) return res.status(403).json({ success: false, error: 'Only Operations can approve/reject bazaar requests' }); }
-    else { if (!isDG) return res.status(403).json({ success: false, error: 'Only Director General can approve/reject head office requests' }); }
+    if (isDeptOrigin) {
+      if (!isDG) return res.status(403).json({ success: false, error: 'Department-originated requests require DG approval' });
+    } else {
+      if (applicantLocType === 'BAZAAR') { if (!isOps) return res.status(403).json({ success: false, error: 'Only Operations can approve/reject bazaar requests' }); }
+      else { if (!isDG) return res.status(403).json({ success: false, error: 'Only Director General can approve/reject head office requests' }); }
+    }
     const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
     const full = await travelService.legacyDecision(id, newStatus, meEmpId);
     res.json({ success: true, request: full });
@@ -183,6 +227,7 @@ module.exports = {
     if (!meEmpId) return res.status(400).json({ success: false, error: 'User not linked to employee' });
     const request = await travelService.getById(id);
     if (!request || request.is_deleted) return res.status(404).json({ success: false, error: 'Not found' });
+  const isDeptOrigin = !!(request.statusEntries||[]).some(e => e.action==='CREATED' && e.remarks && /\[DEPT\]/i.test(String(e.remarks)));
     const applicantEmployment = await prisma.employment.findFirst({ where: { employee_id: request.applicant_id, is_current: true, is_deleted: false }, include: { location: true } });
     const applicantLocType = applicantEmployment?.location?.type || 'HEAD_OFFICE';
     const approverEmployment = await prisma.employment.findFirst({ where: { employee_id: meEmpId, is_current: true, is_deleted: false }, include: { department: true, designation: true } });
@@ -194,8 +239,12 @@ module.exports = {
     const isSuperAdmin = (req.session.user?.role?.name === 'Super Admin') || (req.session.user?.permissions||[]).includes('*');
     if (isHR && !isSuperAdmin) return res.status(403).json({ success: false, error: 'HR cannot modify status' });
     if (!isSuperAdmin) {
-      if (applicantLocType === 'BAZAAR' && !isOps) return res.status(403).json({ success: false, error: 'Only Operations can modify bazaar requests' });
-      if (applicantLocType === 'HEAD_OFFICE' && !isDG) return res.status(403).json({ success: false, error: 'Only Director General can modify head office requests' });
+      if (isDeptOrigin) {
+        if (!isDG) return res.status(403).json({ success: false, error: 'Department-originated requests require DG to change status' });
+      } else {
+        if (applicantLocType === 'BAZAAR' && !isOps) return res.status(403).json({ success: false, error: 'Only Operations can modify bazaar requests' });
+        if (applicantLocType === 'HEAD_OFFICE' && !isDG) return res.status(403).json({ success: false, error: 'Only Director General can modify head office requests' });
+      }
     }
     if (request.status === targetStatus) {
       const full = await travelService.getById(id);
@@ -211,7 +260,9 @@ module.exports = {
       const result = await travelService.recommendOrClear(id, ctx.meEmpId, 'RECOMMEND', ctx);
       res.json({ success: true, request: result });
     } catch (e) {
-      res.status(400).json({ success: false, error: e.message });
+        const msg = String(e.message || '');
+        const code = /not\s+found/i.test(msg) ? 404 : /only\s+created/i.test(msg) ? 409 : /not\s+authorized|forbidden/i.test(msg) ? 403 : 400;
+        res.status(code).json({ success: false, error: e.message });
     }
   },
   clearRecommendation: async (req, res) => {
@@ -233,7 +284,9 @@ module.exports = {
       const result = await travelService.recommendOrClear(id, ctx.meEmpId, action, ctx);
       res.json({ success: true, request: result });
     } catch (e) {
-      res.status(400).json({ success: false, error: e.message });
+        const msg = String(e.message || '');
+        const code = /not\s+found/i.test(msg) ? 404 : /only\s+created/i.test(msg) ? 409 : /not\s+authorized|forbidden/i.test(msg) ? 403 : 400;
+        res.status(code).json({ success: false, error: e.message });
     }
   },
 
