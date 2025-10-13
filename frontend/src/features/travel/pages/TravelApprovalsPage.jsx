@@ -138,7 +138,8 @@ export default function TravelApprovalsPage() {
             {list.map(r => {
               const recommended = hasRecommended(r);
               const canUndo = canUndoRecommendation(r);
-              const showRecommenderActions = !canUndo && !recommended && canRecommendMe(r);
+              // Allow recommending even after first recommendation for HoD's RO stage (handled by canRecommendMe)
+              const showRecommenderActions = !canUndo && canRecommendMe(r);
               const showApproveActions = !canUndo && canApproveMe(r);
               return (
                 <div key={r.id} className="p-4 flex items-center justify-between text-sm">

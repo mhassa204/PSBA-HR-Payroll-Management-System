@@ -67,6 +67,7 @@ export default function ManageExpenseClaimApprovals(){
   const canAccounts = isSuper || can('travel.claim.approve.accounts') || caps?.isAccountsApprover || /(accounts|finance|budget|payroll|reconciliation)/i.test(roleName);
   const meEmpId = user?.employee_id;
   const hasAnyApprovalPerm = canOps || canDG || canHR || canAccounts;
+  const isApproverRole = !!(canOps || canDG || canHR || canAccounts);
 
   // Helper to compute dynamic eligibility replicating backend generalized logic (with recommender stage)
   const isRecommenderFor = (claim) => {
@@ -76,9 +77,23 @@ export default function ManageExpenseClaimApprovals(){
     return applicantEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === ro)
         || employeeEmps.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === ro);
   };
+  const isDeptOriginClaim = (claim) => (claim.statusEntries||[]).some(se => se.action==='SUBMITTED' && /\[DEPT\]/i.test(String(se.remarks||'')));
+  const hodIdForClaim = (claim) => {
+    const emp = claim?.employee;
+    const er = (emp?.employmentRecords||[]).find(x=>x.is_current && !x.is_deleted) || null;
+    return er?.department?.head_employee_id ? Number(er.department.head_employee_id) : null;
+  };
+  const hodROForClaim = (claim) => {
+    const hid = hodIdForClaim(claim);
+    if(!hid) return null;
+    const hodER = (claim?.employee?.employmentRecords||[]).find(x=>x.employee_id===hid) || null;
+    // If not in employee records, we can’t derive reliably on client; fallback to allow second step if not first step
+    const ro = hodER?.reporting_officer_id ? Number(hodER.reporting_officer_id) : null;
+    return ro;
+  };
   const computeEligibility = (claim) => {
     if(!claim) return { canApprove:false, canReject:false, canClear:false, canRecommend:false };
-    const status = claim.status;
+  const status = claim.status;
     const entries = claim.statusEntries || [];
     const approvalsOrder = ['OPS_APPROVED','DG_APPROVED','HR_APPROVED','ACCOUNTS_APPROVED'];
     const rejectionActions = ['OPS_REJECTED','DG_REJECTED','HR_REJECTED','ACCOUNTS_REJECTED','RECOMMENDER_REJECTED'];
@@ -138,11 +153,29 @@ export default function ManageExpenseClaimApprovals(){
       if(locType==='HEAD_OFFICE' && canDG) return { canApprove:true, canReject:true, canClear:false, canRecommend:false };
     }
 
-    // Recommender stage
-    if(status==='SUBMITTED' && !hasRecommended){
-      const canRecommend = isRecommenderFor(claim);
-      const canReject = canRecommend; // allow recommender to reject
-      return { canApprove:false, canReject, canClear:false, canRecommend };
+    // Recommender stage with two-step logic; for non-approver roles, trust server inclusion and show Recommend
+    if(status==='SUBMITTED'){
+      if (!isApproverRole) {
+        // Server already filtered pending approvals for me; surface Recommend for me here.
+        const last = entries[entries.length-1];
+        const alreadyByMe = last && last.action==='RECOMMENDED' && String(last.actor_employee_id||'')===String(meEmpId||'');
+        if (!alreadyByMe) return { canApprove:false, canReject:true, canClear:false, canRecommend:true };
+      }
+      const recs = entries.filter(e=>e.action==='RECOMMENDED').length;
+      const deptOrigin = isDeptOriginClaim(claim);
+      const hodId = hodIdForClaim(claim);
+      const hodRO = hodROForClaim(claim);
+      let canRecommend = false;
+      if (deptOrigin && hodId) {
+        if (recs === 0) canRecommend = (String(meEmpId||'') === String(hodId));
+        else if (recs === 1) canRecommend = (hodRO ? String(meEmpId||'') === String(hodRO) : false);
+        else canRecommend = false;
+      } else {
+        // legacy path: immediate in-charge of applicant (request-linked) or employee (within-city)
+        canRecommend = isRecommenderFor(claim) && recs === 0;
+      }
+      const canReject = canRecommend;
+      if (canRecommend || canReject) return { canApprove:false, canReject, canClear:false, canRecommend };
     }
 
     // Forward-stage actions
@@ -250,8 +283,22 @@ export default function ManageExpenseClaimApprovals(){
       const isRecommended = entries.some(e=>e.action==='RECOMMENDED');
       return (c.status==='SUBMITTED' && isRecommended) || empRepsToMe;
     }
-    // Others: only reportee to recommend (not yet recommended)
-    const canRecommend = c.status==='SUBMITTED' && !entries.some(e=>e.action==='RECOMMENDED') && (empRepsToMe || applicantRepsToMe);
+    // Others (non-approver roles): trust server-side pending list
+    if (!isApproverRole) return true;
+    // Approver roles but not DG/HR/Accounts (i.e., Ops) fall through to recommender logic below
+    const deptOrigin = isDeptOriginClaim(c);
+    const recs = entries.filter(e=>e.action==='RECOMMENDED').length;
+    const hodId = hodIdForClaim(c);
+    const hodRO = hodROForClaim(c);
+    let canRecommend = false;
+    if (c.status==='SUBMITTED') {
+      if (deptOrigin && hodId) {
+        if (recs === 0 && String(meEmpId||'') === String(hodId)) canRecommend = true;
+        else if (recs === 1 && hodRO && String(meEmpId||'') === String(hodRO)) canRecommend = true;
+      } else {
+        canRecommend = (recs === 0) && (empRepsToMe || applicantRepsToMe);
+      }
+    }
     return canRecommend;
   };
 

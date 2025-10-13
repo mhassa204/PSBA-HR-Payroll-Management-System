@@ -343,7 +343,8 @@ module.exports = {
       }
     }
     if (act === 'RECOMMEND') {
-      if (last && last.action==='RECOMMENDED') return req; // idempotent
+      // Idempotent only if the same actor is trying to recommend twice consecutively
+      if (last && last.action==='RECOMMENDED' && Number(last.actor_employee_id||0) === Number(actorEmpId||0)) return req;
       await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: ctx.userEmail || null } });
       return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
     } else if (act === 'REJECT') {
