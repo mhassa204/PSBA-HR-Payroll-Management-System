@@ -201,7 +201,7 @@ export default function TravelRequestsPage() {
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{r.status || 'CREATED'}</Badge>
                   <Button variant="outline" size="sm" onClick={()=>openDetail(r.id)}>View</Button>
-                  {r.status === 'CREATED' && (
+                  {r.status === 'CREATED' && !(r.statusEntries||[]).some(se=>['RECOMMENDED','RECOMMENDED_REJECTED','APPROVED','REJECTED'].includes(se.action)) && (
                     <Button variant="destructive" size="sm" onClick={()=>onDelete(r.id)}>Delete</Button>
                   )}
                 </div>

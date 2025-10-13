@@ -242,7 +242,7 @@ module.exports = {
     include: {
       attendees: { include: { employee: true } },
       statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
-      applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } }
+      applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { department: true } } } }
     }
   }),
 
@@ -309,7 +309,18 @@ module.exports = {
     if (!ctx.meEmpId) throw new Error('Not authorized: your account is not linked to an employee');
     const applicantER = req.applicant?.employmentRecords?.[0];
     const isDeptOrigin = !!(req.statusEntries||[]).some(e => e.action==='CREATED' && e.remarks && /\[DEPT\]/i.test(String(e.remarks)));
-    // Check recommender eligibility
+    const last = req.statusEntries[req.statusEntries.length-1];
+    const act = String(action||'').toUpperCase();
+
+    // CLEAR should be allowed by the original recommender (or SuperAdmin) regardless of current recommender eligibility
+    if (act === 'CLEAR') {
+      if (!last || last.action!=='RECOMMENDED') throw new Error('Nothing to clear');
+      if (last.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin) throw new Error('Cannot clear another user\'s recommendation');
+      await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
+      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    }
+
+    // Check recommender eligibility (applies to RECOMMEND and REJECT)
     let canRecommend = false;
     // Department-originated: only HoD first then HoD's RO
     if (isDeptOrigin) {
@@ -331,8 +342,6 @@ module.exports = {
         throw new Error('Not authorized: only the applicant\'s immediate in-charge (reporting officer) can recommend');
       }
     }
-    const last = req.statusEntries[req.statusEntries.length-1];
-    const act = String(action||'').toUpperCase();
     if (act === 'RECOMMEND') {
       if (last && last.action==='RECOMMENDED') return req; // idempotent
       await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: ctx.userEmail || null } });
@@ -340,11 +349,6 @@ module.exports = {
     } else if (act === 'REJECT') {
       await prisma.travelRequest.update({ where: { id: req.id }, data: { status: 'REJECTED' } });
       await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED_REJECTED', actor_employee_id: actorEmpId, remarks: ctx.userEmail || null } });
-      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
-    } else if (act === 'CLEAR') {
-      if (!last || last.action!=='RECOMMENDED') throw new Error('Nothing to clear');
-      if (last.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin) throw new Error('Cannot clear another user\'s recommendation');
-      await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
       return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
     }
     throw new Error('Invalid action');

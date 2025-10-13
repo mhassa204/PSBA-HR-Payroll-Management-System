@@ -153,6 +153,9 @@ module.exports = {
         return res.status(403).json({ success: false, error: 'Forbidden' });
       }
     }
+    // Disallow deletion once any recommendation or decision exists
+    const hasActions = (row.statusEntries||[]).some(e => ['RECOMMENDED','RECOMMENDED_REJECTED','APPROVED','REJECTED'].includes(e.action));
+    if (hasActions) return res.status(400).json({ success: false, error: 'Cannot delete: request has recommendations or decisions' });
     if (row.status !== 'CREATED') return res.status(400).json({ success: false, error: 'Only CREATED requests can be deleted' });
     await travelService.softDelete(id);
     res.json({ success: true });
