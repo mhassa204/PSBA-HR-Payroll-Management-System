@@ -265,7 +265,7 @@ export default function TravelRequestsPage() {
                     <div key={s.id} className="p-3 flex items-center justify-between">
                       <div>
                         <div className="font-medium">{labelAction(s.action)}</div>
-                        <div className="text-xs text-muted-foreground">by {extractEmail(s.remarks, s.actor?.full_name)} at {new Date(s.createdAt).toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">by {extractEmail(s.remarks, '—')} at {new Date(s.createdAt).toLocaleString()}</div>
                       </div>
                     </div>
                   ))}

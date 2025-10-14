@@ -610,7 +610,7 @@ module.exports = {
         if (targetStatus) {
           await updateStatusSafe(targetStatus, fallbacks);
         }
-        await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: approvalAction, actor_employee_id: actorEmpId, remarks: remarks || null } });
+        await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: approvalAction, actor_employee_id: actorEmpId, remarks: (ctx.userEmail || remarks || null) } });
         return reload();
       } else if (actionUpper === 'REJECT') {
         if (['PROCESSED','SETTLED'].includes(currentStatus)) throw new Error('Cannot reject after final approval');
@@ -632,7 +632,7 @@ module.exports = {
         assertAuthorized(stage, 'REJECT');
         let rejectedStatus = stage === 'OPS' ? 'REJECTED_OPS' : stage === 'DG' ? 'REJECTED_DG' : stage === 'HR' ? 'REJECTED_HR' : 'REJECTED_ACCOUNTS';
         await updateStatusSafe(rejectedStatus, ['REJECTED']);
-        await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: rejectionAction, actor_employee_id: actorEmpId, remarks: remarks || null } });
+        await prisma.travelClaimStatusEntry.create({ data: { claim_id: claim.id, action: rejectionAction, actor_employee_id: actorEmpId, remarks: (ctx.userEmail || remarks || null) } });
         return reload();
       } else if (actionUpper === 'CLEAR') {
         if (!lastEntry) throw new Error('No decision to clear');

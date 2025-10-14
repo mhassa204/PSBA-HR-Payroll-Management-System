@@ -37,6 +37,66 @@ module.exports = {
   return { meEmpId, meUserId, employment, deptName, desigTitle, locType, scaleLevel, isOps, isDG, isHR, isAccountsApprover, canApproveClaimOps, canApproveClaimDG, managesAnyLocation, isBps17Plus, canCreateOrOwn, canViewAll, isSuperAdmin, userEmail };
   },
 
+  // New: list only requests related to the logged-in user (can or did act), excluding own-created
+  listRelated: async (ctx) => {
+    const me = Number(ctx.meEmpId || 0);
+    if (!me) return [];
+    const includeShape = {
+      attendees: { include: { employee: true } },
+      statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
+      applicant: {
+        include: {
+          employmentRecords: {
+            where: { is_current: true, is_deleted: false },
+            include: { department: { include: { head: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } }, location: true }
+          }
+        }
+      }
+    };
+    const candidates = await prisma.travelRequest.findMany({ where: { is_deleted: false }, include: includeShape, orderBy: { createdAt: 'desc' } });
+
+    const isDeptOrigin = (req) => (req.statusEntries||[]).some(e => e.action==='CREATED' && e.remarks && /\[DEPT\]/i.test(String(e.remarks)));
+    const recCount = (req) => (req.statusEntries||[]).filter(e => e.action==='RECOMMENDED').length;
+    const actedByMe = (req) => (req.statusEntries||[]).some(e => Number(e.actor_employee_id||0) === me);
+    const applicantER = (req) => (req.applicant?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted) || null;
+    const isDirectReportTo = (req, empId) => (req.applicant?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(empId||''));
+    const headOfDeptId = (req) => Number(applicantER(req)?.department?.head?.id || 0);
+    const hodROId = (req) => {
+      const hod = applicantER(req)?.department?.head;
+      const hodER = (hod?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted) || null;
+      return hodER?.reporting_officer_id ? Number(hodER.reporting_officer_id) : null;
+    };
+    const locTypeOf = (req) => applicantER(req)?.location?.type || 'HEAD_OFFICE';
+
+    const out = [];
+    for (const r of candidates) {
+      if (Number(r.applicant_id||0) === me) continue; // exclude my own created requests
+      if (actedByMe(r)) { out.push(r); continue; }
+      if (r.status === 'CREATED') {
+        const deptOrigin = isDeptOrigin(r);
+        const recs = recCount(r);
+        // Recommender eligibility
+        if (!deptOrigin && recs === 0 && isDirectReportTo(r, me)) { out.push(r); continue; }
+        if (deptOrigin) {
+          if (recs === 0 && headOfDeptId(r) === me) { out.push(r); continue; }
+          const hodRO = hodROId(r);
+          if (recs === 1 && hodRO && hodRO === me) { out.push(r); continue; }
+        }
+        // Approval eligibility
+        const lt = locTypeOf(r);
+        let neededRecs = 1; if (deptOrigin) { const hodRO = hodROId(r); neededRecs = hodRO ? 2 : 1; }
+        if (recs >= neededRecs) {
+          if (ctx.isOps && lt === 'BAZAAR' && !deptOrigin) { out.push(r); continue; }
+          if (ctx.isDG && lt === 'HEAD_OFFICE') { out.push(r); continue; }
+        }
+        // DG fast-track: direct report at head office
+        if (ctx.isDG && lt === 'HEAD_OFFICE' && isDirectReportTo(r, me)) { out.push(r); continue; }
+      }
+    }
+    const map = new Map(); for (const r of out) map.set(r.id, r);
+    return Array.from(map.values());
+  },
+
   computeTotalDays: (departureDate, departureTime, expectedReturnDate) => {
     const dep = new Date(departureDate);
     if (departureTime) {
@@ -284,15 +344,15 @@ module.exports = {
 
   softDelete: (id) => prisma.travelRequest.update({ where: { id }, data: { is_deleted: true } }),
 
-  legacyDecision: async (id, newStatus, actorEmpId) => {
+  legacyDecision: async (id, newStatus, actorEmpId, actorEmail) => {
     await prisma.travelRequest.update({ where: { id }, data: { status: newStatus } });
-    await prisma.travelRequestStatusEntry.create({ data: { request_id: id, action: newStatus, actor_employee_id: actorEmpId } });
+    await prisma.travelRequestStatusEntry.create({ data: { request_id: id, action: newStatus, actor_employee_id: actorEmpId, remarks: actorEmail || null } });
     return prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
   },
 
-  updateStatusFlexible: async (id, targetStatus, actorEmpId) => {
+  updateStatusFlexible: async (id, targetStatus, actorEmpId, actorEmail) => {
     await prisma.travelRequest.update({ where: { id }, data: { status: targetStatus } });
-    await prisma.travelRequestStatusEntry.create({ data: { request_id: id, action: targetStatus, actor_employee_id: actorEmpId } });
+    await prisma.travelRequestStatusEntry.create({ data: { request_id: id, action: targetStatus, actor_employee_id: actorEmpId, remarks: actorEmail || null } });
     return prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
   },
 
@@ -411,7 +471,7 @@ module.exports = {
       }
       // Update request status and record status entry with selected actor
       await prisma.travelRequest.update({ where: { id: req.id }, data: { status: actionKey } });
-      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: actionKey, actor_employee_id: actorEmpId } });
+      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: actionKey, actor_employee_id: actorEmpId, remarks: ctx.userEmail || null } });
       return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
     }
 

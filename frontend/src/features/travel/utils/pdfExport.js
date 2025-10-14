@@ -177,9 +177,11 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }){
     if(reqEntries.length){
       ensureSpace(20); drawHeading(page, 'Request Status History', margin, y, bold, 12); y -= 16;
       for(const se of reqEntries){
-        const actor = se.actor?.full_name || (se.actor_employee_id ? `Emp #${se.actor_employee_id}` : '—');
+        // Prefer email from remarks; do not fall back to names; if missing, use neutral placeholder
+        const emailMatch = String(se.remarks||'').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        const actor = emailMatch ? emailMatch[0] : '—';
         const when = se.createdAt ? new Date(se.createdAt).toLocaleString() : '';
-        const line = `${se.action} by ${actor}${when?` at ${when}`:''}${se.remarks?` — ${se.remarks}`:''}`;
+        const line = `${se.action} by ${actor}${when?` at ${when}`:''}`;
         y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Request Status History (cont.)' }) - 2;
       }
       y -= 8;
@@ -213,7 +215,7 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }){
   ensureSpace(20); drawHeading(page, 'Status History', margin, y, bold, 12); y -= 16;
   const entries = claim.statusEntries || [];
   if(entries.length===0){ ensureSpace(16); page.drawText(safe('No history'), { x: margin, y, size: 11, font }); y -= 16; }
-  else { for(const se of entries){ const actor = se.actor?.full_name || `Emp #${se.actor_employee_id}`; const when = new Date(se.createdAt).toLocaleString(); const line = `${se.action} by ${actor} at ${when}${se.remarks?` — ${se.remarks}`:''}`; y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Status History (cont.)' }) - 2; } }
+  else { for(const se of entries){ const emailMatch = String(se.remarks||'').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i); const actor = emailMatch ? emailMatch[0] : '—'; const when = new Date(se.createdAt).toLocaleString(); const line = `${se.action} by ${actor} at ${when}`; y = drawParagraph(line, { fnt: font, size: 11, maxWidth: 515, lineHeight: 14, contHeading: 'Status History (cont.)' }) - 2; } }
 
   // Documents
   const docs = claim.documents || [];

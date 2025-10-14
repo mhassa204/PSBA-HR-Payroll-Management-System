@@ -34,8 +34,9 @@ module.exports = {
   },
   listManage: async (req, res) => {
     const ctx = await travelService.getAuthContext(req);
-    if (!ctx.canViewAll && !ctx.isSuperAdmin) return res.status(403).json({ success: false, error: 'Forbidden' });
-    const list = await travelService.listManage(ctx);
+    // Change semantics: show only requests related to the logged-in user (can act on or has acted on),
+    // and exclude those created by the same user (applicant).
+    const list = await travelService.listRelated(ctx);
     res.json({ success: true, requests: list });
   },
   listPendingApprovals: async (req, res) => {
@@ -180,6 +181,7 @@ module.exports = {
     res.json({ success: true, request: row });
   },
   legacyDecision: async (req, res) => {
+    const ctx = await travelService.getAuthContext(req);
     const id = Number(req.params.id);
     const action = String((req.body?.action || '')).toUpperCase();
     if (!['APPROVE','REJECT'].includes(action)) return res.status(400).json({ success: false, error: 'Invalid action' });
@@ -203,7 +205,7 @@ module.exports = {
       else { if (!isDG) return res.status(403).json({ success: false, error: 'Only Director General can approve/reject head office requests' }); }
     }
     const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-    const full = await travelService.legacyDecision(id, newStatus, meEmpId);
+    const full = await travelService.legacyDecision(id, newStatus, meEmpId, ctx.userEmail);
     res.json({ success: true, request: full });
   },
   capabilities: async (req, res) => {
@@ -223,6 +225,7 @@ module.exports = {
     }});
   },
   updateStatusFlexible: async (req, res) => {
+    const ctx = await travelService.getAuthContext(req);
     const id = Number(req.params.id);
     const targetStatus = String(req.body?.status || '').toUpperCase();
     if (!['CREATED','APPROVED','REJECTED'].includes(targetStatus)) return res.status(400).json({ success: false, error: 'Invalid status' });
@@ -253,7 +256,7 @@ module.exports = {
       const full = await travelService.getById(id);
       return res.json({ success: true, request: full });
     }
-    const full = await travelService.updateStatusFlexible(id, targetStatus, meEmpId);
+    const full = await travelService.updateStatusFlexible(id, targetStatus, meEmpId, ctx.userEmail);
     res.json({ success: true, request: full });
   },
   recommend: async (req, res) => {
