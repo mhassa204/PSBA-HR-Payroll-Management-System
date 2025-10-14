@@ -88,12 +88,12 @@ module.exports = {
   // New: list only requests related to the logged-in user (can or did act), excluding own-created
   listRelated: async (ctx) => {
     const me = Number(ctx.meEmpId || 0);
-    if (!me) return [];
+    if (!me && !ctx.userEmail) return [];
     const includeShape = {
       attendees: { include: { employee: true } },
       statusEntries: {
         orderBy: { createdAt: "asc" },
-        include: { actor: true },
+        include: { actor: { include: { user: true } } },
       },
       applicant: {
         include: {
@@ -117,8 +117,57 @@ module.exports = {
         },
       },
     };
+    // Stage-based candidates: only CREATED (pre-terminal) requests
     const candidates = await prisma.travelRequest.findMany({
-      where: { is_deleted: false },
+      where: { is_deleted: false, status: "CREATED" },
+      include: includeShape,
+      orderBy: { createdAt: "desc" },
+    });
+    // Also include any requests user has already acted on (any status), excluding self-created
+    const actedDbWhere = {
+      is_deleted: false,
+      OR: [
+        { statusEntries: { some: { actor_employee_id: me } } },
+        ...(ctx.userEmail
+          ? [
+              {
+                statusEntries: {
+                  some: {
+                    actor: {
+                      is: {
+                        user: {
+                          is: {
+                            email: {
+                              equals: String(ctx.userEmail),
+                              mode: "insensitive",
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ]
+          : []),
+        ...(ctx.userEmail
+          ? [
+              {
+                statusEntries: {
+                  some: {
+                    remarks: {
+                      contains: String(ctx.userEmail),
+                      mode: "insensitive",
+                    },
+                  },
+                },
+              },
+            ]
+          : []),
+      ],
+    };
+    const actedDb = await prisma.travelRequest.findMany({
+      where: actedDbWhere,
       include: includeShape,
       orderBy: { createdAt: "desc" },
     });
@@ -133,10 +182,26 @@ module.exports = {
     const recCount = (req) =>
       (req.statusEntries || []).filter((e) => e.action === "RECOMMENDED")
         .length;
-    const actedByMe = (req) =>
-      (req.statusEntries || []).some(
-        (e) => Number(e.actor_employee_id || 0) === me
-      );
+    const actedByMe = (req) => {
+      const email = String(ctx.userEmail || "").trim();
+      return (req.statusEntries || []).some((e) => {
+        if (me && Number(e.actor_employee_id || 0) === me) return true;
+        const actorEmail = e.actor?.user?.email || null;
+        if (
+          email &&
+          actorEmail &&
+          actorEmail.toLowerCase() === email.toLowerCase()
+        )
+          return true;
+        if (
+          email &&
+          e.remarks &&
+          String(e.remarks).toLowerCase().includes(email.toLowerCase())
+        )
+          return true;
+        return false;
+      });
+    };
     const applicantER = (req) =>
       (req.applicant?.employmentRecords || []).find(
         (er) => er.is_current && !er.is_deleted
@@ -163,9 +228,42 @@ module.exports = {
     const locTypeOf = (req) =>
       applicantER(req)?.location?.type || "HEAD_OFFICE";
 
-    const out = [];
+    const out = [...actedDb];
+    // Helper: exclude requests the current user created (not just where they are applicant)
+    const createdByMe = (req) => {
+      const ce = (req.statusEntries || []).find((e) => e.action === "CREATED");
+      if (!ce) return false;
+      const email = String(ctx.userEmail || "").trim();
+      const isDept = !!(ce.remarks && /\[DEPT\]/i.test(String(ce.remarks)));
+      // If department-originated, don't treat HoD-as-actor as "created by me".
+      // Only exclude if the remarks explicitly include my email (i.e., I used my own account to create it).
+      if (isDept) {
+        return !!(
+          email &&
+          ce.remarks &&
+          String(ce.remarks).toLowerCase().includes(email.toLowerCase())
+        );
+      }
+      // Non-department: exclude if actor is me, or actor's linked user email matches, or remarks include my email
+      if (me && Number(ce.actor_employee_id || 0) === me) return true;
+      const actorEmail = ce.actor?.user?.email || null;
+      if (
+        email &&
+        actorEmail &&
+        actorEmail.toLowerCase() === email.toLowerCase()
+      )
+        return true;
+      if (
+        email &&
+        ce.remarks &&
+        String(ce.remarks).toLowerCase().includes(email.toLowerCase())
+      )
+        return true;
+      return false;
+    };
+
     for (const r of candidates) {
-      if (Number(r.applicant_id || 0) === me) continue; // exclude my own created requests
+      if (createdByMe(r)) continue; // exclude requests actually created by me
       if (actedByMe(r)) {
         out.push(r);
         continue;
@@ -214,7 +312,9 @@ module.exports = {
       }
     }
     const map = new Map();
-    for (const r of out) map.set(r.id, r);
+    for (const r of out) {
+      if (!createdByMe(r)) map.set(r.id, r);
+    }
     return Array.from(map.values());
   },
 

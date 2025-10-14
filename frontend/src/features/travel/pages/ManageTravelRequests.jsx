@@ -172,7 +172,7 @@ export default function ManageTravelRequests() {
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>All TADA Requests</CardTitle>
+          <CardTitle>Related TADA Requests</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y">
