@@ -1,40 +1,88 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 // Core DB interactions for Travel Requests kept 1:1 with former inline route logic.
 module.exports = {
   getAuthContext: async (req) => {
-    const meUserId = Number(req.session.user?.id || req.session.user?.user_id || req.session.user?.uid);
+    const meUserId = Number(
+      req.session.user?.id || req.session.user?.user_id || req.session.user?.uid
+    );
     const meEmpId = Number(req.session.user?.employee_id);
-    const employment = meEmpId ? await prisma.employment.findFirst({
-      where: { employee_id: meEmpId, is_current: true, is_deleted: false },
-      include: { department: true, designation: true, location: true, scale_grade: true }
-    }) : null;
-    const deptName = employment?.department?.name || '';
-    const desigTitle = employment?.designation?.title || '';
-    const locType = employment?.location?.type || 'HEAD_OFFICE';
+    const employment = meEmpId
+      ? await prisma.employment.findFirst({
+          where: { employee_id: meEmpId, is_current: true, is_deleted: false },
+          include: {
+            department: true,
+            designation: true,
+            location: true,
+            scale_grade: true,
+          },
+        })
+      : null;
+    const deptName = employment?.department?.name || "";
+    const desigTitle = employment?.designation?.title || "";
+    const locType = employment?.location?.type || "HEAD_OFFICE";
     const scaleLevel = Number(employment?.scale_grade?.level || 0);
-    const roleName = (req.session.user?.role?.name || '');
-  const perms = req.session.user?.permissions || [];
-  const userEmail = req.session.user?.email || null;
+    const roleName = req.session.user?.role?.name || "";
+    const perms = req.session.user?.permissions || [];
+    const userEmail = req.session.user?.email || null;
 
     // Permission-driven stage approver flags
-    const isOps = perms.includes('travel.request.approve.ops') || /operations/i.test(deptName);
-    const isDG = perms.includes('travel.request.approve.dg') || /^director\s+general$/i.test(desigTitle);
-  // HR: department-based or permission-based
-  const isHR = /(^|\b)(HR|Human\s*Resources)(\b|$)/i.test(deptName) || perms.includes('travel.claim.approve.hr');
+    const isOps =
+      perms.includes("travel.request.approve.ops") ||
+      /operations/i.test(deptName);
+    const isDG =
+      perms.includes("travel.request.approve.dg") ||
+      /^director\s+general$/i.test(desigTitle);
+    // HR: department-based or permission-based
+    const isHR =
+      /(^|\b)(HR|Human\s*Resources)(\b|$)/i.test(deptName) ||
+      perms.includes("travel.claim.approve.hr");
     // Restore department-based fallback for Accounts approvers
-    const isAccountsApprover = perms.includes('travel.claim.approve.accounts') || /accounts|finance|budget|payroll|reconciliation/i.test(deptName);
-    const canApproveClaimOps = perms.includes('travel.claim.approve.ops');
-    const canApproveClaimDG = perms.includes('travel.claim.approve.dg');
+    const isAccountsApprover =
+      perms.includes("travel.claim.approve.accounts") ||
+      /accounts|finance|budget|payroll|reconciliation/i.test(deptName);
+    const canApproveClaimOps = perms.includes("travel.claim.approve.ops");
+    const canApproveClaimDG = perms.includes("travel.claim.approve.dg");
 
-    const managesAnyLocation = meUserId ? !!(await prisma.location.findFirst({ where: { manager_user_id: meUserId, is_deleted: false, is_active: true }, select: { id: true } })) : false;
-  const isBps17Plus = scaleLevel >= 17;
-  // Updated rule: permission-driven create/own, supports department accounts without employee mapping
-  const canCreateOrOwn = (perms.includes('travel.create') || perms.includes('*'));
-    const canViewAll = (isHR || isOps || isDG);
-    const isSuperAdmin = (req.session.user?.role?.name === 'Super Admin') || perms.includes('*');
-  return { meEmpId, meUserId, employment, deptName, desigTitle, locType, scaleLevel, isOps, isDG, isHR, isAccountsApprover, canApproveClaimOps, canApproveClaimDG, managesAnyLocation, isBps17Plus, canCreateOrOwn, canViewAll, isSuperAdmin, userEmail };
+    const managesAnyLocation = meUserId
+      ? !!(await prisma.location.findFirst({
+          where: {
+            manager_user_id: meUserId,
+            is_deleted: false,
+            is_active: true,
+          },
+          select: { id: true },
+        }))
+      : false;
+    const isBps17Plus = scaleLevel >= 17;
+    // Updated rule: permission-driven create/own, supports department accounts without employee mapping
+    const canCreateOrOwn =
+      perms.includes("travel.create") || perms.includes("*");
+    const canViewAll = isHR || isOps || isDG;
+    const isSuperAdmin =
+      req.session.user?.role?.name === "Super Admin" || perms.includes("*");
+    return {
+      meEmpId,
+      meUserId,
+      employment,
+      deptName,
+      desigTitle,
+      locType,
+      scaleLevel,
+      isOps,
+      isDG,
+      isHR,
+      isAccountsApprover,
+      canApproveClaimOps,
+      canApproveClaimDG,
+      managesAnyLocation,
+      isBps17Plus,
+      canCreateOrOwn,
+      canViewAll,
+      isSuperAdmin,
+      userEmail,
+    };
   },
 
   // New: list only requests related to the logged-in user (can or did act), excluding own-created
@@ -43,65 +91,139 @@ module.exports = {
     if (!me) return [];
     const includeShape = {
       attendees: { include: { employee: true } },
-      statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
+      statusEntries: {
+        orderBy: { createdAt: "asc" },
+        include: { actor: true },
+      },
       applicant: {
         include: {
           employmentRecords: {
             where: { is_current: true, is_deleted: false },
-            include: { department: { include: { head: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } }, location: true }
-          }
-        }
-      }
+            include: {
+              department: {
+                include: {
+                  head: {
+                    include: {
+                      employmentRecords: {
+                        where: { is_current: true, is_deleted: false },
+                      },
+                    },
+                  },
+                },
+              },
+              location: true,
+            },
+          },
+        },
+      },
     };
-    const candidates = await prisma.travelRequest.findMany({ where: { is_deleted: false }, include: includeShape, orderBy: { createdAt: 'desc' } });
+    const candidates = await prisma.travelRequest.findMany({
+      where: { is_deleted: false },
+      include: includeShape,
+      orderBy: { createdAt: "desc" },
+    });
 
-    const isDeptOrigin = (req) => (req.statusEntries||[]).some(e => e.action==='CREATED' && e.remarks && /\[DEPT\]/i.test(String(e.remarks)));
-    const recCount = (req) => (req.statusEntries||[]).filter(e => e.action==='RECOMMENDED').length;
-    const actedByMe = (req) => (req.statusEntries||[]).some(e => Number(e.actor_employee_id||0) === me);
-    const applicantER = (req) => (req.applicant?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted) || null;
-    const isDirectReportTo = (req, empId) => (req.applicant?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(empId||''));
-    const headOfDeptId = (req) => Number(applicantER(req)?.department?.head?.id || 0);
+    const isDeptOrigin = (req) =>
+      (req.statusEntries || []).some(
+        (e) =>
+          e.action === "CREATED" &&
+          e.remarks &&
+          /\[DEPT\]/i.test(String(e.remarks))
+      );
+    const recCount = (req) =>
+      (req.statusEntries || []).filter((e) => e.action === "RECOMMENDED")
+        .length;
+    const actedByMe = (req) =>
+      (req.statusEntries || []).some(
+        (e) => Number(e.actor_employee_id || 0) === me
+      );
+    const applicantER = (req) =>
+      (req.applicant?.employmentRecords || []).find(
+        (er) => er.is_current && !er.is_deleted
+      ) || null;
+    const isDirectReportTo = (req, empId) =>
+      (req.applicant?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          String(er.reporting_officer_id || "") === String(empId || "")
+      );
+    const headOfDeptId = (req) =>
+      Number(applicantER(req)?.department?.head?.id || 0);
     const hodROId = (req) => {
       const hod = applicantER(req)?.department?.head;
-      const hodER = (hod?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted) || null;
-      return hodER?.reporting_officer_id ? Number(hodER.reporting_officer_id) : null;
+      const hodER =
+        (hod?.employmentRecords || []).find(
+          (er) => er.is_current && !er.is_deleted
+        ) || null;
+      return hodER?.reporting_officer_id
+        ? Number(hodER.reporting_officer_id)
+        : null;
     };
-    const locTypeOf = (req) => applicantER(req)?.location?.type || 'HEAD_OFFICE';
+    const locTypeOf = (req) =>
+      applicantER(req)?.location?.type || "HEAD_OFFICE";
 
     const out = [];
     for (const r of candidates) {
-      if (Number(r.applicant_id||0) === me) continue; // exclude my own created requests
-      if (actedByMe(r)) { out.push(r); continue; }
-      if (r.status === 'CREATED') {
+      if (Number(r.applicant_id || 0) === me) continue; // exclude my own created requests
+      if (actedByMe(r)) {
+        out.push(r);
+        continue;
+      }
+      if (r.status === "CREATED") {
         const deptOrigin = isDeptOrigin(r);
         const recs = recCount(r);
         // Recommender eligibility
-        if (!deptOrigin && recs === 0 && isDirectReportTo(r, me)) { out.push(r); continue; }
+        if (!deptOrigin && recs === 0 && isDirectReportTo(r, me)) {
+          out.push(r);
+          continue;
+        }
         if (deptOrigin) {
-          if (recs === 0 && headOfDeptId(r) === me) { out.push(r); continue; }
+          if (recs === 0 && headOfDeptId(r) === me) {
+            out.push(r);
+            continue;
+          }
           const hodRO = hodROId(r);
-          if (recs === 1 && hodRO && hodRO === me) { out.push(r); continue; }
+          if (recs === 1 && hodRO && hodRO === me) {
+            out.push(r);
+            continue;
+          }
         }
         // Approval eligibility
         const lt = locTypeOf(r);
-        let neededRecs = 1; if (deptOrigin) { const hodRO = hodROId(r); neededRecs = hodRO ? 2 : 1; }
+        let neededRecs = 1;
+        if (deptOrigin) {
+          const hodRO = hodROId(r);
+          neededRecs = hodRO ? 2 : 1;
+        }
         if (recs >= neededRecs) {
-          if (ctx.isOps && lt === 'BAZAAR' && !deptOrigin) { out.push(r); continue; }
-          if (ctx.isDG && lt === 'HEAD_OFFICE') { out.push(r); continue; }
+          if (ctx.isOps && lt === "BAZAAR" && !deptOrigin) {
+            out.push(r);
+            continue;
+          }
+          if (ctx.isDG && lt === "HEAD_OFFICE") {
+            out.push(r);
+            continue;
+          }
         }
         // DG fast-track: direct report at head office
-        if (ctx.isDG && lt === 'HEAD_OFFICE' && isDirectReportTo(r, me)) { out.push(r); continue; }
+        if (ctx.isDG && lt === "HEAD_OFFICE" && isDirectReportTo(r, me)) {
+          out.push(r);
+          continue;
+        }
       }
     }
-    const map = new Map(); for (const r of out) map.set(r.id, r);
+    const map = new Map();
+    for (const r of out) map.set(r.id, r);
     return Array.from(map.values());
   },
 
   computeTotalDays: (departureDate, departureTime, expectedReturnDate) => {
     const dep = new Date(departureDate);
     if (departureTime) {
-      const [hh, mm] = String(departureTime).split(':');
-      if (!Number.isNaN(Number(hh))) dep.setHours(Number(hh), Number(mm||0), 0, 0);
+      const [hh, mm] = String(departureTime).split(":");
+      if (!Number.isNaN(Number(hh)))
+        dep.setHours(Number(hh), Number(mm || 0), 0, 0);
     }
     const ret = new Date(expectedReturnDate);
     const ms = ret.getTime() - dep.getTime();
@@ -110,14 +232,36 @@ module.exports = {
   },
 
   listManage: async (ctx) => {
-    const me = String(ctx.meEmpId || '');
+    const me = String(ctx.meEmpId || "");
     const base = { is_deleted: false };
     let where = { ...base };
     if (!ctx.isSuperAdmin && !ctx.isHR) {
       if (ctx.isOps && !ctx.isDG) {
-        where = { ...where, applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'BAZAAR' } } } } };
+        where = {
+          ...where,
+          applicant: {
+            employmentRecords: {
+              some: {
+                is_current: true,
+                is_deleted: false,
+                location: { type: "BAZAAR" },
+              },
+            },
+          },
+        };
       } else if (ctx.isDG && !ctx.isOps) {
-        where = { ...where, applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'HEAD_OFFICE' } } } } };
+        where = {
+          ...where,
+          applicant: {
+            employmentRecords: {
+              some: {
+                is_current: true,
+                is_deleted: false,
+                location: { type: "HEAD_OFFICE" },
+              },
+            },
+          },
+        };
       } else if (me) {
         // Reporting Officer view: show requests from employees who report to me
         // and also employees whose department head reports to me (HoD's RO coverage)
@@ -130,18 +274,36 @@ module.exports = {
                 is_deleted: false,
                 OR: [
                   { reporting_officer_id: me },
-                  { department: { head: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } } }
-                ]
-              }
-            }
-          }
+                  {
+                    department: {
+                      head: {
+                        employmentRecords: {
+                          some: {
+                            is_current: true,
+                            is_deleted: false,
+                            reporting_officer_id: me,
+                          },
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
         };
       }
     }
     return prisma.travelRequest.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
-      include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } }
+      orderBy: { createdAt: "desc" },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+      },
     });
   },
 
@@ -149,43 +311,83 @@ module.exports = {
     // Strategy: fetch a safe superset of CREATED requests without terminal decisions, then filter in JS per role/stage.
     const includeShape = {
       attendees: { include: { employee: true } },
-      statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
+      statusEntries: {
+        orderBy: { createdAt: "asc" },
+        include: { actor: true },
+      },
       applicant: {
         include: {
           employmentRecords: {
             where: { is_current: true, is_deleted: false },
-            include: { department: { include: { head: { include: { employmentRecords: { where: { is_current: true, is_deleted: false } } } } } }, location: true }
-          }
-        }
-      }
+            include: {
+              department: {
+                include: {
+                  head: {
+                    include: {
+                      employmentRecords: {
+                        where: { is_current: true, is_deleted: false },
+                      },
+                    },
+                  },
+                },
+              },
+              location: true,
+            },
+          },
+        },
+      },
     };
-  const candidates = await prisma.travelRequest.findMany({
+    const candidates = await prisma.travelRequest.findMany({
       where: {
         is_deleted: false,
-        status: 'CREATED',
-        statusEntries: { none: { action: { in: ['APPROVED', 'REJECTED'] } } }
+        status: "CREATED",
+        statusEntries: { none: { action: { in: ["APPROVED", "REJECTED"] } } },
       },
       include: includeShape,
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: "desc" },
     });
 
     const me = Number(ctx.meEmpId || 0);
     const allowedTypes = [];
-    if (ctx.isSuperAdmin) { allowedTypes.push('BAZAAR', 'HEAD_OFFICE'); }
-    else {
-      if (ctx.isOps) allowedTypes.push('BAZAAR');
-      if (ctx.isDG) allowedTypes.push('HEAD_OFFICE');
+    if (ctx.isSuperAdmin) {
+      allowedTypes.push("BAZAAR", "HEAD_OFFICE");
+    } else {
+      if (ctx.isOps) allowedTypes.push("BAZAAR");
+      if (ctx.isDG) allowedTypes.push("HEAD_OFFICE");
     }
 
-    const isDeptOrigin = (req) => (req.statusEntries||[]).some(e => e.action==='CREATED' && e.remarks && /\[DEPT\]/i.test(String(e.remarks)));
-    const recCount = (req) => (req.statusEntries||[]).filter(e => e.action==='RECOMMENDED').length;
-    const applicantER = (req) => (req.applicant?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted) || null;
-    const isDirectReportTo = (req, empId) => (req.applicant?.employmentRecords||[]).some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(empId||''));
-    const headOfDeptId = (req) => Number(applicantER(req)?.department?.head?.id || 0);
+    const isDeptOrigin = (req) =>
+      (req.statusEntries || []).some(
+        (e) =>
+          e.action === "CREATED" &&
+          e.remarks &&
+          /\[DEPT\]/i.test(String(e.remarks))
+      );
+    const recCount = (req) =>
+      (req.statusEntries || []).filter((e) => e.action === "RECOMMENDED")
+        .length;
+    const applicantER = (req) =>
+      (req.applicant?.employmentRecords || []).find(
+        (er) => er.is_current && !er.is_deleted
+      ) || null;
+    const isDirectReportTo = (req, empId) =>
+      (req.applicant?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          String(er.reporting_officer_id || "") === String(empId || "")
+      );
+    const headOfDeptId = (req) =>
+      Number(applicantER(req)?.department?.head?.id || 0);
     const hodROId = (req) => {
       const hod = applicantER(req)?.department?.head;
-      const hodER = (hod?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted) || null;
-      return hodER?.reporting_officer_id ? Number(hodER.reporting_officer_id) : null;
+      const hodER =
+        (hod?.employmentRecords || []).find(
+          (er) => er.is_current && !er.is_deleted
+        ) || null;
+      return hodER?.reporting_officer_id
+        ? Number(hodER.reporting_officer_id)
+        : null;
     };
 
     const out = [];
@@ -193,7 +395,7 @@ module.exports = {
     for (const r of candidates) {
       const deptOrigin = isDeptOrigin(r);
       const recs = recCount(r);
-      const locType = applicantER(r)?.location?.type || 'HEAD_OFFICE';
+      const locType = applicantER(r)?.location?.type || "HEAD_OFFICE";
 
       // Recommender stage (non-DG path)
       if (me && !ctx.isDG) {
@@ -202,9 +404,15 @@ module.exports = {
           continue;
         }
         if (deptOrigin) {
-          if (recs === 0 && headOfDeptId(r) === me) { out.push(r); continue; }
+          if (recs === 0 && headOfDeptId(r) === me) {
+            out.push(r);
+            continue;
+          }
           const hodRO = hodROId(r);
-          if (recs === 1 && hodRO && hodRO === me) { out.push(r); continue; }
+          if (recs === 1 && hodRO && hodRO === me) {
+            out.push(r);
+            continue;
+          }
         }
       }
 
@@ -226,7 +434,12 @@ module.exports = {
       }
 
       // DG fast-track for direct reports at head office (no prior recommendation required)
-      if (ctx.isDG && me && locType === 'HEAD_OFFICE' && isDirectReportTo(r, me)) {
+      if (
+        ctx.isDG &&
+        me &&
+        locType === "HEAD_OFFICE" &&
+        isDirectReportTo(r, me)
+      ) {
         out.push(r);
         continue;
       }
@@ -235,15 +448,23 @@ module.exports = {
     // Dedupe by id to be safe, then sort by createdAt desc
     const map = new Map();
     for (const r of out) map.set(r.id, r);
-    return Array.from(map.values()).sort((a,b) => (new Date(b.createdAt) - new Date(a.createdAt)));
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
   },
 
   listMine: async (employeeId) => {
     if (!employeeId) return [];
     return prisma.travelRequest.findMany({
       where: { is_deleted: false, applicant_id: employeeId },
-      orderBy: { createdAt: 'desc' },
-      include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } }
+      orderBy: { createdAt: "desc" },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+      },
     });
   },
 
@@ -254,11 +475,24 @@ module.exports = {
       where: {
         is_deleted: false,
         applicant: {
-          employmentRecords: { some: { is_current: true, is_deleted: false, department_id: departmentId } }
-        }
+          employmentRecords: {
+            some: {
+              is_current: true,
+              is_deleted: false,
+              department_id: departmentId,
+            },
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' },
-      include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } }, applicant: true }
+      orderBy: { createdAt: "desc" },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+        applicant: true,
+      },
     });
   },
 
@@ -272,27 +506,55 @@ module.exports = {
         purpose: data.purpose || null,
         destination: data.destination || null,
         total_days: totalDays,
-        status: 'CREATED'
-      }
+        status: "CREATED",
+      },
     });
     if (attendeeIds.length) {
-      await prisma.travelRequestEmployee.createMany({ data: attendeeIds.map(eid => ({ request_id: created.id, employee_id: eid })) });
+      await prisma.travelRequestEmployee.createMany({
+        data: attendeeIds.map((eid) => ({
+          request_id: created.id,
+          employee_id: eid,
+        })),
+      });
     }
-    await prisma.travelRequestStatusEntry.create({ data: { request_id: created.id, action: 'CREATED', actor_employee_id: ctx.meEmpId, remarks: actorLabel || null } });
-    return prisma.travelRequest.findUnique({ where: { id: created.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    await prisma.travelRequestStatusEntry.create({
+      data: {
+        request_id: created.id,
+        action: "CREATED",
+        actor_employee_id: ctx.meEmpId,
+        remarks: actorLabel || null,
+      },
+    });
+    return prisma.travelRequest.findUnique({
+      where: { id: created.id },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+      },
+    });
   },
 
   // New: on-behalf request creation
-  createRequestOnBehalf: async (ctx, data, attendeeIds, totalDays, createdByEmpId, createdByLabel) => {
+  createRequestOnBehalf: async (
+    ctx,
+    data,
+    attendeeIds,
+    totalDays,
+    createdByEmpId,
+    createdByLabel
+  ) => {
     // ctx.meEmpId is replaced with applicant_id so created request belongs to that employee
     const submissionDateTime = (() => {
       try {
         if (data.submission_date) {
           const date = String(data.submission_date);
-          const time = String(data.submission_time||'00:00');
+          const time = String(data.submission_time || "00:00");
           return new Date(`${date}T${time}:00`);
         }
-      } catch(_){}
+      } catch (_) {}
       return undefined;
     })();
     const created = await prisma.travelRequest.create({
@@ -304,56 +566,151 @@ module.exports = {
         purpose: data.purpose || null,
         destination: data.destination || null,
         total_days: totalDays,
-        status: 'CREATED',
-        ...(submissionDateTime ? { submission_date: submissionDateTime } : {})
-      }
+        status: "CREATED",
+        ...(submissionDateTime ? { submission_date: submissionDateTime } : {}),
+      },
     });
     if (attendeeIds.length) {
-      await prisma.travelRequestEmployee.createMany({ data: attendeeIds.map(eid => ({ request_id: created.id, employee_id: eid })) });
+      await prisma.travelRequestEmployee.createMany({
+        data: attendeeIds.map((eid) => ({
+          request_id: created.id,
+          employee_id: eid,
+        })),
+      });
     }
     // Record CREATED by actor: prefer creator if provided (e.g., HoD for department account), else applicant
-  const actorId = Number(createdByEmpId || ctx.meEmpId);
-  await prisma.travelRequestStatusEntry.create({ data: { request_id: created.id, action: 'CREATED', actor_employee_id: actorId, remarks: createdByLabel || null } });
-    return prisma.travelRequest.findUnique({ where: { id: created.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    const actorId = Number(createdByEmpId || ctx.meEmpId);
+    await prisma.travelRequestStatusEntry.create({
+      data: {
+        request_id: created.id,
+        action: "CREATED",
+        actor_employee_id: actorId,
+        remarks: createdByLabel || null,
+      },
+    });
+    return prisma.travelRequest.findUnique({
+      where: { id: created.id },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+      },
+    });
   },
 
-  getById: (id) => prisma.travelRequest.findUnique({
-    where: { id },
-    include: {
-      attendees: { include: { employee: true } },
-      statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
-      applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, department: { include: { head: true } } } } } }
-    }
-  }),
+  getById: (id) =>
+    prisma.travelRequest.findUnique({
+      where: { id },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+        applicant: {
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: {
+                location: true,
+                department: { include: { head: true } },
+              },
+            },
+          },
+        },
+      },
+    }),
 
   updateRequest: async (id, data, attendeeIds, totalDays) => {
     const updateData = { total_days: totalDays };
-    if ('purpose' in data) updateData.purpose = data.purpose || null;
-    if ('destination' in data) updateData.destination = data.destination || null;
-    if ('departure_date' in data && data.departure_date) updateData.departure_date = new Date(data.departure_date);
-    if ('departure_time' in data) updateData.departure_time = data.departure_time || null;
-    if ('expected_return_date' in data && data.expected_return_date) updateData.expected_return_date = new Date(data.expected_return_date);
+    if ("purpose" in data) updateData.purpose = data.purpose || null;
+    if ("destination" in data)
+      updateData.destination = data.destination || null;
+    if ("departure_date" in data && data.departure_date)
+      updateData.departure_date = new Date(data.departure_date);
+    if ("departure_time" in data)
+      updateData.departure_time = data.departure_time || null;
+    if ("expected_return_date" in data && data.expected_return_date)
+      updateData.expected_return_date = new Date(data.expected_return_date);
 
     await prisma.travelRequest.update({ where: { id }, data: updateData });
     if (Array.isArray(attendeeIds)) {
-      await prisma.travelRequestEmployee.deleteMany({ where: { request_id: id } });
-      if (attendeeIds.length) await prisma.travelRequestEmployee.createMany({ data: attendeeIds.map(eid => ({ request_id: id, employee_id: eid })) });
+      await prisma.travelRequestEmployee.deleteMany({
+        where: { request_id: id },
+      });
+      if (attendeeIds.length)
+        await prisma.travelRequestEmployee.createMany({
+          data: attendeeIds.map((eid) => ({
+            request_id: id,
+            employee_id: eid,
+          })),
+        });
     }
-    return prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    return prisma.travelRequest.findUnique({
+      where: { id },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+      },
+    });
   },
 
-  softDelete: (id) => prisma.travelRequest.update({ where: { id }, data: { is_deleted: true } }),
+  softDelete: (id) =>
+    prisma.travelRequest.update({ where: { id }, data: { is_deleted: true } }),
 
   legacyDecision: async (id, newStatus, actorEmpId, actorEmail) => {
-    await prisma.travelRequest.update({ where: { id }, data: { status: newStatus } });
-    await prisma.travelRequestStatusEntry.create({ data: { request_id: id, action: newStatus, actor_employee_id: actorEmpId, remarks: actorEmail || null } });
-    return prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    await prisma.travelRequest.update({
+      where: { id },
+      data: { status: newStatus },
+    });
+    await prisma.travelRequestStatusEntry.create({
+      data: {
+        request_id: id,
+        action: newStatus,
+        actor_employee_id: actorEmpId,
+        remarks: actorEmail || null,
+      },
+    });
+    return prisma.travelRequest.findUnique({
+      where: { id },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+      },
+    });
   },
 
   updateStatusFlexible: async (id, targetStatus, actorEmpId, actorEmail) => {
-    await prisma.travelRequest.update({ where: { id }, data: { status: targetStatus } });
-    await prisma.travelRequestStatusEntry.create({ data: { request_id: id, action: targetStatus, actor_employee_id: actorEmpId, remarks: actorEmail || null } });
-    return prisma.travelRequest.findUnique({ where: { id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    await prisma.travelRequest.update({
+      where: { id },
+      data: { status: targetStatus },
+    });
+    await prisma.travelRequestStatusEntry.create({
+      data: {
+        request_id: id,
+        action: targetStatus,
+        actor_employee_id: actorEmpId,
+        remarks: actorEmail || null,
+      },
+    });
+    return prisma.travelRequest.findUnique({
+      where: { id },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+      },
+    });
   },
 
   // New: decision API for recommendation/clear without changing status
@@ -361,7 +718,7 @@ module.exports = {
     const req = await prisma.travelRequest.findUnique({
       where: { id: Number(id) },
       include: {
-        statusEntries: { orderBy: { createdAt: 'asc' } },
+        statusEntries: { orderBy: { createdAt: "asc" } },
         applicant: {
           include: {
             employmentRecords: {
@@ -371,33 +728,55 @@ module.exports = {
                   include: {
                     head: {
                       include: {
-                        employmentRecords: { where: { is_current: true, is_deleted: false } }
-                      }
-                    }
-                  }
+                        employmentRecords: {
+                          where: { is_current: true, is_deleted: false },
+                        },
+                      },
+                    },
+                  },
                 },
                 location: true,
-                scale_grade: true
-              }
-            }
-          }
-        }
-      }
+                scale_grade: true,
+              },
+            },
+          },
+        },
+      },
     });
-    if (!req || req.is_deleted) throw new Error('Not found');
-    if (req.status !== 'CREATED') throw new Error('Only CREATED requests can be actioned');
-    if (!ctx.meEmpId) throw new Error('Not authorized: your account is not linked to an employee');
+    if (!req || req.is_deleted) throw new Error("Not found");
+    if (req.status !== "CREATED")
+      throw new Error("Only CREATED requests can be actioned");
+    if (!ctx.meEmpId)
+      throw new Error(
+        "Not authorized: your account is not linked to an employee"
+      );
     const applicantER = req.applicant?.employmentRecords?.[0];
-    const isDeptOrigin = !!(req.statusEntries||[]).some(e => e.action==='CREATED' && e.remarks && /\[DEPT\]/i.test(String(e.remarks)));
-    const last = req.statusEntries[req.statusEntries.length-1];
-    const act = String(action||'').toUpperCase();
+    const isDeptOrigin = !!(req.statusEntries || []).some(
+      (e) =>
+        e.action === "CREATED" &&
+        e.remarks &&
+        /\[DEPT\]/i.test(String(e.remarks))
+    );
+    const last = req.statusEntries[req.statusEntries.length - 1];
+    const act = String(action || "").toUpperCase();
 
     // CLEAR should be allowed by the original recommender (or SuperAdmin) regardless of current recommender eligibility
-    if (act === 'CLEAR') {
-      if (!last || last.action!=='RECOMMENDED') throw new Error('Nothing to clear');
-      if (last.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin) throw new Error('Cannot clear another user\'s recommendation');
+    if (act === "CLEAR") {
+      if (!last || last.action !== "RECOMMENDED")
+        throw new Error("Nothing to clear");
+      if (last.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin)
+        throw new Error("Cannot clear another user's recommendation");
       await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
-      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+      return prisma.travelRequest.findUnique({
+        where: { id: req.id },
+        include: {
+          attendees: { include: { employee: true } },
+          statusEntries: {
+            orderBy: { createdAt: "asc" },
+            include: { actor: true },
+          },
+        },
+      });
     }
 
     // Check recommender eligibility (applies to RECOMMEND and REJECT)
@@ -405,114 +784,323 @@ module.exports = {
     // Department-originated: only HoD first then HoD's RO
     if (isDeptOrigin) {
       const hodId = Number(applicantER?.department?.head?.id || 0);
-      const hodRO = Number((applicantER?.department?.head?.employmentRecords||[]).find(er => er.is_current && !er.is_deleted)?.reporting_officer_id || 0) || null;
-      const alreadyRecs = (req.statusEntries||[]).filter(e => e.action==='RECOMMENDED').length;
-      const me = Number(ctx.meEmpId||0);
-      if (alreadyRecs === 0) canRecommend = (me === hodId);
-      else if (alreadyRecs === 1) canRecommend = (hodRO ? me === Number(hodRO) : false);
+      const hodRO =
+        Number(
+          (applicantER?.department?.head?.employmentRecords || []).find(
+            (er) => er.is_current && !er.is_deleted
+          )?.reporting_officer_id || 0
+        ) || null;
+      const alreadyRecs = (req.statusEntries || []).filter(
+        (e) => e.action === "RECOMMENDED"
+      ).length;
+      const me = Number(ctx.meEmpId || 0);
+      if (alreadyRecs === 0) canRecommend = me === hodId;
+      else if (alreadyRecs === 1)
+        canRecommend = hodRO ? me === Number(hodRO) : false;
       else canRecommend = false; // no further recommendations
     } else {
       // Legacy: immediate in-charge can recommend
-      canRecommend = canRecommend || (req.applicant?.employmentRecords||[]).some(er => String(er.reporting_officer_id||'') === String(ctx.meEmpId||''));
+      canRecommend =
+        canRecommend ||
+        (req.applicant?.employmentRecords || []).some(
+          (er) =>
+            String(er.reporting_officer_id || "") === String(ctx.meEmpId || "")
+        );
     }
     if (!canRecommend && !ctx.isSuperAdmin) {
       if (isDeptOrigin) {
-        throw new Error('Not authorized: department-origin request can only be recommended by HoD first, then HoD\'s Reporting Officer');
+        throw new Error(
+          "Not authorized: department-origin request can only be recommended by HoD first, then HoD's Reporting Officer"
+        );
       } else {
-        throw new Error('Not authorized: only the applicant\'s immediate in-charge (reporting officer) can recommend');
+        throw new Error(
+          "Not authorized: only the applicant's immediate in-charge (reporting officer) can recommend"
+        );
       }
     }
-    if (act === 'RECOMMEND') {
+    if (act === "RECOMMEND") {
       // Idempotent only if the same actor is trying to recommend twice consecutively
-      if (last && last.action==='RECOMMENDED' && Number(last.actor_employee_id||0) === Number(actorEmpId||0)) return req;
-      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: ctx.userEmail || null } });
-      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
-    } else if (act === 'REJECT') {
-      await prisma.travelRequest.update({ where: { id: req.id }, data: { status: 'REJECTED' } });
-      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED_REJECTED', actor_employee_id: actorEmpId, remarks: ctx.userEmail || null } });
-      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+      if (
+        last &&
+        last.action === "RECOMMENDED" &&
+        Number(last.actor_employee_id || 0) === Number(actorEmpId || 0)
+      )
+        return req;
+      await prisma.travelRequestStatusEntry.create({
+        data: {
+          request_id: req.id,
+          action: "RECOMMENDED",
+          actor_employee_id: actorEmpId,
+          remarks: ctx.userEmail || null,
+        },
+      });
+      return prisma.travelRequest.findUnique({
+        where: { id: req.id },
+        include: {
+          attendees: { include: { employee: true } },
+          statusEntries: {
+            orderBy: { createdAt: "asc" },
+            include: { actor: true },
+          },
+        },
+      });
+    } else if (act === "REJECT") {
+      await prisma.travelRequest.update({
+        where: { id: req.id },
+        data: { status: "REJECTED" },
+      });
+      await prisma.travelRequestStatusEntry.create({
+        data: {
+          request_id: req.id,
+          action: "RECOMMENDED_REJECTED",
+          actor_employee_id: actorEmpId,
+          remarks: ctx.userEmail || null,
+        },
+      });
+      return prisma.travelRequest.findUnique({
+        where: { id: req.id },
+        include: {
+          attendees: { include: { employee: true } },
+          statusEntries: {
+            orderBy: { createdAt: "asc" },
+            include: { actor: true },
+          },
+        },
+      });
     }
-    throw new Error('Invalid action');
+    throw new Error("Invalid action");
   },
 
   manualDecision: async (id, { stage, actorEmpId, action }, ctx) => {
     // Mirror normal flow but attribute actor to the selected employee
-    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, department: { include: { head: true } } } } } }, statusEntries: { orderBy: { createdAt: 'asc' } } } });
-    if (!req || req.is_deleted) throw new Error('Not found');
-    if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) throw new Error('Forbidden');
+    const req = await prisma.travelRequest.findUnique({
+      where: { id: Number(id) },
+      include: {
+        applicant: {
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: {
+                location: true,
+                department: { include: { head: true } },
+              },
+            },
+          },
+        },
+        statusEntries: { orderBy: { createdAt: "asc" } },
+      },
+    });
+    if (!req || req.is_deleted) throw new Error("Not found");
+    if (!(ctx.isSuperAdmin || ctx.isAccountsApprover))
+      throw new Error("Forbidden");
 
-    const act = String(action||'').toUpperCase();
-    if (act === 'RECOMMEND') {
-      if (req.status !== 'CREATED') throw new Error('Only CREATED can be recommended');
-      const last = req.statusEntries[req.statusEntries.length-1];
-      if (last && last.action==='RECOMMENDED') return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
-      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: 'RECOMMENDED', actor_employee_id: actorEmpId, remarks: ctx.userEmail || null } });
-      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+    const act = String(action || "").toUpperCase();
+    if (act === "RECOMMEND") {
+      if (req.status !== "CREATED")
+        throw new Error("Only CREATED can be recommended");
+      const last = req.statusEntries[req.statusEntries.length - 1];
+      if (last && last.action === "RECOMMENDED")
+        return prisma.travelRequest.findUnique({
+          where: { id: req.id },
+          include: {
+            attendees: { include: { employee: true } },
+            statusEntries: {
+              orderBy: { createdAt: "asc" },
+              include: { actor: true },
+            },
+          },
+        });
+      await prisma.travelRequestStatusEntry.create({
+        data: {
+          request_id: req.id,
+          action: "RECOMMENDED",
+          actor_employee_id: actorEmpId,
+          remarks: ctx.userEmail || null,
+        },
+      });
+      return prisma.travelRequest.findUnique({
+        where: { id: req.id },
+        include: {
+          attendees: { include: { employee: true } },
+          statusEntries: {
+            orderBy: { createdAt: "asc" },
+            include: { actor: true },
+          },
+        },
+      });
     }
 
     // Approval/Reject: DG or OPS depending on location type; department-originated requires DG
-    const locType = req.applicant?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE';
-    const isDeptOrigin = !!(req.statusEntries||[]).some(e => e.action==='CREATED' && e.remarks && /department|\[DEPT\]/i.test(String(e.remarks)));
-    if (act === 'APPROVE' || act === 'REJECT') {
-      if (req.status !== 'CREATED') throw new Error('Already decided');
-      const isBazaar = locType === 'BAZAAR';
-      const actionKey = act === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const locType =
+      req.applicant?.employmentRecords?.[0]?.location?.type || "HEAD_OFFICE";
+    const isDeptOrigin = !!(req.statusEntries || []).some(
+      (e) =>
+        e.action === "CREATED" &&
+        e.remarks &&
+        /department|\[DEPT\]/i.test(String(e.remarks))
+    );
+    if (act === "APPROVE" || act === "REJECT") {
+      if (req.status !== "CREATED") throw new Error("Already decided");
+      const isBazaar = locType === "BAZAAR";
+      const actionKey = act === "APPROVE" ? "APPROVED" : "REJECTED";
       if (isDeptOrigin) {
         // Enforce DG-only approval for department-originated
-        const approverEmployment = await prisma.employment.findFirst({ where: { employee_id: actorEmpId, is_current: true, is_deleted: false }, include: { designation: true } });
-        const isDG = /^director\s+general$/i.test(approverEmployment?.designation?.title || '');
-        if (!isDG && !ctx.isSuperAdmin) throw new Error('Department-originated requests require DG approval');
+        const approverEmployment = await prisma.employment.findFirst({
+          where: {
+            employee_id: actorEmpId,
+            is_current: true,
+            is_deleted: false,
+          },
+          include: { designation: true },
+        });
+        const isDG = /^director\s+general$/i.test(
+          approverEmployment?.designation?.title || ""
+        );
+        if (!isDG && !ctx.isSuperAdmin)
+          throw new Error("Department-originated requests require DG approval");
         // Require two recommendations when HoD has a reporting officer
-        const er = (req.applicant?.employmentRecords||[]).find(e => e.is_current && !e.is_deleted) || null;
-        const hodER = er?.department?.head ? await prisma.employment.findFirst({ where: { employee_id: Number(er.department.head.id), is_current: true, is_deleted: false } }) : null;
-        const hodHasRO = !!(hodER?.reporting_officer_id);
-        const currentRecs = (req.statusEntries||[]).filter(se => se.action==='RECOMMENDED').length;
-        if (hodHasRO && currentRecs < 2) throw new Error('Requires HoD and HoD’s RO recommendations before DG approval');
+        const er =
+          (req.applicant?.employmentRecords || []).find(
+            (e) => e.is_current && !e.is_deleted
+          ) || null;
+        const hodER = er?.department?.head
+          ? await prisma.employment.findFirst({
+              where: {
+                employee_id: Number(er.department.head.id),
+                is_current: true,
+                is_deleted: false,
+              },
+            })
+          : null;
+        const hodHasRO = !!hodER?.reporting_officer_id;
+        const currentRecs = (req.statusEntries || []).filter(
+          (se) => se.action === "RECOMMENDED"
+        ).length;
+        if (hodHasRO && currentRecs < 2)
+          throw new Error(
+            "Requires HoD and HoD’s RO recommendations before DG approval"
+          );
       }
       // Update request status and record status entry with selected actor
-      await prisma.travelRequest.update({ where: { id: req.id }, data: { status: actionKey } });
-      await prisma.travelRequestStatusEntry.create({ data: { request_id: req.id, action: actionKey, actor_employee_id: actorEmpId, remarks: ctx.userEmail || null } });
-      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+      await prisma.travelRequest.update({
+        where: { id: req.id },
+        data: { status: actionKey },
+      });
+      await prisma.travelRequestStatusEntry.create({
+        data: {
+          request_id: req.id,
+          action: actionKey,
+          actor_employee_id: actorEmpId,
+          remarks: ctx.userEmail || null,
+        },
+      });
+      return prisma.travelRequest.findUnique({
+        where: { id: req.id },
+        include: {
+          attendees: { include: { employee: true } },
+          statusEntries: {
+            orderBy: { createdAt: "asc" },
+            include: { actor: true },
+          },
+        },
+      });
     }
 
-    if (act === 'CLEAR') {
-      const last = req.statusEntries[req.statusEntries.length-1];
-      if (!last) throw new Error('Nothing to clear');
+    if (act === "CLEAR") {
+      const last = req.statusEntries[req.statusEntries.length - 1];
+      if (!last) throw new Error("Nothing to clear");
       // Allow Accounts/SuperAdmin to clear last decision regardless of actor
       await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
       // If cleared action was terminal, revert status
-      if (['APPROVED','REJECTED'].includes(last.action)) {
-        await prisma.travelRequest.update({ where: { id: req.id }, data: { status: 'CREATED' } });
+      if (["APPROVED", "REJECTED"].includes(last.action)) {
+        await prisma.travelRequest.update({
+          where: { id: req.id },
+          data: { status: "CREATED" },
+        });
       }
-      return prisma.travelRequest.findUnique({ where: { id: req.id }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } } } });
+      return prisma.travelRequest.findUnique({
+        where: { id: req.id },
+        include: {
+          attendees: { include: { employee: true } },
+          statusEntries: {
+            orderBy: { createdAt: "asc" },
+            include: { actor: true },
+          },
+        },
+      });
     }
 
-    throw new Error('Invalid action');
+    throw new Error("Invalid action");
   },
 
   // New: clear the last decision (including APPROVED/REJECTED) by the same actor; revert status if terminal
   clearLastDecision: async (id, actorEmpId, ctx) => {
-    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { statusEntries: { orderBy: { createdAt: 'asc' } } } });
-    if (!req || req.is_deleted) throw new Error('Not found');
-    const last = (req.statusEntries||[])[(req.statusEntries||[]).length-1];
-    if (!last) throw new Error('Nothing to clear');
-    if (Number(last.actor_employee_id||0) !== Number(actorEmpId||0) && !ctx.isSuperAdmin) throw new Error('Cannot clear another user\'s decision');
+    const req = await prisma.travelRequest.findUnique({
+      where: { id: Number(id) },
+      include: { statusEntries: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!req || req.is_deleted) throw new Error("Not found");
+    const last = (req.statusEntries || [])[
+      (req.statusEntries || []).length - 1
+    ];
+    if (!last) throw new Error("Nothing to clear");
+    if (
+      Number(last.actor_employee_id || 0) !== Number(actorEmpId || 0) &&
+      !ctx.isSuperAdmin
+    )
+      throw new Error("Cannot clear another user's decision");
     await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
-    if (['APPROVED','REJECTED'].includes(last.action)) {
-      await prisma.travelRequest.update({ where: { id: Number(id) }, data: { status: 'CREATED' } });
+    if (["APPROVED", "REJECTED"].includes(last.action)) {
+      await prisma.travelRequest.update({
+        where: { id: Number(id) },
+        data: { status: "CREATED" },
+      });
     }
-    return prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } }, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, department: { include: { head: true } } } } } } } });
+    return prisma.travelRequest.findUnique({
+      where: { id: Number(id) },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+        applicant: {
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: {
+                location: true,
+                department: { include: { head: true } },
+              },
+            },
+          },
+        },
+      },
+    });
   },
 
   listReporteesPlusSelf: async (meEmpId) => {
     if (!meEmpId) return [];
-    const self = await prisma.employee.findUnique({ where: { id: Number(meEmpId) } });
+    const self = await prisma.employee.findUnique({
+      where: { id: Number(meEmpId) },
+    });
     const officerKey = String(meEmpId);
-    const employments = await prisma.employment.findMany({ where: { is_deleted: false, is_current: true, reporting_officer_id: officerKey }, include: { employee: true } });
-    const reportees = employments.map(e => e.employee).filter(Boolean);
+    const employments = await prisma.employment.findMany({
+      where: {
+        is_deleted: false,
+        is_current: true,
+        reporting_officer_id: officerKey,
+      },
+      include: { employee: true },
+    });
+    const reportees = employments.map((e) => e.employee).filter(Boolean);
     const map = new Map();
     for (const e of reportees) if (e) map.set(e.id, e);
     if (self) map.set(self.id, self);
-    return Array.from(map.values()).map(e => ({ id: e.id, full_name: e.full_name, cnic: e.cnic || '' }));
-  }
+    return Array.from(map.values()).map((e) => ({
+      id: e.id,
+      full_name: e.full_name,
+      cnic: e.cnic || "",
+    }));
+  },
 };

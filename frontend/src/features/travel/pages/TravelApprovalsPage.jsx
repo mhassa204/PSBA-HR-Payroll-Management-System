@@ -1,11 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { getTravelRequest, updateTravelRequestStatus, recommendTravelRequest, clearTravelRecommendation, recommendDecisionTravelRequest, getTravelCapabilities } from '../../../services/travelService';
-import api from '../../../lib/axios';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import EnhancedModal from '@/components/ui/EnhancedModal';
-import { useAuthStore } from '../../auth/authStore';
+import React, { useEffect, useState } from "react";
+import {
+  getTravelRequest,
+  updateTravelRequestStatus,
+  recommendTravelRequest,
+  clearTravelRecommendation,
+  recommendDecisionTravelRequest,
+  getTravelCapabilities,
+} from "../../../services/travelService";
+import api from "../../../lib/axios";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import EnhancedModal from "@/components/ui/EnhancedModal";
+import { useAuthStore } from "../../auth/authStore";
 
 export default function TravelApprovalsPage() {
   const [list, setList] = useState([]);
@@ -13,18 +20,27 @@ export default function TravelApprovalsPage() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const meEmpId = useAuthStore(s=>s.user?.employee_id);
+  const meEmpId = useAuthStore((s) => s.user?.employee_id);
   const [caps, setCaps] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/travel/requests/pending-approvals');
+      const res = await api.get("/travel/requests/pending-approvals");
       setList(res.data?.requests || []);
-      if (!caps) { try { const c = await getTravelCapabilities(); setCaps(c); } catch(_){} }
-    } finally { setLoading(false); }
+      if (!caps) {
+        try {
+          const c = await getTravelCapabilities();
+          setCaps(c);
+        } catch (_) {}
+      }
+    } finally {
+      setLoading(false);
+    }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const openDetail = async (id) => {
     setOpen(true);
@@ -33,60 +49,89 @@ export default function TravelApprovalsPage() {
     setSelected(full);
   };
 
-  const hasRecommended = (r) => (r.statusEntries||[]).some(se => se.action === 'RECOMMENDED');
-  const recCount = (r) => (r.statusEntries||[]).filter(se => se.action === 'RECOMMENDED').length;
-  const lastEntry = (r) => (r.statusEntries||[])[(r.statusEntries||[]).length-1];
+  const hasRecommended = (r) =>
+    (r.statusEntries || []).some((se) => se.action === "RECOMMENDED");
+  const recCount = (r) =>
+    (r.statusEntries || []).filter((se) => se.action === "RECOMMENDED").length;
+  const lastEntry = (r) =>
+    (r.statusEntries || [])[(r.statusEntries || []).length - 1];
   const canUndoRecommendation = (r) => {
     const last = lastEntry(r);
-    return r.status==='CREATED' && last && last.action==='RECOMMENDED' && String(last.actor_employee_id)===String(meEmpId);
+    return (
+      r.status === "CREATED" &&
+      last &&
+      last.action === "RECOMMENDED" &&
+      String(last.actor_employee_id) === String(meEmpId)
+    );
   };
-  const labelAction = (a) => a === 'RECOMMENDED' ? 'Recommended' : a;
+  const labelAction = (a) => (a === "RECOMMENDED" ? "Recommended" : a);
   const extractEmail = (remarks, fallback) => {
-    const r = String(remarks||'');
+    const r = String(remarks || "");
     const m = r.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-    return m ? m[0] : (remarks || fallback || '—');
+    return m ? m[0] : remarks || fallback || "—";
   };
 
   const doAction = async (r, action) => {
-    if(!r) return;
+    if (!r) return;
     setSubmitting(true);
     try {
-      if(action==='RECOMMEND') {
+      if (action === "RECOMMEND") {
         await recommendTravelRequest(r.id);
-      } else if(action==='RECOMMENDER_REJECT') {
-        await recommendDecisionTravelRequest(r.id, 'REJECT');
-      } else if(action==='UNDO_RECOMMEND') {
+      } else if (action === "RECOMMENDER_REJECT") {
+        await recommendDecisionTravelRequest(r.id, "REJECT");
+      } else if (action === "UNDO_RECOMMEND") {
         await clearTravelRecommendation(r.id);
-      } else if(action==='APPROVE') {
-        await updateTravelRequestStatus(r.id, 'APPROVED');
-      } else if(action==='REJECT') {
-        await updateTravelRequestStatus(r.id, 'REJECTED');
+      } else if (action === "APPROVE") {
+        await updateTravelRequestStatus(r.id, "APPROVED");
+      } else if (action === "REJECT") {
+        await updateTravelRequestStatus(r.id, "REJECTED");
       }
       await load();
-    } catch(err) {
-      alert(err?.response?.data?.error || 'Update failed');
-    } finally { setSubmitting(false); }
+    } catch (err) {
+      alert(err?.response?.data?.error || "Update failed");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const isDirectReportToMe = (req) => {
     const ers = req?.applicant?.employmentRecords || [];
-    return ers.some(er => er.is_current && !er.is_deleted && String(er.reporting_officer_id||'') === String(meEmpId||''));
+    return ers.some(
+      (er) =>
+        er.is_current &&
+        !er.is_deleted &&
+        String(er.reporting_officer_id || "") === String(meEmpId || "")
+    );
   };
-  const isDeptOrigin = (r) => (r.statusEntries||[]).some(se => se.action==='CREATED' && /\[DEPT\]/i.test(String(se.remarks||'')));
+  const isDeptOrigin = (r) =>
+    (r.statusEntries || []).some(
+      (se) =>
+        se.action === "CREATED" && /\[DEPT\]/i.test(String(se.remarks || ""))
+    );
   const isHoDFor = (r) => {
-    const er = (r?.applicant?.employmentRecords||[]).find(x => x.is_current && !x.is_deleted);
+    const er = (r?.applicant?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
     const hodId = Number(er?.department?.head?.id || 0);
     return meEmpId && Number(meEmpId) === hodId;
   };
   const hodROFor = (r) => {
-    const er = (r?.applicant?.employmentRecords||[]).find(x => x.is_current && !x.is_deleted);
-    const hodER = (er?.department?.head?.employmentRecords||[]).find(x => x.is_current && !x.is_deleted);
-    const ro = hodER?.reporting_officer_id ? Number(hodER.reporting_officer_id) : null;
+    const er = (r?.applicant?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const hodER = (er?.department?.head?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const ro = hodER?.reporting_officer_id
+      ? Number(hodER.reporting_officer_id)
+      : null;
     return ro;
   };
   const applicantLocType = (r) => {
-    const er = (r?.applicant?.employmentRecords||[]).find(x => x.is_current && !x.is_deleted);
-    return er?.location?.type || 'HEAD_OFFICE';
+    const er = (r?.applicant?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    return er?.location?.type || "HEAD_OFFICE";
   };
   const canRecommendMe = (r) => {
     if (!meEmpId) return false;
@@ -107,16 +152,17 @@ export default function TravelApprovalsPage() {
     const locType = applicantLocType(r);
     // For department-origin, if HoD has a RO, require two recommendations before DG approval
     const neededRecs = deptOrigin && hodROFor(r) ? 2 : 1;
-    const isDG = !!(caps?.isDG);
-    const isOps = !!(caps?.isOps);
-    const fastTrackDG = isDG && locType === 'HEAD_OFFICE' && isDirectReportToMe(r);
+    const isDG = !!caps?.isDG;
+    const isOps = !!caps?.isOps;
+    const fastTrackDG =
+      isDG && locType === "HEAD_OFFICE" && isDirectReportToMe(r);
     if (isDG) {
       if (fastTrackDG) return true;
-      if (locType === 'HEAD_OFFICE' && recs >= neededRecs) return true;
+      if (locType === "HEAD_OFFICE" && recs >= neededRecs) return true;
       return false;
     }
     if (isOps) {
-      if (locType === 'BAZAAR' && !deptOrigin && recs >= 1) return true;
+      if (locType === "BAZAAR" && !deptOrigin && recs >= 1) return true;
       return false;
     }
     return false;
@@ -126,46 +172,112 @@ export default function TravelApprovalsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Travel Approvals</h1>
-        <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
+        <Button variant="outline" size="sm" onClick={load}>
+          Refresh
+        </Button>
       </div>
 
       <Card>
-        <CardHeader className="border-b"><CardTitle>Pending Approvals</CardTitle></CardHeader>
+        <CardHeader className="border-b">
+          <CardTitle>Pending Approvals</CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y">
-            {loading && <div className="p-4 text-muted-foreground">Loading...</div>}
-            {!loading && list.length === 0 && <div className="p-6 text-muted-foreground">No pending requests</div>}
-            {list.map(r => {
+            {loading && (
+              <div className="p-4 text-muted-foreground">Loading...</div>
+            )}
+            {!loading && list.length === 0 && (
+              <div className="p-6 text-muted-foreground">
+                No pending requests
+              </div>
+            )}
+            {list.map((r) => {
               const recommended = hasRecommended(r);
               const canUndo = canUndoRecommendation(r);
               // Allow recommending even after first recommendation for HoD's RO stage (handled by canRecommendMe)
               const showRecommenderActions = !canUndo && canRecommendMe(r);
               const showApproveActions = !canUndo && canApproveMe(r);
               return (
-                <div key={r.id} className="p-4 flex items-center justify-between text-sm">
+                <div
+                  key={r.id}
+                  className="p-4 flex items-center justify-between text-sm"
+                >
                   <div className="space-y-0.5">
-                    <div className="font-medium">{r.purpose || '—'}</div>
-                    <div className="text-muted-foreground">{r.destination ? `${r.destination} · ` : ''}{String(r.departure_date).slice(0,10)} {r.departure_time ? `at ${r.departure_time}`:''} → {String(r.expected_return_date).slice(0,10)} · {r.total_days ? `${r.total_days} day(s)` : '—'}</div>
+                    <div className="font-medium">{r.purpose || "—"}</div>
+                    <div className="text-muted-foreground">
+                      {r.destination ? `${r.destination} · ` : ""}
+                      {String(r.departure_date).slice(0, 10)}{" "}
+                      {r.departure_time ? `at ${r.departure_time}` : ""} →{" "}
+                      {String(r.expected_return_date).slice(0, 10)} ·{" "}
+                      {r.total_days ? `${r.total_days} day(s)` : "—"}
+                    </div>
                     <div className="flex flex-wrap gap-1">
-                      {(r.statusEntries||[]).map(se => <Badge key={se.id} variant="outline" className="text-[11px]">{labelAction(se.action)}</Badge>)}
+                      {(r.statusEntries || []).map((se) => (
+                        <Badge
+                          key={se.id}
+                          variant="outline"
+                          className="text-[11px]"
+                        >
+                          {labelAction(se.action)}
+                        </Badge>
+                      ))}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={()=>openDetail(r.id)}>View</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDetail(r.id)}
+                    >
+                      View
+                    </Button>
                     <div className="flex items-center gap-1">
                       {canUndo && (
-                        <Button disabled={submitting} size="sm" variant="secondary" onClick={()=>doAction(r,'UNDO_RECOMMEND')}>Undo</Button>
+                        <Button
+                          disabled={submitting}
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => doAction(r, "UNDO_RECOMMEND")}
+                        >
+                          Undo
+                        </Button>
                       )}
                       {showRecommenderActions && (
                         <>
-                          <Button disabled={submitting} size="sm" onClick={()=>doAction(r,'RECOMMEND')}>Recommend</Button>
-                          <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(r,'RECOMMENDER_REJECT')}>Reject</Button>
+                          <Button
+                            disabled={submitting}
+                            size="sm"
+                            onClick={() => doAction(r, "RECOMMEND")}
+                          >
+                            Recommend
+                          </Button>
+                          <Button
+                            disabled={submitting}
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => doAction(r, "RECOMMENDER_REJECT")}
+                          >
+                            Reject
+                          </Button>
                         </>
                       )}
                       {!canUndo && showApproveActions && (
                         <>
-                          <Button disabled={submitting} size="sm" onClick={()=>doAction(r,'APPROVE')}>Approve</Button>
-                          <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(r,'REJECT')}>Reject</Button>
+                          <Button
+                            disabled={submitting}
+                            size="sm"
+                            onClick={() => doAction(r, "APPROVE")}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            disabled={submitting}
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => doAction(r, "REJECT")}
+                          >
+                            Reject
+                          </Button>
                         </>
                       )}
                     </div>
@@ -177,7 +289,12 @@ export default function TravelApprovalsPage() {
         </CardContent>
       </Card>
 
-      <EnhancedModal isOpen={open} onClose={()=>setOpen(false)} title="TADA Request Details" size="lg">
+      <EnhancedModal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="TADA Request Details"
+        size="lg"
+      >
         <div className="p-4 space-y-4 text-sm">
           {!selected && <div className="text-muted-foreground">Loading...</div>}
           {selected && (
@@ -185,36 +302,51 @@ export default function TravelApprovalsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <div className="text-muted-foreground">Submission Date</div>
-                  <div className="font-medium">{String(selected.submission_date).slice(0,10)}</div>
+                  <div className="font-medium">
+                    {String(selected.submission_date).slice(0, 10)}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Purpose</div>
-                  <div className="font-medium">{selected.purpose || '—'}</div>
+                  <div className="font-medium">{selected.purpose || "—"}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Destination</div>
-                  <div className="font-medium">{selected.destination || '—'}</div>
+                  <div className="font-medium">
+                    {selected.destination || "—"}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Departure</div>
-                  <div className="font-medium">{String(selected.departure_date).slice(0,10)} {selected.departure_time ? `at ${selected.departure_time}`: ''}</div>
+                  <div className="font-medium">
+                    {String(selected.departure_date).slice(0, 10)}{" "}
+                    {selected.departure_time
+                      ? `at ${selected.departure_time}`
+                      : ""}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Expected Return</div>
-                  <div className="font-medium">{String(selected.expected_return_date).slice(0,10)}</div>
+                  <div className="font-medium">
+                    {String(selected.expected_return_date).slice(0, 10)}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Total Days</div>
-                  <div className="font-medium">{selected.total_days || '—'}</div>
+                  <div className="font-medium">
+                    {selected.total_days || "—"}
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <div className="text-muted-foreground">Employees</div>
                   <div className="font-medium space-y-1">
-                    {(selected.attendees||[]).length
-                      ? (selected.attendees||[]).map(a => (
-                          <div key={a.id}>{a.employee.full_name} — {a.employee.cnic || 'N/A'}</div>
+                    {(selected.attendees || []).length
+                      ? (selected.attendees || []).map((a) => (
+                          <div key={a.id}>
+                            {a.employee.full_name} — {a.employee.cnic || "N/A"}
+                          </div>
                         ))
-                      : '—'}
+                      : "—"}
                   </div>
                 </div>
               </div>
@@ -222,12 +354,22 @@ export default function TravelApprovalsPage() {
               <div className="pt-2">
                 <div className="font-medium mb-2">Status History</div>
                 <div className="rounded-lg border divide-y">
-                  {(selected.statusEntries||[]).length === 0 && <div className="p-3 text-muted-foreground">No history</div>}
-                  {(selected.statusEntries||[]).map(s => (
-                    <div key={s.id} className="p-3 flex items-center justify-between">
+                  {(selected.statusEntries || []).length === 0 && (
+                    <div className="p-3 text-muted-foreground">No history</div>
+                  )}
+                  {(selected.statusEntries || []).map((s) => (
+                    <div
+                      key={s.id}
+                      className="p-3 flex items-center justify-between"
+                    >
                       <div>
-                        <div className="font-medium">{labelAction(s.action)}</div>
-                        <div className="text-slate-500 text-xs">by {extractEmail(s.remarks, '—')} at {new Date(s.createdAt).toLocaleString()}</div>
+                        <div className="font-medium">
+                          {labelAction(s.action)}
+                        </div>
+                        <div className="text-slate-500 text-xs">
+                          by {extractEmail(s.remarks, "—")} at{" "}
+                          {new Date(s.createdAt).toLocaleString()}
+                        </div>
                       </div>
                     </div>
                   ))}
