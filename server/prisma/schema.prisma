@@ -351,12 +351,16 @@ model User {
   employee_id  Int?      @unique
   // Optional: link user to a department
   department_id Int?
+  // Optional: link user to a location (e.g., bazaar/head office)
+  location_id   Int?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   is_deleted   Boolean   @default(false)
   role         Role      @relation(fields: [role_id], references: [id])
   employee     Employee? @relation(fields: [employee_id], references: [id])
   department    Department? @relation(fields: [department_id], references: [id])
+  // Optional reference to a Location for location-based users
+  location      Location?  @relation(name: "UserLocation", fields: [location_id], references: [id])
   // back relation for settings updates
   updatedSettings SystemSetting[] @relation("UserUpdatedSettings")
   // back relation for managed locations
@@ -369,6 +373,7 @@ model User {
   createdTranches TravelClaimTranche[]
 
   @@index([department_id])
+  @@index([location_id])
 }
 
 model Session {
@@ -439,6 +444,8 @@ model Location {
   devices         Device[]
   // back relation: employments assigned to this location
   employments     Employment[]
+  // back relation: users optionally linked to this location (distinct from manager)
+  users           User[]     @relation(name: "UserLocation")
 
   @@index([district_id])
   @@index([city_id])
