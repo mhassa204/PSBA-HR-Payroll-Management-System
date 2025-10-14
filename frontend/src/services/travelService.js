@@ -12,6 +12,7 @@ export const decideTravelRequest = (id, action) => api.post(`/travel/requests/${
 export const getPendingTravelApprovals = () => api.get('/travel/requests/pending-approvals').then(r => r.data.requests);
 export const getTravelCapabilities = () => api.get('/travel/me/capabilities').then(r => r.data.capabilities);
 export const updateTravelRequestStatus = (id, status) => api.patch(`/travel/requests/${id}/status`, { status }).then(r => r.data.request);
+export const clearLastDecisionTravelRequest = (id) => api.post(`/travel/requests/${id}/clear-last`).then(r => r.data.request);
 // New recommender APIs
 export const recommendTravelRequest = (id) => api.post(`/travel/requests/${id}/recommend`).then(r => r.data.request);
 export const clearTravelRecommendation = (id) => api.post(`/travel/requests/${id}/recommend/clear`).then(r => r.data.request);

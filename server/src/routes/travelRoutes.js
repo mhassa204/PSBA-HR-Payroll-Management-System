@@ -29,6 +29,7 @@ router.put('/requests/:id', isAuthenticated, authorizeAny(['travel.manage','trav
 router.delete('/requests/:id', isAuthenticated, travelRequestController.remove);
 router.get('/requests/:id', isAuthenticated, travelRequestController.getOne);
 router.post('/requests/:id/decision', isAuthenticated, travelRequestController.legacyDecision);
+router.post('/requests/:id/clear-last', isAuthenticated, travelRequestController.clearLast);
 
 // Capabilities for current user (frontend can use this to gate UI)
 router.get('/me/capabilities', isAuthenticated, travelRequestController.capabilities);

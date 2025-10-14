@@ -292,6 +292,17 @@ module.exports = {
         res.status(code).json({ success: false, error: e.message });
     }
   },
+  clearLast: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      const id = Number(req.params.id);
+      if (!ctx.meEmpId && !ctx.isSuperAdmin) return res.status(403).json({ success:false, error:'Forbidden' });
+      const full = await travelService.clearLastDecision(id, ctx.meEmpId, ctx);
+      res.json({ success:true, request: full });
+    } catch(e){
+      res.status(400).json({ success:false, error: e.message });
+    }
+  },
 
   // For manual entry: list reportees of a selected applicant
   reporteesOfApplicant: async (req, res) => {

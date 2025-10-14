@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTravelRequests, getTravelRequest, updateTravelRequestStatus, getTravelCapabilities, recommendTravelRequest, clearTravelRecommendation, recommendDecisionTravelRequest } from '../../../services/travelService';
+import { getTravelRequests, getTravelRequest, updateTravelRequestStatus, getTravelCapabilities, recommendTravelRequest, clearTravelRecommendation, recommendDecisionTravelRequest, clearLastDecisionTravelRequest } from '../../../services/travelService';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -58,6 +58,32 @@ export default function ManageTravelRequests() {
     const last = lastEntry(r);
     return r?.status==='CREATED' && last && last.action==='RECOMMENDED' && String(last.actor_employee_id)===String(meEmpId);
   };
+  const isDeptOrigin = (r) => (r?.statusEntries||[]).some(se=>se.action==='CREATED' && /\[DEPT\]/i.test(String(se.remarks||'')));
+  const locType = (r) => (r?.applicant?.employmentRecords?.[0]?.location?.type || 'HEAD_OFFICE');
+  const canApproveHere = (r) => {
+    if (r?.status !== 'CREATED') return false; // only CREATED can be approved/rejected
+    const recommendedCount = (r?.statusEntries||[]).filter(se=>se.action==='RECOMMENDED').length;
+    if (caps.isDG) {
+      // Department-origin: DG after required recommendations
+      const needed = isDeptOrigin(r) ? 2 : 1; // conservative in UI; backend is source of truth
+      if (recommendedCount >= needed && locType(r) === 'HEAD_OFFICE') return true;
+      return false;
+    }
+    if (caps.isOps) {
+      if (!isDeptOrigin(r) && locType(r) === 'BAZAAR' && recommendedCount >= 1) return true;
+      return false;
+    }
+    return false;
+  };
+  const canUndoDecision = (r) => {
+    const last = lastEntry(r);
+    if (!last) return false;
+    const isMine = String(last.actor_employee_id||'')===String(meEmpId||'');
+    // Allow undo if I am the actor of the last entry and next stage hasn't acted yet (best-effort in UI)
+    if (!isMine) return false;
+    if (['APPROVED','REJECTED'].includes(last.action)) return true;
+    return false;
+  };
 
   const doAction = async (r, action) => {
     if(!r) return; if(!window.confirm(`Confirm to ${action.toLowerCase().replace('_',' ')} request #${r.id}?`)) return;
@@ -66,8 +92,9 @@ export default function ManageTravelRequests() {
       if(action==='RECOMMEND') await recommendTravelRequest(r.id);
       else if(action==='UNDO_RECOMMEND') await clearTravelRecommendation(r.id);
       else if(action==='RECOMMENDER_REJECT') await recommendDecisionTravelRequest(r.id, 'REJECT');
-      else if(action==='APPROVE') await updateTravelRequestStatus(r.id, 'APPROVED');
-      else if(action==='REJECT') await updateTravelRequestStatus(r.id, 'REJECTED');
+  else if(action==='APPROVE') await updateTravelRequestStatus(r.id, 'APPROVED');
+  else if(action==='REJECT') await updateTravelRequestStatus(r.id, 'REJECTED');
+  else if(action==='UNDO_LAST') await clearLastDecisionTravelRequest(r.id);
       const full = await getTravelRequest(r.id); setSelected(full);
       await load();
     } catch(err){ alert(err?.response?.data?.error || 'Action failed'); }
@@ -158,18 +185,14 @@ export default function ManageTravelRequests() {
                   {canUndoRecommendation(selected) && (
                     <Button disabled={submitting} size="sm" variant="secondary" onClick={()=>doAction(selected,'UNDO_RECOMMEND')}>Undo</Button>
                   )}
-                  {!hasRecommended(selected) && (
-                    <>
-                      {/* Recommender actions generally not exposed here; backend will enforce */}
-                      {/* <Button disabled={submitting} size="sm" onClick={()=>doAction(selected,'RECOMMEND')}>Recommend</Button>
-                      <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(selected,'RECOMMENDER_REJECT')}>Reject</Button> */}
-                    </>
-                  )}
-                  {hasRecommended(selected) && (caps.isDG || caps.isOps) && (
+                  {canApproveHere(selected) && (
                     <>
                       <Button disabled={submitting} size="sm" onClick={()=>doAction(selected,'APPROVE')}>Approve</Button>
                       <Button disabled={submitting} size="sm" variant="destructive" onClick={()=>doAction(selected,'REJECT')}>Reject</Button>
                     </>
+                  )}
+                  {canUndoDecision(selected) && (
+                    <Button disabled={submitting} size="sm" variant="secondary" onClick={()=>doAction(selected,'UNDO_LAST')}>Undo</Button>
                   )}
                 </div>
               </div>

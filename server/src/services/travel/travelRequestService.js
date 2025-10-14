@@ -50,12 +50,32 @@ module.exports = {
   },
 
   listManage: async (ctx) => {
-    const where = { is_deleted: false };
+    const me = String(ctx.meEmpId || '');
+    const base = { is_deleted: false };
+    let where = { ...base };
     if (!ctx.isSuperAdmin && !ctx.isHR) {
       if (ctx.isOps && !ctx.isDG) {
-        where.applicant = { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'BAZAAR' } } } };
+        where = { ...where, applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'BAZAAR' } } } } };
       } else if (ctx.isDG && !ctx.isOps) {
-        where.applicant = { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'HEAD_OFFICE' } } } };
+        where = { ...where, applicant: { employmentRecords: { some: { is_current: true, is_deleted: false, location: { type: 'HEAD_OFFICE' } } } } };
+      } else if (me) {
+        // Reporting Officer view: show requests from employees who report to me
+        // and also employees whose department head reports to me (HoD's RO coverage)
+        where = {
+          ...where,
+          applicant: {
+            employmentRecords: {
+              some: {
+                is_current: true,
+                is_deleted: false,
+                OR: [
+                  { reporting_officer_id: me },
+                  { department: { head: { employmentRecords: { some: { is_current: true, is_deleted: false, reporting_officer_id: me } } } } }
+                ]
+              }
+            }
+          }
+        };
       }
     }
     return prisma.travelRequest.findMany({
@@ -242,7 +262,7 @@ module.exports = {
     include: {
       attendees: { include: { employee: true } },
       statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } },
-      applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { department: true } } } }
+      applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, department: { include: { head: true } } } } } }
     }
   }),
 
@@ -408,6 +428,20 @@ module.exports = {
     }
 
     throw new Error('Invalid action');
+  },
+
+  // New: clear the last decision (including APPROVED/REJECTED) by the same actor; revert status if terminal
+  clearLastDecision: async (id, actorEmpId, ctx) => {
+    const req = await prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { statusEntries: { orderBy: { createdAt: 'asc' } } } });
+    if (!req || req.is_deleted) throw new Error('Not found');
+    const last = (req.statusEntries||[])[(req.statusEntries||[]).length-1];
+    if (!last) throw new Error('Nothing to clear');
+    if (Number(last.actor_employee_id||0) !== Number(actorEmpId||0) && !ctx.isSuperAdmin) throw new Error('Cannot clear another user\'s decision');
+    await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
+    if (['APPROVED','REJECTED'].includes(last.action)) {
+      await prisma.travelRequest.update({ where: { id: Number(id) }, data: { status: 'CREATED' } });
+    }
+    return prisma.travelRequest.findUnique({ where: { id: Number(id) }, include: { attendees: { include: { employee: true } }, statusEntries: { orderBy: { createdAt: 'asc' }, include: { actor: true } }, applicant: { include: { employmentRecords: { where: { is_current: true, is_deleted: false }, include: { location: true, department: { include: { head: true } } } } } } } });
   },
 
   listReporteesPlusSelf: async (meEmpId) => {
