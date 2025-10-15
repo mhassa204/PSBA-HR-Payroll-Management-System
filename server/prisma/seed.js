@@ -895,70 +895,79 @@ async function main() {
     )
   );
 
-  // Link permissions to roles (skip Super Admin and Director General with * permissions)
+  // Link permissions to roles (grant ALL permissions to Management and Senior Management)
   for (const role of createdRoles) {
     const orig = roles.find((r) => r.name === role.name);
     if (!orig) continue;
-    if (orig.allowed_actions.includes("*")) continue;
+    if (orig.allowed_actions.includes("*")) continue; // Super Admin / DG
 
-    const basePerms = await prisma.permission.findMany({
-      where: { key: { in: orig.allowed_actions.filter((k) => k !== "*") } },
-    });
-    const permsToCreate = basePerms.map((p) => ({ permission_id: p.id }));
+    let permsToCreate = [];
 
-    // Add additional permissions based on role type
-    if (orig.name === "Senior Management") {
-      const extraKeys = [
-        "attendance.map",
-        "leaves.read",
-        "leaves.create",
-        "leaves.update",
-        "leaves.delete",
-        "leaves.status",
-        "leaves.apply",
-        "leave-banks.read",
-        "leave-banks.create",
-        "leave-banks.update",
-        "leave-banks.delete",
-        "leave-types.read",
-        "leave-types.create",
-        "leave-types.update",
-        "leave-types.delete",
-      ];
-      const extraPerms = await prisma.permission.findMany({
-        where: { key: { in: extraKeys } },
+    // For Management and Senior Management, assign ALL permissions available
+    if (orig.name === "Management" || orig.name === "Senior Management") {
+      const allPerms = await prisma.permission.findMany({});
+      permsToCreate = allPerms.map((p) => ({ permission_id: p.id }));
+    } else {
+      // Default behavior: assign only declared permissions (+ a few role-specific extras)
+      const basePerms = await prisma.permission.findMany({
+        where: { key: { in: orig.allowed_actions.filter((k) => k !== "*") } },
       });
-      for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
-    }
+      permsToCreate = basePerms.map((p) => ({ permission_id: p.id }));
 
-    if (orig.name === "Management") {
-      const extraPerms = await prisma.permission.findMany({
-        where: {
-          key: {
-            in: [
-              "leaves.apply",
-              "leaves.read",
-              "travel.claim.approve.hr", // Management level can approve HR stage
-            ],
+      // Add additional permissions based on role type
+      if (orig.name === "Senior Management") {
+        const extraKeys = [
+          "attendance.map",
+          "leaves.read",
+          "leaves.create",
+          "leaves.update",
+          "leaves.delete",
+          "leaves.status",
+          "leaves.apply",
+          "leave-banks.read",
+          "leave-banks.create",
+          "leave-banks.update",
+          "leave-banks.delete",
+          "leave-types.read",
+          "leave-types.create",
+          "leave-types.update",
+          "leave-types.delete",
+        ];
+        const extraPerms = await prisma.permission.findMany({
+          where: { key: { in: extraKeys } },
+        });
+        for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
+      }
+
+      if (orig.name === "Management") {
+        const extraPerms = await prisma.permission.findMany({
+          where: {
+            key: {
+              in: [
+                "leaves.apply",
+                "leaves.read",
+                "travel.claim.approve.hr", // Management level can approve HR stage
+              ],
+            },
           },
-        },
-      });
-      for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
-    }
+        });
+        for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
+      }
 
-    if (orig.name === "Accounts Manager") {
-      const extraPerms = await prisma.permission.findMany({
-        where: {
-          key: {
-            in: [
-              "leaves.apply",
-              "leaves.read",
-              "travel.claim.approve.hr", // Accounts Manager can also approve HR stage
-            ],
+      if (orig.name === "Accounts Manager") {
+        const extraPerms = await prisma.permission.findMany({
+          where: {
+            key: {
+              in: [
+                "leaves.apply",
+                "leaves.read",
+                "travel.claim.approve.hr", // Accounts Manager can also approve HR stage
+              ],
+            },
           },
-        },
-      });
-      for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
+        });
+        for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
+      }
     }
 
     // Deduplicate permission_ids to avoid P2002 unique constraint violations

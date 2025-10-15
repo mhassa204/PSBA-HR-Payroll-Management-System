@@ -36,17 +36,52 @@ module.exports = {
       (req.session.user?.permissions || []).includes("*");
     return { employee_id, isSuperAdmin };
   },
-  listEligibleRequests: async (employee_id) => {
-    if (!employee_id) return [];
-    const requests = await prisma.travelRequest.findMany({
+  listEligibleRequests: async (employee_id, userEmail) => {
+    // Fetch approved TADA requests either for the applicant (employee_id) OR
+    // created by the logged-in email (from CREATED status entry actor or remarks)
+    const orFilters = [];
+    if (employee_id) {
+      orFilters.push({ applicant_id: Number(employee_id) });
+    }
+    if (userEmail) {
+      const email = String(userEmail);
+      orFilters.push({
+        statusEntries: {
+          some: {
+            action: "CREATED",
+            OR: [
+              {
+                actor: {
+                  user: {
+                    is: { email: { equals: email, mode: "insensitive" } },
+                  },
+                },
+              },
+              { remarks: { contains: email, mode: "insensitive" } },
+            ],
+          },
+        },
+      });
+    }
+    if (orFilters.length === 0) return [];
+
+    return prisma.travelRequest.findMany({
       where: {
-        applicant_id: employee_id,
-        status: "APPROVED",
         is_deleted: false,
+        status: "APPROVED",
+        OR: orFilters,
       },
-      include: { attendees: { include: { employee: true } }, claims: true },
+      orderBy: { createdAt: "desc" },
+      include: {
+        attendees: { include: { employee: true } },
+        claims: true,
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: { include: { user: true } } },
+        },
+        applicant: true,
+      },
     });
-    return requests.filter((r) => withinLastNDays(r.expected_return_date, 15));
   },
   listClaims: async (employee_id, isSuperAdmin) => {
     if (!employee_id) return [];
