@@ -86,6 +86,8 @@ model Department {
   head              Employee?     @relation("DepartmentHead", fields: [head_employee_id], references: [id])
   // Back-relation: users optionally linked to this department
   users             User[]
+  // Back-relation: travel claims submitted by this department account or HQ-origin
+  createdClaims     TravelClaim[]
 
   @@index([head_employee_id])
 }
@@ -734,6 +736,9 @@ model TravelClaim {
   per_diem_rate      Float?         @default(0)
   per_diem_amount    Float?         @default(0) // F
   grand_total        Float?         @default(0) // G = E + F
+  // New: track which Department submitted the claim (for department-origin/HQ routing)
+  created_by_department_id Int?
+  createdByDepartment      Department?   @relation(fields: [created_by_department_id], references: [id])
   documents          TravelClaimDocument[]
   segments           TravelClaimSegment[]
   statusEntries      TravelClaimStatusEntry[]
@@ -741,6 +746,7 @@ model TravelClaim {
   trancheItems       TravelClaimTrancheItem[]
 
   @@unique([travel_request_id, employee_id], name: "request_employee_claim_unique")
+  @@index([created_by_department_id])
 }
 
 // Status history for expense claims (OPS/DG/HR/Accounts)

@@ -7,7 +7,19 @@ module.exports = {
     const meUserId = Number(
       req.session.user?.id || req.session.user?.user_id || req.session.user?.uid
     );
-    const meEmpId = Number(req.session.user?.employee_id);
+    let meEmpId = Number(req.session.user?.employee_id);
+    if (!Number.isFinite(meEmpId) || meEmpId <= 0) {
+      // Fallback: resolve via User relation if available
+      if (Number.isFinite(meUserId) && meUserId > 0) {
+        try {
+          const userRow = await prisma.user.findUnique({
+            where: { id: meUserId },
+            select: { employee: { select: { id: true } } },
+          });
+          if (userRow?.employee?.id) meEmpId = Number(userRow.employee.id);
+        } catch (_) {}
+      }
+    }
     const employment = meEmpId
       ? await prisma.employment.findFirst({
           where: { employee_id: meEmpId, is_current: true, is_deleted: false },
@@ -19,7 +31,17 @@ module.exports = {
           },
         })
       : null;
-    const deptName = employment?.department?.name || "";
+    // Fallback: department-based user (no employee mapping)
+    let deptName = employment?.department?.name || "";
+    if (!deptName && req.session.user?.department_id) {
+      const dept = await prisma.department.findFirst({
+        where: {
+          id: Number(req.session.user.department_id),
+          is_deleted: false,
+        },
+      });
+      deptName = dept?.name || "";
+    }
     const desigTitle = employment?.designation?.title || "";
     const locType = employment?.location?.type || "HEAD_OFFICE";
     const scaleLevel = Number(employment?.scale_grade?.level || 0);

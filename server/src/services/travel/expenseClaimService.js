@@ -874,9 +874,14 @@ module.exports = {
     );
     if (!isWithinCity && !hasReport)
       throw new Error("Report document required before submission");
+    // If submitted by a department account, persist the origin department for routing
+    const updateData = { status: "SUBMITTED" };
+    if (!employee_id && department_id) {
+      updateData.created_by_department_id = Number(department_id);
+    }
     await prisma.travelClaim.update({
       where: { id: claim.id },
-      data: { status: "SUBMITTED" },
+      data: updateData,
     });
     await prisma.travelClaimStatusEntry.create({
       data: {
@@ -902,7 +907,7 @@ module.exports = {
     const stageFilters = [];
 
     // Recommendation stages
-    if (ctx.meEmpId && !ctx.isDG) {
+    if (ctx.meEmpId) {
       // Personal/standard path: immediate in-charge of applicant (request-linked)
       stageFilters.push({
         status: "SUBMITTED",
@@ -935,9 +940,32 @@ module.exports = {
         statusEntries: { none: { action: "RECOMMENDED" } },
       });
 
-      // Department-originated: HoD-first recommendation
+      // Department-originated (dept account): route to HoD of the submitting department (created_by_department_id)
       stageFilters.push({
         status: "SUBMITTED",
+        statusEntries: { none: { action: "RECOMMENDED" } },
+        AND: [
+          { created_by_department_id: { not: null } },
+          {
+            OR: [
+              {
+                createdByDepartment: {
+                  is: { head_employee_id: Number(ctx.meEmpId) },
+                },
+              },
+              {
+                createdByDepartment: {
+                  head: { is: { id: Number(ctx.meEmpId) } },
+                },
+              },
+            ],
+          },
+        ],
+      });
+      // Legacy fallback: no created_by_department_id but submitted with [DEPT] marker; route via claimant's HoD
+      stageFilters.push({
+        status: "SUBMITTED",
+        created_by_department_id: null,
         statusEntries: {
           none: { action: "RECOMMENDED" },
           some: {
@@ -950,41 +978,146 @@ module.exports = {
             some: {
               is_current: true,
               is_deleted: false,
-              department: { head_employee_id: Number(ctx.meEmpId) },
+              department: { is: { head_employee_id: Number(ctx.meEmpId) } },
             },
           },
         },
       });
 
-      // Department-originated: HoD’s RO as second recommendation (after first recommendation)
+      // HQ-origin (personal at Head Office): claimant's department HoD is me
       stageFilters.push({
         status: "SUBMITTED",
-        statusEntries: {
-          some: { action: "RECOMMENDED" },
-          some: {
-            action: "SUBMITTED",
-            remarks: { contains: "[DEPT]", mode: "insensitive" },
+        statusEntries: { none: { action: "RECOMMENDED" } },
+        AND: [
+          { created_by_department_id: null },
+          {
+            employee: {
+              employmentRecords: {
+                some: {
+                  is_current: true,
+                  is_deleted: false,
+                  location: { is: { type: "HEAD_OFFICE" } },
+                  department: { is: { head_employee_id: Number(ctx.meEmpId) } },
+                },
+              },
+            },
           },
-        },
-        employee: {
-          employmentRecords: {
-            some: {
-              is_current: true,
-              is_deleted: false,
-              department: {
+        ],
+      });
+
+      // Fallback: Department-originated but route via claimant's HoD as well (data inconsistencies)
+      stageFilters.push({
+        status: "SUBMITTED",
+        statusEntries: { none: { action: "RECOMMENDED" } },
+        AND: [
+          { created_by_department_id: { not: null } },
+          {
+            employee: {
+              employmentRecords: {
+                some: {
+                  is_current: true,
+                  is_deleted: false,
+                  department: { is: { head_employee_id: Number(ctx.meEmpId) } },
+                },
+              },
+            },
+          },
+        ],
+      });
+
+      // Department-originated: HoD’s RO is me (based on submitting department HoD)
+      stageFilters.push({
+        status: "SUBMITTED",
+        statusEntries: { some: { action: "RECOMMENDED" } },
+        AND: [
+          { created_by_department_id: { not: null } },
+          {
+            createdByDepartment: {
+              is: {
                 head: {
-                  employmentRecords: {
-                    some: {
-                      is_current: true,
-                      is_deleted: false,
-                      reporting_officer_id: String(ctx.meEmpId),
+                  is: {
+                    employmentRecords: {
+                      some: {
+                        is_current: true,
+                        is_deleted: false,
+                        reporting_officer_id: String(ctx.meEmpId),
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
+        ],
+      });
+
+      // HQ-origin (personal): claimant's department HoD's RO is me (at Head Office)
+      stageFilters.push({
+        status: "SUBMITTED",
+        statusEntries: { some: { action: "RECOMMENDED" } },
+        AND: [
+          { created_by_department_id: null },
+          {
+            employee: {
+              employmentRecords: {
+                some: {
+                  is_current: true,
+                  is_deleted: false,
+                  location: { is: { type: "HEAD_OFFICE" } },
+                  department: {
+                    is: {
+                      head: {
+                        is: {
+                          employmentRecords: {
+                            some: {
+                              is_current: true,
+                              is_deleted: false,
+                              reporting_officer_id: String(ctx.meEmpId),
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      });
+
+      // Fallback: Department-originated but allow HoD’s RO via claimant’s department HoD as well
+      stageFilters.push({
+        status: "SUBMITTED",
+        statusEntries: { some: { action: "RECOMMENDED" } },
+        AND: [
+          { created_by_department_id: { not: null } },
+          {
+            employee: {
+              employmentRecords: {
+                some: {
+                  is_current: true,
+                  is_deleted: false,
+                  department: {
+                    is: {
+                      head: {
+                        is: {
+                          employmentRecords: {
+                            some: {
+                              is_current: true,
+                              is_deleted: false,
+                              reporting_officer_id: String(ctx.meEmpId),
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
       });
     }
 
@@ -1002,13 +1135,11 @@ module.exports = {
             some: { is_current: true, location: { type: "BAZAAR" } },
           },
         },
+        // Exclude department-origin and HQ-origin from OPS; only bazaar-origin standard claims
+        created_by_department_id: null,
         statusEntries: {
           none: firstStageNone,
           some: { action: "RECOMMENDED" },
-          none: {
-            action: "SUBMITTED",
-            remarks: { contains: "[DEPT]", mode: "insensitive" },
-          },
         },
       });
     }
@@ -1024,23 +1155,29 @@ module.exports = {
         statusEntries: {
           none: firstStageNone,
           some: { action: "RECOMMENDED" },
-          none: {
-            action: "SUBMITTED",
-            remarks: { contains: "[DEPT]", mode: "insensitive" },
-          },
         },
       });
-      // Department-originated: DG sees after recommendations
+      // Department/HQ-origin: DG sees after recommendations
       stageFilters.push({
         status: "SUBMITTED",
         statusEntries: {
           some: { action: "RECOMMENDED" },
-          some: {
-            action: "SUBMITTED",
-            remarks: { contains: "[DEPT]", mode: "insensitive" },
-          },
           none: firstStageNone,
         },
+        OR: [
+          { created_by_department_id: { not: null } },
+          {
+            employee: {
+              employmentRecords: {
+                some: {
+                  is_current: true,
+                  is_deleted: false,
+                  location: { type: "HEAD_OFFICE" },
+                },
+              },
+            },
+          },
+        ],
       });
       // Fast-track for DG direct reports (skip recommendation) remains
       if (ctx.meEmpId) {
@@ -1058,10 +1195,6 @@ module.exports = {
           },
           statusEntries: {
             none: firstStageNone,
-            none: {
-              action: "SUBMITTED",
-              remarks: { contains: "[DEPT]", mode: "insensitive" },
-            },
           },
         });
       }
@@ -1100,11 +1233,36 @@ module.exports = {
       where: { OR: stageFilters },
       orderBy: { createdAt: "desc" },
       include: {
+        createdByDepartment: {
+          include: {
+            head: {
+              include: {
+                employmentRecords: {
+                  where: { is_current: true, is_deleted: false },
+                },
+              },
+            },
+          },
+        },
         employee: {
           include: {
             employmentRecords: {
               where: { is_current: true, is_deleted: false },
-              include: { designation: true, department: true, location: true },
+              include: {
+                designation: true,
+                department: {
+                  include: {
+                    head: {
+                      include: {
+                        employmentRecords: {
+                          where: { is_current: true, is_deleted: false },
+                        },
+                      },
+                    },
+                  },
+                },
+                location: true,
+              },
             },
           },
         },
@@ -1117,7 +1275,17 @@ module.exports = {
                   include: {
                     location: true,
                     designation: true,
-                    department: true,
+                    department: {
+                      include: {
+                        head: {
+                          include: {
+                            employmentRecords: {
+                              where: { is_current: true, is_deleted: false },
+                            },
+                          },
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -1216,21 +1384,34 @@ module.exports = {
       Number(sg.grade.level || 0) < 17
     );
     // Department-originated detection: SUBMITTED entry remarks contain [DEPT]
-    const isDeptOrigin = (claim.statusEntries || []).some(
-      (e) =>
-        e.action === "SUBMITTED" &&
-        e.remarks &&
-        /\[DEPT\]/i.test(String(e.remarks))
-    );
+    // Department-origin detection: submitted by a department account (explicit persisted field)
+    const isDeptOrigin = !!claim.created_by_department_id;
+    // HQ-origin detection: claimant belongs to Head Office
+    const isHQOrigin = getClaimerLocationType() === "HEAD_OFFICE";
     const currentEmp =
       (claim.employee?.employmentRecords || []).find(
         (er) => er.is_current && !er.is_deleted
       ) ||
       claim.employee?.employmentRecords?.[0] ||
       null;
-    const hodId = currentEmp?.department?.head_employee_id
-      ? Number(currentEmp.department.head_employee_id)
-      : null;
+    // Prefer HoD based on origin:
+    // - Department-origin: HoD of the submitting department (created_by_department_id)
+    // - Otherwise: HoD of claimant's current department
+    let hodId = null;
+    if (claim.created_by_department_id) {
+      const originDept = await prisma.department.findFirst({
+        where: {
+          id: Number(claim.created_by_department_id),
+          is_deleted: false,
+        },
+        select: { head_employee_id: true },
+      });
+      if (originDept?.head_employee_id)
+        hodId = Number(originDept.head_employee_id);
+    }
+    if (!hodId && currentEmp?.department?.head_employee_id) {
+      hodId = Number(currentEmp.department.head_employee_id);
+    }
     const hodEmployment = hodId
       ? await prisma.employment.findFirst({
           where: { employee_id: hodId, is_current: true, is_deleted: false },
@@ -1270,7 +1451,7 @@ module.exports = {
     // - For low-BPS and HoD set: HoD first, then HoD's RO; DG direct reports bypass recommender
     // - Else (high-BPS or no HoD): immediate in-charge of applicant (request-linked) or employee (within-city)
     const expectedRecommenderId = (() => {
-      if (isDeptOrigin && hodId && !isDirectReportToDG()) {
+      if ((isDeptOrigin || isHQOrigin) && hodId && !isDirectReportToDG()) {
         if (recommendationCount === 0) return hodId;
         if (recommendationCount === 1) return hodRoId || null;
         return null; // already completed recommendations
@@ -1444,7 +1625,7 @@ module.exports = {
 
     // Determine how many recommendations are needed before first-stage approval
     const neededRecommendations =
-      (isDeptOrigin || isLowBps) && hodId && !isDirectReportToDG()
+      (isDeptOrigin || isHQOrigin || isLowBps) && hodId && !isDirectReportToDG()
         ? hodRoId
           ? 2
           : 1
@@ -1552,9 +1733,11 @@ module.exports = {
         let targetStatus;
         let fallbacks = [];
         if (stage === "OPS") {
-          // Department-originated should not be approved by OPS; require DG
-          if (isDeptOrigin)
-            throw new Error("Department-originated claims require DG approval");
+          // Department- or HQ-originated should not be approved by OPS; require DG
+          if (isDeptOrigin || isHQOrigin)
+            throw new Error(
+              "Head Office or department-originated claims require DG approval"
+            );
           approvalAction = "OPS_APPROVED";
           targetStatus = "APPROVED";
         } else if (stage === "DG") {

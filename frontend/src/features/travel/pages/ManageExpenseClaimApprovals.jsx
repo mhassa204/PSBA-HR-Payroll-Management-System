@@ -125,33 +125,40 @@ export default function ManageExpenseClaimApprovals() {
       )
     );
   };
-  const isDeptOriginClaim = (claim) =>
-    (claim.statusEntries || []).some(
-      (se) =>
-        se.action === "SUBMITTED" && /\[DEPT\]/i.test(String(se.remarks || ""))
-    );
+  const isDeptOriginClaim = (claim) => !!claim?.created_by_department_id;
   const hodIdForClaim = (claim) => {
-    const emp = claim?.employee;
-    const er =
-      (emp?.employmentRecords || []).find(
-        (x) => x.is_current && !x.is_deleted
-      ) || null;
-    return er?.department?.head_employee_id
-      ? Number(er.department.head_employee_id)
-      : null;
+    if (!claim) return null;
+    // Department-origin: HoD of submitting department
+    if (isDeptOriginClaim(claim)) {
+      const hodId = claim?.createdByDepartment?.head_employee_id;
+      return hodId ? Number(hodId) : null;
+    }
+    // HQ/personal: HoD of claimant's department
+    const er = (claim?.employee?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const hodId = er?.department?.head_employee_id;
+    return hodId ? Number(hodId) : null;
   };
   const hodROForClaim = (claim) => {
-    const hid = hodIdForClaim(claim);
-    if (!hid) return null;
-    const hodER =
-      (claim?.employee?.employmentRecords || []).find(
-        (x) => x.employee_id === hid
-      ) || null;
-    // If not in employee records, we can’t derive reliably on client; fallback to allow second step if not first step
-    const ro = hodER?.reporting_officer_id
-      ? Number(hodER.reporting_officer_id)
-      : null;
-    return ro;
+    if (!claim) return null;
+    // Department-origin: use submitting department HoD's current employment to read RO
+    if (isDeptOriginClaim(claim)) {
+      const hodER = (
+        claim?.createdByDepartment?.head?.employmentRecords || []
+      ).find((e) => e.is_current && !e.is_deleted);
+      const ro = hodER?.reporting_officer_id;
+      return ro ? Number(ro) : null;
+    }
+    // HQ/personal: use claimant department HoD's employment to read RO
+    const er = (claim?.employee?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const hodER = (er?.department?.head?.employmentRecords || []).find(
+      (e) => e.is_current && !e.is_deleted
+    );
+    const ro = hodER?.reporting_officer_id;
+    return ro ? Number(ro) : null;
   };
   const computeEligibility = (claim) => {
     if (!claim)
@@ -511,6 +518,22 @@ export default function ManageExpenseClaimApprovals() {
         String(er.reporting_officer_id || "") === String(meEmpId || "")
     );
 
+    // HoD/HoD's RO short-circuit: always see their recommender items
+    if (c.status === "SUBMITTED") {
+      const deptOrigin = isDeptOriginClaim(c);
+      const recs = entries.filter((e) => e.action === "RECOMMENDED").length;
+      const hodId = hodIdForClaim(c);
+      const hodRO = hodROForClaim(c);
+      if (
+        deptOrigin &&
+        ((recs === 0 && String(meEmpId || "") === String(hodId || "")) ||
+          (recs === 1 &&
+            hodRO &&
+            String(meEmpId || "") === String(hodRO || "")))
+      )
+        return true;
+    }
+
     if (canAccounts) {
       // Accounts sees only HR-approved (status VERIFIED)
       return c.status === "VERIFIED" && has("HR_APPROVED");
@@ -631,19 +654,8 @@ export default function ManageExpenseClaimApprovals() {
     });
   const fmtDate = (v) => (v ? new Date(v).toISOString().slice(0, 10) : "—");
 
-  // New: label helper for recommendation stage context
-  const getRecommendLabel = (claim) => {
-    const empJob = currentEmployment(claim?.employee);
-    const isHoDMe =
-      String(empJob?.department?.head_employee_id || "") ===
-      String(meEmpId || "");
-    const recCount = (claim?.statusEntries || []).filter(
-      (se) => se.action === "RECOMMENDED"
-    ).length;
-    if (recCount === 0 && isHoDMe) return "HoD Recommend";
-    if (recCount === 1) return "HoD’s RO Recommend";
-    return "Recommend";
-  };
+  // Label: always display 'Recommend'
+  const getRecommendLabel = () => "Recommend";
 
   return (
     <div className="space-y-6">
