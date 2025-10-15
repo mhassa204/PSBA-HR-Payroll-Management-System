@@ -28,12 +28,9 @@ module.exports = {
     const userEmail = req.session.user?.email || null;
 
     // Permission-driven stage approver flags
-    const isOps =
-      perms.includes("travel.request.approve.ops") ||
-      /operations/i.test(deptName);
-    const isDG =
-      perms.includes("travel.request.approve.dg") ||
-      /^director\s+general$/i.test(desigTitle);
+    // Ops/DG must be derived from org role, not permissions, to avoid over-exposing Approve actions
+    const isOps = /operations/i.test(deptName);
+    const isDG = /^director\s+general$/i.test(desigTitle);
     // HR: department-based or permission-based
     const isHR =
       /(^|\b)(HR|Human\s*Resources)(\b|$)/i.test(deptName) ||
@@ -424,6 +421,7 @@ module.exports = {
                 include: {
                   head: {
                     include: {
+                      user: true,
                       employmentRecords: {
                         where: { is_current: true, is_deleted: false },
                       },
@@ -479,6 +477,10 @@ module.exports = {
       );
     const headOfDeptId = (req) =>
       Number(applicantER(req)?.department?.head?.id || 0);
+    const headOfDeptEmail = (req) =>
+      String(
+        applicantER(req)?.department?.head?.user?.email || ""
+      ).toLowerCase();
     const hodROId = (req) => {
       const hod = applicantER(req)?.department?.head;
       const hodER =
@@ -497,14 +499,20 @@ module.exports = {
       const recs = recCount(r);
       const locType = applicantER(r)?.location?.type || "HEAD_OFFICE";
 
-      // Recommender stage (non-DG path)
-      if (me && !ctx.isDG) {
+      // Recommender stage: allow if eligible regardless of DG permission.
+      // Some HoDs have broad permissions (including DG approve), but they should still see their pending recommendations.
+      if (me || ctx.userEmail) {
         if (!deptOrigin && recs === 0 && isDirectReportTo(r, me)) {
           out.push(r);
           continue;
         }
         if (deptOrigin) {
-          if (recs === 0 && headOfDeptId(r) === me) {
+          const hodId = headOfDeptId(r);
+          const hodEmail = headOfDeptEmail(r);
+          const meEmail = String(ctx.userEmail || "").toLowerCase();
+          const isHoDById = me && hodId === me;
+          const isHoDByEmail = meEmail && hodEmail && meEmail === hodEmail;
+          if (recs === 0 && (isHoDById || isHoDByEmail)) {
             out.push(r);
             continue;
           }

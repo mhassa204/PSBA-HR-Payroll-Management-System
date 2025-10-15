@@ -126,6 +126,38 @@ module.exports = {
     });
     return claims;
   },
+  // New: Department account listing — show claims for employees in the department
+  listClaimsForDepartment: async (department_id) => {
+    if (!department_id) return [];
+    return prisma.travelClaim.findMany({
+      where: {
+        is_deleted: false,
+        employee: {
+          employmentRecords: {
+            some: {
+              is_current: true,
+              is_deleted: false,
+              department_id: Number(department_id),
+            },
+          },
+        },
+      },
+      include: {
+        documents: true,
+        segments: true,
+        employee: {
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: { designation: true, department: true, location: true },
+            },
+          },
+        },
+        request: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  },
   createClaim: async (employee_id, data) => {
     // Support two modes:
     // 1) Request-linked (existing)
@@ -258,7 +290,7 @@ module.exports = {
     }
     return false;
   },
-  getClaim: async (id, employee_id, isSuperAdmin) => {
+  getClaim: async (id, employee_id, isSuperAdmin, department_id) => {
     const parsedId = Number(id);
     if (!Number.isInteger(parsedId) || parsedId <= 0) {
       throw new Error("Invalid claim id");
@@ -280,8 +312,16 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) return null;
-    if (!module.exports._canAccess(claim, employee_id, isSuperAdmin))
-      throw new Error("Forbidden");
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    if (!allowed && !employee_id && department_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed) throw new Error("Forbidden");
     // If draft and rates missing/zero, pull latest rates
     if (
       claim.status === "DRAFT" &&
@@ -516,7 +556,13 @@ module.exports = {
       },
     });
   },
-  addSegment: async (claimId, employee_id, isSuperAdmin, payload) => {
+  addSegment: async (
+    claimId,
+    employee_id,
+    isSuperAdmin,
+    payload,
+    department_id
+  ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
       include: {
@@ -531,8 +577,16 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    if (!module.exports._canAccess(claim, employee_id, isSuperAdmin))
-      throw new Error("Forbidden");
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    if (!allowed && !employee_id && department_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed) throw new Error("Forbidden");
     if (claim.status !== "DRAFT") throw new Error("Only draft claims editable");
     await prisma.travelClaimSegment.create({
       data: {
@@ -554,7 +608,8 @@ module.exports = {
     segmentId,
     employee_id,
     isSuperAdmin,
-    payload
+    payload,
+    department_id
   ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
@@ -570,8 +625,16 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    if (!module.exports._canAccess(claim, employee_id, isSuperAdmin))
-      throw new Error("Forbidden");
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    if (!allowed && !employee_id && department_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed) throw new Error("Forbidden");
     if (claim.status !== "DRAFT") throw new Error("Only draft claims editable");
     const seg = await prisma.travelClaimSegment.findUnique({
       where: { id: Number(segmentId) },
@@ -596,7 +659,13 @@ module.exports = {
     });
     return module.exports.recomputeTotals(claim.id);
   },
-  deleteSegment: async (claimId, segmentId, employee_id, isSuperAdmin) => {
+  deleteSegment: async (
+    claimId,
+    segmentId,
+    employee_id,
+    isSuperAdmin,
+    department_id
+  ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
       include: {
@@ -611,15 +680,30 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    if (!module.exports._canAccess(claim, employee_id, isSuperAdmin))
-      throw new Error("Forbidden");
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    if (!allowed && !employee_id && department_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed) throw new Error("Forbidden");
     if (claim.status !== "DRAFT") throw new Error("Only draft claims editable");
     await prisma.travelClaimSegment.deleteMany({
       where: { id: Number(segmentId), claim_id: claim.id },
     });
     return module.exports.recomputeTotals(claim.id);
   },
-  addDocuments: async (claimId, employee_id, isSuperAdmin, files, category) => {
+  addDocuments: async (
+    claimId,
+    employee_id,
+    isSuperAdmin,
+    files,
+    category,
+    department_id
+  ) => {
     // Supports multi-file uploads; category may be FUEL, TOLL, PICTURE, REPORT, OTHER
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
@@ -636,8 +720,16 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    if (!module.exports._canAccess(claim, employee_id, isSuperAdmin))
-      throw new Error("Forbidden");
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    if (!allowed && !employee_id && department_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed) throw new Error("Forbidden");
     if (claim.status !== "DRAFT") throw new Error("Only draft claims editable");
     const cat = String(category || "OTHER").toUpperCase();
     // Allow multiple REPORT uploads; submission will ensure at least one exists (for request-linked claims)
@@ -660,7 +752,13 @@ module.exports = {
       },
     });
   },
-  deleteDocument: async (claimId, docId, employee_id, isSuperAdmin) => {
+  deleteDocument: async (
+    claimId,
+    docId,
+    employee_id,
+    isSuperAdmin,
+    department_id
+  ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
       include: {
@@ -676,8 +774,16 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    if (!module.exports._canAccess(claim, employee_id, isSuperAdmin))
-      throw new Error("Forbidden");
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    if (!allowed && !employee_id && department_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed) throw new Error("Forbidden");
     if (claim.status !== "DRAFT") throw new Error("Only draft claims editable");
     const doc = await prisma.travelClaimDocument.findUnique({
       where: { id: Number(docId) },
@@ -695,7 +801,7 @@ module.exports = {
       },
     });
   },
-  deleteClaim: async (id, employee_id, isSuperAdmin) => {
+  deleteClaim: async (id, employee_id, isSuperAdmin, department_id) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
       include: {
@@ -712,14 +818,29 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    if (!module.exports._canAccess(claim, employee_id, isSuperAdmin))
-      throw new Error("Forbidden");
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    // Department-based account: allow deletion if claimant currently belongs to the same department
+    if (!allowed && !employee_id && department_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed) throw new Error("Forbidden");
     if (claim.status !== "DRAFT")
       throw new Error("Only draft claims deletable");
     await prisma.travelClaim.delete({ where: { id: claim.id } });
     return { success: true };
   },
-  submitClaim: async (id, employee_id, isSuperAdmin, actorLabel) => {
+  submitClaim: async (
+    id,
+    employee_id,
+    isSuperAdmin,
+    actorLabel,
+    department_id
+  ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
       include: {
@@ -735,8 +856,16 @@ module.exports = {
       },
     });
     if (!claim) throw new Error("Not found");
-    if (!module.exports._canAccess(claim, employee_id, isSuperAdmin))
-      throw new Error("Forbidden");
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    if (!allowed && !employee_id && department_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed) throw new Error("Forbidden");
     if (claim.status !== "DRAFT")
       throw new Error("Only draft claims can be submitted");
     const isWithinCity = !claim.travel_request_id;

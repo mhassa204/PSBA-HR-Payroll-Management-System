@@ -2693,7 +2693,7 @@ async function main() {
   // 🏢 Assign department heads after employees and employment records are created
   console.log("👑 Assigning department heads...");
   const departmentHeads = [
-    { deptName: "Establishment", headName: "Maria Iqbal" },
+    { deptName: "Establishment", headName: "Mariya Iqbal" },
     { deptName: "Accounts", headName: "Kashif Rasheed" },
     { deptName: "Operations", headName: "Usman Badar" },
     { deptName: "IT", headName: "Muhammad Ahmad" },
