@@ -90,7 +90,9 @@ export default function ManageExpenseClaimApprovals() {
   const roleName = (user?.role?.name || "").toLowerCase();
   // Permission OR heuristic fallbacks mirroring backend travelRequestService
   const canOps = isSuper || can("travel.claim.approve.ops") || caps?.isOps;
-  const canDG = isSuper || can("travel.claim.approve.dg") || caps?.isDG;
+  // DG UI gating: only a true DG (designation) or Super Admin should see DG actions
+  // DG UI gating: only a Director General by role (from backend caps) or Super Admin
+  const canDG = isSuper || !!caps?.isDG;
   const canHR =
     isSuper ||
     can("travel.claim.approve.hr") ||
@@ -308,6 +310,22 @@ export default function ManageExpenseClaimApprovals() {
         };
     }
 
+    // DG bypass when DG (as HoD's RO) just recommended: allow immediate DG approval
+    if (
+      status === "SUBMITTED" &&
+      canDG &&
+      lastApproval &&
+      lastApproval.action === "RECOMMENDED" &&
+      lastApproval.actor_employee_id === user?.employee_id
+    ) {
+      return {
+        canApprove: true,
+        canReject: true,
+        canClear: true,
+        canRecommend: false,
+      };
+    }
+
     // Recommender stage with two-step logic; for non-approver roles, trust server inclusion and show Recommend
     if (status === "SUBMITTED") {
       if (!isApproverRole) {
@@ -348,10 +366,8 @@ export default function ManageExpenseClaimApprovals() {
 
     // Forward-stage actions
     if (status === "SUBMITTED") {
-      if (
-        (locType === "BAZAAR" && canOps) ||
-        (locType === "HEAD_OFFICE" && canDG)
-      ) {
+      // Only DG can approve/reject at SUBMITTED stage (HQ/department-origin); OPS only for BAZAAR
+      if (locType === "BAZAAR" && canOps) {
         if (!hasRecommended)
           return {
             canApprove: false,
@@ -366,6 +382,22 @@ export default function ManageExpenseClaimApprovals() {
           canRecommend: false,
         };
       }
+      if (locType === "HEAD_OFFICE" && canDG) {
+        if (!hasRecommended)
+          return {
+            canApprove: false,
+            canReject: false,
+            canClear: false,
+            canRecommend: false,
+          };
+        return {
+          canApprove: true,
+          canReject: true,
+          canClear: false,
+          canRecommend: false,
+        };
+      }
+      // HoD/RO must not see Approve/Reject at SUBMITTED stage
     } else if (status === "APPROVED") {
       // HR stage
       if (canHR)
@@ -926,6 +958,20 @@ export default function ManageExpenseClaimApprovals() {
                 const emp = c.employee;
                 const empJob = c.employee?.employmentRecords?.[0];
                 const eligibility = computeEligibility(c);
+                const locTypeAll =
+                  c.employee?.employmentRecords?.[0]?.location?.type ||
+                  "HEAD_OFFICE";
+                const isSubmitted = c.status === "SUBMITTED";
+                // In All tab, do an extra guard: for SUBMITTED, only DG (HO) or OPS (BAZAAR) can see Approve/Reject
+                const allowApproveRejectInAll = isSubmitted
+                  ? locTypeAll === "BAZAAR"
+                    ? !!canOps
+                    : !!canDG
+                  : true; // other stages governed by eligibility (HR/Accounts)
+                const showApprove =
+                  eligibility.canApprove && allowApproveRejectInAll;
+                const showReject =
+                  eligibility.canReject && allowApproveRejectInAll;
                 const clickAction = async (claim, action) => {
                   const labelMap = {
                     APPROVE: "approve",
@@ -1013,7 +1059,7 @@ export default function ManageExpenseClaimApprovals() {
                             {recLabel}
                           </Button>
                         )}
-                        {eligibility.canApprove && (
+                        {showApprove && (
                           <Button
                             size="sm"
                             onClick={() => clickAction(c, "APPROVE")}
@@ -1021,7 +1067,7 @@ export default function ManageExpenseClaimApprovals() {
                             Approve
                           </Button>
                         )}
-                        {eligibility.canReject && (
+                        {showReject && (
                           <Button
                             size="sm"
                             variant="destructive"

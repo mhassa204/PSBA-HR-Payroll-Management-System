@@ -147,12 +147,14 @@ module.exports = {
         await require("../../services/travel/travelRequestService").getAuthContext(
           req
         );
+      const department_id = Number(req.session.user?.department_id || 0);
       const claim = await service.updateClaim(
         Number(req.params.id),
         ctx.meEmpId,
         ctx.isSuperAdmin,
         req.body || {},
-        ctx
+        ctx,
+        department_id
       );
       res.json({ success: true, claim });
     } catch (e) {

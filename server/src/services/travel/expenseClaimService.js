@@ -358,7 +358,14 @@ module.exports = {
     }
     return claim;
   },
-  updateClaim: async (id, employee_id, isSuperAdmin, data, ctx) => {
+  updateClaim: async (
+    id,
+    employee_id,
+    isSuperAdmin,
+    data,
+    ctx,
+    department_id
+  ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
       include: {
@@ -378,9 +385,18 @@ module.exports = {
       ctx &&
       (ctx.isSuperAdmin || ctx.isAccountsApprover) &&
       !claim.statusEntries.some((e) => e.action === "ACCOUNTS_APPROVED");
-    const canAccess =
+    let canAccess =
       module.exports._canAccess(claim, employee_id, isSuperAdmin) ||
       editableByAccounts;
+    // Department-based account: allow editing if claimant currently belongs to the same department
+    if (!canAccess && !employee_id && department_id) {
+      canAccess = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.department_id) === Number(department_id)
+      );
+    }
     if (!canAccess) throw new Error("Forbidden");
 
     if (!editableByAccounts) {
@@ -1132,7 +1148,10 @@ module.exports = {
         status: "SUBMITTED",
         employee: {
           employmentRecords: {
-            some: { is_current: true, location: { type: "BAZAAR" } },
+            some: {
+              is_current: true,
+              location: { is: { type: "BAZAAR" } },
+            },
           },
         },
         // Exclude department-origin and HQ-origin from OPS; only bazaar-origin standard claims
@@ -1149,13 +1168,53 @@ module.exports = {
         status: "SUBMITTED",
         employee: {
           employmentRecords: {
-            some: { is_current: true, location: { type: "HEAD_OFFICE" } },
+            some: {
+              is_current: true,
+              location: { is: { type: "HEAD_OFFICE" } },
+            },
           },
         },
         statusEntries: {
           none: firstStageNone,
           some: { action: "RECOMMENDED" },
         },
+      });
+      // DG fallback: include any SUBMITTED claim with at least one recommendation
+      // and no first-stage (OPS/DG) decision, regardless of origin/location
+      stageFilters.push({
+        status: "SUBMITTED",
+        statusEntries: {
+          some: { action: "RECOMMENDED" },
+          none: firstStageNone,
+        },
+      });
+      // DG explicit: include department-origin claims regardless of recommendation count
+      // This prevents hiding items due to origin/location quirks; decision API still enforces rec requirements.
+      stageFilters.push({
+        status: "SUBMITTED",
+        OR: [
+          { created_by_department_id: { not: null } },
+          {
+            statusEntries: {
+              some: {
+                action: "SUBMITTED",
+                OR: [
+                  { remarks: { contains: "[DEPT]", mode: "insensitive" } },
+                  { remarks: { contains: "department", mode: "insensitive" } },
+                  {
+                    remarks: { contains: "submitted by", mode: "insensitive" },
+                  },
+                ],
+              },
+            },
+          },
+          {
+            statusEntries: {
+              some: { action: "SUBMITTED", actor_employee_id: null },
+            },
+          },
+        ],
+        statusEntries: { none: firstStageNone },
       });
       // Department/HQ-origin: DG sees after recommendations
       stageFilters.push({
@@ -1165,14 +1224,51 @@ module.exports = {
           none: firstStageNone,
         },
         OR: [
+          // Explicit department-origin
           { created_by_department_id: { not: null } },
+          // Legacy department-origin marker in SUBMITTED remarks
+          {
+            statusEntries: {
+              some: {
+                action: "SUBMITTED",
+                OR: [
+                  { remarks: { contains: "[DEPT]", mode: "insensitive" } },
+                  { remarks: { contains: "department", mode: "insensitive" } },
+                  {
+                    remarks: { contains: "submitted by", mode: "insensitive" },
+                  },
+                ],
+              },
+            },
+          },
+          // Department account submitted (no employee actor recorded)
+          {
+            statusEntries: {
+              some: { action: "SUBMITTED", actor_employee_id: null },
+            },
+          },
+          // Head Office personal claims
           {
             employee: {
               employmentRecords: {
                 some: {
                   is_current: true,
                   is_deleted: false,
-                  location: { type: "HEAD_OFFICE" },
+                  location: { is: { type: "HEAD_OFFICE" } },
+                },
+              },
+            },
+          },
+          // Request applicant at Head Office (request-linked claims)
+          {
+            request: {
+              applicant: {
+                employmentRecords: {
+                  some: {
+                    is_current: true,
+                    is_deleted: false,
+                    location: { is: { type: "HEAD_OFFICE" } },
+                  },
                 },
               },
             },
@@ -1188,7 +1284,7 @@ module.exports = {
               some: {
                 is_current: true,
                 is_deleted: false,
-                location: { type: "HEAD_OFFICE" },
+                location: { is: { type: "HEAD_OFFICE" } },
                 reporting_officer_id: String(ctx.meEmpId),
               },
             },
@@ -1229,8 +1325,8 @@ module.exports = {
 
     if (stageFilters.length === 0) return [];
 
-    const claims = await prisma.travelClaim.findMany({
-      where: { OR: stageFilters },
+    let claims = await prisma.travelClaim.findMany({
+      where: { OR: stageFilters, is_deleted: false },
       orderBy: { createdAt: "desc" },
       include: {
         createdByDepartment: {
@@ -1313,6 +1409,131 @@ module.exports = {
         },
       },
     });
+
+    // DG safety-net: if nothing matched due to origin/location quirks, include
+    // a broad, role-appropriate set to avoid hiding valid department-origin items.
+    if (
+      (ctx.isDG || ctx.canApproveClaimDG) &&
+      (!claims || claims.length === 0)
+    ) {
+      const me = String(ctx.meEmpId || "");
+      claims = await prisma.travelClaim.findMany({
+        where: {
+          is_deleted: false,
+          status: "SUBMITTED",
+          OR: [
+            // Any SUBMITTED with at least one recommendation
+            { statusEntries: { some: { action: "RECOMMENDED" } } },
+            // Direct reports to DG (fast-track)
+            {
+              employee: {
+                employmentRecords: {
+                  some: {
+                    is_current: true,
+                    is_deleted: false,
+                    reporting_officer_id: me,
+                  },
+                },
+              },
+            },
+          ],
+          // Exclude those already decided at first stage (OPS/DG)
+          statusEntries: {
+            none: {
+              action: {
+                in: [
+                  "OPS_APPROVED",
+                  "OPS_REJECTED",
+                  "DG_APPROVED",
+                  "DG_REJECTED",
+                ],
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          createdByDepartment: {
+            include: {
+              head: {
+                include: {
+                  employmentRecords: {
+                    where: { is_current: true, is_deleted: false },
+                  },
+                },
+              },
+            },
+          },
+          employee: {
+            include: {
+              employmentRecords: {
+                where: { is_current: true, is_deleted: false },
+                include: {
+                  designation: true,
+                  department: {
+                    include: {
+                      head: {
+                        include: {
+                          employmentRecords: {
+                            where: { is_current: true, is_deleted: false },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  location: true,
+                },
+              },
+            },
+          },
+          request: {
+            include: {
+              applicant: {
+                include: {
+                  employmentRecords: {
+                    where: { is_current: true, is_deleted: false },
+                    include: {
+                      location: true,
+                      designation: true,
+                      department: {
+                        include: {
+                          head: {
+                            include: {
+                              employmentRecords: {
+                                where: { is_current: true, is_deleted: false },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          documents: true,
+          segments: true,
+          statusEntries: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              actor: {
+                include: {
+                  employmentRecords: {
+                    where: { is_current: true, is_deleted: false },
+                    include: {
+                      designation: true,
+                      department: true,
+                      location: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
     return claims;
   },
   decideClaim: async (id, actorEmpId, ctx, action, remarks) => {
@@ -1501,7 +1722,8 @@ module.exports = {
         );
       }
       if (stageKey === "OPS") return ctx.isOps || ctx.canApproveClaimOps;
-      if (stageKey === "DG") return ctx.isDG || ctx.canApproveClaimDG;
+      // Only a real DG (designation) can act at DG stage; do not allow permission-only
+      if (stageKey === "DG") return ctx.isDG;
       if (stageKey === "HR") return ctx.isHR;
       if (stageKey === "ACCOUNTS") return ctx.isAccountsApprover;
       return false;
@@ -1643,6 +1865,8 @@ module.exports = {
           : lastEntry.action === "RECOMMENDED"
           ? claim.status === "SUBMITTED"
           : REJECTION_STATUSES.has(claim.status));
+      // Permit CLEAR by the same actor who made the last decision even if they are not the current expected actor
+      if (intent === "CLEAR" && userIsLastApprover) return true;
       if (!canActStage(stage)) {
         if (userIsLastApprover) {
           if (intent === "APPROVE" || intent === "RECOMMEND")
@@ -1705,7 +1929,14 @@ module.exports = {
           lastEntry.actor_employee_id === actorEmpId
         ) {
           const lastStage = mapActionToStage(lastEntry.action);
-          if (stage !== lastStage) {
+          // Special-case: If the actor is the DG (true DG, not just permission) and their last action
+          // was a RECOMMENDED (as HoD's RO), allow them to proceed to DG stage without requiring CLEAR.
+          const actorIsTrueDG = !!ctx.isDG;
+          const canBypassForDG =
+            actorIsTrueDG &&
+            lastEntry.action === "RECOMMENDED" &&
+            stage === "DG";
+          if (!canBypassForDG && stage !== lastStage) {
             throw new Error(
               "You already decided the previous stage. Use CLEAR to undo your decision; you cannot act on the next stage."
             );
@@ -1741,6 +1972,10 @@ module.exports = {
           approvalAction = "OPS_APPROVED";
           targetStatus = "APPROVED";
         } else if (stage === "DG") {
+          // Only Director General (role) can approve at DG stage
+          if (!ctx.isDG && !ctx.isSuperAdmin) {
+            throw new Error("Only Director General can approve these claims");
+          }
           approvalAction = "DG_APPROVED";
           targetStatus = "APPROVED";
         } else if (stage === "HR") {
@@ -1838,6 +2073,38 @@ module.exports = {
         if (lastEntry.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin)
           throw new Error("Cannot clear another user's decision");
         assertAuthorized(lastStage, "CLEAR");
+        // Disallow CLEAR if next stage has already acted
+        const hasNextStageAction = (() => {
+          // If last was RECOMMENDED, next stage is OPS/DG; if last was OPS/DG approved, next is HR; if HR approved, next is Accounts
+          if (isRecommendation) {
+            return (claim.statusEntries || []).some((e) =>
+              [
+                "OPS_APPROVED",
+                "OPS_REJECTED",
+                "DG_APPROVED",
+                "DG_REJECTED",
+              ].includes(e.action)
+            );
+          }
+          if (
+            lastEntry.action === "OPS_APPROVED" ||
+            lastEntry.action === "DG_APPROVED"
+          ) {
+            return (claim.statusEntries || []).some((e) =>
+              ["HR_APPROVED", "HR_REJECTED"].includes(e.action)
+            );
+          }
+          if (lastEntry.action === "HR_APPROVED") {
+            return (claim.statusEntries || []).some((e) =>
+              ["ACCOUNTS_APPROVED", "ACCOUNTS_REJECTED"].includes(e.action)
+            );
+          }
+          return false;
+        })();
+        if (hasNextStageAction)
+          throw new Error(
+            "Cannot undo: next stage has already acted on this claim"
+          );
         if (isRecommendation) {
           if (claim.status !== "SUBMITTED")
             throw new Error("Cannot clear, workflow advanced");
@@ -2015,7 +2282,9 @@ module.exports = {
       orFilters.push({
         status: "SUBMITTED",
         OR: [
+          // Any SUBMITTED with at least one recommendation
           { statusEntries: { some: { action: "RECOMMENDED" } } },
+          // Direct report fast-track (no recommendation required)
           {
             employee: {
               employmentRecords: {
@@ -2026,6 +2295,49 @@ module.exports = {
                 },
               },
             },
+          },
+          // Department-origin (explicit or legacy) to ensure visibility after recommendations
+          {
+            AND: [
+              { statusEntries: { some: { action: "RECOMMENDED" } } },
+              {
+                OR: [
+                  { created_by_department_id: { not: null } },
+                  {
+                    statusEntries: {
+                      some: {
+                        action: "SUBMITTED",
+                        OR: [
+                          {
+                            remarks: {
+                              contains: "[DEPT]",
+                              mode: "insensitive",
+                            },
+                          },
+                          {
+                            remarks: {
+                              contains: "department",
+                              mode: "insensitive",
+                            },
+                          },
+                          {
+                            remarks: {
+                              contains: "submitted by",
+                              mode: "insensitive",
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  {
+                    statusEntries: {
+                      some: { action: "SUBMITTED", actor_employee_id: null },
+                    },
+                  },
+                ],
+              },
+            ],
           },
         ],
       });
@@ -2126,6 +2438,18 @@ module.exports = {
       },
       orderBy: { createdAt: "desc" },
       include: {
+        // Include origin department graph to allow frontend to compute HoD/RO correctly
+        createdByDepartment: {
+          include: {
+            head: {
+              include: {
+                employmentRecords: {
+                  where: { is_current: true, is_deleted: false },
+                },
+              },
+            },
+          },
+        },
         employee: {
           include: {
             employmentRecords: {

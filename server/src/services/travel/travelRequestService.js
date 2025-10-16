@@ -52,7 +52,14 @@ module.exports = {
     // Permission-driven stage approver flags
     // Ops/DG must be derived from org role, not permissions, to avoid over-exposing Approve actions
     const isOps = /operations/i.test(deptName);
-    const isDG = /^director\s+general$/i.test(desigTitle);
+    // Robust DG detection: match on either Role name or current Designation title
+    // Accept common variants/abbreviation (e.g., "Director General", "DG") case-insensitively.
+    const roleNameRaw = (req.session.user?.role?.name || "").trim();
+    const isDGByRole = /(^|\b)(director\s*general|dg)(\b|$)/i.test(roleNameRaw);
+    const isDGByDesignation = /(^|\b)(director\s*general|dg)(\b|$)/i.test(
+      (desigTitle || "").trim()
+    );
+    const isDG = isDGByRole || isDGByDesignation;
     // HR: department-based or permission-based
     const isHR =
       /(^|\b)(HR|Human\s*Resources)(\b|$)/i.test(deptName) ||

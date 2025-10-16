@@ -55,13 +55,11 @@ module.exports = {
       res.json({ success: true, requests: list });
     } catch (err) {
       console.error("Pending approvals query error", err);
-      res
-        .status(500)
-        .json({
-          success: false,
-          error: "Failed to load pending approvals",
-          details: err.message,
-        });
+      res.status(500).json({
+        success: false,
+        error: "Failed to load pending approvals",
+        details: err.message,
+      });
     }
   },
   listMine: async (req, res) => {
@@ -91,12 +89,10 @@ module.exports = {
             .status(400)
             .json({ success: false, error: "departure_date is required" });
         if (!data.expected_return_date)
-          return res
-            .status(400)
-            .json({
-              success: false,
-              error: "expected_return_date is required",
-            });
+          return res.status(400).json({
+            success: false,
+            error: "expected_return_date is required",
+          });
         const computedDays = travelService.computeTotalDays(
           data.departure_date,
           data.departure_time,
@@ -107,12 +103,10 @@ module.exports = {
           data.total_days !== "" &&
           Number(data.total_days) !== computedDays
         ) {
-          return res
-            .status(400)
-            .json({
-              success: false,
-              error: `total_days (${data.total_days}) does not match date range (${computedDays})`,
-            });
+          return res.status(400).json({
+            success: false,
+            error: `total_days (${data.total_days}) does not match date range (${computedDays})`,
+          });
         }
         const attendeeIds = Array.isArray(data.employee_ids)
           ? data.employee_ids.map(Number).filter(Boolean)
@@ -137,26 +131,22 @@ module.exports = {
       if (!applicant_id) {
         const deptId = Number(req.session.user?.department_id || 0);
         if (!deptId)
-          return res
-            .status(400)
-            .json({
-              success: false,
-              error:
-                "No department linked to account and no applicant_id provided",
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              "No department linked to account and no applicant_id provided",
+          });
         const dept = await prisma.department.findFirst({
           where: { id: deptId, is_deleted: false },
           include: { head: true },
         });
         applicant_id = Number(dept?.head?.id || 0);
         if (!applicant_id)
-          return res
-            .status(400)
-            .json({
-              success: false,
-              error:
-                "Department head not set. Please assign a head to the department or provide applicant_id.",
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              "Department head not set. Please assign a head to the department or provide applicant_id.",
+          });
       }
       if (!data.departure_date)
         return res
@@ -239,12 +229,10 @@ module.exports = {
       data.total_days !== "" &&
       Number(data.total_days) !== computedDays
     ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: `total_days (${data.total_days}) does not match date range (${computedDays})`,
-        });
+      return res.status(400).json({
+        success: false,
+        error: `total_days (${data.total_days}) does not match date range (${computedDays})`,
+      });
     }
     const attendeeIds = Array.isArray(data.employee_ids)
       ? data.employee_ids.map(Number).filter(Boolean)
@@ -294,19 +282,15 @@ module.exports = {
       )
     );
     if (hasActions)
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Cannot delete: request has recommendations or decisions",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Cannot delete: request has recommendations or decisions",
+      });
     if (row.status !== "CREATED")
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Only CREATED requests can be deleted",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Only CREATED requests can be deleted",
+      });
     await travelService.softDelete(id);
     res.json({ success: true });
   },
@@ -353,12 +337,10 @@ module.exports = {
     if (!request || request.is_deleted)
       return res.status(404).json({ success: false, error: "Not found" });
     if (request.status !== "CREATED")
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Only CREATED requests can be decided",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Only CREATED requests can be decided",
+      });
     const isDeptOrigin = !!(request.statusEntries || []).some(
       (e) =>
         e.action === "CREATED" &&
@@ -385,30 +367,24 @@ module.exports = {
     const isDG = /^director\s+general$/i.test(desigTitle);
     if (isDeptOrigin) {
       if (!isDG)
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "Department-originated requests require DG approval",
-          });
+        return res.status(403).json({
+          success: false,
+          error: "Department-originated requests require DG approval",
+        });
     } else {
       if (applicantLocType === "BAZAAR") {
         if (!isOps)
-          return res
-            .status(403)
-            .json({
-              success: false,
-              error: "Only Operations can approve/reject bazaar requests",
-            });
+          return res.status(403).json({
+            success: false,
+            error: "Only Operations can approve/reject bazaar requests",
+          });
       } else {
         if (!isDG)
-          return res
-            .status(403)
-            .json({
-              success: false,
-              error:
-                "Only Director General can approve/reject head office requests",
-            });
+          return res.status(403).json({
+            success: false,
+            error:
+              "Only Director General can approve/reject head office requests",
+          });
       }
     }
     const newStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
@@ -430,6 +406,7 @@ module.exports = {
         isOps: ctx.isOps,
         isHR: ctx.isHR,
         isDG: ctx.isDG,
+        desigTitle: ctx.desigTitle,
         isAccountsApprover: ctx.isAccountsApprover,
         canApproveClaimOps: ctx.canApproveClaimOps,
         canApproveClaimDG: ctx.canApproveClaimDG,
@@ -488,28 +465,21 @@ module.exports = {
     if (!isSuperAdmin) {
       if (isDeptOrigin) {
         if (!isDG)
-          return res
-            .status(403)
-            .json({
-              success: false,
-              error:
-                "Department-originated requests require DG to change status",
-            });
+          return res.status(403).json({
+            success: false,
+            error: "Department-originated requests require DG to change status",
+          });
       } else {
         if (applicantLocType === "BAZAAR" && !isOps)
-          return res
-            .status(403)
-            .json({
-              success: false,
-              error: "Only Operations can modify bazaar requests",
-            });
+          return res.status(403).json({
+            success: false,
+            error: "Only Operations can modify bazaar requests",
+          });
         if (applicantLocType === "HEAD_OFFICE" && !isDG)
-          return res
-            .status(403)
-            .json({
-              success: false,
-              error: "Only Director General can modify head office requests",
-            });
+          return res.status(403).json({
+            success: false,
+            error: "Only Director General can modify head office requests",
+          });
       }
     }
     if (request.status === targetStatus) {
