@@ -404,7 +404,7 @@ module.exports = {
         canCreateOrOwn: ctx.canCreateOrOwn || ctx.isSuperAdmin,
         canViewAll: ctx.canViewAll || ctx.isSuperAdmin,
         isOps: ctx.isOps,
-        isHR: ctx.isHR,
+        isEstablishment: ctx.isEstablishment,
         isDG: ctx.isDG,
         desigTitle: ctx.desigTitle,
         isAccountsApprover: ctx.isAccountsApprover,
@@ -454,14 +454,14 @@ module.exports = {
     const desigTitle = approverEmployment?.designation?.title || "";
     const isOps = /operations/i.test(deptName);
     const isDG = /^director\s+general$/i.test(desigTitle);
-    const isHR = /^hr$/i.test(deptName) || /human\s*resources/i.test(deptName);
+  const isEstablishment = /^hr$/i.test(deptName) || /human\s*resources|establishment/i.test(deptName);
     const isSuperAdmin =
       req.session.user?.role?.name === "Super Admin" ||
       (req.session.user?.permissions || []).includes("*");
-    if (isHR && !isSuperAdmin)
+    if (isEstablishment && !isSuperAdmin)
       return res
         .status(403)
-        .json({ success: false, error: "HR cannot modify status" });
+        .json({ success: false, error: "Establishment cannot modify status" });
     if (!isSuperAdmin) {
       if (isDeptOrigin) {
         if (!isDG)

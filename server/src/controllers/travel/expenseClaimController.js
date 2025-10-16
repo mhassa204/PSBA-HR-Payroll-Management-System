@@ -318,11 +318,16 @@ module.exports = {
         await require("../../services/travel/travelRequestService").getAuthContext(
           req
         );
-      const meEmpId = ctx.meEmpId;
-      if (!meEmpId)
+      let meEmpId = ctx.meEmpId;
+      // For department-type Establishment/Accounts users, allow acting without employee link
+      if (!meEmpId && (ctx.isEstablishment || ctx.isAccountsApprover)) {
+        meEmpId = null; // actor will be recorded via remarks/email in the service layer
+      }
+      if (!meEmpId && !(ctx.isEstablishment || ctx.isAccountsApprover)) {
         return res
           .status(400)
           .json({ success: false, error: "User not linked" });
+      }
       const { action, remarks } = req.body || {};
       const claim = await service.decideClaim(
         req.params.id,

@@ -60,16 +60,19 @@ module.exports = {
       (desigTitle || "").trim()
     );
     const isDG = isDGByRole || isDGByDesignation;
-    // HR: department-based or permission-based
-    const isHR =
-      /(^|\b)(HR|Human\s*Resources)(\b|$)/i.test(deptName) ||
-      perms.includes("travel.claim.approve.hr");
-    // Restore department-based fallback for Accounts approvers
+    // Establishment: department-based (Establishment) or permission-based
+    // Role-driven flags: prefer role name prefixes, then explicit permissions, then department fallbacks
+    const isEstablishment =
+      /^\s*establishment/i.test(roleNameRaw) ||
+      perms.includes("travel.claim.verify.establishment") ||
+      /(^|\b)(Establishment)(\b|$)/i.test(deptName);
+    // Accounts approver: role name starts with Accounts OR explicit permission OR department keywords
     const isAccountsApprover =
-      perms.includes("travel.claim.approve.accounts") ||
+      /^\s*accounts/i.test(roleNameRaw) ||
+      perms.includes("travel.claim.process.start") ||
       /accounts|finance|budget|payroll|reconciliation/i.test(deptName);
     const canApproveClaimOps = perms.includes("travel.claim.approve.ops");
-    const canApproveClaimDG = perms.includes("travel.claim.approve.dg");
+  const canApproveClaimDG = perms.includes("travel.claim.approve.dg");
 
     const managesAnyLocation = meUserId
       ? !!(await prisma.location.findFirst({
@@ -85,7 +88,7 @@ module.exports = {
     // Updated rule: permission-driven create/own, supports department accounts without employee mapping
     const canCreateOrOwn =
       perms.includes("travel.create") || perms.includes("*");
-    const canViewAll = isHR || isOps || isDG;
+  const canViewAll = isEstablishment || isOps || isDG;
     const isSuperAdmin =
       req.session.user?.role?.name === "Super Admin" || perms.includes("*");
     return {
@@ -99,7 +102,7 @@ module.exports = {
       scaleLevel,
       isOps,
       isDG,
-      isHR,
+  isEstablishment,
       isAccountsApprover,
       canApproveClaimOps,
       canApproveClaimDG,
@@ -362,7 +365,7 @@ module.exports = {
     const me = String(ctx.meEmpId || "");
     const base = { is_deleted: false };
     let where = { ...base };
-    if (!ctx.isSuperAdmin && !ctx.isHR) {
+  if (!ctx.isSuperAdmin && !ctx.isEstablishment) {
       if (ctx.isOps && !ctx.isDG) {
         where = {
           ...where,

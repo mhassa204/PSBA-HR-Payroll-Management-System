@@ -34,7 +34,21 @@ module.exports = {
     const isSuperAdmin =
       req.session.user?.role?.name === "Super Admin" ||
       (req.session.user?.permissions || []).includes("*");
-    return { employee_id, isSuperAdmin };
+    const roleName = req.session.user?.role?.name || "";
+    // Derive deptName similarly to travel request service for department-type users
+    let deptName = "";
+    if (req.session.user?.department_id) {
+      try {
+        const { PrismaClient } = require("@prisma/client");
+        const p = new PrismaClient();
+        const dept = await p.department.findFirst({
+          where: { id: Number(req.session.user.department_id), is_deleted: false },
+        });
+        deptName = dept?.name || "";
+        await p.$disconnect();
+      } catch (_) {}
+    }
+    return { employee_id, isSuperAdmin, roleName, deptName };
   },
   listEligibleRequests: async (employee_id, userEmail) => {
     // Fetch approved TADA requests either for the applicant (employee_id) OR
@@ -384,7 +398,7 @@ module.exports = {
     const editableByAccounts =
       ctx &&
       (ctx.isSuperAdmin || ctx.isAccountsApprover) &&
-      !claim.statusEntries.some((e) => e.action === "ACCOUNTS_APPROVED");
+      !claim.statusEntries.some((e) => e.action === "PROCESS_STARTED");
     let canAccess =
       module.exports._canAccess(claim, employee_id, isSuperAdmin) ||
       editableByAccounts;
@@ -1303,29 +1317,36 @@ module.exports = {
       }
     }
 
-    // HR stage
-    if (ctx.isHR) {
+    // Establishment stage (replaces HR) — allow by ctx flag, role name, or department name
+    const looksEstablishment =
+      !!ctx.isEstablishment ||
+      /^\s*establishment/i.test(String(ctx.roleName || "")) ||
+      /(^|\b)establishment(\b|$)/i.test(String(ctx.deptName || ""));
+    if (looksEstablishment) {
       stageFilters.push({
         status: "APPROVED",
         statusEntries: {
           some: { action: { in: ["OPS_APPROVED", "DG_APPROVED"] } },
-          none: { action: { in: ["HR_APPROVED", "HR_REJECTED"] } },
+          none: {
+            action: { in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"] },
+          },
         },
       });
     }
 
-    // Accounts stage
-    if (ctx.isAccountsApprover) {
+    // Accounts stage (processing, not approval)
+    const looksAccounts =
+      !!ctx.isAccountsApprover ||
+      /^\s*accounts/i.test(String(ctx.roleName || "")) ||
+      /(accounts|finance|budget|payroll|reconciliation)/i.test(
+        String(ctx.deptName || "")
+      );
+    if (looksAccounts) {
       stageFilters.push({
         status: "VERIFIED",
         statusEntries: {
-          some: {
-            AND: [
-              { action: "HR_APPROVED" },
-              { NOT: { actor_employee_id: ctx.meEmpId } },
-            ],
-          },
-          none: { action: { in: ["ACCOUNTS_APPROVED", "ACCOUNTS_REJECTED"] } },
+          some: { action: "ESTABLISHMENT_VERIFIED" },
+          none: { action: { in: ["PROCESS_STARTED"] } },
         },
       });
     }
@@ -1652,7 +1673,7 @@ module.exports = {
     const rejectionMap = {
       OPS: "OPS_REJECTED",
       DG: "DG_REJECTED",
-      HR: "HR_REJECTED",
+      ESTABLISHMENT: "ESTABLISHMENT_REJECTED",
       ACCOUNTS: "ACCOUNTS_REJECTED",
       RECOMMENDER: "RECOMMENDER_REJECTED",
     };
@@ -1725,10 +1746,10 @@ module.exports = {
           )
         );
       }
-      if (stageKey === "OPS") return ctx.isOps || ctx.canApproveClaimOps;
+  if (stageKey === "OPS") return !!(ctx.isOps || ctx.canApproveClaimOps);
       // Only a real DG (designation) can act at DG stage; do not allow permission-only
-      if (stageKey === "DG") return ctx.isDG;
-      if (stageKey === "HR") return ctx.isHR;
+      if (stageKey === "DG") return !!ctx.isDG;
+      if (stageKey === "ESTABLISHMENT") return !!ctx.isEstablishment;
       if (stageKey === "ACCOUNTS") return !!ctx.isAccountsApprover; // DG cannot act as Accounts
       return false;
     };
@@ -1815,17 +1836,12 @@ module.exports = {
     const approvalStatusMap = {
       OPS_APPROVED: ["APPROVED"],
       DG_APPROVED: ["APPROVED"],
-      HR_APPROVED: ["VERIFIED"],
-      // Keep Accounts approval non-final: status remains VERIFIED until tranching; also handle idempotence when already processed/settled
-      ACCOUNTS_APPROVED: ["VERIFIED", "PROCESSED", "SETTLED"],
+      ESTABLISHMENT_VERIFIED: ["VERIFIED"],
+      // Accounts processing start moves to UNDER_PROCESS (later tranching sets PROCESSED)
+      PROCESS_STARTED: ["UNDER_PROCESS", "PROCESSED", "SETTLED"],
     };
     const isApprovalAction = (a) =>
-      [
-        "OPS_APPROVED",
-        "DG_APPROVED",
-        "HR_APPROVED",
-        "ACCOUNTS_APPROVED",
-      ].includes(a);
+      ["OPS_APPROVED", "DG_APPROVED", "ESTABLISHMENT_VERIFIED", "PROCESS_STARTED"].includes(a);
     const REJECTION_STATUSES = new Set([
       "REJECTED",
       "REJECTED_OPS",
@@ -1839,9 +1855,9 @@ module.exports = {
         ? "OPS"
         : act.startsWith("DG_")
         ? "DG"
-        : act.startsWith("HR_")
-        ? "HR"
-        : act.startsWith("ACCOUNTS_")
+        : act.startsWith("ESTABLISHMENT_") || act === "ESTABLISHMENT_VERIFIED"
+        ? "ESTABLISHMENT"
+        : act === "PROCESS_STARTED" || act.startsWith("ACCOUNTS_")
         ? "ACCOUNTS"
         : act === "RECOMMENDED"
         ? "RECOMMENDER"
@@ -1857,10 +1873,25 @@ module.exports = {
           : 1
         : 1;
 
-    const assertAuthorized = (stage, intent) => {
+  const assertAuthorized = (stage, intent) => {
+      const lastEntryByMe = () => {
+        if (!lastEntry) return false;
+        // Match either by employee_id or by email in remarks for department accounts
+        if (
+          lastEntry.actor_employee_id != null &&
+          actorEmpId != null &&
+          Number(lastEntry.actor_employee_id) === Number(actorEmpId)
+        )
+          return true;
+        const re = String(lastEntry.remarks || "");
+        return (
+          !!ctx.userEmail &&
+          re.toLowerCase().includes(String(ctx.userEmail).toLowerCase())
+        );
+      };
       const userIsLastApprover =
         lastEntry &&
-        lastEntry.actor_employee_id === actorEmpId &&
+        lastEntryByMe() &&
         (isApprovalAction(lastEntry.action) ||
           lastEntry.action === "RECOMMENDED" ||
           lastEntry.action === "RECOMMENDER_REJECTED") &&
@@ -1869,8 +1900,15 @@ module.exports = {
           : lastEntry.action === "RECOMMENDED"
           ? claim.status === "SUBMITTED"
           : REJECTION_STATUSES.has(claim.status));
-      // Permit CLEAR by the same actor who made the last decision even if they are not the current expected actor
-      if (intent === "CLEAR" && userIsLastApprover) return true;
+      // Special hard-guard: Only Establishment (or Super Admin) may CLEAR Establishment decisions
+      if (intent === "CLEAR") {
+        const lastStage = lastEntry ? mapActionToStage(lastEntry.action) : null;
+        if (lastStage === "ESTABLISHMENT" && !(ctx.isEstablishment || ctx.isSuperAdmin)) {
+          throw new Error("Only Establishment can undo Establishment verification");
+        }
+        // Permit CLEAR by the same actor who made the last decision even if they are not the current expected actor
+        if (userIsLastApprover) return true;
+      }
       if (!canActStage(stage)) {
         if (userIsLastApprover) {
           if (intent === "APPROVE" || intent === "RECOMMEND")
@@ -1890,8 +1928,8 @@ module.exports = {
           ? FIRST_STAGE_ACTOR
           : "RECOMMENDER";
       }
-      if (currentStatus === "APPROVED") return "HR"; // leads to VERIFIED
-      if (currentStatus === "VERIFIED") return "ACCOUNTS"; // leads to PROCESSED
+      if (currentStatus === "APPROVED") return "ESTABLISHMENT"; // establishment verifies → VERIFIED
+      if (currentStatus === "VERIFIED") return "ACCOUNTS"; // accounts start process → UNDER_PROCESS
       return null;
     };
 
@@ -1930,7 +1968,11 @@ module.exports = {
           (isApprovalAction(lastEntry.action) ||
             lastEntry.action === "RECOMMENDED" ||
             lastEntry.action === "RECOMMENDER_REJECTED") &&
-          lastEntry.actor_employee_id === actorEmpId
+          (lastEntry.actor_employee_id === actorEmpId ||
+            (ctx.userEmail &&
+              String(lastEntry.remarks || "")
+                .toLowerCase()
+                .includes(String(ctx.userEmail).toLowerCase())))
         ) {
           const lastStage = mapActionToStage(lastEntry.action);
           // Special-case: If the actor is the DG (true DG, not just permission) and their last action
@@ -1982,14 +2024,15 @@ module.exports = {
           }
           approvalAction = "DG_APPROVED";
           targetStatus = "APPROVED";
-        } else if (stage === "HR") {
-          approvalAction = "HR_APPROVED";
+        } else if (stage === "ESTABLISHMENT") {
+          // Establishment verifies (not approves)
+          approvalAction = "ESTABLISHMENT_VERIFIED";
           targetStatus = "VERIFIED";
         } else if (stage === "ACCOUNTS") {
-          approvalAction = "ACCOUNTS_APPROVED";
-          // Do NOT move to PROCESSED here. Keep status at VERIFIED; only tranching should move to PROCESSED
-          targetStatus = null;
-          fallbacks = [];
+          // Accounts start processing (not approval)
+          approvalAction = "PROCESS_STARTED";
+          targetStatus = "UNDER_PROCESS";
+          fallbacks = ["VERIFIED"]; // fallback to VERIFIED for legacy environments without new enum
         }
         if (
           lastEntry &&
@@ -2021,7 +2064,11 @@ module.exports = {
           (isApprovalAction(lastEntry.action) ||
             lastEntry.action === "RECOMMENDED" ||
             lastEntry.action === "RECOMMENDER_REJECTED") &&
-          lastEntry.actor_employee_id === actorEmpId
+          (lastEntry.actor_employee_id === actorEmpId ||
+            (ctx.userEmail &&
+              String(lastEntry.remarks || "")
+                .toLowerCase()
+                .includes(String(ctx.userEmail).toLowerCase())))
         ) {
           const lastStage = mapActionToStage(lastEntry.action);
           if (stage !== lastStage)
@@ -2068,13 +2115,21 @@ module.exports = {
         const isRejection = [
           "OPS_REJECTED",
           "DG_REJECTED",
-          "HR_REJECTED",
+          "ESTABLISHMENT_REJECTED",
           "ACCOUNTS_REJECTED",
           "RECOMMENDER_REJECTED",
         ].includes(lastEntry.action);
         const isRecommendation = lastEntry.action === "RECOMMENDED";
         const lastStage = mapActionToStage(lastEntry.action);
-        if (lastEntry.actor_employee_id !== actorEmpId && !ctx.isSuperAdmin)
+        const sameLogicalActor =
+          (lastEntry.actor_employee_id != null &&
+            actorEmpId != null &&
+            Number(lastEntry.actor_employee_id) === Number(actorEmpId)) ||
+          (ctx.userEmail &&
+            String(lastEntry.remarks || "")
+              .toLowerCase()
+              .includes(String(ctx.userEmail).toLowerCase()));
+        if (!sameLogicalActor && !ctx.isSuperAdmin)
           throw new Error("Cannot clear another user's decision");
         assertAuthorized(lastStage, "CLEAR");
         // Disallow CLEAR if next stage has already acted
@@ -2095,12 +2150,15 @@ module.exports = {
             lastEntry.action === "DG_APPROVED"
           ) {
             return (claim.statusEntries || []).some((e) =>
-              ["HR_APPROVED", "HR_REJECTED"].includes(e.action)
+              [
+                "ESTABLISHMENT_VERIFIED",
+                "ESTABLISHMENT_REJECTED",
+              ].includes(e.action)
             );
           }
-          if (lastEntry.action === "HR_APPROVED") {
+          if (lastEntry.action === "ESTABLISHMENT_VERIFIED") {
             return (claim.statusEntries || []).some((e) =>
-              ["ACCOUNTS_APPROVED", "ACCOUNTS_REJECTED"].includes(e.action)
+              ["PROCESS_STARTED", "ACCOUNTS_REJECTED"].includes(e.action)
             );
           }
           return false;
@@ -2125,12 +2183,14 @@ module.exports = {
             where: { id: lastEntry.id },
           });
           let revertStatus = "SUBMITTED";
-          if (lastEntry.action === "HR_APPROVED") revertStatus = "APPROVED";
-          else if (lastEntry.action === "ACCOUNTS_APPROVED")
+          if (lastEntry.action === "ESTABLISHMENT_VERIFIED")
+            revertStatus = "APPROVED";
+          else if (lastEntry.action === "PROCESS_STARTED")
             revertStatus = "VERIFIED";
           await updateStatusSafe(revertStatus, [
             "APPROVED",
             "VERIFIED",
+            "UNDER_PROCESS",
             "SUBMITTED",
           ]);
           return reload();
@@ -2148,12 +2208,14 @@ module.exports = {
             where: { id: lastEntry.id },
           });
           let revertStatus = "SUBMITTED";
-          if (lastEntry.action === "HR_REJECTED") revertStatus = "APPROVED";
+          if (lastEntry.action === "ESTABLISHMENT_REJECTED")
+            revertStatus = "APPROVED";
           else if (lastEntry.action === "ACCOUNTS_REJECTED")
             revertStatus = "VERIFIED";
           await updateStatusSafe(revertStatus, [
             "APPROVED",
             "VERIFIED",
+            "UNDER_PROCESS",
             "SUBMITTED",
           ]);
           return reload();
@@ -2268,13 +2330,13 @@ module.exports = {
     const me = String(ctx.meEmpId || "");
     const orFilters = [];
 
-    // Accounts: show only HR-approved (status VERIFIED)
+    // Accounts: show Establishment-verified (status VERIFIED) and under process
     if (ctx.isAccountsApprover) {
-      orFilters.push({ status: "VERIFIED" });
+      orFilters.push({ status: { in: ["VERIFIED", "UNDER_PROCESS"] } });
     }
 
-    // HR: show only DG-approved (status APPROVED with DG_APPROVED entry)
-    if (ctx.isHR) {
+    // Establishment: show only DG-approved (status APPROVED with DG_APPROVED)
+    if (ctx.isEstablishment) {
       orFilters.push({
         status: "APPROVED",
         statusEntries: { some: { action: "DG_APPROVED" } },
@@ -2349,7 +2411,7 @@ module.exports = {
 
     // Other users (non-approvers): show only reportees' claims so they can recommend
     const isApprover =
-      ctx.isHR ||
+      ctx.isEstablishment ||
       ctx.isDG ||
       ctx.isOps ||
       ctx.isAccountsApprover ||
@@ -2504,8 +2566,9 @@ module.exports = {
     if (!(ctx.isSuperAdmin || ctx.isAccountsApprover)) return [];
     const where = {
       is_deleted: false,
-      status: "VERIFIED",
-      statusEntries: { some: { action: "ACCOUNTS_APPROVED" } },
+      // Eligible for tranching either when processing has started (UNDER_PROCESS) or still VERIFIED
+      status: { in: ["VERIFIED", "UNDER_PROCESS"] },
+      statusEntries: { some: { action: "PROCESS_STARTED" } },
     };
     if (filters) {
       if (filters.employee_cnic)
@@ -2586,13 +2649,13 @@ module.exports = {
     const meUserId = ctx.meUserId || Number(ctx.req?.session?.user?.id);
     if (!Array.isArray(claimIds) || claimIds.length === 0)
       throw new Error("No claims selected");
-    // Only allow grouping of VERIFIED claims that have already been approved by Accounts
+    // Only allow grouping of claims that Accounts has started processing
     const claims = await prisma.travelClaim.findMany({
       where: {
         id: { in: claimIds.map(Number) },
-        status: "VERIFIED",
+        status: { in: ["VERIFIED", "UNDER_PROCESS"] },
         is_deleted: false,
-        statusEntries: { some: { action: "ACCOUNTS_APPROVED" } },
+        statusEntries: { some: { action: "PROCESS_STARTED" } },
       },
     });
     if (claims.length !== claimIds.length)
@@ -2614,7 +2677,7 @@ module.exports = {
       where: { id: { in: claims.map((c) => c.id) } },
       data: { status: "PROCESSED" },
     });
-    // Do NOT create ACCOUNTS_APPROVED entries here to avoid duplicates; approval was already recorded
+  // Do NOT create PROCESS_STARTED entries here; processing was already recorded
     return prisma.travelClaimTranche.findUnique({
       where: { id: tranche.id },
       include: {

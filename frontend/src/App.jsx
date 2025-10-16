@@ -474,7 +474,7 @@ function App() {
             <Route
               path="travel/accounts/tranches"
               element={
-                <PrivateRoute permissions={["travel.claim.approve.accounts"]}>
+                <PrivateRoute permissions={["travel.claim.process.start"]}>
                   <AccountsTranchesPage />
                 </PrivateRoute>
               }
@@ -482,7 +482,7 @@ function App() {
             <Route
               path="travel/manual"
               element={
-                <PrivateRoute permissions={["travel.claim.approve.accounts"]}>
+                <PrivateRoute permissions={["travel.claim.process.start"]}>
                   <TravelManualEntryPage />
                 </PrivateRoute>
               }

@@ -65,7 +65,7 @@ const express = require("express");
 const router = express.Router();
 const employeeController = require("../controllers/employeeController");
 const upload = require("../config/multer");
-const { isAuthenticated, authorize } = require('../middleware/auth');
+const { isAuthenticated, authorize, authorizeOwnEmployeeOrEmployeesRead } = require('../middleware/auth');
 
 // Routes
 router.post(
@@ -78,7 +78,7 @@ router.post(
 
 router.get("/", isAuthenticated, authorize('employees.read'), employeeController.getAllEmployees);
 
-router.get("/:id", isAuthenticated, authorize('employees.read'), employeeController.getEmployeeById);
+router.get("/:id", isAuthenticated, authorizeOwnEmployeeOrEmployeesRead(), employeeController.getEmployeeById);
 
 router.put(
   "/:id",

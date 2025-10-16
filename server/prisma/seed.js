@@ -296,10 +296,10 @@ async function main() {
     { title: "Senior Software Developer", department_name: "IT", level: 2 },
     { title: "IT Manager", department_name: "IT", level: 3 },
 
-    // HR hierarchy
-    { title: "HR Officer", department_name: "HR", level: 1 },
-    { title: "Senior HR Officer", department_name: "HR", level: 2 },
-    { title: "HR Manager", department_name: "HR", level: 3 },
+  // Establishment hierarchy (replacing HR)
+  { title: "Establishment Officer", department_name: "Establishment", level: 1 },
+  { title: "Senior Establishment Officer", department_name: "Establishment", level: 2 },
+  { title: "Establishment Manager", department_name: "Establishment", level: 3 },
 
     // Administration hierarchy
     {
@@ -485,100 +485,24 @@ async function main() {
       name: "Senior Management",
       type: "senior",
       allowed_actions: [
-        "employees.read",
-        "employees.create",
-        "employees.update",
-        "employees.delete",
-        "employment.read",
-        "employment.create",
-        "employment.update",
-        "employment.delete",
-        "employment.salary.read",
-        "employment.salary.create",
-        "employment.salary.update",
-        "employment.salary.delete",
-        "employment.location.read",
-        "employment.location.create",
-        "employment.location.update",
-        "employment.location.delete",
-        "employment.contract.read",
-        "employment.contract.create",
-        "employment.contract.update",
-        "employment.contract.delete",
-        "departments.read",
-        "departments.create",
-        "departments.update",
-        "departments.delete",
-        "designations.read",
-        "designations.create",
-        "designations.update",
-        "designations.delete",
-        "districts.read",
-        "districts.create",
-        "districts.update",
-        "districts.delete",
-        "cities.read",
-        "cities.create",
-        "cities.update",
-        "cities.delete",
-        "education-levels.read",
-        "education-levels.create",
-        "education-levels.update",
-        "education-levels.delete",
-        "role-tags.read",
-        "role-tags.create",
-        "role-tags.update",
-        "role-tags.delete",
-        "scale-grades.read",
-        "scale-grades.create",
-        "scale-grades.update",
-        "scale-grades.delete",
-        "locations.read",
-        "locations.create",
-        "locations.update",
-        "locations.delete",
-        "devices.read",
-        "devices.create",
-        "devices.update",
-        "devices.delete",
-        "attendance.read",
-        "attendance.fetch",
-        "reports.read",
-        "users.read",
-        "users.manage",
-        "audit.read",
-        "roster.read",
-        "roster.create",
-        "roster.update",
-        "roster.delete",
-        "roster.status",
+        // TADA module only
         "travel.read",
         "travel.create",
         "travel.update",
-        "travel.delete",
         "travel.submit",
-        "travel.cancel",
         "travel.status",
-        "travel.manage",
         "travel.claim.read",
         "travel.claim.create",
         "travel.claim.update",
-        "travel.claim.delete",
         "travel.claim.submit",
         "travel.claim.status",
-        "travel.claim.settle",
         "travel.rates.read",
-        "travel.rates.manage",
+        // If acting in OPS capacity only
         "travel.request.approve.ops",
         "travel.claim.approve.ops",
       ],
       enabled: true,
-      fields: [
-        "employee_personal",
-        "employee_employment",
-        "employee_salary",
-        "employee_documents",
-      ],
+      fields: ["employee_personal", "employee_employment"],
     },
 
     // Management (BPS 17) - Assistant Directors
@@ -586,32 +510,7 @@ async function main() {
       name: "Management",
       type: "management",
       allowed_actions: [
-        "employees.read",
-        "employees.create",
-        "employees.update",
-        "employment.read",
-        "employment.create",
-        "employment.update",
-        "employment.location.read",
-        "employment.location.create",
-        "employment.location.update",
-        "departments.read",
-        "designations.read",
-        "districts.read",
-        "cities.read",
-        "education-levels.read",
-        "role-tags.read",
-        "scale-grades.read",
-        "locations.read",
-        "devices.read",
-        "attendance.read",
-        "attendance.fetch",
-        "reports.read",
-        "roster.read",
-        "roster.create",
-        "roster.update",
-        "roster.delete",
-        "roster.status",
+        // TADA module only (no Accounts processing)
         "travel.read",
         "travel.create",
         "travel.update",
@@ -633,49 +532,15 @@ async function main() {
       name: "Accounts Manager",
       type: "department",
       allowed_actions: [
-        "employees.read",
-        "employees.create",
-        "employees.update",
-        "employment.read",
-        "employment.create",
-        "employment.update",
-        "employment.location.read",
-        "employment.location.create",
-        "employment.location.update",
-        "departments.read",
-        "designations.read",
-        "districts.read",
-        "cities.read",
-        "education-levels.read",
-        "role-tags.read",
-        "scale-grades.read",
-        "locations.read",
-        "devices.read",
-        "attendance.read",
-        "attendance.fetch",
-        "reports.read",
-        "roster.read",
-        "roster.create",
-        "roster.update",
-        "roster.delete",
-        "roster.status",
+        // TADA only + Accounts processing
         "travel.read",
-        "travel.create",
-        "travel.update",
-        "travel.submit",
-        "travel.status",
         "travel.claim.read",
-        "travel.claim.create",
-        "travel.claim.update",
-        "travel.claim.submit",
+        "travel.claim.process.start",
         "travel.claim.status",
-        "travel.claim.settle",
         "travel.rates.read",
-        "travel.rates.manage",
-        "travel.claim.approve.accounts",
-        // Special TADA permissions for Accounts department
-        "tada.managed.entry", // Only Accounts Manager has access to TADA Managed Entry screen
-        "accounts.tranches.access", // Only Accounts department users have access to Accounts Tranches screen
+        // Accounts screens
+        "tada.managed.entry",
+        "accounts.tranches.access",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment", "employee_salary"],
@@ -686,24 +551,31 @@ async function main() {
       name: "Accounts User",
       type: "department",
       allowed_actions: [
-        "employees.read",
-        "reports.read",
+        // TADA only + Accounts processing
         "travel.read",
-        "travel.create",
-        "travel.update",
-        "travel.submit",
-        "travel.status",
         "travel.claim.read",
-        "travel.claim.create",
-        "travel.claim.update",
-        "travel.claim.submit",
+        "travel.claim.process.start",
         "travel.claim.status",
-        "travel.claim.settle",
         "travel.rates.read",
-        "travel.rates.manage",
-        "travel.claim.approve.accounts",
+        // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
+      ],
+      enabled: true,
+      fields: ["employee_basic"],
+    },
+
+    // Establishment Role (department approver for verification stage)
+    {
+      name: "Establishment",
+      type: "department",
+      allowed_actions: [
+        // TADA only + Establishment verification
+        "travel.read",
+        "travel.claim.read",
+        "travel.claim.verify.establishment",
+        "travel.claim.status",
+        "travel.rates.read",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -714,6 +586,7 @@ async function main() {
       name: "Employee",
       type: "general",
       allowed_actions: [
+        // TADA only for demo
         "profile.read",
         "profile.update",
         "travel.read",
@@ -726,11 +599,7 @@ async function main() {
         "travel.claim.update",
         "travel.claim.submit",
         "travel.claim.status",
-        "travel.claim.settle",
         "travel.rates.read",
-        "travel.rates.manage",
-        "tada.managed.entry",
-        "accounts.tranches.access",
       ],
       enabled: true,
       fields: ["own_personal", "own_employment"],
@@ -755,93 +624,7 @@ async function main() {
 
   // Permissions catalog (routes + domain actions) - Updated with TADA-specific permissions
   const ROUTE_PERMISSION_KEYS = [
-    "employees.read",
-    "employees.create",
-    "employees.update",
-    "employees.delete",
-    "employment.read",
-    "employment.create",
-    "employment.update",
-    "employment.delete",
-    "employment.salary.create",
-    "employment.salary.update",
-    "employment.salary.delete",
-    "employment.location.create",
-    "employment.location.update",
-    "employment.location.delete",
-    "employment.contract.create",
-    "employment.contract.update",
-    "employment.contract.delete",
-    "departments.read",
-    "departments.create",
-    "departments.update",
-    "departments.delete",
-    "designations.read",
-    "designations.create",
-    "designations.update",
-    "designations.delete",
-    "districts.read",
-    "districts.create",
-    "districts.update",
-    "districts.delete",
-    "cities.read",
-    "cities.create",
-    "cities.update",
-    "cities.delete",
-    "education-levels.read",
-    "education-levels.create",
-    "education-levels.update",
-    "education-levels.delete",
-    "role-tags.read",
-    "role-tags.create",
-    "role-tags.update",
-    "role-tags.delete",
-    "scale-grades.read",
-    "scale-grades.create",
-    "scale-grades.update",
-    "scale-grades.delete",
-    "locations.read",
-    "locations.create",
-    "locations.update",
-    "locations.delete",
-    "devices.read",
-    "devices.create",
-    "devices.update",
-    "devices.delete",
-    "attendance.read",
-    "attendance.fetch",
-    "attendance.map",
-    "roster.read",
-    "roster.create",
-    "roster.update",
-    "roster.delete",
-    "roster.status",
-    "leaves.read",
-    "leaves.create",
-    "leaves.update",
-    "leaves.delete",
-    "leaves.status",
-    "leaves.apply",
-    "leave-banks.read",
-    "leave-banks.create",
-    "leave-banks.update",
-    "leave-banks.delete",
-    "leave-types.read",
-    "leave-types.create",
-    "leave-types.update",
-    "leave-types.delete",
-    "users.read",
-    "users.manage",
-    "roles.read",
-    "roles.manage",
-    "permissions.read",
-    "permissions.manage",
-    "system.database.read",
-    "system.security.read",
-    "system.security.update",
-    "system.themes.read",
-    "system.themes.update",
-    "admin.tools",
+    // TADA module routes only
     "travel.read",
     "travel.create",
     "travel.update",
@@ -864,14 +647,12 @@ async function main() {
     "travel.request.approve.dg",
     "travel.claim.approve.ops",
     "travel.claim.approve.dg",
-    "travel.claim.approve.hr",
-    "travel.claim.approve.accounts",
-    // TADA-specific permissions for RBAC
-    "tada.managed.entry", // Only Accounts Manager (Kashif Rasheed) has access to TADA Managed Entry screen
-    "accounts.tranches.access", // Only Accounts department users and manager have access to Accounts Tranches screen
-    "reports.read",
-    "audit.read",
-    "requests.approve",
+    "travel.claim.verify.establishment",
+    "travel.claim.process.start",
+    // Accounts screens
+    "tada.managed.entry",
+    "accounts.tranches.access",
+    // Profile
     "profile.read",
     "profile.update",
   ];
@@ -897,7 +678,7 @@ async function main() {
     )
   );
 
-  // Link permissions to roles (grant ALL permissions to Management and Senior Management)
+  // Link permissions to roles (restrict to declared permissions only)
   for (const role of createdRoles) {
     const orig = roles.find((r) => r.name === role.name);
     if (!orig) continue;
@@ -905,72 +686,11 @@ async function main() {
 
     let permsToCreate = [];
 
-    // For Management and Senior Management, assign ALL permissions available
-    if (orig.name === "Management" || orig.name === "Senior Management") {
-      const allPerms = await prisma.permission.findMany({});
-      permsToCreate = allPerms.map((p) => ({ permission_id: p.id }));
-    } else {
-      // Default behavior: assign only declared permissions (+ a few role-specific extras)
-      const basePerms = await prisma.permission.findMany({
-        where: { key: { in: orig.allowed_actions.filter((k) => k !== "*") } },
-      });
-      permsToCreate = basePerms.map((p) => ({ permission_id: p.id }));
-
-      // Add additional permissions based on role type
-      if (orig.name === "Senior Management") {
-        const extraKeys = [
-          "attendance.map",
-          "leaves.read",
-          "leaves.create",
-          "leaves.update",
-          "leaves.delete",
-          "leaves.status",
-          "leaves.apply",
-          "leave-banks.read",
-          "leave-banks.create",
-          "leave-banks.update",
-          "leave-banks.delete",
-          "leave-types.read",
-          "leave-types.create",
-          "leave-types.update",
-          "leave-types.delete",
-        ];
-        const extraPerms = await prisma.permission.findMany({
-          where: { key: { in: extraKeys } },
-        });
-        for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
-      }
-
-      if (orig.name === "Management") {
-        const extraPerms = await prisma.permission.findMany({
-          where: {
-            key: {
-              in: [
-                "leaves.apply",
-                "leaves.read",
-                "travel.claim.approve.hr", // Management level can approve HR stage
-              ],
-            },
-          },
-        });
-        for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
-      }
-
-      if (orig.name === "Accounts Manager") {
-        const extraPerms = await prisma.permission.findMany({
-          where: {
-            key: {
-              in: [
-                "leaves.apply",
-                "leaves.read",
-                "travel.claim.approve.hr", // Accounts Manager can also approve HR stage
-              ],
-            },
-          },
-        });
-        for (const p of extraPerms) permsToCreate.push({ permission_id: p.id });
-      }
-    }
+    // Assign only declared permissions
+    const basePerms = await prisma.permission.findMany({
+      where: { key: { in: orig.allowed_actions.filter((k) => k !== "*") } },
+    });
+    permsToCreate = basePerms.map((p) => ({ permission_id: p.id }));
 
     // Deduplicate permission_ids to avoid P2002 unique constraint violations
     const seen = new Set();
@@ -1576,10 +1296,10 @@ async function main() {
       status: "Active",
       is_deleted: false,
     },
-    // Added: HR viewer (for Manage view)
+    // Added: Establishment viewer (for Manage view)
     {
-      employee_id: "EMPHR001",
-      full_name: "HR Viewer Test",
+      employee_id: "EMPEST001",
+      full_name: "Establishment Viewer Test",
       father_husband_name: "Ijaz Ahmed",
       relationship_type: "father",
       mother_name: "Samina",
@@ -1593,7 +1313,7 @@ async function main() {
       religion: "Islam",
       mobile_number: "03231234567",
       whatsapp_number: "03231234567",
-      email: "hr.viewer@psba.gop.pk",
+  email: "est.viewer@psba.gop.pk",
       present_address: "Lahore",
       permanent_address: "Lahore",
       district: "Lahore",
@@ -1604,7 +1324,7 @@ async function main() {
     // Dummy employees for department testing
     {
       employee_id: "EMPDUMMY01",
-      full_name: "Dummy Employee One",
+      full_name: "Ali",
       father_husband_name: "Test Father",
       relationship_type: "father",
       mother_name: "Test Mother",
@@ -1628,7 +1348,7 @@ async function main() {
     },
     {
       employee_id: "EMPDUMMY02",
-      full_name: "Dummy Employee Two",
+      full_name: "Umar",
       father_husband_name: "Test Father",
       relationship_type: "father",
       mother_name: "Test Mother",
@@ -1715,7 +1435,7 @@ async function main() {
     {
       email: "establishment@psba.gop.pk",
       password: encrypt("abc123"),
-      role_id: getRoleId("Employee"),
+      role_id: getRoleId("Establishment"),
       employee_id: null,
       department_id: getDeptId("Establishment"),
       is_deleted: false,
@@ -1723,7 +1443,7 @@ async function main() {
     {
       email: "accounts@psba.gop.pk",
       password: encrypt("abc123"),
-      role_id: getRoleId("Employee"),
+      role_id: getRoleId("Accounts User"),
       employee_id: null,
       department_id: getDeptId("Accounts"),
       is_deleted: false,
@@ -1755,7 +1475,7 @@ async function main() {
 
     // DG (BPS 19-20) - Director General
     {
-      email: "dg@psba.gop.pk",
+      email: "adg.hfp@psba.gop.pk",
       password: encrypt("abc123"),
       role_id: getRoleId("Director General"),
       employee_id: findEmpId("Naveed Rafaqat Ahmad"),
@@ -1801,7 +1521,7 @@ async function main() {
     {
       email: "ad.est@psba.gop.pk",
       password: encrypt("abc123"),
-      role_id: getRoleId("Management"),
+      role_id: getRoleId("Establishment"),
       employee_id: findEmpId("Mariya Iqbal"),
       department_id: null,
       is_deleted: false,
@@ -2625,16 +2345,16 @@ async function main() {
       location_id: findLocationId("Head Quarter"),
       is_deleted: false,
     },
-    // Added: HR viewer in HR department at Head Office
+    // Added: Establishment viewer in Establishment department at Head Office
     {
-      employee_id: empId("HR Viewer Test"),
+      employee_id: empId("Establishment Viewer Test"),
       organization: "PSBA",
-      department_id: deptId("HR"),
-      designation_id: desigId("HR Officer", "HR"),
+      department_id: deptId("Establishment"),
+      designation_id: desigId("Establishment Officer", "Establishment"),
       employment_type: "Regular",
       effective_from: new Date("2022-03-01"),
       office_location: "Head Quarter",
-      remarks: "HR viewer for Manage list",
+  remarks: "Establishment viewer for Manage list",
       scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-3").id,
       employment_status: "active",
       is_current: true,
@@ -2645,7 +2365,7 @@ async function main() {
     },
     // Dummy employment records for department association testing
     {
-      employee_id: empId("Dummy Employee One"),
+      employee_id: empId("Ali"),
       organization: "PSBA",
       department_id: deptId("IT"),
       designation_id: desigId("Software Developer", "IT"),
@@ -2661,7 +2381,7 @@ async function main() {
       is_deleted: false,
     },
     {
-      employee_id: empId("Dummy Employee Two"),
+      employee_id: empId("Umar"),
       organization: "PSBA",
       department_id: deptId("Accounts"),
       designation_id: desigId("Assistant Director", "Accounts"),
@@ -3004,8 +2724,8 @@ async function main() {
     console.log("⚠️ Skipped sample expense claim seeding (missing employees)");
   }
 
-  // NEW: Seed VERIFIED claims for Accounts tranche testing
-  console.log("🧾 Seeding HR-VERIFIED claims for Accounts...");
+    // NEW: Seed VERIFIED claims for Accounts tranche testing
+  console.log("🧾 Seeding Establishment-VERIFIED claims for Accounts...");
   const seedVerifiedClaim = async (empName, fromDaysAgo, toDaysAgo) => {
     const empIdLocal = empByName(empName);
     if (!empIdLocal) return null;
@@ -3057,7 +2777,7 @@ async function main() {
         file_size: 10000,
       },
     });
-    // Status history: SUBMITTED -> RECOMMENDED -> DG_APPROVED -> HR_APPROVED
+  // Status history: SUBMITTED -> RECOMMENDED -> DG_APPROVED -> ESTABLISHMENT_VERIFIED
     await prisma.travelClaimStatusEntry.create({
       data: {
         claim_id: c.id,
@@ -3082,8 +2802,8 @@ async function main() {
     await prisma.travelClaimStatusEntry.create({
       data: {
         claim_id: c.id,
-        action: "HR_APPROVED",
-        actor_employee_id: empByName("Maria Iqbal"),
+        action: "ESTABLISHMENT_VERIFIED",
+        actor_employee_id: empByName("Mariya Iqbal"),
       },
     });
     // Totals recompute
@@ -3093,6 +2813,86 @@ async function main() {
   };
   const v1 = await seedVerifiedClaim("Muhammad Ahmad", 8, 8);
   const v2 = await seedVerifiedClaim("Muhammad Ali Hassan", 6, 6);
+
+  // Seed an APPROVED claim (DG-approved, awaiting Establishment verification)
+  console.log("🧾 Seeding DG-APPROVED claim for Establishment stage...");
+  const seedApprovedForEstablishment = async (empName, fromDaysAgo, toDaysAgo) => {
+    const empIdLocal = empByName(empName);
+    if (!empIdLocal) return null;
+    const c = await prisma.travelClaim.create({
+      data: {
+        employee_id: empIdLocal,
+        travel_request_id: null, // within-city claim for simplicity
+        from_date: daysFromNow(-fromDaysAgo),
+        to_date: daysFromNow(-toDaysAgo),
+        per_diem_days: 0,
+        rate_per_km: 300,
+        per_diem_rate: 1500,
+        toll_tax_total: 100,
+        transport_mode: "OWN",
+        fuel_total: 0,
+        fare_total: 0,
+        status: "APPROVED",
+      },
+    });
+    await prisma.travelClaimSegment.createMany({
+      data: [
+        {
+          claim_id: c.id,
+          departure_from: "Lahore",
+          departure_to: "Field",
+          depart_time: "09:15",
+          arrive_time: "10:00",
+          mode: "Car",
+          distance_km: 25,
+        },
+        {
+          claim_id: c.id,
+          departure_from: "Field",
+          departure_to: "Lahore",
+          depart_time: "16:30",
+          arrive_time: "17:10",
+          mode: "Car",
+          distance_km: 25,
+        },
+      ],
+    });
+    await prisma.travelClaimDocument.create({
+      data: {
+        claim_id: c.id,
+        category: "REPORT",
+        file_path: "uploads/Travel/Claims/demo/approved_report.pdf",
+        mime_type: "application/pdf",
+        file_size: 9000,
+      },
+    });
+    // Status history: SUBMITTED -> RECOMMENDED -> DG_APPROVED (no Establishment action yet)
+    await prisma.travelClaimStatusEntry.create({
+      data: {
+        claim_id: c.id,
+        action: "SUBMITTED",
+        actor_employee_id: empIdLocal,
+      },
+    });
+    await prisma.travelClaimStatusEntry.create({
+      data: {
+        claim_id: c.id,
+        action: "RECOMMENDED",
+        actor_employee_id: empByName("Roshan Zameer"),
+      },
+    });
+    await prisma.travelClaimStatusEntry.create({
+      data: {
+        claim_id: c.id,
+        action: "DG_APPROVED",
+        actor_employee_id: empByName("Naveed Rafaqat Ahmad"),
+      },
+    });
+    await recomputeClaimTotals(c.id);
+    console.log("✅ Seeded APPROVED claim (awaiting Establishment) for", empName, "→ Claim", c.id);
+    return c.id;
+  };
+  const estPending = await seedApprovedForEstablishment("Rizwan Haider Shah", 4, 4);
 
   // Seed Travel Rates (sample)
   console.log("🧮 Seeding travel rates...");

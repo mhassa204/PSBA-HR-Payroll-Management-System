@@ -97,19 +97,20 @@ export default function ManageExpenseClaimApprovals() {
     !!caps?.isDG ||
     can("travel.claim.approve.dg") ||
     /(^|\b)(director\s*general|dg)(\b|$)/i.test(roleName);
-  const canHR =
+  // Establishment replaces HR
+  const canEstablishment =
     isSuper ||
-    can("travel.claim.approve.hr") ||
-    caps?.isHR ||
-    /(^hr$|human\s*resources)/i.test(roleName);
+    can("travel.claim.verify.establishment") ||
+    caps?.isEstablishment ||
+    /establishment/i.test(roleName);
   const canAccounts =
     isSuper ||
-    can("travel.claim.approve.accounts") ||
+    can("travel.claim.process.start") ||
     caps?.isAccountsApprover ||
     /(accounts|finance|budget|payroll|reconciliation)/i.test(roleName);
   const meEmpId = user?.employee_id;
-  const hasAnyApprovalPerm = canOps || canDG || canHR || canAccounts;
-  const isApproverRole = !!(canOps || canDG || canHR || canAccounts);
+  const hasAnyApprovalPerm = canOps || canDG || canEstablishment || canAccounts;
+  const isApproverRole = !!(canOps || canDG || canEstablishment || canAccounts);
 
   // Helper to compute dynamic eligibility replicating backend generalized logic (with recommender stage)
   const isRecommenderFor = (claim) => {
@@ -179,13 +180,13 @@ export default function ManageExpenseClaimApprovals() {
     const approvalsOrder = [
       "OPS_APPROVED",
       "DG_APPROVED",
-      "HR_APPROVED",
-      "ACCOUNTS_APPROVED",
+      "ESTABLISHMENT_VERIFIED",
+      "PROCESS_STARTED",
     ];
     const rejectionActions = [
       "OPS_REJECTED",
       "DG_REJECTED",
-      "HR_REJECTED",
+      "ESTABLISHMENT_REJECTED",
       "ACCOUNTS_REJECTED",
       "RECOMMENDER_REJECTED",
     ];
@@ -196,10 +197,8 @@ export default function ManageExpenseClaimApprovals() {
       );
     const lastEntry = entries[entries.length - 1];
     const hasRecommended = entries.some((e) => e.action === "RECOMMENDED");
-    const hasHRAppr = entries.some((e) => e.action === "HR_APPROVED");
-    const hasAccountsAppr = entries.some(
-      (e) => e.action === "ACCOUNTS_APPROVED"
-    );
+    const hasEstVerified = entries.some((e) => e.action === "ESTABLISHMENT_VERIFIED");
+    const hasProcessStarted = entries.some((e) => e.action === "PROCESS_STARTED");
     const locType =
       claim.employee?.employmentRecords?.[0]?.location?.type || "HEAD_OFFICE";
     const directToDG =
@@ -228,7 +227,7 @@ export default function ManageExpenseClaimApprovals() {
         } else if (
           (stage === "OPS" && canOps) ||
           (stage === "DG" && canDG) ||
-          (stage === "HR" && canHR) ||
+          (stage === "ESTABLISHMENT" && canEstablishment) ||
           (stage === "ACCOUNTS" && canAccounts)
         ) {
           canClear = true;
@@ -262,20 +261,21 @@ export default function ManageExpenseClaimApprovals() {
         lastApproval.action === "OPS_APPROVED" ||
         lastApproval.action === "DG_APPROVED"
       )
-        return hasHRAppr || hasAccountsAppr;
-      if (lastApproval.action === "HR_APPROVED") return hasAccountsAppr;
-      if (lastApproval.action === "ACCOUNTS_APPROVED") return false; // final stage entry
+        return hasEstVerified || hasProcessStarted;
+      if (lastApproval.action === "ESTABLISHMENT_VERIFIED")
+        return hasProcessStarted;
+      if (lastApproval.action === "PROCESS_STARTED") return false; // processing initiated
       return false;
     };
 
     const lastApprovalIsMine =
       lastApproval && lastApproval.actor_employee_id === user?.employee_id;
 
-    // If Accounts approval already exists, lock further actions to only CLEAR by the same approver (unless processed/settled, handled above)
-    if (hasAccountsAppr) {
+    // If Accounts has started processing, lock further actions (except CLEAR by same actor)
+    if (hasProcessStarted) {
       if (
         lastApproval &&
-        lastApproval.action === "ACCOUNTS_APPROVED" &&
+        lastApproval.action === "PROCESS_STARTED" &&
         lastApprovalIsMine
       ) {
         return {
@@ -325,7 +325,7 @@ export default function ManageExpenseClaimApprovals() {
       return {
         canApprove: true,
         canReject: true,
-        canClear: true,
+        canClear: false,
         canRecommend: false,
       };
     }
@@ -415,19 +415,19 @@ export default function ManageExpenseClaimApprovals() {
       }
       // HoD/RO must not see Approve/Reject at SUBMITTED stage
     } else if (status === "APPROVED") {
-      // HR stage
-      if (canHR)
+      // Establishment stage
+      if (canEstablishment)
         return {
-          canApprove: true,
+          canApprove: true, // Verify action triggers APPROVE with ESTABLISHMENT_VERIFIED server-side
           canReject: true,
           canClear: false,
           canRecommend: false,
         };
     } else if (status === "VERIFIED") {
-      // Accounts stage
+      // Accounts stage (start process)
       if (canAccounts)
         return {
-          canApprove: true,
+          canApprove: true, // Start Process action triggers APPROVE with PROCESS_STARTED
           canReject: true,
           canClear: false,
           canRecommend: false,
@@ -583,11 +583,14 @@ export default function ManageExpenseClaimApprovals() {
     }
 
     if (canAccounts) {
-      // Accounts sees only HR-approved (status VERIFIED)
-      return c.status === "VERIFIED" && has("HR_APPROVED");
+      // Accounts sees Establishment-verified (status VERIFIED) or Under Process
+      return (
+        (c.status === "VERIFIED" && has("ESTABLISHMENT_VERIFIED")) ||
+        c.status === "UNDER_PROCESS"
+      );
     }
-    if (canHR) {
-      // HR sees only DG-approved (status APPROVED with DG_APPROVED)
+    if (canEstablishment) {
+      // Establishment sees only DG-approved (status APPROVED with DG_APPROVED)
       return c.status === "APPROVED" && has("DG_APPROVED");
     }
     if (canDG) {
@@ -635,7 +638,7 @@ export default function ManageExpenseClaimApprovals() {
 
   const pendingFiltered = useMemo(
     () => (list || []).filter(passesRoleFilter),
-    [list, canAccounts, canHR, canDG, meEmpId]
+    [list, canAccounts, canEstablishment, canDG, meEmpId]
   );
 
   const filteredAll = useMemo(() => {
@@ -674,13 +677,13 @@ export default function ManageExpenseClaimApprovals() {
         const approvals = [
           "OPS_APPROVED",
           "DG_APPROVED",
-          "HR_APPROVED",
-          "ACCOUNTS_APPROVED",
+          "ESTABLISHMENT_VERIFIED",
+          "PROCESS_STARTED",
         ];
         const rejections = [
           "OPS_REJECTED",
           "DG_REJECTED",
-          "HR_REJECTED",
+          "ESTABLISHMENT_REJECTED",
           "ACCOUNTS_REJECTED",
           "RECOMMENDER_REJECTED",
         ];
@@ -709,7 +712,7 @@ export default function ManageExpenseClaimApprovals() {
       }
       return true;
     });
-  }, [allClaims, search, statusFilter, canAccounts, canHR, canDG, meEmpId]);
+  }, [allClaims, search, statusFilter, canAccounts, canEstablishment, canDG, meEmpId]);
 
   const currentEmployment = (emp) => emp?.employmentRecords?.[0];
   const formatMoney = (v) =>
@@ -848,7 +851,11 @@ export default function ManageExpenseClaimApprovals() {
                             size="sm"
                             onClick={() => clickAction(c, "APPROVE")}
                           >
-                            Approve
+                            {c.status === "APPROVED" && canEstablishment
+                              ? "Verify"
+                              : c.status === "VERIFIED" && canAccounts
+                              ? "Start Process"
+                              : "Approve"}
                           </Button>
                         )}
                         {eligibility.canReject && (
@@ -903,6 +910,7 @@ export default function ManageExpenseClaimApprovals() {
                     "SUBMITTED",
                     "APPROVED",
                     "VERIFIED",
+                    "UNDER_PROCESS",
                     "PROCESSED",
                     "REJECTED",
                     "PENDING_APPROVAL",
@@ -1097,7 +1105,11 @@ export default function ManageExpenseClaimApprovals() {
                             size="sm"
                             onClick={() => clickAction(c, "APPROVE")}
                           >
-                            Approve
+                            {c.status === "APPROVED" && canEstablishment
+                              ? "Verify"
+                              : c.status === "VERIFIED" && canAccounts
+                              ? "Start Process"
+                              : "Approve"}
                           </Button>
                         )}
                         {showReject && (
@@ -1140,16 +1152,16 @@ export default function ManageExpenseClaimApprovals() {
             const empJob = currentEmployment(emp);
             const isAccountsUser =
               isSuper ||
-              can("travel.claim.approve.accounts") ||
+              can("travel.claim.process.start") ||
               caps?.isAccountsApprover;
             const entries = selected.statusEntries || [];
             const hasAccountsDecision = entries.some(
               (se) =>
-                se.action === "ACCOUNTS_APPROVED" ||
+                se.action === "PROCESS_STARTED" ||
                 se.action === "ACCOUNTS_REJECTED"
             );
-            // Edit is only available to Accounts users when HR has approved (status === 'VERIFIED')
-            // and Accounts have not approved/rejected/processed/settled yet
+            // Edit is only available to Accounts users when Establishment has verified (status === 'VERIFIED')
+            // and Accounts have not started processing/rejected/processed/settled yet
             const allowEdit =
               isAccountsUser &&
               selected.status === "VERIFIED" &&
@@ -1652,7 +1664,11 @@ export default function ManageExpenseClaimApprovals() {
                             size="sm"
                             onClick={() => act("APPROVE")}
                           >
-                            Approve
+                            {selected.status === "APPROVED" && canEstablishment
+                              ? "Verify"
+                              : selected.status === "VERIFIED" && canAccounts
+                              ? "Start Process"
+                              : "Approve"}
                           </Button>
                         )}
                         {elig.canReject && (

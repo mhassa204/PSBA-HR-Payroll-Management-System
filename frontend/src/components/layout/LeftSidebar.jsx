@@ -88,7 +88,7 @@ const LeftSidebar = () => {
   const user = useAuthStore((s) => s.user);
   const [expandedItems, setExpandedItems] = useState(new Set());
   const STORAGE_KEY = 'leftSidebar.expandedItems';
-  const [travelCaps, setTravelCaps] = useState({ canCreateOrOwn: false, canViewAll: false, isOps: false, isHR: false, isDG: false });
+  const [travelCaps, setTravelCaps] = useState({ canCreateOrOwn: false, canViewAll: false, isOps: false, isEstablishment: false, isDG: false });
 
   // Fetch current user's employee record (for avatar)
   const [employee, setEmployee] = useState(null);
@@ -251,15 +251,15 @@ const LeftSidebar = () => {
       description: 'TADA',
       color: 'bg-fuchsia-600',
       show: () => (
-        travelCaps.canCreateOrOwn || can('travel.create') || travelCaps.canViewAll || can('travel.claim.read') || travelCaps.isHR || travelCaps.isDG
+        travelCaps.canCreateOrOwn || can('travel.create') || travelCaps.canViewAll || can('travel.claim.read') || travelCaps.isEstablishment || travelCaps.isDG
       ),
       children: [
         { name: 'Requests', href: '/travel/requests', icon: ViewColumnsIcon, show: () => (travelCaps.canCreateOrOwn || can('travel.create') || travelCaps.isAccountsApprover) },
-  { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => (travelCaps.canViewAll || travelCaps.isAccountsApprover || travelCaps.isDG || travelCaps.isHR) },
-  { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isAccountsApprover || travelCaps.isHR) },
+  { name: 'Manage Requests', href: '/travel/manage', icon: ViewColumnsIcon, show: () => (travelCaps.canViewAll || travelCaps.isAccountsApprover || travelCaps.isDG || travelCaps.isEstablishment) },
+  { name: 'Approvals', href: '/travel/approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isAccountsApprover || travelCaps.isEstablishment) },
         { name: 'Expense Claims', href: '/travel/expense-claims', icon: ViewColumnsIcon, show: () => can('travel.claim.read') },
-        { name: 'Claim Approvals', href: '/travel/expense-claim-approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isHR || travelCaps.isAccountsApprover) },
-        { name: 'Accounts Tranches', href: '/travel/accounts/tranches', icon: ViewColumnsIcon, show: () => (travelCaps.isAccountsApprover || can('travel.claim.approve.accounts')) },
+  { name: 'Claim Approvals', href: '/travel/expense-claim-approvals', icon: ViewColumnsIcon, show: () => (travelCaps.isOps || travelCaps.isDG || travelCaps.isEstablishment || travelCaps.isAccountsApprover) },
+  { name: 'Accounts Tranches', href: '/travel/accounts/tranches', icon: ViewColumnsIcon, show: () => (travelCaps.isAccountsApprover || can('travel.claim.process.start')) },
         { name: 'TADA Managed Entry', href: '/travel/manual', icon: ViewColumnsIcon, show: () => (travelCaps.isAccountsApprover || travelCaps.isSuperAdmin) }
       ]
     }

@@ -624,6 +624,7 @@ enum TravelClaimStatus {
   PENDING_APPROVAL // legacy (treated same as APPROVED after first stage)
   VERIFIED         // after HR approval (still used)
   APPROVED         // now specifically means first-stage (OPS/DG) approved
+  UNDER_PROCESS    // after Accounts starts processing
   PROCESSED        // final after Accounts approval
   REJECTED         // legacy generic
   REJECTED_OPS

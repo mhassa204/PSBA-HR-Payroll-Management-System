@@ -49,4 +49,23 @@ function authorizeAny(permissions = []) {
   };
 }
 
-module.exports = { isAuthenticated, hasRole, authorize, authorizeAny };
+// Allow reading own employee record without global employees.read
+function authorizeOwnEmployeeOrEmployeesRead() {
+  return (req, res, next) => {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    const user = req.session.user;
+    const paramId = Number(req.params.id);
+    const ownEmpId = Number(user.employee_id || 0);
+    // If requesting own employee record, allow regardless of employees.read
+    if (ownEmpId && paramId === ownEmpId) {
+      return next();
+    }
+    // Otherwise require employees.read permission (or wildcard)
+    if (hasPermission(user, 'employees.read')) return next();
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  };
+}
+
+module.exports = { isAuthenticated, hasRole, authorize, authorizeAny, authorizeOwnEmployeeOrEmployeesRead };

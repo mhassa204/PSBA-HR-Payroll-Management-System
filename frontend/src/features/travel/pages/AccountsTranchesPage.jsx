@@ -58,8 +58,8 @@ export default function AccountsTranchesPage(){
       <Card className="w-full">
         <CardHeader className="border-b">
           <div className="flex items-center justify-between">
-            <CardTitle>Filter Accounts-Approved (Verified) Claims</CardTitle>
-            <span className="text-[11px] text-muted-foreground hidden md:inline">Only claims already approved by Accounts are listed here</span>
+            <CardTitle>Filter Accounts Processing Claims</CardTitle>
+            <span className="text-[11px] text-muted-foreground hidden md:inline">Only claims where processing has been started by Accounts are listed here</span>
           </div>
         </CardHeader>
         <CardContent className="p-4 text-sm space-y-3">
@@ -88,10 +88,10 @@ export default function AccountsTranchesPage(){
           {/* Scrollable list taking available width */}
           <div className="rounded border max-h-[60vh] overflow-auto divide-y">
             {loading && <div className="p-3 text-muted-foreground">Loading...</div>}
-            {!loading && claims.length===0 && <div className="p-3 text-muted-foreground">No accounts-approved verified claims match filters.</div>}
+            {!loading && claims.length===0 && <div className="p-3 text-muted-foreground">No claims with processing started match filters.</div>}
             {claims.map(c => {
               const emp = c.employee; const job = emp?.employmentRecords?.[0];
-              const hasAccountsApproval = (c.statusEntries||[]).some(se => se.action === 'ACCOUNTS_APPROVED');
+              const hasAccountsApproval = (c.statusEntries||[]).some(se => se.action === 'PROCESS_STARTED');
               return (
                 <div key={c.id} className="p-3 flex items-center justify-between text-sm bg-white">
                   <div className="flex items-center gap-3 min-w-0">
@@ -102,7 +102,7 @@ export default function AccountsTranchesPage(){
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {hasAccountsApproval && <Badge variant="secondary" className="text-[10px]">Accounts Approved</Badge>}
+                    {hasAccountsApproval && <Badge variant="secondary" className="text-[10px]">Processing Started</Badge>}
                     <Badge variant="outline" className="text-[10px]">{c.status}</Badge>
                   </div>
                 </div>

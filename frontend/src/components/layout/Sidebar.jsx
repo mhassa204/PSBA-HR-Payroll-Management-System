@@ -93,7 +93,7 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
   const user = useAuthStore(s=>s.user);
   const can = useAuthStore(s=>s.can);
   const isSuper = user?.role?.name==='Super Admin' || (user?.permissions||[]).includes('*');
-  const canAccounts = isSuper || can('travel.claim.approve.accounts') || /accounts|finance|budget|payroll|reconciliation/i.test(user?.role?.name||'');
+  const canAccounts = isSuper || can('travel.claim.process.start') || /accounts|finance|budget|payroll|reconciliation/i.test(user?.role?.name||'');
 
   // Build navigation dynamically to inject Accounts section
   const nav = React.useMemo(()=>{
