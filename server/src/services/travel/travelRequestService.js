@@ -94,6 +94,7 @@ module.exports = {
       employment,
       deptName,
       desigTitle,
+      roleName,
       locType,
       scaleLevel,
       isOps,

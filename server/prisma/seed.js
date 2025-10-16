@@ -465,12 +465,14 @@ async function main() {
       fields: ["*"],
     },
 
-    // DG Role (BPS 19-20) - Director General with full access
+    // DG Role (BPS 19-20) - Director General with DG-specific access only
     {
       name: "Director General",
       type: "executive",
       allowed_actions: [
-        "*", // Full system access
+        // Minimal, explicit DG privileges (no wildcard)
+        "travel.read",
+        "travel.manage",
         "travel.request.approve.dg",
         "travel.claim.approve.dg",
       ],

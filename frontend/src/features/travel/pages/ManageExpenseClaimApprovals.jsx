@@ -92,7 +92,11 @@ export default function ManageExpenseClaimApprovals() {
   const canOps = isSuper || can("travel.claim.approve.ops") || caps?.isOps;
   // DG UI gating: only a true DG (designation) or Super Admin should see DG actions
   // DG UI gating: only a Director General by role (from backend caps) or Super Admin
-  const canDG = isSuper || !!caps?.isDG;
+  const canDG =
+    isSuper ||
+    !!caps?.isDG ||
+    can("travel.claim.approve.dg") ||
+    /(^|\b)(director\s*general|dg)(\b|$)/i.test(roleName);
   const canHR =
     isSuper ||
     can("travel.claim.approve.hr") ||
@@ -383,7 +387,19 @@ export default function ManageExpenseClaimApprovals() {
         };
       }
       if (locType === "HEAD_OFFICE" && canDG) {
-        if (!hasRecommended)
+        // Require recommendations before DG acts. For department-origin claims where HoD has a RO,
+        // require two recommendations (HoD, then HoD's RO). Otherwise require at least one.
+        const recs = entries.filter((e) => e.action === "RECOMMENDED").length;
+        const deptOrigin = isDeptOriginClaim(claim);
+        const needRecs = (() => {
+          if (deptOrigin) {
+            const hodId = hodIdForClaim(claim);
+            const hodRO = hodROForClaim(claim);
+            if (hodId && hodRO) return 2;
+          }
+          return 1;
+        })();
+        if (recs < needRecs)
           return {
             canApprove: false,
             canReject: false,
@@ -575,9 +591,26 @@ export default function ManageExpenseClaimApprovals() {
       return c.status === "APPROVED" && has("DG_APPROVED");
     }
     if (canDG) {
-      // DG sees recommended OR direct reports regardless of recommendation
+      // DG sees:
+      // - Any SUBMITTED with at least one recommendation
+      // - Direct reports (fast-track)
+      // - Department-origin SUBMITTED claims (server already enforces recs before approve)
       const isRecommended = entries.some((e) => e.action === "RECOMMENDED");
-      return (c.status === "SUBMITTED" && isRecommended) || empRepsToMe;
+      const isDeptOriginExplicit = isDeptOriginClaim(c);
+      const hasDeptOriginMarker = (entries || []).some(
+        (e) =>
+          e.action === "SUBMITTED" &&
+          // submitted by department account (no employee actor)
+          (!e.actor_employee_id ||
+            // legacy textual markers
+            (e.remarks &&
+              /\[DEPT\]|department|submitted by/i.test(String(e.remarks))))
+      );
+      const isDeptOriginForDG = isDeptOriginExplicit || hasDeptOriginMarker;
+      return (
+        (c.status === "SUBMITTED" && (isRecommended || isDeptOriginForDG)) ||
+        empRepsToMe
+      );
     }
     // Others (non-approver roles): trust server-side pending list
     if (!isApproverRole) return true;

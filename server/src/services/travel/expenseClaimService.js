@@ -1162,7 +1162,14 @@ module.exports = {
         },
       });
     }
-    if (ctx.isDG || ctx.canApproveClaimDG) {
+    const looksLikeDG =
+      !!ctx.isDG ||
+      !!ctx.canApproveClaimDG ||
+      /(^|\b)(director\s*general|dg)(\b|$)/i.test(
+        String(ctx.desigTitle || "")
+      ) ||
+      /(^|\b)(director\s*general|dg)(\b|$)/i.test(String(ctx.roleName || ""));
+    if (looksLikeDG) {
       // DG sees standard claims requiring recommendation
       stageFilters.push({
         status: "SUBMITTED",
@@ -1412,10 +1419,7 @@ module.exports = {
 
     // DG safety-net: if nothing matched due to origin/location quirks, include
     // a broad, role-appropriate set to avoid hiding valid department-origin items.
-    if (
-      (ctx.isDG || ctx.canApproveClaimDG) &&
-      (!claims || claims.length === 0)
-    ) {
+    if (looksLikeDG && (!claims || claims.length === 0)) {
       const me = String(ctx.meEmpId || "");
       claims = await prisma.travelClaim.findMany({
         where: {
@@ -1725,7 +1729,7 @@ module.exports = {
       // Only a real DG (designation) can act at DG stage; do not allow permission-only
       if (stageKey === "DG") return ctx.isDG;
       if (stageKey === "HR") return ctx.isHR;
-      if (stageKey === "ACCOUNTS") return ctx.isAccountsApprover;
+      if (stageKey === "ACCOUNTS") return !!ctx.isAccountsApprover; // DG cannot act as Accounts
       return false;
     };
 

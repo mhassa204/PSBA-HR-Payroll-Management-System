@@ -29,7 +29,7 @@ const authController = {
 
     // Load permissions for the user's role (normalized RBAC)
     let permissions = [];
-    if (user.role?.name === "Super Admin" || user.role?.name === "Director General") {
+    if (user.role?.name === "Super Admin") {
       permissions = ["*"];
     } else {
       const rolePerms = await prisma.rolePermission.findMany({
@@ -85,12 +85,14 @@ const authController = {
         // Invalidate session if user/role is no longer valid
         req.session.destroy(() => {});
         res.clearCookie("connect.sid");
-        return res.status(401).json({ success: false, error: "Not authenticated" });
+        return res
+          .status(401)
+          .json({ success: false, error: "Not authenticated" });
       }
 
       let permissions = req.session.user.permissions || [];
-      if (!permissions || permissions.length === 0 || dbUser.role?.name === "Director General") {
-        if (dbUser.role?.name === "Super Admin" || dbUser.role?.name === "Director General") {
+      if (!permissions || permissions.length === 0) {
+        if (dbUser.role?.name === "Super Admin") {
           permissions = ["*"];
         } else {
           const rolePerms = await prisma.rolePermission.findMany({
@@ -104,7 +106,11 @@ const authController = {
       req.session.user = {
         id: dbUser.id,
         email: dbUser.email,
-        role: { id: dbUser.role.id, name: dbUser.role.name, type: dbUser.role.type },
+        role: {
+          id: dbUser.role.id,
+          name: dbUser.role.name,
+          type: dbUser.role.type,
+        },
         permissions,
         employee_id: dbUser.employee?.id || null,
         employee_code: dbUser.employee?.employee_id || null,
