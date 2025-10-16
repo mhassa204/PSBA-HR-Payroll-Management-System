@@ -18,19 +18,19 @@ function hasRole(allowedRoles = []) {
 function hasPermission(user, perm) {
   if (!user) return false;
   // Super Admin shortcut
-  if (user.role?.name === 'Super Admin') return true;
+  if (user.role?.name === "Super Admin") return true;
   const list = user.permissions || [];
-  if (list.includes('*')) return true;
+  if (list.includes("*")) return true;
   return list.includes(perm);
 }
 
 function authorize(permission) {
   return (req, res, next) => {
     if (!req.session.user) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
     if (!hasPermission(req.session.user, permission)) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return res.status(403).json({ success: false, error: "Forbidden" });
     }
     next();
   };
@@ -39,11 +39,11 @@ function authorize(permission) {
 function authorizeAny(permissions = []) {
   return (req, res, next) => {
     if (!req.session.user) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
     const ok = permissions.some((p) => hasPermission(req.session.user, p));
     if (!ok) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+      return res.status(403).json({ success: false, error: "Forbidden" });
     }
     next();
   };
@@ -53,7 +53,7 @@ function authorizeAny(permissions = []) {
 function authorizeOwnEmployeeOrEmployeesRead() {
   return (req, res, next) => {
     if (!req.session.user) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
     const user = req.session.user;
     const paramId = Number(req.params.id);
@@ -63,9 +63,15 @@ function authorizeOwnEmployeeOrEmployeesRead() {
       return next();
     }
     // Otherwise require employees.read permission (or wildcard)
-    if (hasPermission(user, 'employees.read')) return next();
-    return res.status(403).json({ success: false, error: 'Forbidden' });
+    if (hasPermission(user, "employees.read")) return next();
+    return res.status(403).json({ success: false, error: "Forbidden" });
   };
 }
 
-module.exports = { isAuthenticated, hasRole, authorize, authorizeAny, authorizeOwnEmployeeOrEmployeesRead };
+module.exports = {
+  isAuthenticated,
+  hasRole,
+  authorize,
+  authorizeAny,
+  authorizeOwnEmployeeOrEmployeesRead,
+};

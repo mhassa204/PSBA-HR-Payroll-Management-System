@@ -17,9 +17,9 @@ import CleanEmploymentHistory from "./features/employees/components/CleanEmploym
 import AuditLogsDashboard from "./features/audit/components/AuditLogsDashboard";
 import ConfirmationProvider from "./components/ui/ConfirmationProvider";
 import ToastProvider from "./components/ui/ToastContainer";
-import { 
-  SettingsDashboard, 
-  DepartmentManagement, 
+import {
+  SettingsDashboard,
+  DepartmentManagement,
   DesignationManagement,
   RoleTagManagement,
   ScaleGradeManagement,
@@ -29,7 +29,7 @@ import {
   DistrictManagement,
   CityManagement,
   EducationLevelManagement,
-  TravelRateManagement
+  TravelRateManagement,
 } from "./features/settings";
 import { UserManagement } from "./features/users";
 import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
@@ -45,10 +45,10 @@ import AttendanceDevices from "./features/attendance/pages/AttendanceDevices";
 import AttendanceLocationDetailHome from "./features/attendance/pages/AttendanceLocationDetailHome";
 import LocationFMOPage from "./features/attendance/pages/LocationFMOPage";
 import LocationRosterPage from "./features/attendance/pages/LocationRosterPage";
-import LeaveManagement from './features/attendance/pages/LeaveManagement';
-import LeaveBankPage from './features/attendance/pages/LeaveBankPage';
+import LeaveManagement from "./features/attendance/pages/LeaveManagement";
+import LeaveBankPage from "./features/attendance/pages/LeaveBankPage";
 import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
-import LeaveApply from './features/attendance/pages/LeaveApply';
+import LeaveApply from "./features/attendance/pages/LeaveApply";
 import TravelRequestsPage from "./features/travel/pages/TravelRequestsPage";
 import TravelClaimsPage from "./features/travel/pages/TravelClaimsPage";
 import ManageTravelRequests from "./features/travel/pages/ManageTravelRequests";
@@ -61,23 +61,23 @@ import TravelManualEntryPage from "./features/travel/pages/TravelManualEntryPage
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
   const location = useLocation();
-  
+
   // Emergency scroll restore keyboard shortcut (Ctrl+Shift+S)
   useEffect(() => {
     // Only fetch session if we're not on the login page
-    if (location.pathname !== '/login') {
+    if (location.pathname !== "/login") {
       fetchSession();
     }
-    
+
     const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+      if (e.ctrlKey && e.shiftKey && e.key === "S") {
         e.preventDefault();
         console.log("🚨 Emergency scroll restore triggered by user");
         emergencyScrollRestore();
       }
     };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [fetchSession, location.pathname]);
 
   return (
@@ -86,7 +86,10 @@ function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
-          <Route path="/unauthorized" element={<div>Unauthorized Access</div>} />
+          <Route
+            path="/unauthorized"
+            element={<div>Unauthorized Access</div>}
+          />
 
           {/* App layout route keeps sidebar mounted across navigations */}
           <Route element={<LeftSidebarLayout />}>
@@ -94,10 +97,20 @@ function App() {
             <Route
               index
               element={
-                <PrivateRoute permissions={["employees.read","departments.read","designations.read"]}>
+                <PrivateRoute
+                  permissions={[
+                    "employees.read",
+                    "departments.read",
+                    "designations.read",
+                  ]}
+                >
                   <div className="text-center py-20">
-                    <h1 className="text-4xl font-bold text-slate-800 mb-4">Welcome to PSBA HR Portal</h1>
-                    <p className="text-xl text-slate-600">Select an option from the sidebar to get started</p>
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">
+                      Welcome to PSBA HR Portal
+                    </h1>
+                    <p className="text-xl text-slate-600">
+                      Select an option from the sidebar to get started
+                    </p>
                   </div>
                 </PrivateRoute>
               }
@@ -107,10 +120,14 @@ function App() {
             <Route
               path="dashboard"
               element={
-                <PrivateRoute permissions={["employees.read","reports.read"]}>
+                <PrivateRoute permissions={["employees.read", "reports.read"]}>
                   <div className="text-center py-20">
-                    <h1 className="text-4xl font-bold text-slate-800 mb-4">Dashboard</h1>
-                    <p className="text-xl text-slate-600">Overview and analytics coming soon</p>
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">
+                      Dashboard
+                    </h1>
+                    <p className="text-xl text-slate-600">
+                      Overview and analytics coming soon
+                    </p>
                   </div>
                 </PrivateRoute>
               }
@@ -175,13 +192,13 @@ function App() {
                 </PrivateRoute>
               }
             />
-            <Route 
-              path="employees/create" 
+            <Route
+              path="employees/create"
               element={
                 <PrivateRoute permissions={["employees.create"]}>
                   <CreateEmployeeForm />
                 </PrivateRoute>
-              } 
+              }
             />
             <Route
               path="employees/:employeeId/employment"
@@ -198,28 +215,39 @@ function App() {
               element={
                 <PrivateRoute permissions={["reports.read"]}>
                   <div className="text-center py-20">
-                    <h1 className="text-4xl font-bold text-slate-800 mb-4">Reports & Analytics</h1>
-                    <p className="text-xl text-slate-600">Analytics and reporting dashboard coming soon</p>
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">
+                      Reports & Analytics
+                    </h1>
+                    <p className="text-xl text-slate-600">
+                      Analytics and reporting dashboard coming soon
+                    </p>
                   </div>
                 </PrivateRoute>
               }
             />
-            
+
             {/* Audit Logs */}
-            <Route 
-              path="audit-logs" 
+            <Route
+              path="audit-logs"
               element={
                 <PrivateRoute permissions={["audit.read"]}>
                   <AuditLogsDashboard />
                 </PrivateRoute>
-              } 
+              }
             />
-            
+
             {/* Settings */}
             <Route
               path="settings"
               element={
-                <PrivateRoute permissions={["departments.read","designations.read","role-tags.read","scale-grades.read"]}>
+                <PrivateRoute
+                  permissions={[
+                    "departments.read",
+                    "designations.read",
+                    "role-tags.read",
+                    "scale-grades.read",
+                  ]}
+                >
                   <SettingsDashboard />
                 </PrivateRoute>
               }
@@ -329,7 +357,7 @@ function App() {
                 </PrivateRoute>
               }
             />
-            
+
             {/* Users */}
             <Route
               path="users"
@@ -400,7 +428,7 @@ function App() {
             <Route
               path="/attendance/leaves"
               element={
-                <PrivateRoute permissions={["attendance.read","leaves.read"]}>
+                <PrivateRoute permissions={["attendance.read", "leaves.read"]}>
                   <LeaveManagement />
                 </PrivateRoute>
               }
@@ -408,7 +436,7 @@ function App() {
             <Route
               path="/attendance/leave-bank"
               element={
-                <PrivateRoute permissions={["attendance.read","leaves.read"]}>
+                <PrivateRoute permissions={["attendance.read", "leaves.read"]}>
                   <LeaveBankPage />
                 </PrivateRoute>
               }
@@ -458,7 +486,13 @@ function App() {
             <Route
               path="travel/expense-claims"
               element={
-                <PrivateRoute permissions={["travel.claim.create","travel.claim.read","travel.read"]}>
+                <PrivateRoute
+                  permissions={[
+                    "travel.claim.create",
+                    "travel.claim.read",
+                    "travel.read",
+                  ]}
+                >
                   <TravelExpenseClaimsPage />
                 </PrivateRoute>
               }
@@ -466,7 +500,9 @@ function App() {
             <Route
               path="travel/expense-claim-approvals"
               element={
-                <PrivateRoute permissions={["travel.claim.read","travel.read"]}>
+                <PrivateRoute
+                  permissions={["travel.claim.read", "travel.read"]}
+                >
                   <ManageExpenseClaimApprovals />
                 </PrivateRoute>
               }
@@ -489,8 +525,8 @@ function App() {
             />
           </Route>
         </Routes>
-        </ConfirmationProvider>
-      </ToastProvider>
+      </ConfirmationProvider>
+    </ToastProvider>
   );
 }
 

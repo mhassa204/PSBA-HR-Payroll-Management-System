@@ -454,7 +454,9 @@ module.exports = {
     const desigTitle = approverEmployment?.designation?.title || "";
     const isOps = /operations/i.test(deptName);
     const isDG = /^director\s+general$/i.test(desigTitle);
-  const isEstablishment = /^hr$/i.test(deptName) || /human\s*resources|establishment/i.test(deptName);
+    const isEstablishment =
+      /^hr$/i.test(deptName) ||
+      /human\s*resources|establishment/i.test(deptName);
     const isSuperAdmin =
       req.session.user?.role?.name === "Super Admin" ||
       (req.session.user?.permissions || []).includes("*");

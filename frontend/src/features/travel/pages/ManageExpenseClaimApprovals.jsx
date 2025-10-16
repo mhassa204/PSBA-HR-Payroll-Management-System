@@ -107,7 +107,7 @@ export default function ManageExpenseClaimApprovals() {
     isSuper ||
     can("travel.claim.process.start") ||
     caps?.isAccountsApprover ||
-    /(accounts|finance|budget|payroll|reconciliation)/i.test(roleName);
+    /accounts/i.test(roleName);
   const meEmpId = user?.employee_id;
   const hasAnyApprovalPerm = canOps || canDG || canEstablishment || canAccounts;
   const isApproverRole = !!(canOps || canDG || canEstablishment || canAccounts);
@@ -197,8 +197,12 @@ export default function ManageExpenseClaimApprovals() {
       );
     const lastEntry = entries[entries.length - 1];
     const hasRecommended = entries.some((e) => e.action === "RECOMMENDED");
-    const hasEstVerified = entries.some((e) => e.action === "ESTABLISHMENT_VERIFIED");
-    const hasProcessStarted = entries.some((e) => e.action === "PROCESS_STARTED");
+    const hasEstVerified = entries.some(
+      (e) => e.action === "ESTABLISHMENT_VERIFIED"
+    );
+    const hasProcessStarted = entries.some(
+      (e) => e.action === "PROCESS_STARTED"
+    );
     const locType =
       claim.employee?.employmentRecords?.[0]?.location?.type || "HEAD_OFFICE";
     const directToDG =
@@ -712,7 +716,15 @@ export default function ManageExpenseClaimApprovals() {
       }
       return true;
     });
-  }, [allClaims, search, statusFilter, canAccounts, canEstablishment, canDG, meEmpId]);
+  }, [
+    allClaims,
+    search,
+    statusFilter,
+    canAccounts,
+    canEstablishment,
+    canDG,
+    meEmpId,
+  ]);
 
   const currentEmployment = (emp) => emp?.employmentRecords?.[0];
   const formatMoney = (v) =>

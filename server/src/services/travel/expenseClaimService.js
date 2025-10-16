@@ -42,7 +42,10 @@ module.exports = {
         const { PrismaClient } = require("@prisma/client");
         const p = new PrismaClient();
         const dept = await p.department.findFirst({
-          where: { id: Number(req.session.user.department_id), is_deleted: false },
+          where: {
+            id: Number(req.session.user.department_id),
+            is_deleted: false,
+          },
         });
         deptName = dept?.name || "";
         await p.$disconnect();
@@ -1328,7 +1331,9 @@ module.exports = {
         statusEntries: {
           some: { action: { in: ["OPS_APPROVED", "DG_APPROVED"] } },
           none: {
-            action: { in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"] },
+            action: {
+              in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"],
+            },
           },
         },
       });
@@ -1746,7 +1751,7 @@ module.exports = {
           )
         );
       }
-  if (stageKey === "OPS") return !!(ctx.isOps || ctx.canApproveClaimOps);
+      if (stageKey === "OPS") return !!(ctx.isOps || ctx.canApproveClaimOps);
       // Only a real DG (designation) can act at DG stage; do not allow permission-only
       if (stageKey === "DG") return !!ctx.isDG;
       if (stageKey === "ESTABLISHMENT") return !!ctx.isEstablishment;
@@ -1841,7 +1846,12 @@ module.exports = {
       PROCESS_STARTED: ["UNDER_PROCESS", "PROCESSED", "SETTLED"],
     };
     const isApprovalAction = (a) =>
-      ["OPS_APPROVED", "DG_APPROVED", "ESTABLISHMENT_VERIFIED", "PROCESS_STARTED"].includes(a);
+      [
+        "OPS_APPROVED",
+        "DG_APPROVED",
+        "ESTABLISHMENT_VERIFIED",
+        "PROCESS_STARTED",
+      ].includes(a);
     const REJECTION_STATUSES = new Set([
       "REJECTED",
       "REJECTED_OPS",
@@ -1866,14 +1876,46 @@ module.exports = {
         : null;
 
     // Determine how many recommendations are needed before first-stage approval
-    const neededRecommendations =
-      (isDeptOrigin || isHQOrigin || isLowBps) && hodId && !isDirectReportToDG()
-        ? hodRoId
-          ? 2
-          : 1
-        : 1;
+    // Dynamic recommendation chain (claims):
+    // - Department-origin: HoD then HoD's RO (if exists), then DG approves.
+    // - Personal/HQ: sequential immediate reporting officers up to DG.
+    // - If the chain is empty or user directly reports to DG, skip to DG stage.
+    const neededRecommendations = await (async () => {
+      if (isDeptOrigin && hodId) return hodRoId ? 2 : 1;
+      // For personal/HQ, compute chain length dynamically; minimal 0 (direct to DG) or more
+      const applicantER = (
+        claim.request?.applicant?.employmentRecords ||
+        claim.employee?.employmentRecords ||
+        []
+      ).find((x) => x.is_current && !x.is_deleted);
+      let length = 0;
+      let currentRO = applicantER?.reporting_officer_id
+        ? String(applicantER.reporting_officer_id)
+        : null;
+      const visited = new Set();
+      while (currentRO && !visited.has(currentRO)) {
+        visited.add(currentRO);
+        const nextEmp = await prisma.employment.findFirst({
+          where: {
+            employee_id: Number(currentRO),
+            is_current: true,
+            is_deleted: false,
+          },
+          include: { designation: true },
+        });
+        const isDG = /^director\s*general$/i.test(
+          nextEmp?.designation?.title || ""
+        );
+        if (isDG) break; // do not count DG as recommender
+        length++;
+        currentRO = nextEmp?.reporting_officer_id
+          ? String(nextEmp.reporting_officer_id)
+          : null;
+      }
+      return length; // number of required recommendations before DG
+    })();
 
-  const assertAuthorized = (stage, intent) => {
+    const assertAuthorized = (stage, intent) => {
       const lastEntryByMe = () => {
         if (!lastEntry) return false;
         // Match either by employee_id or by email in remarks for department accounts
@@ -1903,8 +1945,13 @@ module.exports = {
       // Special hard-guard: Only Establishment (or Super Admin) may CLEAR Establishment decisions
       if (intent === "CLEAR") {
         const lastStage = lastEntry ? mapActionToStage(lastEntry.action) : null;
-        if (lastStage === "ESTABLISHMENT" && !(ctx.isEstablishment || ctx.isSuperAdmin)) {
-          throw new Error("Only Establishment can undo Establishment verification");
+        if (
+          lastStage === "ESTABLISHMENT" &&
+          !(ctx.isEstablishment || ctx.isSuperAdmin)
+        ) {
+          throw new Error(
+            "Only Establishment can undo Establishment verification"
+          );
         }
         // Permit CLEAR by the same actor who made the last decision even if they are not the current expected actor
         if (userIsLastApprover) return true;
@@ -1937,13 +1984,9 @@ module.exports = {
       if (actionUpper === "RECOMMEND") {
         if (currentStatus !== "SUBMITTED")
           throw new Error("Only SUBMITTED claims can be recommended");
-        if (recommendationCount >= neededRecommendations) return claim; // already enough recommendations
-        // If DG’s direct report, bypass recommender entirely
-        if (
-          (isLowBps && hodId && isDirectReportToDG()) ||
-          (!isLowBps && isDirectReportToDG())
-        )
-          return claim;
+        if (recommendationCount >= neededRecommendations) return claim; // already enough
+        // If direct to DG and no recommendations needed, skip
+        if (neededRecommendations === 0 && isDirectReportToDG()) return claim;
         assertAuthorized("RECOMMENDER", "RECOMMEND");
         await prisma.travelClaimStatusEntry.create({
           data: {
@@ -2150,10 +2193,9 @@ module.exports = {
             lastEntry.action === "DG_APPROVED"
           ) {
             return (claim.statusEntries || []).some((e) =>
-              [
-                "ESTABLISHMENT_VERIFIED",
-                "ESTABLISHMENT_REJECTED",
-              ].includes(e.action)
+              ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"].includes(
+                e.action
+              )
             );
           }
           if (lastEntry.action === "ESTABLISHMENT_VERIFIED") {
@@ -2677,7 +2719,7 @@ module.exports = {
       where: { id: { in: claims.map((c) => c.id) } },
       data: { status: "PROCESSED" },
     });
-  // Do NOT create PROCESS_STARTED entries here; processing was already recorded
+    // Do NOT create PROCESS_STARTED entries here; processing was already recorded
     return prisma.travelClaimTranche.findUnique({
       where: { id: tranche.id },
       include: {

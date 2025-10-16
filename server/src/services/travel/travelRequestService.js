@@ -66,13 +66,13 @@ module.exports = {
       /^\s*establishment/i.test(roleNameRaw) ||
       perms.includes("travel.claim.verify.establishment") ||
       /(^|\b)(Establishment)(\b|$)/i.test(deptName);
-    // Accounts approver: role name starts with Accounts OR explicit permission OR department keywords
+    // Accounts approver: role name starts with Accounts OR explicit permission OR department includes 'Accounts'
     const isAccountsApprover =
       /^\s*accounts/i.test(roleNameRaw) ||
       perms.includes("travel.claim.process.start") ||
-      /accounts|finance|budget|payroll|reconciliation/i.test(deptName);
+      /accounts/i.test(deptName);
     const canApproveClaimOps = perms.includes("travel.claim.approve.ops");
-  const canApproveClaimDG = perms.includes("travel.claim.approve.dg");
+    const canApproveClaimDG = perms.includes("travel.claim.approve.dg");
 
     const managesAnyLocation = meUserId
       ? !!(await prisma.location.findFirst({
@@ -88,7 +88,7 @@ module.exports = {
     // Updated rule: permission-driven create/own, supports department accounts without employee mapping
     const canCreateOrOwn =
       perms.includes("travel.create") || perms.includes("*");
-  const canViewAll = isEstablishment || isOps || isDG;
+    const canViewAll = isEstablishment || isOps || isDG;
     const isSuperAdmin =
       req.session.user?.role?.name === "Super Admin" || perms.includes("*");
     return {
@@ -102,7 +102,7 @@ module.exports = {
       scaleLevel,
       isOps,
       isDG,
-  isEstablishment,
+      isEstablishment,
       isAccountsApprover,
       canApproveClaimOps,
       canApproveClaimDG,
@@ -365,7 +365,7 @@ module.exports = {
     const me = String(ctx.meEmpId || "");
     const base = { is_deleted: false };
     let where = { ...base };
-  if (!ctx.isSuperAdmin && !ctx.isEstablishment) {
+    if (!ctx.isSuperAdmin && !ctx.isEstablishment) {
       if (ctx.isOps && !ctx.isDG) {
         where = {
           ...where,
@@ -650,6 +650,40 @@ module.exports = {
         status: "CREATED",
       },
     });
+    let full = await prisma.travelRequest.findUnique({
+      where: { id: created.id },
+      include: includeShape,
+    });
+    // Auto-approve if applicant is true DG
+    try {
+      const er = await prisma.employment.findFirst({
+        where: {
+          employee_id: Number(full.applicant_id),
+          is_current: true,
+          is_deleted: false,
+        },
+        include: { designation: true },
+      });
+      const isDG = /^director\s*general$/i.test(er?.designation?.title || "");
+      if (isDG) {
+        await prisma.travelRequest.update({
+          where: { id: full.id },
+          data: { status: "APPROVED" },
+        });
+        await prisma.travelRequestStatusEntry.create({
+          data: {
+            request_id: full.id,
+            action: "APPROVED",
+            actor_employee_id: Number(full.applicant_id),
+            remarks: ctx.userEmail || null,
+          },
+        });
+        full = await prisma.travelRequest.findUnique({
+          where: { id: full.id },
+          include: includeShape,
+        });
+      }
+    } catch (_) {}
     if (attendeeIds.length) {
       await prisma.travelRequestEmployee.createMany({
         data: attendeeIds.map((eid) => ({
@@ -921,32 +955,73 @@ module.exports = {
     }
 
     // Check recommender eligibility (applies to RECOMMEND and REJECT)
+    // Dynamic multi-level chain:
+    // - Department-origin: HoD must recommend, then HoD's RO (if present), then DG can approve.
+    // - Personal/HQ: Sequential immediate reporting officers up the chain until DG.
+    // - If the HoD directly reports to DG, only HoD recommendation is needed before DG approval.
     let canRecommend = false;
-    // Department-originated: only HoD first then HoD's RO
+    const me = Number(ctx.meEmpId || 0);
+    const recEntries = (req.statusEntries || []).filter(
+      (e) => e.action === "RECOMMENDED"
+    );
     if (isDeptOrigin) {
       const hodId = Number(applicantER?.department?.head?.id || 0);
-      const hodRO =
-        Number(
-          (applicantER?.department?.head?.employmentRecords || []).find(
-            (er) => er.is_current && !er.is_deleted
-          )?.reporting_officer_id || 0
-        ) || null;
-      const alreadyRecs = (req.statusEntries || []).filter(
-        (e) => e.action === "RECOMMENDED"
-      ).length;
-      const me = Number(ctx.meEmpId || 0);
-      if (alreadyRecs === 0) canRecommend = me === hodId;
-      else if (alreadyRecs === 1)
-        canRecommend = hodRO ? me === Number(hodRO) : false;
-      else canRecommend = false; // no further recommendations
+      const hodER = applicantER?.department?.head
+        ? await prisma.employment.findFirst({
+            where: { employee_id: hodId, is_current: true, is_deleted: false },
+          })
+        : null;
+      const hodRO = hodER?.reporting_officer_id
+        ? String(hodER.reporting_officer_id)
+        : null;
+      if (recEntries.length === 0) {
+        canRecommend = me === hodId; // HoD first
+      } else if (recEntries.length === 1 && hodRO) {
+        canRecommend = String(me) === hodRO; // HoD's RO second (if exists)
+      } else {
+        canRecommend = false; // then DG approval stage (no more recommendations)
+      }
     } else {
-      // Legacy: immediate in-charge can recommend
-      canRecommend =
-        canRecommend ||
-        (req.applicant?.employmentRecords || []).some(
-          (er) =>
-            String(er.reporting_officer_id || "") === String(ctx.meEmpId || "")
+      // Personal/HQ flow: compute the next expected recommender as the lowest-level reporting officer
+      // not yet in the recommendation chain, walking up until DG.
+      const er = (req.applicant?.employmentRecords || []).find(
+        (x) => x.is_current && !x.is_deleted
+      );
+      // Build the chain of reporting_officer_ids until DG (or cycle break)
+      const expectedChain = [];
+      let currentRO = er?.reporting_officer_id
+        ? String(er.reporting_officer_id)
+        : null;
+      const visited = new Set();
+      while (currentRO && !visited.has(currentRO)) {
+        visited.add(currentRO);
+        expectedChain.push(currentRO);
+        const nextEmp = await prisma.employment.findFirst({
+          where: {
+            employee_id: Number(currentRO),
+            is_current: true,
+            is_deleted: false,
+          },
+          include: { designation: true },
+        });
+        const isDG = /^director\s*general$/i.test(
+          nextEmp?.designation?.title || ""
         );
+        if (isDG) break; // stop before DG
+        currentRO = nextEmp?.reporting_officer_id
+          ? String(nextEmp.reporting_officer_id)
+          : null;
+      }
+      // Determine next expected recommender = first in expectedChain not yet in recEntries
+      const already = new Set(
+        recEntries.map((e) => String(e.actor_employee_id || ""))
+      );
+      const nextExpected = expectedChain.find((empId) => !already.has(empId));
+      if (nextExpected) {
+        canRecommend = String(me) === nextExpected;
+      } else {
+        canRecommend = false; // no more recommendations; next is DG approval
+      }
     }
     if (!canRecommend && !ctx.isSuperAdmin) {
       if (isDeptOrigin) {

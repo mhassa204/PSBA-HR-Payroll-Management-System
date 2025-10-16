@@ -296,10 +296,22 @@ async function main() {
     { title: "Senior Software Developer", department_name: "IT", level: 2 },
     { title: "IT Manager", department_name: "IT", level: 3 },
 
-  // Establishment hierarchy (replacing HR)
-  { title: "Establishment Officer", department_name: "Establishment", level: 1 },
-  { title: "Senior Establishment Officer", department_name: "Establishment", level: 2 },
-  { title: "Establishment Manager", department_name: "Establishment", level: 3 },
+    // Establishment hierarchy (replacing HR)
+    {
+      title: "Establishment Officer",
+      department_name: "Establishment",
+      level: 1,
+    },
+    {
+      title: "Senior Establishment Officer",
+      department_name: "Establishment",
+      level: 2,
+    },
+    {
+      title: "Establishment Manager",
+      department_name: "Establishment",
+      level: 3,
+    },
 
     // Administration hierarchy
     {
@@ -472,6 +484,8 @@ async function main() {
       allowed_actions: [
         // Minimal, explicit DG privileges (no wildcard)
         "travel.read",
+        "travel.manage.view",
+        "travel.approvals.view",
         "travel.manage",
         "travel.request.approve.dg",
         "travel.claim.approve.dg",
@@ -487,6 +501,8 @@ async function main() {
       allowed_actions: [
         // TADA module only
         "travel.read",
+        "travel.manage.view",
+        "travel.approvals.view",
         "travel.create",
         "travel.update",
         "travel.submit",
@@ -512,6 +528,8 @@ async function main() {
       allowed_actions: [
         // TADA module only (no Accounts processing)
         "travel.read",
+        "travel.manage.view",
+        "travel.approvals.view",
         "travel.create",
         "travel.update",
         "travel.submit",
@@ -532,9 +550,16 @@ async function main() {
       name: "Accounts Manager",
       type: "department",
       allowed_actions: [
-        // TADA only + Accounts processing
+        // TADA only + Accounts processing + own creation
         "travel.read",
+        "travel.manage.view",
+        "travel.approvals.view",
+        "travel.create",
+        "travel.submit",
+        "travel.status",
         "travel.claim.read",
+        "travel.claim.create",
+        "travel.claim.submit",
         "travel.claim.process.start",
         "travel.claim.status",
         "travel.rates.read",
@@ -551,9 +576,16 @@ async function main() {
       name: "Accounts User",
       type: "department",
       allowed_actions: [
-        // TADA only + Accounts processing
+        // TADA only + Accounts processing + own creation
         "travel.read",
+        "travel.manage.view",
+        "travel.approvals.view",
+        "travel.create",
+        "travel.submit",
+        "travel.status",
         "travel.claim.read",
+        "travel.claim.create",
+        "travel.claim.submit",
         "travel.claim.process.start",
         "travel.claim.status",
         "travel.rates.read",
@@ -570,9 +602,16 @@ async function main() {
       name: "Establishment",
       type: "department",
       allowed_actions: [
-        // TADA only + Establishment verification
+        // TADA only + Establishment verification + own creation
         "travel.read",
+        "travel.manage.view",
+        "travel.approvals.view",
+        "travel.create",
+        "travel.submit",
+        "travel.status",
         "travel.claim.read",
+        "travel.claim.create",
+        "travel.claim.submit",
         "travel.claim.verify.establishment",
         "travel.claim.status",
         "travel.rates.read",
@@ -590,6 +629,8 @@ async function main() {
         "profile.read",
         "profile.update",
         "travel.read",
+        "travel.manage.view",
+        "travel.approvals.view",
         "travel.create",
         "travel.update",
         "travel.submit",
@@ -626,6 +667,8 @@ async function main() {
   const ROUTE_PERMISSION_KEYS = [
     // TADA module routes only
     "travel.read",
+    "travel.manage.view",
+    "travel.approvals.view",
     "travel.create",
     "travel.update",
     "travel.delete",
@@ -1313,7 +1356,7 @@ async function main() {
       religion: "Islam",
       mobile_number: "03231234567",
       whatsapp_number: "03231234567",
-  email: "est.viewer@psba.gop.pk",
+      email: "est.viewer@psba.gop.pk",
       present_address: "Lahore",
       permanent_address: "Lahore",
       district: "Lahore",
@@ -2354,7 +2397,7 @@ async function main() {
       employment_type: "Regular",
       effective_from: new Date("2022-03-01"),
       office_location: "Head Quarter",
-  remarks: "Establishment viewer for Manage list",
+      remarks: "Establishment viewer for Manage list",
       scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-3").id,
       employment_status: "active",
       is_current: true,
@@ -2724,7 +2767,7 @@ async function main() {
     console.log("⚠️ Skipped sample expense claim seeding (missing employees)");
   }
 
-    // NEW: Seed VERIFIED claims for Accounts tranche testing
+  // NEW: Seed VERIFIED claims for Accounts tranche testing
   console.log("🧾 Seeding Establishment-VERIFIED claims for Accounts...");
   const seedVerifiedClaim = async (empName, fromDaysAgo, toDaysAgo) => {
     const empIdLocal = empByName(empName);
@@ -2777,7 +2820,7 @@ async function main() {
         file_size: 10000,
       },
     });
-  // Status history: SUBMITTED -> RECOMMENDED -> DG_APPROVED -> ESTABLISHMENT_VERIFIED
+    // Status history: SUBMITTED -> RECOMMENDED -> DG_APPROVED -> ESTABLISHMENT_VERIFIED
     await prisma.travelClaimStatusEntry.create({
       data: {
         claim_id: c.id,
@@ -2816,7 +2859,11 @@ async function main() {
 
   // Seed an APPROVED claim (DG-approved, awaiting Establishment verification)
   console.log("🧾 Seeding DG-APPROVED claim for Establishment stage...");
-  const seedApprovedForEstablishment = async (empName, fromDaysAgo, toDaysAgo) => {
+  const seedApprovedForEstablishment = async (
+    empName,
+    fromDaysAgo,
+    toDaysAgo
+  ) => {
     const empIdLocal = empByName(empName);
     if (!empIdLocal) return null;
     const c = await prisma.travelClaim.create({
@@ -2889,10 +2936,19 @@ async function main() {
       },
     });
     await recomputeClaimTotals(c.id);
-    console.log("✅ Seeded APPROVED claim (awaiting Establishment) for", empName, "→ Claim", c.id);
+    console.log(
+      "✅ Seeded APPROVED claim (awaiting Establishment) for",
+      empName,
+      "→ Claim",
+      c.id
+    );
     return c.id;
   };
-  const estPending = await seedApprovedForEstablishment("Rizwan Haider Shah", 4, 4);
+  const estPending = await seedApprovedForEstablishment(
+    "Rizwan Haider Shah",
+    4,
+    4
+  );
 
   // Seed Travel Rates (sample)
   console.log("🧮 Seeding travel rates...");

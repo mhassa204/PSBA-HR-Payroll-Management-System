@@ -57,33 +57,43 @@
 
 // module.exports = router;
 
-
-
-
-
 const express = require("express");
 const router = express.Router();
 const employeeController = require("../controllers/employeeController");
 const upload = require("../config/multer");
-const { isAuthenticated, authorize, authorizeOwnEmployeeOrEmployeesRead } = require('../middleware/auth');
+const {
+  isAuthenticated,
+  authorize,
+  authorizeOwnEmployeeOrEmployeesRead,
+} = require("../middleware/auth");
 
 // Routes
 router.post(
   "/",
   isAuthenticated,
-  authorize('employees.create'),
+  authorize("employees.create"),
   upload.any(), // Accept files with allowed types; no strict field-name filter
   employeeController.createEmployee
 );
 
-router.get("/", isAuthenticated, authorize('employees.read'), employeeController.getAllEmployees);
+router.get(
+  "/",
+  isAuthenticated,
+  authorize("employees.read"),
+  employeeController.getAllEmployees
+);
 
-router.get("/:id", isAuthenticated, authorizeOwnEmployeeOrEmployeesRead(), employeeController.getEmployeeById);
+router.get(
+  "/:id",
+  isAuthenticated,
+  authorizeOwnEmployeeOrEmployeesRead(),
+  employeeController.getEmployeeById
+);
 
 router.put(
   "/:id",
   isAuthenticated,
-  authorize('employees.update'),
+  authorize("employees.update"),
   upload.any(), // Accept files with allowed types; no strict field-name filter
   employeeController.updateEmployee
 );
@@ -91,7 +101,7 @@ router.put(
 router.delete(
   "/:id",
   isAuthenticated,
-  authorize('employees.delete'),
+  authorize("employees.delete"),
   employeeController.deleteEmployee
 );
 
