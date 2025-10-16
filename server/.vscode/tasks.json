@@ -11,6 +11,16 @@
 				"$eslint-compact"
 			],
 			"group": "build"
+		},
+		{
+			"label": "seed-rbac-update",
+			"type": "shell",
+			"command": "npm run seed",
+			"args": [],
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
 		}
 	]
 }

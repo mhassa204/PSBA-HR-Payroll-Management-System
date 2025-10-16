@@ -484,8 +484,6 @@ async function main() {
       allowed_actions: [
         // Minimal, explicit DG privileges (no wildcard)
         "travel.read",
-        "travel.manage.view",
-        "travel.approvals.view",
         "travel.manage",
         "travel.request.approve.dg",
         "travel.claim.approve.dg",
@@ -501,8 +499,7 @@ async function main() {
       allowed_actions: [
         // TADA module only
         "travel.read",
-        "travel.manage.view",
-        "travel.approvals.view",
+        "travel.manage",
         "travel.create",
         "travel.update",
         "travel.submit",
@@ -513,9 +510,7 @@ async function main() {
         "travel.claim.submit",
         "travel.claim.status",
         "travel.rates.read",
-        // If acting in OPS capacity only
-        "travel.request.approve.ops",
-        "travel.claim.approve.ops",
+        // No OPS approvals here; use Operations role
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment"],
@@ -528,8 +523,7 @@ async function main() {
       allowed_actions: [
         // TADA module only (no Accounts processing)
         "travel.read",
-        "travel.manage.view",
-        "travel.approvals.view",
+        "travel.manage",
         "travel.create",
         "travel.update",
         "travel.submit",
@@ -545,6 +539,30 @@ async function main() {
       fields: ["employee_personal", "employee_employment"],
     },
 
+    // Operations Role (department approver for OPS stage)
+    {
+      name: "Operations",
+      type: "department",
+      allowed_actions: [
+        // TADA + OPS approvals + own creation
+        "travel.read",
+        "travel.manage",
+        "travel.create",
+        "travel.submit",
+        "travel.status",
+        "travel.claim.read",
+        "travel.claim.create",
+        "travel.claim.submit",
+        "travel.claim.status",
+        "travel.rates.read",
+        // OPS approvals
+        "travel.request.approve.ops",
+        "travel.claim.approve.ops",
+      ],
+      enabled: true,
+      fields: ["employee_basic"],
+    },
+
     // Accounts Manager (Special role for Accounts department head)
     {
       name: "Accounts Manager",
@@ -552,8 +570,7 @@ async function main() {
       allowed_actions: [
         // TADA only + Accounts processing + own creation
         "travel.read",
-        "travel.manage.view",
-        "travel.approvals.view",
+        "travel.manage",
         "travel.create",
         "travel.submit",
         "travel.status",
@@ -578,8 +595,7 @@ async function main() {
       allowed_actions: [
         // TADA only + Accounts processing + own creation
         "travel.read",
-        "travel.manage.view",
-        "travel.approvals.view",
+        "travel.manage",
         "travel.create",
         "travel.submit",
         "travel.status",
@@ -604,8 +620,7 @@ async function main() {
       allowed_actions: [
         // TADA only + Establishment verification + own creation
         "travel.read",
-        "travel.manage.view",
-        "travel.approvals.view",
+        "travel.manage",
         "travel.create",
         "travel.submit",
         "travel.status",
@@ -629,8 +644,7 @@ async function main() {
         "profile.read",
         "profile.update",
         "travel.read",
-        "travel.manage.view",
-        "travel.approvals.view",
+        "travel.manage",
         "travel.create",
         "travel.update",
         "travel.submit",
@@ -667,8 +681,6 @@ async function main() {
   const ROUTE_PERMISSION_KEYS = [
     // TADA module routes only
     "travel.read",
-    "travel.manage.view",
-    "travel.approvals.view",
     "travel.create",
     "travel.update",
     "travel.delete",
@@ -1494,7 +1506,7 @@ async function main() {
     {
       email: "operations@psba.gop.pk",
       password: encrypt("abc123"),
-      role_id: getRoleId("Employee"),
+      role_id: getRoleId("Operations"),
       employee_id: null,
       department_id: getDeptId("Operations"),
       is_deleted: false,
@@ -1580,7 +1592,7 @@ async function main() {
     {
       email: "ad.orc@psba.gop.pk",
       password: encrypt("abc123"),
-      role_id: getRoleId("Management"),
+      role_id: getRoleId("Operations"),
       employee_id: findEmpId("Usman Badar"),
       department_id: null,
       is_deleted: false,

@@ -506,48 +506,29 @@ const LeftSidebar = () => {
           href: "/travel/requests",
           icon: ViewColumnsIcon,
           show: () =>
-            // All users can see Requests (own creation), department accounts included
-            travelCaps.canCreateOrOwn || can("travel.create") || true,
+            travelCaps.canCreateOrOwn ||
+            can("travel.create") ||
+            travelCaps.isAccountsApprover,
         },
         {
           name: "Manage Requests",
           href: "/travel/manage",
           icon: ViewColumnsIcon,
-          show: () => {
-            // Show to all users except department accounts other than Establishment/Accounts
-            const isDeptAccount = !!user?.department_id && !user?.employee_id;
-            const isAllowedDept = ["Establishment", "Accounts"].includes(
-              user?.department?.name || ""
-            );
-            if (isDeptAccount && !isAllowedDept) return false;
-            return (
-              can("travel.manage.view") ||
-              travelCaps.canViewAll ||
-              travelCaps.isDG ||
-              travelCaps.isEstablishment ||
-              travelCaps.isAccountsApprover
-            );
-          },
+          show: () =>
+            travelCaps.canViewAll ||
+            travelCaps.isAccountsApprover ||
+            travelCaps.isDG ||
+            travelCaps.isEstablishment,
         },
         {
           name: "Approvals",
           href: "/travel/approvals",
           icon: ViewColumnsIcon,
-          show: () => {
-            // Show to all users except department accounts other than Establishment/Accounts
-            const isDeptAccount = !!user?.department_id && !user?.employee_id;
-            const isAllowedDept = ["Establishment", "Accounts"].includes(
-              user?.department?.name || ""
-            );
-            if (isDeptAccount && !isAllowedDept) return false;
-            return (
-              can("travel.approvals.view") ||
-              travelCaps.isOps ||
-              travelCaps.isDG ||
-              travelCaps.isAccountsApprover ||
-              travelCaps.isEstablishment
-            );
-          },
+          show: () =>
+            travelCaps.isOps ||
+            travelCaps.isDG ||
+            travelCaps.isAccountsApprover ||
+            travelCaps.isEstablishment,
         },
         {
           name: "Expense Claims",
@@ -559,21 +540,11 @@ const LeftSidebar = () => {
           name: "Claim Approvals",
           href: "/travel/expense-claim-approvals",
           icon: ViewColumnsIcon,
-          show: () => {
-            // Show to all users except department accounts other than Establishment/Accounts
-            const isDeptAccount = !!user?.department_id && !user?.employee_id;
-            const isAllowedDept = ["Establishment", "Accounts"].includes(
-              user?.department?.name || ""
-            );
-            if (isDeptAccount && !isAllowedDept) return false;
-            return (
-              can("travel.approvals.view") ||
-              travelCaps.isOps ||
-              travelCaps.isDG ||
-              travelCaps.isEstablishment ||
-              travelCaps.isAccountsApprover
-            );
-          },
+          show: () =>
+            travelCaps.isOps ||
+            travelCaps.isDG ||
+            travelCaps.isEstablishment ||
+            travelCaps.isAccountsApprover,
         },
         {
           name: "Accounts Tranches",
