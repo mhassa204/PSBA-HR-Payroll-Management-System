@@ -791,6 +791,34 @@ module.exports = {
     });
   },
 
+  // For location accounts: list requests whose applicant currently belongs to the location
+  listLocationApplicants: async (locationId) => {
+    if (!locationId) return [];
+    return prisma.travelRequest.findMany({
+      where: {
+        is_deleted: false,
+        applicant: {
+          employmentRecords: {
+            some: {
+              is_current: true,
+              is_deleted: false,
+              location_id: Number(locationId),
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        attendees: { include: { employee: true } },
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: true },
+        },
+        applicant: true,
+      },
+    });
+  },
+
   createRequest: async (ctx, data, attendeeIds, totalDays, actorLabel) => {
     const includeShape = {
       attendees: { include: { employee: true } },

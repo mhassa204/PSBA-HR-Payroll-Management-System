@@ -8,6 +8,21 @@ module.exports = {
       // Department-based account path: no personal employee_id but has department_id
       const meEmpId = Number(req.session.user?.employee_id || 0);
       const deptId = Number(req.session.user?.department_id || 0);
+      const locId = Number(req.session.user?.location_id || 0);
+      // Location-based account path: user account directly linked with locations table
+      if (!meEmpId && !deptId && locId) {
+        const employees = await prisma.employee.findMany({
+          where: {
+            is_deleted: false,
+            employmentRecords: {
+              some: { is_current: true, is_deleted: false, location_id: locId },
+            },
+          },
+          orderBy: { full_name: "asc" },
+          select: { id: true, full_name: true, cnic: true },
+        });
+        return res.json({ success: true, employees });
+      }
       if (!meEmpId && deptId) {
         const dept = await prisma.department.findFirst({
           where: { id: deptId, is_deleted: false },
@@ -73,14 +88,22 @@ module.exports = {
     }
     // For department accounts, show department's applicants (current employment in same department)
     const deptId = Number(req.session.user?.department_id || 0);
-    if (!deptId) return res.json({ success: true, requests: [] });
-    const list = await travelService.listDepartmentApplicants(deptId);
-    return res.json({ success: true, requests: list });
+    const locId = Number(req.session.user?.location_id || 0);
+    if (deptId) {
+      const list = await travelService.listDepartmentApplicants(deptId);
+      return res.json({ success: true, requests: list });
+    }
+    if (locId) {
+      const list = await travelService.listLocationApplicants(locId);
+      return res.json({ success: true, requests: list });
+    }
+    return res.json({ success: true, requests: [] });
   },
   create: async (req, res) => {
     const ctx = await travelService.getAuthContext(req);
     const data = req.body || {};
     try {
+      // Personal account: create for self
       if (ctx.meEmpId) {
         if (!ctx.canCreateOrOwn)
           return res.status(403).json({ success: false, error: "Forbidden" });
@@ -89,10 +112,12 @@ module.exports = {
             .status(400)
             .json({ success: false, error: "departure_date is required" });
         if (!data.expected_return_date)
-          return res.status(400).json({
-            success: false,
-            error: "expected_return_date is required",
-          });
+          return res
+            .status(400)
+            .json({
+              success: false,
+              error: "expected_return_date is required",
+            });
         const computedDays = travelService.computeTotalDays(
           data.departure_date,
           data.departure_time,
@@ -108,15 +133,10 @@ module.exports = {
             error: `total_days (${data.total_days}) does not match date range (${computedDays})`,
           });
         }
-        let attendeeIds = Array.isArray(data.employee_ids)
+        const attendeeIds = Array.isArray(data.employee_ids)
           ? data.employee_ids.map(Number).filter(Boolean)
           : [];
-        // Auto-include the current user as an attendee for personal accounts
-        if (ctx.meEmpId && !attendeeIds.includes(Number(ctx.meEmpId))) {
-          attendeeIds = [...attendeeIds, Number(ctx.meEmpId)];
-        }
-        const email = String(req.session.user?.email || "");
-        const label = email ? `created by ${email}` : null;
+        const label = ctx.userEmail ? `created by ${ctx.userEmail}` : null;
         const full = await travelService.createRequest(
           ctx,
           data,
@@ -127,31 +147,13 @@ module.exports = {
         return res.json({ success: true, request: full });
       }
 
-      // Department account path (no employee linked)
+      // Non-personal accounts: department-based or location-based
       if (!ctx.canCreateOrOwn)
         return res.status(403).json({ success: false, error: "Forbidden" });
-      let applicant_id = Number(data.applicant_id || 0);
-      // Auto-assign to department head if not provided
-      if (!applicant_id) {
-        const deptId = Number(req.session.user?.department_id || 0);
-        if (!deptId)
-          return res.status(400).json({
-            success: false,
-            error:
-              "No department linked to account and no applicant_id provided",
-          });
-        const dept = await prisma.department.findFirst({
-          where: { id: deptId, is_deleted: false },
-          include: { head: true },
-        });
-        applicant_id = Number(dept?.head?.id || 0);
-        if (!applicant_id)
-          return res.status(400).json({
-            success: false,
-            error:
-              "Department head not set. Please assign a head to the department or provide applicant_id.",
-          });
-      }
+
+      const deptId = Number(req.session.user?.department_id || 0);
+      const locId = Number(req.session.user?.location_id || 0);
+
       if (!data.departure_date)
         return res
           .status(400)
@@ -165,32 +167,104 @@ module.exports = {
         data.departure_time,
         data.expected_return_date
       );
+      if (
+        data.total_days != null &&
+        data.total_days !== "" &&
+        Number(data.total_days) !== computedDays
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: `total_days (${data.total_days}) does not match date range (${computedDays})`,
+        });
+      }
       const attendeeIds = Array.isArray(data.employee_ids)
         ? data.employee_ids.map(Number).filter(Boolean)
         : [];
-      // createdByEmpId should be the department head (manager) so status history shows their name
-      const deptId = Number(req.session.user?.department_id || 0);
-      const dept = deptId
-        ? await prisma.department.findFirst({
+
+      // Department-based account: default applicant to HoD if not provided
+      if (deptId && !locId) {
+        let applicant_id = Number(data.applicant_id || 0);
+        if (!applicant_id) {
+          const dept = await prisma.department.findFirst({
             where: { id: deptId, is_deleted: false },
             include: { head: true },
-          })
-        : null;
-      const createdByEmpId = Number(dept?.head?.id || 0) || applicant_id; // fallback to applicant if no HoD
-      const email = String(req.session.user?.email || "");
-      // Include [DEPT] to mark department-origin robustly, plus the creating user's email
-      const createdByLabel = `${
-        dept?.name ? `[DEPT] ${dept.name} Department` : "[DEPT] Department"
-      }${email ? ` | created by ${email}` : ""}`;
-      const full = await travelService.createRequestOnBehalf(
-        { ...ctx, meEmpId: applicant_id },
-        data,
-        attendeeIds,
-        computedDays,
-        createdByEmpId,
-        createdByLabel
-      );
-      return res.json({ success: true, request: full });
+          });
+          applicant_id = Number(dept?.head?.id || 0);
+          if (!applicant_id) {
+            return res.status(400).json({
+              success: false,
+              error:
+                "Department head not set. Please assign a head to the department or provide applicant_id.",
+            });
+          }
+        }
+        const dept = await prisma.department.findFirst({
+          where: { id: deptId, is_deleted: false },
+          include: { head: true },
+        });
+        const createdByEmpId = Number(dept?.head?.id || 0) || applicant_id;
+        const email = String(req.session.user?.email || "");
+        const createdByLabel = dept
+          ? `${
+              dept?.name
+                ? `[DEPT] ${dept.name} Department`
+                : "[DEPT] Department"
+            }${email ? ` | created by ${email}` : ""}`
+          : `${email ? `created by ${email}` : ""}`;
+        const full = await travelService.createRequestOnBehalf(
+          { ...ctx, meEmpId: applicant_id },
+          data,
+          attendeeIds,
+          computedDays,
+          createdByEmpId,
+          createdByLabel
+        );
+        return res.json({ success: true, request: full });
+      }
+
+      // Location-based account: require selecting at least one employee; default applicant to first selected
+      if (locId && !deptId) {
+        let applicant_id = Number(data.applicant_id || 0);
+        if (!applicant_id) {
+          if (!attendeeIds.length) {
+            return res.status(400).json({
+              success: false,
+              error:
+                "Select at least one employee under your location to create a request.",
+            });
+          }
+          applicant_id = attendeeIds[0];
+        }
+        // Build a label indicating location-origin
+        const email = String(req.session.user?.email || "");
+        let locName = "Location";
+        try {
+          const loc = await prisma.location.findFirst({
+            where: { id: locId, is_deleted: false },
+            select: { name: true },
+          });
+          if (loc?.name) locName = loc.name;
+        } catch (_) {}
+        const createdByLabel = `[LOC] ${locName}${
+          email ? ` | created by ${email}` : ""
+        }`;
+        const full = await travelService.createRequestOnBehalf(
+          { ...ctx, meEmpId: applicant_id },
+          data,
+          attendeeIds,
+          computedDays,
+          null,
+          createdByLabel
+        );
+        return res.json({ success: true, request: full });
+      }
+
+      // Fallback: no department/location linkage
+      return res.status(400).json({
+        success: false,
+        error:
+          "No department/location linked to account and no applicant_id provided",
+      });
     } catch (e) {
       console.error("Create request error", e);
       return res.status(400).json({ success: false, error: e.message });

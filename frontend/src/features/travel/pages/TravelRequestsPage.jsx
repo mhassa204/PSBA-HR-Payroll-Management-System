@@ -88,6 +88,7 @@ export default function TravelRequestsPage() {
     caps.isBps17Plus,
     authUser?.employee_id,
     authUser?.department_id,
+    authUser?.location_id,
   ]);
 
   const onChange = (e) =>
@@ -171,6 +172,8 @@ export default function TravelRequestsPage() {
   const isDepartmentAccount = !!(
     authUser?.department_id && !authUser?.employee_id
   );
+  // Determine if this is a true location-based account (user linked directly to a location)
+  const isLocationAccount = !!(authUser?.location_id && !authUser?.employee_id);
 
   return (
     <div className="space-y-6">
@@ -190,8 +193,8 @@ export default function TravelRequestsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Attendees: Only allow selection for department accounts; personal users don't need to pick applicant */}
-              {isDepartmentAccount ? (
+              {/* Attendees: Allow selection for department or location accounts; personal users don't need to pick applicant */}
+              {isDepartmentAccount || isLocationAccount ? (
                 <div className="md:col-span-2">
                   <label className="text-sm text-muted-foreground">
                     Employees (multi-select, optional)

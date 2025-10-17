@@ -1307,7 +1307,7 @@ async function main() {
     // Added: Bazaar Manager (BAZAAR location employee)
     {
       employee_id: "EMPBZ001",
-      full_name: "Bazaar Manager One",
+      full_name: "Ahsan Raza",
       father_husband_name: "Akhtar Ali",
       relationship_type: "father",
       mother_name: "Ayesha",
@@ -1321,7 +1321,7 @@ async function main() {
       religion: "Islam",
       mobile_number: "03211234567",
       whatsapp_number: "03211234567",
-      email: "bazaar.manager@psba.gop.pk",
+      email: "mianplaza.manager@psba.gop.pk",
       present_address: "Lahore",
       permanent_address: "Lahore",
       district: "Lahore",
@@ -1329,10 +1329,10 @@ async function main() {
       status: "Active",
       is_deleted: false,
     },
-    // Added: Head Office staff (BPS < 17 equivalent)
+    // Added: Head Office staff (BPS < 17 equivalent) realistic name
     {
       employee_id: "EMPHO001",
-      full_name: "Head Office Staff",
+      full_name: "Bilal Ahmed",
       father_husband_name: "Rashid Khan",
       relationship_type: "father",
       mother_name: "Saira",
@@ -1346,7 +1346,7 @@ async function main() {
       religion: "Islam",
       mobile_number: "03221234567",
       whatsapp_number: "03221234567",
-      email: "hostaff.emp@psba.gop.pk",
+      email: "bilal.ahmed@psba.gop.pk",
       present_address: "Lahore",
       permanent_address: "Lahore",
       district: "Lahore",
@@ -1354,10 +1354,10 @@ async function main() {
       status: "Active",
       is_deleted: false,
     },
-    // Added: Establishment viewer (for Manage view)
+    // Added: Establishment viewer (for Manage view) realistic name
     {
       employee_id: "EMPEST001",
-      full_name: "Establishment Viewer Test",
+      full_name: "Sadia Ijaz",
       father_husband_name: "Ijaz Ahmed",
       relationship_type: "father",
       mother_name: "Samina",
@@ -1371,7 +1371,7 @@ async function main() {
       religion: "Islam",
       mobile_number: "03231234567",
       whatsapp_number: "03231234567",
-      email: "est.viewer@psba.gop.pk",
+      email: "sadia.ijaz@psba.gop.pk",
       present_address: "Lahore",
       permanent_address: "Lahore",
       district: "Lahore",
@@ -1379,10 +1379,10 @@ async function main() {
       status: "Active",
       is_deleted: false,
     },
-    // Dummy employees for department testing
+    // Realistic employees for department testing
     {
       employee_id: "EMPDUMMY01",
-      full_name: "Ali",
+      full_name: "Ali Raza Khan",
       father_husband_name: "Test Father",
       relationship_type: "father",
       mother_name: "Test Mother",
@@ -1396,7 +1396,7 @@ async function main() {
       religion: "Islam",
       mobile_number: "03009999991",
       whatsapp_number: "03009999991",
-      email: "dummy.one@psba.gop.pk",
+      email: "ali.raza@psba.gop.pk",
       present_address: "Test Address",
       permanent_address: "Test Address",
       district: "Lahore",
@@ -1406,7 +1406,7 @@ async function main() {
     },
     {
       employee_id: "EMPDUMMY02",
-      full_name: "Umar",
+      full_name: "Umar Farooq",
       father_husband_name: "Test Father",
       relationship_type: "father",
       mother_name: "Test Mother",
@@ -1420,7 +1420,7 @@ async function main() {
       religion: "Islam",
       mobile_number: "03009999992",
       whatsapp_number: "03009999992",
-      email: "dummy.two@psba.gop.pk",
+      email: "umar.farooq@psba.gop.pk",
       present_address: "Test Address",
       permanent_address: "Test Address",
       district: "Lahore",
@@ -1429,6 +1429,83 @@ async function main() {
       is_deleted: false,
     },
   ];
+
+  // Additional realistic bazaar employees for testing (Township bazaar)
+  const bazaarTestEmployees = [
+    {
+      employee_id: "EMPBZ101",
+      full_name: "Hassan Javed",
+      father_husband_name: "Javed Iqbal",
+      relationship_type: "father",
+      mother_name: "Shabana",
+      cnic: "3520212346004",
+      cnic_issue_date: new Date("2019-04-04"),
+      cnic_expire_date: new Date("2039-04-04"),
+      date_of_birth: new Date("1994-04-14"),
+      gender: "Male",
+      marital_status: "Married",
+      nationality: "Pakistani",
+      religion: "Islam",
+      mobile_number: "03241234567",
+      whatsapp_number: "03241234567",
+      email: "hassan.javed@psba.gop.pk",
+      present_address: "Township, Lahore",
+      permanent_address: "Lahore",
+      district: "Lahore",
+      city: "Lahore",
+      status: "Active",
+      is_deleted: false,
+    },
+    {
+      employee_id: "EMPBZ102",
+      full_name: "Ayesha Khan",
+      father_husband_name: "Naeem Khan",
+      relationship_type: "father",
+      mother_name: "Rukhsana",
+      cnic: "3520212346012",
+      cnic_issue_date: new Date("2018-06-06"),
+      cnic_expire_date: new Date("2038-06-06"),
+      date_of_birth: new Date("1995-09-12"),
+      gender: "Female",
+      marital_status: "Single",
+      nationality: "Pakistani",
+      religion: "Islam",
+      mobile_number: "03251234567",
+      whatsapp_number: "03251234567",
+      email: "ayesha.khan@psba.gop.pk",
+      present_address: "Township, Lahore",
+      permanent_address: "Lahore",
+      district: "Lahore",
+      city: "Lahore",
+      status: "Active",
+      is_deleted: false,
+    },
+    {
+      employee_id: "EMPBZ103",
+      full_name: "Hamza Tariq",
+      father_husband_name: "Tariq Mahmood",
+      relationship_type: "father",
+      mother_name: "Shazia",
+      cnic: "3520212346020",
+      cnic_issue_date: new Date("2020-07-07"),
+      cnic_expire_date: new Date("2040-07-07"),
+      date_of_birth: new Date("1996-01-25"),
+      gender: "Male",
+      marital_status: "Single",
+      nationality: "Pakistani",
+      religion: "Islam",
+      mobile_number: "03261234567",
+      whatsapp_number: "03261234567",
+      email: "hamza.tariq@psba.gop.pk",
+      present_address: "Township, Lahore",
+      permanent_address: "Lahore",
+      district: "Lahore",
+      city: "Lahore",
+      status: "Active",
+      is_deleted: false,
+    },
+  ];
+  employees.push(...bazaarTestEmployees);
 
   console.log("👥 Seeding employees...");
   for (const emp of employees) {
@@ -2083,7 +2160,7 @@ async function main() {
       is_deleted: false,
     },
     {
-      employee_id: empId("Sadam Hussain"),
+      employee_id: empId("Sadam Khokhar"),
       organization: "PSBA",
       department_id: deptId("Authority"),
       designation_id: desigId("Additional Director", "Authority"),
@@ -2231,19 +2308,19 @@ async function main() {
       employment_type: "Regular",
       effective_from: new Date("2021-03-01"),
       office_location: "Head Quarter",
-      remarks: "Reports to Additional Director Sadam Hussain",
+      remarks: "Reports to Additional Director Sadam Khokhar",
       scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-17").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
-      reporting_officer_id: String(empId("Sadam Hussain")),
+      reporting_officer_id: String(empId("Sadam Khokhar")),
       location_id: findLocationId("Head Quarter"),
       is_deleted: false,
     },
 
     // Department heads reporting to DG directly (BPS-17 Assistant Directors)
     {
-      employee_id: empId("Maria Iqbal"),
+      employee_id: empId("Mariya Iqbal"),
       organization: "PSBA",
       department_id: deptId("Establishment"),
       designation_id: desigId("Assistant Director", "Establishment"),
@@ -2369,7 +2446,7 @@ async function main() {
 
     // Added: Bazaar Manager employed at a BAZAAR location
     {
-      employee_id: empId("Bazaar Manager One"),
+      employee_id: empId("Ahsan Raza"),
       organization: "PSBA",
       department_id: deptId("HQ Admin / Operations"),
       designation_id: desigId("Assistant Director", "HQ Admin / Operations"),
@@ -2387,7 +2464,7 @@ async function main() {
     },
     // Added: HO staff (grade < 17) at Head Office
     {
-      employee_id: empId("Head Office Staff"),
+      employee_id: empId("Bilal Ahmed"),
       organization: "PSBA",
       department_id: deptId("Engineering"),
       designation_id: desigId("Junior Engineer", "Engineering"),
@@ -2405,7 +2482,7 @@ async function main() {
     },
     // Added: Establishment viewer in Establishment department at Head Office
     {
-      employee_id: empId("Establishment Viewer Test"),
+      employee_id: empId("Sadia Ijaz"),
       organization: "PSBA",
       department_id: deptId("Establishment"),
       designation_id: desigId("Establishment Officer", "Establishment"),
@@ -2423,7 +2500,7 @@ async function main() {
     },
     // Dummy employment records for department association testing
     {
-      employee_id: empId("Ali"),
+      employee_id: empId("Ali Raza Khan"),
       organization: "PSBA",
       department_id: deptId("IT"),
       designation_id: desigId("Software Developer", "IT"),
@@ -2439,7 +2516,7 @@ async function main() {
       is_deleted: false,
     },
     {
-      employee_id: empId("Umar"),
+      employee_id: empId("Umar Farooq"),
       organization: "PSBA",
       department_id: deptId("Accounts"),
       designation_id: desigId("Assistant Director", "Accounts"),
@@ -2454,6 +2531,27 @@ async function main() {
       location_id: findLocationId("Head Quarter"),
       is_deleted: false,
     },
+    // New: Bazaar employees under Township location
+    ...["Hassan Javed", "Ayesha Khan", "Hamza Tariq"].map((name) => ({
+      employee_id: empId(name),
+      organization: "PSBA",
+      department_id: deptId("HQ Admin / Operations"),
+      designation_id: desigId(
+        "Administrative Officer",
+        "HQ Admin / Operations"
+      ),
+      employment_type: "Contract",
+      effective_from: new Date("2023-08-01"),
+      office_location: "Sahulat Bazaar Township",
+      remarks: "Assigned to Township bazaar",
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-2").id,
+      employment_status: "active",
+      is_current: true,
+      filer_status: "non_filer",
+      location_id: findLocationId("Sahulat Bazaar Township"),
+      is_deleted: false,
+      reporting_officer_id: String(empId("Usman Badar")),
+    })),
   ];
 
   // NEW: Persist employment records
