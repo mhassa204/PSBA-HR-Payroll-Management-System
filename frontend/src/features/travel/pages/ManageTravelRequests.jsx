@@ -337,25 +337,28 @@ export default function ManageTravelRequests() {
                       Undo
                     </Button>
                   )}
-                  {!canUndoRecommendation(selected) && canRecommendHere(selected) && (
-                    <>
-                      <Button
-                        disabled={submitting}
-                        size="sm"
-                        onClick={() => doAction(selected, "RECOMMEND")}
-                      >
-                        Recommend
-                      </Button>
-                      <Button
-                        disabled={submitting}
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => doAction(selected, "RECOMMENDER_REJECT")}
-                      >
-                        Reject
-                      </Button>
-                    </>
-                  )}
+                  {!canUndoRecommendation(selected) &&
+                    canRecommendHere(selected) && (
+                      <>
+                        <Button
+                          disabled={submitting}
+                          size="sm"
+                          onClick={() => doAction(selected, "RECOMMEND")}
+                        >
+                          Recommend
+                        </Button>
+                        <Button
+                          disabled={submitting}
+                          size="sm"
+                          variant="destructive"
+                          onClick={() =>
+                            doAction(selected, "RECOMMENDER_REJECT")
+                          }
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   {canApproveHere(selected) && (
                     <>
                       <Button

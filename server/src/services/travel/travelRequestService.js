@@ -372,7 +372,9 @@ module.exports = {
                 .filter((e) => e.action === "RECOMMENDED")
                 .map((e) => String(e.actor_employee_id || ""))
             );
-            const nextExpected = expectedChain.find((empId) => !already.has(empId));
+            const nextExpected = expectedChain.find(
+              (empId) => !already.has(empId)
+            );
             if (nextExpected && String(me) === String(nextExpected)) {
               out.push(r);
               continue;
@@ -666,7 +668,9 @@ module.exports = {
                 .filter((e) => e.action === "RECOMMENDED")
                 .map((e) => String(e.actor_employee_id || ""))
             );
-            const nextExpected = expectedChain.find((empId) => !already.has(empId));
+            const nextExpected = expectedChain.find(
+              (empId) => !already.has(empId)
+            );
             if (nextExpected && String(me) === String(nextExpected)) {
               out.push(r);
               continue;
