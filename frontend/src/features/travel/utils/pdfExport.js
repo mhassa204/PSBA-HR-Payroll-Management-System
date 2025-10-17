@@ -296,15 +296,13 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }) {
       drawHeading(page, "Request Status History", margin, y, bold, 12);
       y -= 16;
       for (const se of reqEntries) {
-        // Prefer server-side actor info; fallback to email in remarks
-        const actorFromServer =
-          se?.actor?.user?.email || se?.actor?.email || se?.actor?.name || null;
+        // Align with UI: prefer email embedded in remarks (department accounts), then actor.user/email/name
         const emailMatch = String(se.remarks || "").match(
           /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
         );
-        const actor = safe(
-          actorFromServer || (emailMatch ? emailMatch[0] : "—")
-        );
+        const actorFromServer =
+          se?.actor?.user?.email || se?.actor?.email || se?.actor?.name || null;
+        const actor = safe(emailMatch ? emailMatch[0] : actorFromServer || "—");
         const when = se.createdAt
           ? new Date(se.createdAt).toLocaleString()
           : "";
@@ -430,13 +428,13 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }) {
     y -= 16;
   } else {
     for (const se of entries) {
-      // Prefer server-side actor info; fallback to email in remarks
-      const actorFromServer =
-        se?.actor?.user?.email || se?.actor?.email || se?.actor?.name || null;
+      // Align with UI: prefer email embedded in remarks (department accounts), then actor.user/email/name
       const emailMatch = String(se.remarks || "").match(
         /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
       );
-      const actor = safe(actorFromServer || (emailMatch ? emailMatch[0] : "—"));
+      const actorFromServer =
+        se?.actor?.user?.email || se?.actor?.email || se?.actor?.name || null;
+      const actor = safe(emailMatch ? emailMatch[0] : actorFromServer || "—");
       const when = new Date(se.createdAt).toLocaleString();
       const line = `${se.action} by ${actor} at ${when}`;
       y =

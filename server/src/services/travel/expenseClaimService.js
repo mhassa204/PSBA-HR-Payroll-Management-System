@@ -2804,7 +2804,43 @@ module.exports = {
       where: { id: tranche.id },
       include: {
         items: {
-          include: { claim: { include: { employee: true, request: true } } },
+          include: {
+            claim: {
+              include: {
+                // Full employee job context for PDF (Designation/Department/Location)
+                employee: {
+                  include: {
+                    employmentRecords: {
+                      where: { is_current: true, is_deleted: false },
+                      include: {
+                        designation: true,
+                        department: true,
+                        location: true,
+                      },
+                    },
+                  },
+                },
+                // Documents and segments for embedding and calculations
+                documents: true,
+                segments: true,
+                // Claim status history (actor with user for email)
+                statusEntries: {
+                  orderBy: { createdAt: "asc" },
+                  include: { actor: { include: { user: true } } },
+                },
+                // Associated request with attendees and status history
+                request: {
+                  include: {
+                    attendees: { include: { employee: true } },
+                    statusEntries: {
+                      orderBy: { createdAt: "asc" },
+                      include: { actor: { include: { user: true } } },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     });
@@ -2815,7 +2851,39 @@ module.exports = {
       orderBy: { createdAt: "desc" },
       include: {
         items: {
-          include: { claim: { include: { employee: true, request: true } } },
+          include: {
+            claim: {
+              include: {
+                employee: {
+                  include: {
+                    employmentRecords: {
+                      where: { is_current: true, is_deleted: false },
+                      include: {
+                        designation: true,
+                        department: true,
+                        location: true,
+                      },
+                    },
+                  },
+                },
+                documents: true,
+                segments: true,
+                statusEntries: {
+                  orderBy: { createdAt: "asc" },
+                  include: { actor: { include: { user: true } } },
+                },
+                request: {
+                  include: {
+                    attendees: { include: { employee: true } },
+                    statusEntries: {
+                      orderBy: { createdAt: "asc" },
+                      include: { actor: { include: { user: true } } },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         createdBy: true,
       },

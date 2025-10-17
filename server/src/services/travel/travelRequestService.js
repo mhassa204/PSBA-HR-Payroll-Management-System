@@ -960,7 +960,7 @@ module.exports = {
         attendees: { include: { employee: true } },
         statusEntries: {
           orderBy: { createdAt: "asc" },
-          include: { actor: true },
+          include: { actor: { include: { user: true } } },
         },
         applicant: {
           include: {
