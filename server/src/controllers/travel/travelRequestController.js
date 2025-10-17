@@ -340,6 +340,7 @@ module.exports = {
         (req.session.user?.permissions || []).includes("travel.create") ||
         (req.session.user?.permissions || []).includes("*");
       let sameDept = false;
+      let sameLoc = false;
       if (!ctx.meEmpId && req.session.user?.department_id) {
         const deptId = Number(req.session.user.department_id);
         sameDept = !!(row.applicant?.employmentRecords || []).some(
@@ -349,7 +350,14 @@ module.exports = {
             Number(er.department_id) === deptId
         );
       }
-      if (!(isOwn || (hasCreate && sameDept))) {
+      // Location account: allow delete if applicant currently belongs to same location
+      if (!ctx.meEmpId && !req.session.user?.department_id && req.session.user?.location_id) {
+        const locId = Number(req.session.user.location_id);
+        sameLoc = !!(row.applicant?.employmentRecords || []).some(
+          (er) => er.is_current && !er.is_deleted && Number(er.location_id) === locId
+        );
+      }
+      if (!(isOwn || (hasCreate && (sameDept || sameLoc)))) {
         return res.status(403).json({ success: false, error: "Forbidden" });
       }
     }
@@ -459,11 +467,8 @@ module.exports = {
     const action = String(req.body?.action || "").toUpperCase();
     if (!["APPROVE", "REJECT"].includes(action))
       return res.status(400).json({ success: false, error: "Invalid action" });
-    const meEmpId = Number(req.session.user?.employee_id);
-    if (!meEmpId)
-      return res
-        .status(400)
-        .json({ success: false, error: "User not linked to employee" });
+    // Allow Ops/DG without employee link to approve/reject (actor id will be null, remarks include email)
+    const meEmpId = Number(req.session.user?.employee_id || 0) || null;
     const request = await travelService.getById(id);
     if (!request || request.is_deleted)
       return res.status(404).json({ success: false, error: "Not found" });
@@ -488,14 +493,9 @@ module.exports = {
     });
     const applicantLocType =
       applicantEmployment?.location?.type || "HEAD_OFFICE";
-    const approverEmployment = await prisma.employment.findFirst({
-      where: { employee_id: meEmpId, is_current: true, is_deleted: false },
-      include: { department: true, designation: true },
-    });
-    const deptName = approverEmployment?.department?.name || "";
-    const desigTitle = approverEmployment?.designation?.title || "";
-    const isOps = /operations/i.test(deptName);
-    const isDG = /^director\s+general$/i.test(desigTitle);
+    // Use ctx flags instead of requiring approver employment
+    const isOps = !!ctx.isOps;
+    const isDG = !!ctx.isDG;
     if (isDeptOrigin) {
       if (!isDG)
         return res.status(403).json({
@@ -550,84 +550,81 @@ module.exports = {
     });
   },
   updateStatusFlexible: async (req, res) => {
-    const ctx = await travelService.getAuthContext(req);
-    const id = Number(req.params.id);
-    const targetStatus = String(req.body?.status || "").toUpperCase();
-    if (!["CREATED", "APPROVED", "REJECTED"].includes(targetStatus))
-      return res.status(400).json({ success: false, error: "Invalid status" });
-    const meEmpId = Number(req.session.user?.employee_id);
-    if (!meEmpId)
-      return res
-        .status(400)
-        .json({ success: false, error: "User not linked to employee" });
-    const request = await travelService.getById(id);
-    if (!request || request.is_deleted)
-      return res.status(404).json({ success: false, error: "Not found" });
-    const isDeptOrigin = !!(request.statusEntries || []).some(
-      (e) =>
-        e.action === "CREATED" &&
-        e.remarks &&
-        /\[DEPT\]/i.test(String(e.remarks))
-    );
-    const applicantEmployment = await prisma.employment.findFirst({
-      where: {
-        employee_id: request.applicant_id,
-        is_current: true,
-        is_deleted: false,
-      },
-      include: { location: true },
-    });
-    const applicantLocType =
-      applicantEmployment?.location?.type || "HEAD_OFFICE";
-    const approverEmployment = await prisma.employment.findFirst({
-      where: { employee_id: meEmpId, is_current: true, is_deleted: false },
-      include: { department: true, designation: true },
-    });
-    const deptName = approverEmployment?.department?.name || "";
-    const desigTitle = approverEmployment?.designation?.title || "";
-    const isOps = /operations/i.test(deptName);
-    const isDG = /^director\s+general$/i.test(desigTitle);
-    const isEstablishment =
-      /^hr$/i.test(deptName) ||
-      /human\s*resources|establishment/i.test(deptName);
-    const isSuperAdmin =
-      req.session.user?.role?.name === "Super Admin" ||
-      (req.session.user?.permissions || []).includes("*");
-    if (isEstablishment && !isSuperAdmin)
-      return res
-        .status(403)
-        .json({ success: false, error: "Establishment cannot modify status" });
-    if (!isSuperAdmin) {
-      if (isDeptOrigin) {
-        if (!isDG)
-          return res.status(403).json({
-            success: false,
-            error: "Department-originated requests require DG to change status",
-          });
-      } else {
-        if (applicantLocType === "BAZAAR" && !isOps)
-          return res.status(403).json({
-            success: false,
-            error: "Only Operations can modify bazaar requests",
-          });
-        if (applicantLocType === "HEAD_OFFICE" && !isDG)
-          return res.status(403).json({
-            success: false,
-            error: "Only Director General can modify head office requests",
-          });
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      const id = Number(req.params.id);
+      const targetStatus = String(req.body?.status || "").toUpperCase();
+      if (!["CREATED", "APPROVED", "REJECTED"].includes(targetStatus)) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid status" });
       }
-    }
-    if (request.status === targetStatus) {
-      const full = await travelService.getById(id);
+      // Allow approvals even if user is not linked to an employee (e.g., location-based Ops accounts)
+      const meEmpId = Number(req.session.user?.employee_id || 0) || null;
+      const request = await travelService.getById(id);
+      if (!request || request.is_deleted)
+        return res.status(404).json({ success: false, error: "Not found" });
+      const isDeptOrigin = !!(request.statusEntries || []).some(
+        (e) =>
+          e.action === "CREATED" &&
+          e.remarks &&
+          /\[DEPT\]/i.test(String(e.remarks))
+      );
+      const applicantEmployment = await prisma.employment.findFirst({
+        where: {
+          employee_id: request.applicant_id,
+          is_current: true,
+          is_deleted: false,
+        },
+        include: { location: true },
+      });
+      const applicantLocType =
+        applicantEmployment?.location?.type || "HEAD_OFFICE";
+      // Use ctx-derived flags (work even when user has no employee link)
+      const isOps = !!ctx.isOps;
+      const isDG = !!ctx.isDG;
+      const isEstablishment = !!ctx.isEstablishment;
+      const isSuperAdmin = !!ctx.isSuperAdmin;
+      if (isEstablishment && !isSuperAdmin)
+        return res.status(403).json({
+          success: false,
+          error: "Establishment cannot modify status",
+        });
+      if (!isSuperAdmin) {
+        if (isDeptOrigin) {
+          if (!isDG)
+            return res.status(403).json({
+              success: false,
+              error:
+                "Department-originated requests require DG to change status",
+            });
+        } else {
+          if (applicantLocType === "BAZAAR" && !isOps)
+            return res.status(403).json({
+              success: false,
+              error: "Only Operations can modify bazaar requests",
+            });
+          if (applicantLocType === "HEAD_OFFICE" && !isDG)
+            return res.status(403).json({
+              success: false,
+              error: "Only Director General can modify head office requests",
+            });
+        }
+      }
+      if (request.status === targetStatus) {
+        const full = await travelService.getById(id);
+        return res.json({ success: true, request: full });
+      }
+      const full = await travelService.updateStatusFlexible(
+        id,
+        targetStatus,
+        meEmpId, // may be null for non-employee-linked accounts; remarks will include email
+        ctx.userEmail
+      );
       return res.json({ success: true, request: full });
+    } catch (e) {
+      return res.status(400).json({ success: false, error: e.message });
     }
-    const full = await travelService.updateStatusFlexible(
-      id,
-      targetStatus,
-      meEmpId,
-      ctx.userEmail
-    );
-    res.json({ success: true, request: full });
   },
   recommend: async (req, res) => {
     try {

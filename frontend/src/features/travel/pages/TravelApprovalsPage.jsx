@@ -150,6 +150,9 @@ export default function TravelApprovalsPage() {
     const recs = recCount(r);
     const deptOrigin = isDeptOrigin(r);
     const locType = applicantLocType(r);
+    const isLocOrigin = (r?.statusEntries || []).some(
+      (se) => se.action === "CREATED" && /\[LOC\]/i.test(String(se.remarks || ""))
+    );
     // For department-origin, if HoD has a RO, require two recommendations before DG approval
     const neededRecs = deptOrigin && hodROFor(r) ? 2 : 1;
     const isDG = !!caps?.isDG;
@@ -162,10 +165,30 @@ export default function TravelApprovalsPage() {
       return false;
     }
     if (isOps) {
-      if (locType === "BAZAAR" && !deptOrigin && recs >= 1) return true;
+      // Allow Ops to approve location-origin bazaar requests directly (no recommendations needed)
+      if (locType === "BAZAAR" && !deptOrigin && (recs >= 1 || isLocOrigin))
+        return true;
       return false;
     }
     return false;
+  };
+
+  // Small helper: applicant location badge label (HQ or Bazaar name)
+  const applicantLocationBadge = (r) => {
+    const er = (r?.applicant?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const loc = er?.location || null;
+    if (loc) {
+      const type = String(loc.type || "HEAD_OFFICE");
+      const label = type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+      return label;
+    }
+    const created = (r?.statusEntries || []).find((e) => e.action === "CREATED");
+    const remarks = String(created?.remarks || "");
+    if (/\[LOC\]/i.test(remarks)) return "Bazaar";
+    if (/\[DEPT\]/i.test(remarks)) return "HQ";
+    return null;
   };
 
   return (
@@ -211,6 +234,16 @@ export default function TravelApprovalsPage() {
                       {String(r.expected_return_date).slice(0, 10)} ·{" "}
                       {r.total_days ? `${r.total_days} day(s)` : "—"}
                     </div>
+                    {(() => {
+                      const locLabel = applicantLocationBadge(r);
+                      return locLabel ? (
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {locLabel}
+                          </Badge>
+                        </div>
+                      ) : null;
+                    })()}
                     <div className="flex flex-wrap gap-1">
                       {(r.statusEntries || []).map((se) => (
                         <Badge
@@ -357,6 +390,22 @@ export default function TravelApprovalsPage() {
                   {(selected.statusEntries || []).length === 0 && (
                     <div className="p-3 text-muted-foreground">No history</div>
                   )}
+                  {/* Location badge in details */}
+                  <div className="p-3">
+                    {(() => {
+                      const er = (selected?.applicant?.employmentRecords || []).find(
+                        (x) => x.is_current && !x.is_deleted
+                      );
+                      const loc = er?.location || null;
+                      if (!loc) return null;
+                      const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+                      return (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {label}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                   {(selected.statusEntries || []).map((s) => (
                     <div
                       key={s.id}

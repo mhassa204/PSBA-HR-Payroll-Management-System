@@ -48,13 +48,14 @@ module.exports = {
     const roleName = req.session.user?.role?.name || "";
     const perms = req.session.user?.permissions || [];
     const userEmail = req.session.user?.email || null;
+    // Raw role name trimmed for regex checks
+    const roleNameRaw = (req.session.user?.role?.name || "").trim();
 
     // Permission-driven stage approver flags
     // Ops/DG must be derived from org role, not permissions, to avoid over-exposing Approve actions
-    const isOps = /operations/i.test(deptName);
+    const isOps = /^\s*operations/i.test(roleNameRaw) || /operations/i.test(deptName);
     // Robust DG detection: match on either Role name or current Designation title
     // Accept common variants/abbreviation (e.g., "Director General", "DG") case-insensitively.
-    const roleNameRaw = (req.session.user?.role?.name || "").trim();
     const isDGByRole = /(^|\b)(director\s*general|dg)(\b|$)/i.test(roleNameRaw);
     const isDGByDesignation = /(^|\b)(director\s*general|dg)(\b|$)/i.test(
       (desigTitle || "").trim()
@@ -245,6 +246,13 @@ module.exports = {
     const recCount = (req) =>
       (req.statusEntries || []).filter((e) => e.action === "RECOMMENDED")
         .length;
+    const isLocOrigin = (req) =>
+      (req.statusEntries || []).some(
+        (e) =>
+          e.action === "CREATED" &&
+          e.remarks &&
+          /\[LOC\]/i.test(String(e.remarks))
+      );
     const actedByMe = (req) => {
       const email = String(ctx.userEmail || "").trim();
       return (req.statusEntries || []).some((e) => {
@@ -414,6 +422,11 @@ module.exports = {
         if (deptOrigin) {
           const hodRO = hodROId(r);
           neededRecs = hodRO ? 2 : 1;
+        }
+        // New: location-origin (created via a location account) — show to Ops even without recommendations
+        if (ctx.isOps && lt === "BAZAAR" && !deptOrigin && isLocOrigin(r)) {
+          out.push(r);
+          continue;
         }
         if (recs >= neededRecs) {
           if (ctx.isOps && lt === "BAZAAR" && !deptOrigin) {
@@ -585,6 +598,13 @@ module.exports = {
           e.remarks &&
           /\[DEPT\]/i.test(String(e.remarks))
       );
+    const isLocOrigin = (req) =>
+      (req.statusEntries || []).some(
+        (e) =>
+          e.action === "CREATED" &&
+          e.remarks &&
+          /\[LOC\]/i.test(String(e.remarks))
+      );
     const recCount = (req) =>
       (req.statusEntries || []).filter((e) => e.action === "RECOMMENDED")
         .length;
@@ -717,6 +737,16 @@ module.exports = {
       if (deptOrigin) {
         const hodRO = hodROId(r);
         neededRecs = hodRO ? 2 : 1;
+      }
+      // New: location-origin requests (created by a location account) go directly to OPS even with zero recommendations
+      if (
+        ctx.isOps &&
+        locType === "BAZAAR" &&
+        !deptOrigin &&
+        isLocOrigin(r)
+      ) {
+        out.push(r);
+        continue;
       }
       if (me && allowedTypes.includes(locType) && recs >= neededRecs) {
         if (ctx.isOps && deptOrigin) {
@@ -1053,7 +1083,7 @@ module.exports = {
       data: {
         request_id: id,
         action: newStatus,
-        actor_employee_id: actorEmpId,
+        actor_employee_id: actorEmpId || null,
         remarks: actorEmail || null,
       },
     });
@@ -1078,7 +1108,7 @@ module.exports = {
       data: {
         request_id: id,
         action: targetStatus,
-        actor_employee_id: actorEmpId,
+        actor_employee_id: actorEmpId || null,
         remarks: actorEmail || null,
       },
     });
@@ -1408,12 +1438,23 @@ module.exports = {
         where: { id: req.id },
         data: { status: actionKey },
       });
+      // Determine canonical remarks when OPS is the approver
+      const canonicalRemarks = (() => {
+        if (isDeptOrigin) return ctx.userEmail || null; // DG-only path
+        if (isBazaar && actionKey) {
+          // Bazaar approvals by Ops
+          return actionKey === "APPROVED" || actionKey === "REJECTED"
+            ? "operations@psba.gop.pk"
+            : ctx.userEmail || null;
+        }
+        return ctx.userEmail || null;
+      })();
       await prisma.travelRequestStatusEntry.create({
         data: {
           request_id: req.id,
           action: actionKey,
           actor_employee_id: actorEmpId,
-          remarks: ctx.userEmail || null,
+          remarks: canonicalRemarks,
         },
       });
       return prisma.travelRequest.findUnique({

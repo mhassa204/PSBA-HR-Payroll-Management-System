@@ -48,6 +48,7 @@ export default function ManageExpenseClaimApprovals() {
   const perDiemRateRef = React.useRef(null);
   const fareTotalRef = React.useRef(null);
   const tollTaxRef = React.useRef(null);
+  const fuelTotalRef = React.useRef(null);
   const setNumWithRef = (field, ref) => (e) => {
     const el = e.target;
     const start = el.selectionStart ?? el.value.length;
@@ -177,6 +178,14 @@ export default function ManageExpenseClaimApprovals() {
       };
     const status = claim.status;
     const entries = claim.statusEntries || [];
+    const hasFirstStageDecision = entries.some((e) =>
+      [
+        "OPS_APPROVED",
+        "OPS_REJECTED",
+        "DG_APPROVED",
+        "DG_REJECTED",
+      ].includes(e.action)
+    );
     const approvalsOrder = [
       "OPS_APPROVED",
       "DG_APPROVED",
@@ -205,6 +214,11 @@ export default function ManageExpenseClaimApprovals() {
     );
     const locType =
       claim.employee?.employmentRecords?.[0]?.location?.type || "HEAD_OFFICE";
+    const isLocationOrigin =
+      !!claim.created_by_location_id ||
+      (entries || []).some(
+        (e) => e.action === "SUBMITTED" && /\[LOC\]/i.test(String(e.remarks || ""))
+      );
     const directToDG =
       canDG &&
       (claim.employee?.employmentRecords || []).some(
@@ -214,29 +228,38 @@ export default function ManageExpenseClaimApprovals() {
           String(er.reporting_officer_id || "") === String(meEmpId || "")
       );
 
-    // Rejected: only allow CLEAR by the actor who rejected at their stage
+    // Helper to map action to stage for CLEAR checks
+    const mapActionToStage = (act) => {
+      if (!act) return "";
+      if (act === "PROCESS_STARTED" || act === "ACCOUNTS_REJECTED")
+        return "ACCOUNTS";
+      if (act === "ESTABLISHMENT_VERIFIED" || act === "ESTABLISHMENT_REJECTED")
+        return "ESTABLISHMENT";
+      if (act.startsWith("OPS_")) return "OPS";
+      if (act.startsWith("DG_")) return "DG";
+      if (act.startsWith("RECOMMENDER")) return "RECOMMENDER";
+      return (act.split("_")[0] || "").toUpperCase();
+    };
+
+    // Rejected: allow CLEAR by the same actor OR by a user with the same stage capability (Establishment/Accounts centralized)
     if (
       status === "REJECTED" ||
       (typeof status === "string" && status.startsWith("REJECTED"))
     ) {
       let canClear = false;
-      if (
+      const lastStage = mapActionToStage(lastEntry?.action);
+      const sameActor =
         lastEntry &&
         rejectionActions.includes(lastEntry.action) &&
-        lastEntry.actor_employee_id === user?.employee_id
-      ) {
-        const stage = lastEntry.action.split("_")[0];
-        if (stage === "RECOMMENDER") {
-          canClear = isRecommenderFor(claim);
-        } else if (
-          (stage === "OPS" && canOps) ||
-          (stage === "DG" && canDG) ||
-          (stage === "ESTABLISHMENT" && canEstablishment) ||
-          (stage === "ACCOUNTS" && canAccounts)
-        ) {
-          canClear = true;
-        }
-      }
+        String(lastEntry.actor_employee_id || "") ===
+          String(user?.employee_id || "");
+      const stageCap =
+        (lastStage === "ESTABLISHMENT" && canEstablishment) ||
+        (lastStage === "ACCOUNTS" && canAccounts) ||
+        (lastStage === "OPS" && canOps) ||
+        (lastStage === "DG" && canDG) ||
+        (lastStage === "RECOMMENDER" && isRecommenderFor(claim));
+      canClear = sameActor || stageCap;
       return {
         canApprove: false,
         canReject: false,
@@ -290,17 +313,21 @@ export default function ManageExpenseClaimApprovals() {
         (myEmail && entryEmail(lastApproval.remarks) === myEmail))
     );
 
-    // If Accounts has started processing, lock further actions (except CLEAR by same actor)
+    // If Accounts has started processing, lock further actions (except CLEAR by Accounts stage user)
     if (hasProcessStarted) {
-      if (
-        lastApproval &&
-        lastApproval.action === "PROCESS_STARTED" &&
-        lastApprovalIsMine
-      ) {
+      if (lastApproval && lastApproval.action === "PROCESS_STARTED") {
+        // Allow any Accounts-capable user to undo PROCESS_STARTED
+        if (canAccounts)
+          return {
+            canApprove: false,
+            canReject: false,
+            canClear: true,
+            canRecommend: false,
+          };
         return {
           canApprove: false,
           canReject: false,
-          canClear: true,
+          canClear: false,
           canRecommend: false,
         };
       }
@@ -312,30 +339,23 @@ export default function ManageExpenseClaimApprovals() {
       };
     }
 
-    if (lastApprovalIsMine && !nextStageHasActed()) {
-      // Only allow CLEAR (Undo) if I have capability for the same stage of the last action.
+    if (!nextStageHasActed()) {
+      // Allow CLEAR when I was the actor OR I have the stage capability (centralized for Establishment/Accounts)
       const act = lastApproval?.action || "";
-      const stage = act === "RECOMMENDED" ? "RECOMMENDER" : act.split("_")[0];
-      let canClear = false;
-      if (stage === "RECOMMENDER") {
-        canClear = isRecommenderFor(claim);
-      } else if (stage === "OPS") {
-        canClear = !!canOps;
-      } else if (stage === "DG") {
-        canClear = !!canDG;
-      } else if (stage === "ESTABLISHMENT") {
-        canClear = !!canEstablishment;
-      } else if (stage === "ACCOUNTS" || stage === "PROCESS") {
-        canClear = !!canAccounts;
-      }
-      if (canClear)
+      const stage = mapActionToStage(act);
+      const canStageClear =
+        (stage === "RECOMMENDER" && isRecommenderFor(claim)) ||
+        (stage === "OPS" && !!canOps) ||
+        (stage === "DG" && !!canDG) ||
+        (stage === "ESTABLISHMENT" && !!canEstablishment) ||
+        (stage === "ACCOUNTS" && !!canAccounts);
+      if (canStageClear || lastApprovalIsMine)
         return {
           canApprove: false,
           canReject: false,
           canClear: true,
           canRecommend: false,
         };
-      // If I don't have capability for that stage, fall through to forward-stage actions
     }
 
     // DG fast-track: skip recommender if direct report to DG
@@ -405,6 +425,15 @@ export default function ManageExpenseClaimApprovals() {
 
     // Forward-stage actions
     if (status === "SUBMITTED") {
+      // Location-origin: allow OPS to approve/reject directly without recommendations
+      if (isLocationOrigin && canOps && !hasFirstStageDecision) {
+        return {
+          canApprove: true,
+          canReject: true,
+          canClear: false,
+          canRecommend: false,
+        };
+      }
       // Only DG can approve/reject at SUBMITTED stage (HQ/department-origin); OPS only for BAZAAR
       if (locType === "BAZAAR" && canOps) {
         if (!hasRecommended)
@@ -501,6 +530,7 @@ export default function ManageExpenseClaimApprovals() {
       per_diem_rate: String(c?.per_diem_rate ?? ""),
       fare_total: String(c?.fare_total ?? ""),
       toll_tax_total: String(c?.toll_tax_total ?? ""),
+      fuel_total: String(c?.fuel_total ?? ""),
     });
   };
   const close = () => {
@@ -534,6 +564,7 @@ export default function ManageExpenseClaimApprovals() {
       per_diem_rate: Number(editVals.per_diem_rate || 0) || 0,
       fare_total: Number(editVals.fare_total || 0) || 0,
       toll_tax_total: Number(editVals.toll_tax_total || 0) || 0,
+      fuel_total: Number(editVals.fuel_total || 0) || 0,
     };
     const totals = computeExpenseClaimTotals({ ...selected, ...payload });
     // Also persist dependent totals
@@ -588,6 +619,19 @@ export default function ManageExpenseClaimApprovals() {
   const passesRoleFilter = (c) => {
     const entries = c.statusEntries || [];
     const has = (act) => entries.some((e) => e.action === act);
+    const hasFirstStageDecision = entries.some((e) =>
+      [
+        "OPS_APPROVED",
+        "OPS_REJECTED",
+        "DG_APPROVED",
+        "DG_REJECTED",
+      ].includes(e.action)
+    );
+    const isLocationOrigin =
+      !!c.created_by_location_id ||
+      (entries || []).some(
+        (e) => e.action === "SUBMITTED" && /\[LOC\]/i.test(String(e.remarks || ""))
+      );
     const empRepsToMe = (c.employee?.employmentRecords || []).some(
       (er) =>
         er.is_current &&
@@ -618,15 +662,42 @@ export default function ManageExpenseClaimApprovals() {
     }
 
     if (canAccounts) {
-      // Accounts sees Establishment-verified (status VERIFIED) or Under Process
+      // Accounts sees Establishment-verified (status VERIFIED), Under Process,
+      // and any claims where Accounts has acted (PROCESS_STARTED/ACCOUNTS_REJECTED)
+      const actedByAccounts = entries.some((e) =>
+        ["PROCESS_STARTED", "ACCOUNTS_REJECTED"].includes(e.action)
+      );
       return (
         (c.status === "VERIFIED" && has("ESTABLISHMENT_VERIFIED")) ||
-        c.status === "UNDER_PROCESS"
+        c.status === "UNDER_PROCESS" ||
+        actedByAccounts
       );
     }
+    // OPS: include Bazaar claims after recommendation and any location-origin claims directly (no recommendation required)
+    if (canOps) {
+      if (c.status === "SUBMITTED" && !hasFirstStageDecision) {
+        const isBazaar = (c.employee?.employmentRecords || []).some(
+          (er) => er.is_current && !er.is_deleted && er.location?.type === "BAZAAR"
+        );
+        const hasRecommended = has("RECOMMENDED");
+        if ((isBazaar && hasRecommended) || isLocationOrigin) return true;
+      }
+      // For other stages, fall through to other role rules
+    }
     if (canEstablishment) {
-      // Establishment sees only DG-approved (status APPROVED with DG_APPROVED)
-      return c.status === "APPROVED" && has("DG_APPROVED");
+      // Establishment sees:
+      // - First-stage approved claims (status APPROVED) that are not yet verified/rejected (awaiting action)
+      // - Any claims already verified/rejected by Establishment (centralized history view shared by ad.est and dept accounts)
+      const awaiting =
+        c.status === "APPROVED" &&
+        !has("ESTABLISHMENT_VERIFIED") &&
+        !has("ESTABLISHMENT_REJECTED");
+      const alreadyActed = entries.some((e) =>
+        ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"].includes(
+          e.action
+        )
+      );
+      return awaiting || alreadyActed;
     }
     if (canDG) {
       // DG sees:
@@ -781,6 +852,15 @@ export default function ManageExpenseClaimApprovals() {
   // Label: always display 'Recommend'
   const getRecommendLabel = () => "Recommend";
 
+  const claimLocationBadge = (c) => {
+    const er = c?.employee?.employmentRecords?.[0];
+    if (!er || er.is_deleted) return null;
+    const loc = er.location || null;
+    if (!loc) return null;
+    const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+    return label;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -860,8 +940,20 @@ export default function ManageExpenseClaimApprovals() {
                       <div className="font-medium">
                         Claim #{c.id}
                         {reqPart} • {emp?.full_name || "Employee"} (
-                        {empJob?.designation?.title || "—"})
+                        {empJob?.designation?.title || "—"}) • CNIC: {String(
+                          emp?.cnic || "—"
+                        )}
                       </div>
+                      {(() => {
+                        const loc = claimLocationBadge(c);
+                        return loc ? (
+                          <div className="flex items-center gap-1">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {loc}
+                            </Badge>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="text-muted-foreground">
                         Distance {c.total_distance_km || 0} km • Grand{" "}
                         {formatMoney(c.grand_total)}
@@ -1059,11 +1151,18 @@ export default function ManageExpenseClaimApprovals() {
                 const locTypeAll =
                   c.employee?.employmentRecords?.[0]?.location?.type ||
                   "HEAD_OFFICE";
+                const isLocationOriginAll =
+                  !!c.created_by_location_id ||
+                  (c.statusEntries || []).some(
+                    (e) =>
+                      e.action === "SUBMITTED" &&
+                      /\[LOC\]/i.test(String(e.remarks || ""))
+                  );
                 const isSubmitted = c.status === "SUBMITTED";
                 // In All tab, do an extra guard: for SUBMITTED, only DG (HO) or OPS (BAZAAR) can see Approve/Reject
                 const allowApproveRejectInAll = isSubmitted
                   ? locTypeAll === "BAZAAR"
-                    ? !!canOps
+                    ? !!canOps || (isLocationOriginAll && !!canOps)
                     : !!canDG
                   : true; // other stages governed by eligibility (HR/Accounts)
                 const showApprove =
@@ -1112,8 +1211,21 @@ export default function ManageExpenseClaimApprovals() {
                         <span className="text-muted-foreground">
                           ({empJob?.designation?.title || "—"})
                         </span>{" "}
+                        <span className="text-muted-foreground">
+                          • CNIC: {String(emp?.cnic || "—")}
+                        </span>{" "}
                         {reqBadge}
                       </div>
+                      {(() => {
+                        const loc = claimLocationBadge(c);
+                        return loc ? (
+                          <div className="flex items-center gap-1">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {loc}
+                            </Badge>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="text-muted-foreground">
                         Distance {c.total_distance_km || 0} km • Grand{" "}
                         {(c.grand_total || 0).toLocaleString(undefined, {
@@ -1398,7 +1510,17 @@ export default function ManageExpenseClaimApprovals() {
                       </div>
                       <div>Fuel Total</div>
                       <div className="text-right font-medium">
-                        {formatMoney(selected.fuel_total)}
+                        {editMode ? (
+                          <Input
+                            ref={fuelTotalRef}
+                            type="text"
+                            value={editVals.fuel_total}
+                            onChange={setNumWithRef("fuel_total", fuelTotalRef)}
+                            className="h-7 text-right"
+                          />
+                        ) : (
+                          formatMoney(selected.fuel_total)
+                        )}
                       </div>
                       <div>Fare Total</div>
                       <div className="text-right font-medium">

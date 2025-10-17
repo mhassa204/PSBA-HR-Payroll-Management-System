@@ -146,6 +146,9 @@ export default function ManageTravelRequests() {
     const recommendedCount = (r?.statusEntries || []).filter(
       (se) => se.action === "RECOMMENDED"
     ).length;
+    const isLocOrigin = (r?.statusEntries || []).some(
+      (se) => se.action === "CREATED" && /\[LOC\]/i.test(String(se.remarks || ""))
+    );
     if (caps.isDG) {
       // Department-origin: DG after required recommendations
       const needed = isDeptOrigin(r) ? 2 : 1; // conservative in UI; backend is source of truth
@@ -154,7 +157,8 @@ export default function ManageTravelRequests() {
       return false;
     }
     if (caps.isOps) {
-      if (!isDeptOrigin(r) && locType(r) === "BAZAAR" && recommendedCount >= 1)
+      // Location-origin bazaar requests can go directly to Ops without recommendations
+      if (!isDeptOrigin(r) && locType(r) === "BAZAAR" && (recommendedCount >= 1 || isLocOrigin))
         return true;
       return false;
     }
@@ -210,6 +214,23 @@ export default function ManageTravelRequests() {
     return m ? m[0] : remarks || fallback || "—";
   };
 
+  const applicantLocationBadge = (r) => {
+    const er = (r?.applicant?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const loc = er?.location || null;
+    if (loc) {
+      const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+      return label;
+    }
+    // Fallback: infer from origin markers in status entries
+    const created = (r?.statusEntries || []).find((e) => e.action === "CREATED");
+    const remarks = String(created?.remarks || "");
+    if (/\[LOC\]/i.test(remarks)) return "Bazaar";
+    if (/\[DEPT\]/i.test(remarks)) return "HQ";
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -245,6 +266,16 @@ export default function ManageTravelRequests() {
                     {String(r.expected_return_date).slice(0, 10)} ·{" "}
                     {r.total_days ? `${r.total_days} day(s)` : "—"}
                   </div>
+                  {(() => {
+                    const loc = applicantLocationBadge(r);
+                    return loc ? (
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary" className="text-[10px]">
+                          {loc}
+                        </Badge>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{r.status || "CREATED"}</Badge>
@@ -397,6 +428,22 @@ export default function ManageTravelRequests() {
                   {(selected.statusEntries || []).length === 0 && (
                     <div className="p-3 text-muted-foreground">No history</div>
                   )}
+                  {/* Location badge in details */}
+                  <div className="p-3">
+                    {(() => {
+                      const er = (selected?.applicant?.employmentRecords || []).find(
+                        (x) => x.is_current && !x.is_deleted
+                      );
+                      const loc = er?.location || null;
+                      if (!loc) return null;
+                      const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+                      return (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {label}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                   {(selected.statusEntries || []).map((s) => (
                     <div
                       key={s.id}

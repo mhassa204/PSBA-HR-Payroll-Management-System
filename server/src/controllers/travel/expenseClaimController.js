@@ -24,11 +24,14 @@ module.exports = {
     try {
       const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
       const deptId = Number(req.session.user?.department_id || 0);
+      const locId = Number(req.session.user?.location_id || 0);
       let claims;
       if (employee_id) {
         claims = await service.listClaims(employee_id, isSuperAdmin);
       } else if (deptId) {
         claims = await service.listClaimsForDepartment(deptId);
+      } else if (locId) {
+        claims = await service.listClaimsForLocation(locId);
       } else {
         claims = [];
       }
@@ -118,7 +121,10 @@ module.exports = {
       }
 
       // Call service with computed actor (applicant for request-linked; selected employee for within-city)
-      const claim = await service.createClaim(actorEmpIdForService, data);
+      // For department/location accounts, pass origin context so service can authorize within-city path
+      const department_id = Number(req.session.user?.department_id || 0);
+      const location_id = Number(req.session.user?.location_id || 0);
+      const claim = await service.createClaim(actorEmpIdForService, data, { department_id, location_id });
       return res.json({ success: true, claim });
     } catch (e) {
       res.status(400).json({ success: false, error: e.message });
@@ -128,11 +134,13 @@ module.exports = {
     try {
       const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
       const department_id = Number(req.session.user?.department_id || 0);
+      const location_id = Number(req.session.user?.location_id || 0);
       const claim = await service.getClaim(
         Number(req.params.id),
         employee_id,
         isSuperAdmin,
-        department_id
+        department_id,
+        location_id
       );
       if (!claim)
         return res.status(404).json({ success: false, error: "Not found" });
@@ -148,13 +156,15 @@ module.exports = {
           req
         );
       const department_id = Number(req.session.user?.department_id || 0);
+      const location_id = Number(req.session.user?.location_id || 0);
       const claim = await service.updateClaim(
         Number(req.params.id),
         ctx.meEmpId,
         ctx.isSuperAdmin,
         req.body || {},
         ctx,
-        department_id
+        department_id,
+        location_id
       );
       res.json({ success: true, claim });
     } catch (e) {
@@ -165,12 +175,14 @@ module.exports = {
     try {
       const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
       const department_id = Number(req.session.user?.department_id || 0);
+      const location_id = Number(req.session.user?.location_id || 0);
       const claim = await service.addSegment(
         req.params.id,
         employee_id,
         isSuperAdmin,
         req.body || {},
-        department_id
+        department_id,
+        location_id
       );
       res.json({ success: true, claim });
     } catch (e) {
@@ -181,13 +193,15 @@ module.exports = {
     try {
       const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
       const department_id = Number(req.session.user?.department_id || 0);
+      const location_id = Number(req.session.user?.location_id || 0);
       const claim = await service.updateSegment(
         req.params.id,
         req.params.segmentId,
         employee_id,
         isSuperAdmin,
         req.body || {},
-        department_id
+        department_id,
+        location_id
       );
       res.json({ success: true, claim });
     } catch (e) {
@@ -198,12 +212,14 @@ module.exports = {
     try {
       const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
       const department_id = Number(req.session.user?.department_id || 0);
+      const location_id = Number(req.session.user?.location_id || 0);
       const claim = await service.deleteSegment(
         req.params.id,
         req.params.segmentId,
         employee_id,
         isSuperAdmin,
-        department_id
+        department_id,
+        location_id
       );
       res.json({ success: true, claim });
     } catch (e) {
@@ -216,13 +232,15 @@ module.exports = {
       try {
         const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
         const department_id = Number(req.session.user?.department_id || 0);
+        const location_id = Number(req.session.user?.location_id || 0);
         const claim = await service.addDocuments(
           req.params.id,
           employee_id,
           isSuperAdmin,
           req.files || [],
           req.query.category,
-          department_id
+          department_id,
+          location_id
         );
         res.json({ success: true, claim });
       } catch (e) {
@@ -234,12 +252,14 @@ module.exports = {
     try {
       const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
       const department_id = Number(req.session.user?.department_id || 0);
+      const location_id = Number(req.session.user?.location_id || 0);
       const claim = await service.deleteDocument(
         req.params.id,
         req.params.docId,
         employee_id,
         isSuperAdmin,
-        department_id
+        department_id,
+        location_id
       );
       res.json({ success: true, claim });
     } catch (e) {
@@ -250,11 +270,13 @@ module.exports = {
     try {
       const { employee_id, isSuperAdmin } = await service.getAuthContext(req);
       const department_id = Number(req.session.user?.department_id || 0);
+      const location_id = Number(req.session.user?.location_id || 0);
       const result = await service.deleteClaim(
         req.params.id,
         employee_id,
         isSuperAdmin,
-        department_id
+        department_id,
+        location_id
       );
       res.json(result);
     } catch (e) {
@@ -282,18 +304,28 @@ module.exports = {
         }))
       )?.name;
       const email = String(req.session.user?.email || "");
-      // Include [DEPT] when department account submits; always include email
+      // Include [DEPT] when department account submits or [LOC] when location account submits; always include email
+      const location_id = Number(req.session.user?.location_id || 0);
+      let locName = null;
+      if (!deptName && location_id) {
+        const loc = await prisma.location.findFirst({
+          where: { id: location_id, is_deleted: false },
+          select: { name: true },
+        });
+        locName = loc?.name || "Location";
+      }
       const actorLabel =
-        `${deptName ? `[DEPT] ${deptName} Department` : ""}${
-          email ? `${deptName ? " | " : ""}submitted by ${email}` : ""
-        }` || null;
+        `${deptName ? `[DEPT] ${deptName} Department` : locName ? `[LOC] ${locName}` : ""}` +
+        `${email ? `${deptName || locName ? " | " : ""}submitted by ${email}` : ""}` || null;
       const department_id = Number(req.session.user?.department_id || 0);
+      
       const claim = await service.submitClaim(
         req.params.id,
         actorEmpId,
         ctx.isSuperAdmin,
         actorLabel,
-        department_id
+        department_id,
+        location_id
       );
       res.json({ success: true, claim });
     } catch (e) {
@@ -319,11 +351,17 @@ module.exports = {
           req
         );
       let meEmpId = ctx.meEmpId;
-      // For department-type Establishment/Accounts users, allow acting without employee link
-      if (!meEmpId && (ctx.isEstablishment || ctx.isAccountsApprover)) {
+      // For Establishment/Accounts/Ops users, allow acting without employee link (actor recorded via remarks/email)
+      if (
+        !meEmpId &&
+        (ctx.isEstablishment || ctx.isAccountsApprover || ctx.isOps || ctx.canApproveClaimOps)
+      ) {
         meEmpId = null; // actor will be recorded via remarks/email in the service layer
       }
-      if (!meEmpId && !(ctx.isEstablishment || ctx.isAccountsApprover)) {
+      if (
+        !meEmpId &&
+        !(ctx.isEstablishment || ctx.isAccountsApprover || ctx.isOps || ctx.canApproveClaimOps)
+      ) {
         return res
           .status(400)
           .json({ success: false, error: "User not linked" });

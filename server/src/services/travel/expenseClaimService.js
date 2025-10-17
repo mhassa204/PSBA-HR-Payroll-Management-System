@@ -143,6 +143,38 @@ module.exports = {
     });
     return claims;
   },
+  // New: Location account listing — show claims for employees whose current employment is at the location
+  listClaimsForLocation: async (location_id) => {
+    if (!location_id) return [];
+    return prisma.travelClaim.findMany({
+      where: {
+        is_deleted: false,
+        employee: {
+          employmentRecords: {
+            some: {
+              is_current: true,
+              is_deleted: false,
+              location_id: Number(location_id),
+            },
+          },
+        },
+      },
+      include: {
+        documents: true,
+        segments: true,
+        employee: {
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: { designation: true, department: true, location: true },
+            },
+          },
+        },
+        request: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  },
   // New: Department account listing — show claims for employees in the department
   listClaimsForDepartment: async (department_id) => {
     if (!department_id) return [];
@@ -175,7 +207,7 @@ module.exports = {
       orderBy: { createdAt: "desc" },
     });
   },
-  createClaim: async (employee_id, data) => {
+  createClaim: async (employee_id, data, { department_id, location_id } = {}) => {
     // Support two modes:
     // 1) Request-linked (existing)
     // 2) Within-city (no travel_request_id) for a reportee of the current user; multiple allowed
@@ -188,8 +220,20 @@ module.exports = {
         where: { id: Number(data.travel_request_id) },
         include: { attendees: true },
       });
-      if (!request || request.applicant_id !== employee_id)
-        throw new Error("Forbidden");
+      // For department/location accounts, allow acting on behalf if request was created by them (email remarks)
+      if (!request) throw new Error("Not found");
+      const allowByApplicant = !!(employee_id && request.applicant_id === employee_id);
+      let allowByOrigin = false;
+      if (!allowByApplicant && (department_id || location_id)) {
+        const createdEntry = await prisma.travelRequestStatusEntry.findFirst({
+          where: { request_id: request.id, action: "CREATED" },
+          orderBy: { createdAt: "asc" },
+        });
+        const remarks = String(createdEntry?.remarks || "");
+        if (department_id) allowByOrigin = /\[DEPT\]/i.test(remarks);
+        if (location_id && !allowByOrigin) allowByOrigin = /\[LOC\]/i.test(remarks);
+      }
+      if (!(allowByApplicant || allowByOrigin)) throw new Error("Forbidden");
       if (request.status !== "APPROVED")
         throw new Error("Request not approved");
       const isAttendee = request.attendees.some(
@@ -243,8 +287,19 @@ module.exports = {
     }
 
     // New: Within-city creation (no travel request)
-    // Validate that the selected employee is either self or reports to the current user
-    if (attendeeEmpId !== employee_id) {
+    // Validate that the selected employee is either self or reports to the current user;
+    // For location accounts, also allow if the employee currently belongs to the same location
+    if (!employee_id && location_id) {
+      const inLocation = await prisma.employment.findFirst({
+        where: {
+          employee_id: attendeeEmpId,
+          is_current: true,
+          is_deleted: false,
+          location_id: Number(location_id),
+        },
+      });
+      if (!inLocation) throw new Error("Forbidden");
+    } else if (attendeeEmpId !== employee_id) {
       const reporteeEmployment = await prisma.employment.findFirst({
         where: {
           employee_id: attendeeEmpId,
@@ -289,7 +344,7 @@ module.exports = {
       },
     });
   },
-  _canAccess(claim, employee_id, isSuperAdmin) {
+  _canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id } = {}) {
     if (isSuperAdmin) return true;
     if (!claim) return false;
     if (claim.employee_id === employee_id) return true;
@@ -305,9 +360,19 @@ module.exports = {
       );
       if (isRO) return true;
     }
+    // Location account: allow if claimant currently belongs to your location
+    if (!employee_id && location_id) {
+      const belongs = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
+      );
+      if (belongs) return true;
+    }
     return false;
   },
-  getClaim: async (id, employee_id, isSuperAdmin, department_id) => {
+  getClaim: async (id, employee_id, isSuperAdmin, department_id, location_id) => {
     const parsedId = Number(id);
     if (!Number.isInteger(parsedId) || parsedId <= 0) {
       throw new Error("Invalid claim id");
@@ -343,13 +408,21 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) return null;
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed && !employee_id && location_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!allowed) throw new Error("Forbidden");
@@ -407,7 +480,8 @@ module.exports = {
     isSuperAdmin,
     data,
     ctx,
-    department_id
+    department_id,
+    location_id
   ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
@@ -429,7 +503,7 @@ module.exports = {
       (ctx.isSuperAdmin || ctx.isAccountsApprover) &&
       !claim.statusEntries.some((e) => e.action === "PROCESS_STARTED");
     let canAccess =
-      module.exports._canAccess(claim, employee_id, isSuperAdmin) ||
+      module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id }) ||
       editableByAccounts;
     // Department-based account: allow editing if claimant currently belongs to the same department
     if (!canAccess && !employee_id && department_id) {
@@ -438,6 +512,14 @@ module.exports = {
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!canAccess && !employee_id && location_id) {
+      canAccess = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!canAccess) throw new Error("Forbidden");
@@ -472,6 +554,8 @@ module.exports = {
         updateData.toll_tax_total = Number(data.toll_tax_total || 0);
       if ("fare_total" in data)
         updateData.fare_total = Number(data.fare_total || 0);
+      if ("fuel_total" in data)
+        updateData.fuel_total = Number(data.fuel_total || 0);
     }
 
     // Regular editable fields in DRAFT
@@ -632,7 +716,8 @@ module.exports = {
     employee_id,
     isSuperAdmin,
     payload,
-    department_id
+    department_id,
+    location_id
   ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
@@ -648,13 +733,21 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed && !employee_id && location_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!allowed) throw new Error("Forbidden");
@@ -680,7 +773,8 @@ module.exports = {
     employee_id,
     isSuperAdmin,
     payload,
-    department_id
+    department_id,
+    location_id
   ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
@@ -696,13 +790,21 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed && !employee_id && location_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!allowed) throw new Error("Forbidden");
@@ -735,7 +837,8 @@ module.exports = {
     segmentId,
     employee_id,
     isSuperAdmin,
-    department_id
+    department_id,
+    location_id
   ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
@@ -751,13 +854,21 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed && !employee_id && location_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!allowed) throw new Error("Forbidden");
@@ -773,7 +884,8 @@ module.exports = {
     isSuperAdmin,
     files,
     category,
-    department_id
+    department_id,
+    location_id
   ) => {
     // Supports multi-file uploads; category may be FUEL, TOLL, PICTURE, REPORT, OTHER
     const claim = await prisma.travelClaim.findUnique({
@@ -791,13 +903,21 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed && !employee_id && location_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!allowed) throw new Error("Forbidden");
@@ -828,7 +948,8 @@ module.exports = {
     docId,
     employee_id,
     isSuperAdmin,
-    department_id
+    department_id,
+    location_id
   ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(claimId) },
@@ -845,13 +966,21 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed && !employee_id && location_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!allowed) throw new Error("Forbidden");
@@ -872,7 +1001,7 @@ module.exports = {
       },
     });
   },
-  deleteClaim: async (id, employee_id, isSuperAdmin, department_id) => {
+  deleteClaim: async (id, employee_id, isSuperAdmin, department_id, location_id) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
       include: {
@@ -889,7 +1018,7 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
     // Department-based account: allow deletion if claimant currently belongs to the same department
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
@@ -897,6 +1026,14 @@ module.exports = {
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed && !employee_id && location_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!allowed) throw new Error("Forbidden");
@@ -910,7 +1047,8 @@ module.exports = {
     employee_id,
     isSuperAdmin,
     actorLabel,
-    department_id
+    department_id,
+    location_id
   ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
@@ -927,13 +1065,21 @@ module.exports = {
       },
     });
     if (!claim) throw new Error("Not found");
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin);
+  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
           er.is_current &&
           !er.is_deleted &&
           Number(er.department_id) === Number(department_id)
+      );
+    }
+    if (!allowed && !employee_id && location_id) {
+      allowed = (claim.employee?.employmentRecords || []).some(
+        (er) =>
+          er.is_current &&
+          !er.is_deleted &&
+          Number(er.location_id) === Number(location_id)
       );
     }
     if (!allowed) throw new Error("Forbidden");
@@ -949,6 +1095,9 @@ module.exports = {
     const updateData = { status: "SUBMITTED" };
     if (!employee_id && department_id) {
       updateData.created_by_department_id = Number(department_id);
+    }
+    if (!employee_id && location_id) {
+      updateData.created_by_location_id = Number(location_id);
     }
     await prisma.travelClaim.update({
       where: { id: claim.id },
@@ -1231,6 +1380,7 @@ module.exports = {
       },
     };
     if (ctx.isOps || ctx.canApproveClaimOps) {
+      // Standard OPS: bazaar-origin after recommendation
       stageFilters.push({
         status: "SUBMITTED",
         employee: {
@@ -1241,11 +1391,27 @@ module.exports = {
             },
           },
         },
-        // Exclude department-origin and HQ-origin from OPS; only bazaar-origin standard claims
         created_by_department_id: null,
         statusEntries: {
           none: firstStageNone,
           some: { action: "RECOMMENDED" },
+        },
+      });
+      // Location-origin: route directly to OPS even without recommendation
+      stageFilters.push({
+        status: "SUBMITTED",
+        created_by_location_id: { not: null },
+        statusEntries: { none: firstStageNone },
+      });
+      // Fallback for environments pending migration: detect location-origin by [LOC] in SUBMITTED remarks
+      stageFilters.push({
+        status: "SUBMITTED",
+        statusEntries: {
+          none: firstStageNone,
+          some: {
+            action: "SUBMITTED",
+            remarks: { contains: "[LOC]", mode: "insensitive" },
+          },
         },
       });
     }
@@ -1396,10 +1562,12 @@ module.exports = {
       /^\s*establishment/i.test(String(ctx.roleName || "")) ||
       /(^|\b)establishment(\b|$)/i.test(String(ctx.deptName || ""));
     if (looksEstablishment) {
+      // Relaxed: include all first-stage approved claims awaiting Establishment, even if legacy
+      // records are missing explicit OPS/DG action entries. Rely on status == APPROVED and
+      // absence of Establishment actions to surface items for verification.
       stageFilters.push({
         status: "APPROVED",
         statusEntries: {
-          some: { action: { in: ["OPS_APPROVED", "DG_APPROVED"] } },
           none: {
             action: {
               in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"],
@@ -1947,6 +2115,8 @@ module.exports = {
     // - Personal/HQ: sequential immediate reporting officers up to DG.
     // - If the chain is empty or user directly reports to DG, skip to DG stage.
     const neededRecommendations = await (async () => {
+      // Direct-to-OPS for location-origin submissions
+      if (claim.created_by_location_id) return 0;
       if (isDeptOrigin && hodId) return hodRoId ? 2 : 1;
       // For personal/HQ, compute chain length dynamically; minimal 0 (direct to DG) or more
       const applicantER = (
@@ -2016,7 +2186,7 @@ module.exports = {
           !(ctx.isEstablishment || ctx.isSuperAdmin)
         ) {
           throw new Error(
-            "Only Establishment can undo Establishment verification"
+            "Only Establishment users can undo Establishment verification"
           );
         }
         // Permit CLEAR by the same actor who made the last decision even if they are not the current expected actor
@@ -2047,6 +2217,20 @@ module.exports = {
     };
 
     try {
+      const canonicalEmailForStage = (stage) => {
+        switch (stage) {
+          case "OPS":
+            return "operations@psba.gop.pk";
+          case "ESTABLISHMENT":
+            return "establishment@psba.gop.pk";
+          case "ACCOUNTS":
+            return "accounts@psba.gop.pk";
+          case "DG":
+          case "RECOMMENDER":
+          default:
+            return ctx.userEmail || remarks || null;
+        }
+      };
       if (actionUpper === "RECOMMEND") {
         if (currentStatus !== "SUBMITTED")
           throw new Error("Only SUBMITTED claims can be recommended");
@@ -2059,7 +2243,7 @@ module.exports = {
             claim_id: claim.id,
             action: "RECOMMENDED",
             actor_employee_id: actorEmpId,
-            remarks: ctx.userEmail || remarks || null,
+            remarks: canonicalEmailForStage("RECOMMENDER"),
           },
         });
         return reload();
@@ -2159,7 +2343,7 @@ module.exports = {
             claim_id: claim.id,
             action: approvalAction,
             actor_employee_id: actorEmpId,
-            remarks: ctx.userEmail || remarks || null,
+            remarks: canonicalEmailForStage(stage),
           },
         });
         return reload();
@@ -2218,7 +2402,7 @@ module.exports = {
             claim_id: claim.id,
             action: rejectionAction,
             actor_employee_id: actorEmpId,
-            remarks: ctx.userEmail || remarks || null,
+            remarks: canonicalEmailForStage(stage),
           },
         });
         return reload();
@@ -2242,8 +2426,16 @@ module.exports = {
             String(lastEntry.remarks || "")
               .toLowerCase()
               .includes(String(ctx.userEmail).toLowerCase()));
-        if (!sameLogicalActor && !ctx.isSuperAdmin)
-          throw new Error("Cannot clear another user's decision");
+        if (!sameLogicalActor && !ctx.isSuperAdmin) {
+          // Centralize: allow users of the same stage capability to CLEAR even if they are not the original actor
+          // Establishment may clear Establishment decisions; Accounts may clear Accounts decisions
+          const canCrossClear =
+            (lastStage === "ESTABLISHMENT" && !!ctx.isEstablishment) ||
+            (lastStage === "ACCOUNTS" && !!ctx.isAccountsApprover);
+          if (!canCrossClear) {
+            throw new Error("Cannot clear another user's decision");
+          }
+        }
         assertAuthorized(lastStage, "CLEAR");
         // Disallow CLEAR if next stage has already acted
         const hasNextStageAction = (() => {
@@ -2442,16 +2634,43 @@ module.exports = {
     const me = String(ctx.meEmpId || "");
     const orFilters = [];
 
+    // Normalize role-based flags like in pending path
+    const looksEstablishment =
+      !!ctx.isEstablishment ||
+      /^\s*establishment/i.test(String(ctx.roleName || "")) ||
+      /(^|\b)establishment(\b|$)/i.test(String(ctx.deptName || ""));
+
     // Accounts: show Establishment-verified (status VERIFIED) and under process
     if (ctx.isAccountsApprover) {
       orFilters.push({ status: { in: ["VERIFIED", "UNDER_PROCESS"] } });
+      // Centralize: also include any claims where Accounts has acted (PROCESS_STARTED or ACCOUNTS_REJECTED)
+      orFilters.push({
+        statusEntries: {
+          some: { action: { in: ["PROCESS_STARTED", "ACCOUNTS_REJECTED"] } },
+        },
+      });
     }
 
-    // Establishment: show only DG-approved (status APPROVED with DG_APPROVED)
-    if (ctx.isEstablishment) {
+    // Establishment: show first-stage approved (OPS or DG) that have not yet been verified/rejected by Establishment
+    if (looksEstablishment) {
+      // Relaxed: show all claims in APPROVED awaiting Establishment's verification,
+      // regardless of explicit OPS/DG action entries (to support legacy data).
       orFilters.push({
         status: "APPROVED",
-        statusEntries: { some: { action: "DG_APPROVED" } },
+        statusEntries: {
+          none: {
+            action: { in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"] },
+          },
+        },
+      });
+      // Centralize: also include any claims already acted upon by Establishment (verified/rejected)
+      // so both employee-linked (ad.est) and department-based Establishment accounts see the same items.
+      orFilters.push({
+        statusEntries: {
+          some: {
+            action: { in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"] },
+          },
+        },
       });
     }
 
@@ -2523,7 +2742,7 @@ module.exports = {
 
     // Other users (non-approvers): show only reportees' claims so they can recommend
     const isApprover =
-      ctx.isEstablishment ||
+      looksEstablishment ||
       ctx.isDG ||
       ctx.isOps ||
       ctx.isAccountsApprover ||
@@ -2799,6 +3018,29 @@ module.exports = {
       where: { id: { in: claims.map((c) => c.id) } },
       data: { status: "PROCESSED" },
     });
+    // Record PROCESSED status entries per claim with Accounts canonical email
+    for (const c of claims) {
+      try {
+        await prisma.travelClaimStatusEntry.create({
+          data: {
+            claim_id: c.id,
+            action: "PROCESS_STARTED", // ensure a processing entry exists before PROCESSED
+            actor_employee_id: ctx.meEmpId || null,
+            remarks: "accounts@psba.gop.pk",
+          },
+        });
+      } catch (_) {}
+      try {
+        await prisma.travelClaimStatusEntry.create({
+          data: {
+            claim_id: c.id,
+            action: "PROCESSED",
+            actor_employee_id: ctx.meEmpId || null,
+            remarks: "accounts@psba.gop.pk",
+          },
+        });
+      } catch (_) {}
+    }
     // Do NOT create PROCESS_STARTED entries here; processing was already recorded
     return prisma.travelClaimTranche.findUnique({
       where: { id: tranche.id },

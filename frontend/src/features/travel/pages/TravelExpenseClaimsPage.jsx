@@ -382,6 +382,15 @@ export default function TravelExpenseClaimsPage() {
   const attendeeAlreadyClaimed = (req, empId) =>
     (req.claims || []).some((c) => c.employee_id === empId);
 
+  const claimLocationBadge = (c) => {
+    const er = c?.employee?.employmentRecords?.[0];
+    if (!er || er.is_deleted) return null;
+    const loc = er.location || null;
+    if (!loc) return null;
+    const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+    return label;
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Travel Expense Claims</h1>
@@ -534,9 +543,18 @@ export default function TravelExpenseClaimsPage() {
                   >
                     <div className="space-y-0.5">
                       <div className="font-medium">
-                        Claim #{c.id} • Req #{c.travel_request_id} • Emp #
-                        {c.employee_id}
+                        Claim #{c.id} • Req #{c.travel_request_id || "—"} • {c.employee?.full_name || `Emp #${c.employee_id}`} {c.employee?.cnic ? `— CNIC ${c.employee.cnic}` : ""}
                       </div>
+                      {(() => {
+                        const loc = claimLocationBadge(c);
+                        return loc ? (
+                          <div className="flex items-center gap-1">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {loc}
+                            </Badge>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="text-muted-foreground">
                         Distance {c.total_distance_km || 0} km • Grand{" "}
                         {c.grand_total || 0}
@@ -656,6 +674,14 @@ export default function TravelExpenseClaimsPage() {
               Expense Claim #{claim.id} (Request #{claim.travel_request_id})
             </div>
             <div className="flex gap-3 items-center">
+              {(() => {
+                const loc = claimLocationBadge(claim);
+                return loc ? (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {loc}
+                  </Badge>
+                ) : null;
+              })()}
               {claim.status === "DRAFT" && (
                 <Button
                   variant="destructive"

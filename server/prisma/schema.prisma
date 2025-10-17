@@ -740,6 +740,8 @@ model TravelClaim {
   // New: track which Department submitted the claim (for department-origin/HQ routing)
   created_by_department_id Int?
   createdByDepartment      Department?   @relation(fields: [created_by_department_id], references: [id])
+  // New: track which Location submitted the claim (for location-origin routing)
+  created_by_location_id Int?
   documents          TravelClaimDocument[]
   segments           TravelClaimSegment[]
   statusEntries      TravelClaimStatusEntry[]
@@ -748,6 +750,7 @@ model TravelClaim {
 
   @@unique([travel_request_id, employee_id], name: "request_employee_claim_unique")
   @@index([created_by_department_id])
+  @@index([created_by_location_id])
 }
 
 // Status history for expense claims (OPS/DG/HR/Accounts)
