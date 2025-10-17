@@ -147,7 +147,8 @@ export default function ManageTravelRequests() {
       (se) => se.action === "RECOMMENDED"
     ).length;
     const isLocOrigin = (r?.statusEntries || []).some(
-      (se) => se.action === "CREATED" && /\[LOC\]/i.test(String(se.remarks || ""))
+      (se) =>
+        se.action === "CREATED" && /\[LOC\]/i.test(String(se.remarks || ""))
     );
     if (caps.isDG) {
       // Department-origin: DG after required recommendations
@@ -158,7 +159,11 @@ export default function ManageTravelRequests() {
     }
     if (caps.isOps) {
       // Location-origin bazaar requests can go directly to Ops without recommendations
-      if (!isDeptOrigin(r) && locType(r) === "BAZAAR" && (recommendedCount >= 1 || isLocOrigin))
+      if (
+        !isDeptOrigin(r) &&
+        locType(r) === "BAZAAR" &&
+        (recommendedCount >= 1 || isLocOrigin)
+      )
         return true;
       return false;
     }
@@ -224,7 +229,9 @@ export default function ManageTravelRequests() {
       return label;
     }
     // Fallback: infer from origin markers in status entries
-    const created = (r?.statusEntries || []).find((e) => e.action === "CREATED");
+    const created = (r?.statusEntries || []).find(
+      (e) => e.action === "CREATED"
+    );
     const remarks = String(created?.remarks || "");
     if (/\[LOC\]/i.test(remarks)) return "Bazaar";
     if (/\[DEPT\]/i.test(remarks)) return "HQ";
@@ -431,12 +438,15 @@ export default function ManageTravelRequests() {
                   {/* Location badge in details */}
                   <div className="p-3">
                     {(() => {
-                      const er = (selected?.applicant?.employmentRecords || []).find(
-                        (x) => x.is_current && !x.is_deleted
-                      );
+                      const er = (
+                        selected?.applicant?.employmentRecords || []
+                      ).find((x) => x.is_current && !x.is_deleted);
                       const loc = er?.location || null;
                       if (!loc) return null;
-                      const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+                      const label =
+                        loc.type === "HEAD_OFFICE"
+                          ? "HQ"
+                          : loc.name || "Bazaar";
                       return (
                         <Badge variant="secondary" className="text-[10px]">
                           {label}

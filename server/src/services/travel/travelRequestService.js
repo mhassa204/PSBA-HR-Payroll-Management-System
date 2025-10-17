@@ -53,7 +53,8 @@ module.exports = {
 
     // Permission-driven stage approver flags
     // Ops/DG must be derived from org role, not permissions, to avoid over-exposing Approve actions
-    const isOps = /^\s*operations/i.test(roleNameRaw) || /operations/i.test(deptName);
+    const isOps =
+      /^\s*operations/i.test(roleNameRaw) || /operations/i.test(deptName);
     // Robust DG detection: match on either Role name or current Designation title
     // Accept common variants/abbreviation (e.g., "Director General", "DG") case-insensitively.
     const isDGByRole = /(^|\b)(director\s*general|dg)(\b|$)/i.test(roleNameRaw);
@@ -739,12 +740,7 @@ module.exports = {
         neededRecs = hodRO ? 2 : 1;
       }
       // New: location-origin requests (created by a location account) go directly to OPS even with zero recommendations
-      if (
-        ctx.isOps &&
-        locType === "BAZAAR" &&
-        !deptOrigin &&
-        isLocOrigin(r)
-      ) {
+      if (ctx.isOps && locType === "BAZAAR" && !deptOrigin && isLocOrigin(r)) {
         out.push(r);
         continue;
       }

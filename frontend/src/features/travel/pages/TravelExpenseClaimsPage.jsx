@@ -543,7 +543,9 @@ export default function TravelExpenseClaimsPage() {
                   >
                     <div className="space-y-0.5">
                       <div className="font-medium">
-                        Claim #{c.id} • Req #{c.travel_request_id || "—"} • {c.employee?.full_name || `Emp #${c.employee_id}`} {c.employee?.cnic ? `— CNIC ${c.employee.cnic}` : ""}
+                        Claim #{c.id} • Req #{c.travel_request_id || "—"} •{" "}
+                        {c.employee?.full_name || `Emp #${c.employee_id}`}{" "}
+                        {c.employee?.cnic ? `— CNIC ${c.employee.cnic}` : ""}
                       </div>
                       {(() => {
                         const loc = claimLocationBadge(c);

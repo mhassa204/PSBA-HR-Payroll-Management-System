@@ -207,7 +207,11 @@ module.exports = {
       orderBy: { createdAt: "desc" },
     });
   },
-  createClaim: async (employee_id, data, { department_id, location_id } = {}) => {
+  createClaim: async (
+    employee_id,
+    data,
+    { department_id, location_id } = {}
+  ) => {
     // Support two modes:
     // 1) Request-linked (existing)
     // 2) Within-city (no travel_request_id) for a reportee of the current user; multiple allowed
@@ -222,7 +226,9 @@ module.exports = {
       });
       // For department/location accounts, allow acting on behalf if request was created by them (email remarks)
       if (!request) throw new Error("Not found");
-      const allowByApplicant = !!(employee_id && request.applicant_id === employee_id);
+      const allowByApplicant = !!(
+        employee_id && request.applicant_id === employee_id
+      );
       let allowByOrigin = false;
       if (!allowByApplicant && (department_id || location_id)) {
         const createdEntry = await prisma.travelRequestStatusEntry.findFirst({
@@ -231,7 +237,8 @@ module.exports = {
         });
         const remarks = String(createdEntry?.remarks || "");
         if (department_id) allowByOrigin = /\[DEPT\]/i.test(remarks);
-        if (location_id && !allowByOrigin) allowByOrigin = /\[LOC\]/i.test(remarks);
+        if (location_id && !allowByOrigin)
+          allowByOrigin = /\[LOC\]/i.test(remarks);
       }
       if (!(allowByApplicant || allowByOrigin)) throw new Error("Forbidden");
       if (request.status !== "APPROVED")
@@ -344,7 +351,12 @@ module.exports = {
       },
     });
   },
-  _canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id } = {}) {
+  _canAccess(
+    claim,
+    employee_id,
+    isSuperAdmin,
+    { department_id, location_id } = {}
+  ) {
     if (isSuperAdmin) return true;
     if (!claim) return false;
     if (claim.employee_id === employee_id) return true;
@@ -372,7 +384,13 @@ module.exports = {
     }
     return false;
   },
-  getClaim: async (id, employee_id, isSuperAdmin, department_id, location_id) => {
+  getClaim: async (
+    id,
+    employee_id,
+    isSuperAdmin,
+    department_id,
+    location_id
+  ) => {
     const parsedId = Number(id);
     if (!Number.isInteger(parsedId) || parsedId <= 0) {
       throw new Error("Invalid claim id");
@@ -408,7 +426,10 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) return null;
-    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+      department_id,
+      location_id,
+    });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
@@ -503,8 +524,10 @@ module.exports = {
       (ctx.isSuperAdmin || ctx.isAccountsApprover) &&
       !claim.statusEntries.some((e) => e.action === "PROCESS_STARTED");
     let canAccess =
-      module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id }) ||
-      editableByAccounts;
+      module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+        department_id,
+        location_id,
+      }) || editableByAccounts;
     // Department-based account: allow editing if claimant currently belongs to the same department
     if (!canAccess && !employee_id && department_id) {
       canAccess = (claim.employee?.employmentRecords || []).some(
@@ -733,7 +756,10 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+      department_id,
+      location_id,
+    });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
@@ -790,7 +816,10 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+      department_id,
+      location_id,
+    });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
@@ -854,7 +883,10 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+      department_id,
+      location_id,
+    });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
@@ -903,7 +935,10 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+      department_id,
+      location_id,
+    });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
@@ -966,7 +1001,10 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+      department_id,
+      location_id,
+    });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
@@ -1001,7 +1039,13 @@ module.exports = {
       },
     });
   },
-  deleteClaim: async (id, employee_id, isSuperAdmin, department_id, location_id) => {
+  deleteClaim: async (
+    id,
+    employee_id,
+    isSuperAdmin,
+    department_id,
+    location_id
+  ) => {
     const claim = await prisma.travelClaim.findUnique({
       where: { id: Number(id) },
       include: {
@@ -1018,7 +1062,10 @@ module.exports = {
       },
     });
     if (!claim || claim.is_deleted) throw new Error("Not found");
-  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+      department_id,
+      location_id,
+    });
     // Department-based account: allow deletion if claimant currently belongs to the same department
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
@@ -1065,7 +1112,10 @@ module.exports = {
       },
     });
     if (!claim) throw new Error("Not found");
-  let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, { department_id, location_id });
+    let allowed = module.exports._canAccess(claim, employee_id, isSuperAdmin, {
+      department_id,
+      location_id,
+    });
     if (!allowed && !employee_id && department_id) {
       allowed = (claim.employee?.employmentRecords || []).some(
         (er) =>
@@ -2659,7 +2709,9 @@ module.exports = {
         status: "APPROVED",
         statusEntries: {
           none: {
-            action: { in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"] },
+            action: {
+              in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"],
+            },
           },
         },
       });
@@ -2668,7 +2720,9 @@ module.exports = {
       orFilters.push({
         statusEntries: {
           some: {
-            action: { in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"] },
+            action: {
+              in: ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"],
+            },
           },
         },
       });

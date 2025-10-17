@@ -124,7 +124,10 @@ module.exports = {
       // For department/location accounts, pass origin context so service can authorize within-city path
       const department_id = Number(req.session.user?.department_id || 0);
       const location_id = Number(req.session.user?.location_id || 0);
-      const claim = await service.createClaim(actorEmpIdForService, data, { department_id, location_id });
+      const claim = await service.createClaim(actorEmpIdForService, data, {
+        department_id,
+        location_id,
+      });
       return res.json({ success: true, claim });
     } catch (e) {
       res.status(400).json({ success: false, error: e.message });
@@ -315,10 +318,20 @@ module.exports = {
         locName = loc?.name || "Location";
       }
       const actorLabel =
-        `${deptName ? `[DEPT] ${deptName} Department` : locName ? `[LOC] ${locName}` : ""}` +
-        `${email ? `${deptName || locName ? " | " : ""}submitted by ${email}` : ""}` || null;
+        `${
+          deptName
+            ? `[DEPT] ${deptName} Department`
+            : locName
+            ? `[LOC] ${locName}`
+            : ""
+        }` +
+          `${
+            email
+              ? `${deptName || locName ? " | " : ""}submitted by ${email}`
+              : ""
+          }` || null;
       const department_id = Number(req.session.user?.department_id || 0);
-      
+
       const claim = await service.submitClaim(
         req.params.id,
         actorEmpId,
@@ -354,13 +367,21 @@ module.exports = {
       // For Establishment/Accounts/Ops users, allow acting without employee link (actor recorded via remarks/email)
       if (
         !meEmpId &&
-        (ctx.isEstablishment || ctx.isAccountsApprover || ctx.isOps || ctx.canApproveClaimOps)
+        (ctx.isEstablishment ||
+          ctx.isAccountsApprover ||
+          ctx.isOps ||
+          ctx.canApproveClaimOps)
       ) {
         meEmpId = null; // actor will be recorded via remarks/email in the service layer
       }
       if (
         !meEmpId &&
-        !(ctx.isEstablishment || ctx.isAccountsApprover || ctx.isOps || ctx.canApproveClaimOps)
+        !(
+          ctx.isEstablishment ||
+          ctx.isAccountsApprover ||
+          ctx.isOps ||
+          ctx.canApproveClaimOps
+        )
       ) {
         return res
           .status(400)

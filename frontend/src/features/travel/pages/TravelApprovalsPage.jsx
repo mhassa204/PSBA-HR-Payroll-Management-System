@@ -151,7 +151,8 @@ export default function TravelApprovalsPage() {
     const deptOrigin = isDeptOrigin(r);
     const locType = applicantLocType(r);
     const isLocOrigin = (r?.statusEntries || []).some(
-      (se) => se.action === "CREATED" && /\[LOC\]/i.test(String(se.remarks || ""))
+      (se) =>
+        se.action === "CREATED" && /\[LOC\]/i.test(String(se.remarks || ""))
     );
     // For department-origin, if HoD has a RO, require two recommendations before DG approval
     const neededRecs = deptOrigin && hodROFor(r) ? 2 : 1;
@@ -184,7 +185,9 @@ export default function TravelApprovalsPage() {
       const label = type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
       return label;
     }
-    const created = (r?.statusEntries || []).find((e) => e.action === "CREATED");
+    const created = (r?.statusEntries || []).find(
+      (e) => e.action === "CREATED"
+    );
     const remarks = String(created?.remarks || "");
     if (/\[LOC\]/i.test(remarks)) return "Bazaar";
     if (/\[DEPT\]/i.test(remarks)) return "HQ";
@@ -393,12 +396,15 @@ export default function TravelApprovalsPage() {
                   {/* Location badge in details */}
                   <div className="p-3">
                     {(() => {
-                      const er = (selected?.applicant?.employmentRecords || []).find(
-                        (x) => x.is_current && !x.is_deleted
-                      );
+                      const er = (
+                        selected?.applicant?.employmentRecords || []
+                      ).find((x) => x.is_current && !x.is_deleted);
                       const loc = er?.location || null;
                       if (!loc) return null;
-                      const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+                      const label =
+                        loc.type === "HEAD_OFFICE"
+                          ? "HQ"
+                          : loc.name || "Bazaar";
                       return (
                         <Badge variant="secondary" className="text-[10px]">
                           {label}

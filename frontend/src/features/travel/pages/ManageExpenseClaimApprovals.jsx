@@ -179,12 +179,9 @@ export default function ManageExpenseClaimApprovals() {
     const status = claim.status;
     const entries = claim.statusEntries || [];
     const hasFirstStageDecision = entries.some((e) =>
-      [
-        "OPS_APPROVED",
-        "OPS_REJECTED",
-        "DG_APPROVED",
-        "DG_REJECTED",
-      ].includes(e.action)
+      ["OPS_APPROVED", "OPS_REJECTED", "DG_APPROVED", "DG_REJECTED"].includes(
+        e.action
+      )
     );
     const approvalsOrder = [
       "OPS_APPROVED",
@@ -217,7 +214,8 @@ export default function ManageExpenseClaimApprovals() {
     const isLocationOrigin =
       !!claim.created_by_location_id ||
       (entries || []).some(
-        (e) => e.action === "SUBMITTED" && /\[LOC\]/i.test(String(e.remarks || ""))
+        (e) =>
+          e.action === "SUBMITTED" && /\[LOC\]/i.test(String(e.remarks || ""))
       );
     const directToDG =
       canDG &&
@@ -620,17 +618,15 @@ export default function ManageExpenseClaimApprovals() {
     const entries = c.statusEntries || [];
     const has = (act) => entries.some((e) => e.action === act);
     const hasFirstStageDecision = entries.some((e) =>
-      [
-        "OPS_APPROVED",
-        "OPS_REJECTED",
-        "DG_APPROVED",
-        "DG_REJECTED",
-      ].includes(e.action)
+      ["OPS_APPROVED", "OPS_REJECTED", "DG_APPROVED", "DG_REJECTED"].includes(
+        e.action
+      )
     );
     const isLocationOrigin =
       !!c.created_by_location_id ||
       (entries || []).some(
-        (e) => e.action === "SUBMITTED" && /\[LOC\]/i.test(String(e.remarks || ""))
+        (e) =>
+          e.action === "SUBMITTED" && /\[LOC\]/i.test(String(e.remarks || ""))
       );
     const empRepsToMe = (c.employee?.employmentRecords || []).some(
       (er) =>
@@ -677,7 +673,8 @@ export default function ManageExpenseClaimApprovals() {
     if (canOps) {
       if (c.status === "SUBMITTED" && !hasFirstStageDecision) {
         const isBazaar = (c.employee?.employmentRecords || []).some(
-          (er) => er.is_current && !er.is_deleted && er.location?.type === "BAZAAR"
+          (er) =>
+            er.is_current && !er.is_deleted && er.location?.type === "BAZAAR"
         );
         const hasRecommended = has("RECOMMENDED");
         if ((isBazaar && hasRecommended) || isLocationOrigin) return true;
@@ -693,9 +690,7 @@ export default function ManageExpenseClaimApprovals() {
         !has("ESTABLISHMENT_VERIFIED") &&
         !has("ESTABLISHMENT_REJECTED");
       const alreadyActed = entries.some((e) =>
-        ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"].includes(
-          e.action
-        )
+        ["ESTABLISHMENT_VERIFIED", "ESTABLISHMENT_REJECTED"].includes(e.action)
       );
       return awaiting || alreadyActed;
     }
@@ -940,9 +935,8 @@ export default function ManageExpenseClaimApprovals() {
                       <div className="font-medium">
                         Claim #{c.id}
                         {reqPart} • {emp?.full_name || "Employee"} (
-                        {empJob?.designation?.title || "—"}) • CNIC: {String(
-                          emp?.cnic || "—"
-                        )}
+                        {empJob?.designation?.title || "—"}) • CNIC:{" "}
+                        {String(emp?.cnic || "—")}
                       </div>
                       {(() => {
                         const loc = claimLocationBadge(c);
