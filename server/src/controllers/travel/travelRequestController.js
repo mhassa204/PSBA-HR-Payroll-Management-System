@@ -112,12 +112,10 @@ module.exports = {
             .status(400)
             .json({ success: false, error: "departure_date is required" });
         if (!data.expected_return_date)
-          return res
-            .status(400)
-            .json({
-              success: false,
-              error: "expected_return_date is required",
-            });
+          return res.status(400).json({
+            success: false,
+            error: "expected_return_date is required",
+          });
         const computedDays = travelService.computeTotalDays(
           data.departure_date,
           data.departure_time,
@@ -351,10 +349,15 @@ module.exports = {
         );
       }
       // Location account: allow delete if applicant currently belongs to same location
-      if (!ctx.meEmpId && !req.session.user?.department_id && req.session.user?.location_id) {
+      if (
+        !ctx.meEmpId &&
+        !req.session.user?.department_id &&
+        req.session.user?.location_id
+      ) {
         const locId = Number(req.session.user.location_id);
         sameLoc = !!(row.applicant?.employmentRecords || []).some(
-          (er) => er.is_current && !er.is_deleted && Number(er.location_id) === locId
+          (er) =>
+            er.is_current && !er.is_deleted && Number(er.location_id) === locId
         );
       }
       if (!(isOwn || (hasCreate && (sameDept || sameLoc)))) {

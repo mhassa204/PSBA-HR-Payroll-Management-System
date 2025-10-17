@@ -184,7 +184,9 @@ export default function TravelRequestsPage() {
       const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
       return label;
     }
-    const created = (r?.statusEntries || []).find((e) => e.action === "CREATED");
+    const created = (r?.statusEntries || []).find(
+      (e) => e.action === "CREATED"
+    );
     const remarks = String(created?.remarks || "");
     if (/\[LOC\]/i.test(remarks)) return "Bazaar";
     if (/\[DEPT\]/i.test(remarks)) return "HQ";
@@ -477,7 +479,8 @@ export default function TravelRequestsPage() {
                   const er = selected?.applicant?.employmentRecords?.[0];
                   const loc = er?.location || null;
                   if (!loc) return null;
-                  const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
+                  const label =
+                    loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
                   return (
                     <Badge variant="secondary" className="text-[10px]">
                       {label}
