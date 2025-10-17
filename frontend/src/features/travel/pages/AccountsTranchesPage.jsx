@@ -249,7 +249,11 @@ export default function AccountsTranchesPage() {
                 None
               </Button>
               <div className="ml-3 text-[11px] text-muted-foreground">
-                Selected: {selectedIds.length} • Total: {selectedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Selected: {selectedIds.length} • Total:{" "}
+                {selectedTotal.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </div>
             </div>
           </div>

@@ -339,15 +339,71 @@ module.exports = {
           out.push(r);
           continue;
         }
+        // Personal/HQ multi-step recommender chain: after first recommendation, include next expected RO
+        if (!deptOrigin && recs >= 1) {
+          try {
+            const er = applicantER(r);
+            let currentRO = er?.reporting_officer_id
+              ? String(er.reporting_officer_id)
+              : null;
+            const visited = new Set();
+            const expectedChain = [];
+            while (currentRO && !visited.has(currentRO)) {
+              visited.add(currentRO);
+              expectedChain.push(currentRO);
+              const nextEmp = await prisma.employment.findFirst({
+                where: {
+                  employee_id: Number(currentRO),
+                  is_current: true,
+                  is_deleted: false,
+                },
+                include: { designation: true },
+              });
+              const isDG = /^director\s*general$/i.test(
+                nextEmp?.designation?.title || ""
+              );
+              if (isDG) break;
+              currentRO = nextEmp?.reporting_officer_id
+                ? String(nextEmp.reporting_officer_id)
+                : null;
+            }
+            const already = new Set(
+              (r.statusEntries || [])
+                .filter((e) => e.action === "RECOMMENDED")
+                .map((e) => String(e.actor_employee_id || ""))
+            );
+            const nextExpected = expectedChain.find((empId) => !already.has(empId));
+            if (nextExpected && String(me) === String(nextExpected)) {
+              out.push(r);
+              continue;
+            }
+          } catch (_) {}
+        }
         if (deptOrigin) {
           if (recs === 0 && headOfDeptId(r) === me) {
             out.push(r);
             continue;
           }
           const hodRO = hodROId(r);
-          if (recs === 1 && hodRO && hodRO === me) {
-            out.push(r);
-            continue;
+          if (recs === 1 && hodRO) {
+            let isHodRO = !!(me && hodRO === me);
+            if (!isHodRO) {
+              const meEmailLower = String(ctx.userEmail || "").toLowerCase();
+              if (meEmailLower) {
+                try {
+                  const roUser = await prisma.user.findFirst({
+                    where: { employee_id: Number(hodRO) },
+                    select: { email: true },
+                  });
+                  const roEmail = String(roUser?.email || "").toLowerCase();
+                  if (roEmail && roEmail === meEmailLower) isHodRO = true;
+                } catch (_) {}
+              }
+            }
+            if (isHodRO) {
+              out.push(r);
+              continue;
+            }
           }
         }
         // Approval eligibility
@@ -572,6 +628,51 @@ module.exports = {
           out.push(r);
           continue;
         }
+        // Personal/HQ multi-step recommender chain: after the first recommendation,
+        // allow the next reporting officer (walking up until DG) to see and act
+        if (!deptOrigin && recs >= 1) {
+          try {
+            // Build the chain of reporting officers starting from applicant's immediate RO
+            const er = (r.applicant?.employmentRecords || []).find(
+              (x) => x.is_current && !x.is_deleted
+            );
+            let currentRO = er?.reporting_officer_id
+              ? String(er.reporting_officer_id)
+              : null;
+            const visited = new Set();
+            const expectedChain = [];
+            while (currentRO && !visited.has(currentRO)) {
+              visited.add(currentRO);
+              expectedChain.push(currentRO);
+              const nextEmp = await prisma.employment.findFirst({
+                where: {
+                  employee_id: Number(currentRO),
+                  is_current: true,
+                  is_deleted: false,
+                },
+                include: { designation: true },
+              });
+              // Stop before DG in the chain
+              const isDG = /^director\s*general$/i.test(
+                nextEmp?.designation?.title || ""
+              );
+              if (isDG) break;
+              currentRO = nextEmp?.reporting_officer_id
+                ? String(nextEmp.reporting_officer_id)
+                : null;
+            }
+            const already = new Set(
+              (r.statusEntries || [])
+                .filter((e) => e.action === "RECOMMENDED")
+                .map((e) => String(e.actor_employee_id || ""))
+            );
+            const nextExpected = expectedChain.find((empId) => !already.has(empId));
+            if (nextExpected && String(me) === String(nextExpected)) {
+              out.push(r);
+              continue;
+            }
+          } catch (_) {}
+        }
         if (deptOrigin) {
           const hodId = headOfDeptId(r);
           const hodEmail = headOfDeptEmail(r);
@@ -583,9 +684,25 @@ module.exports = {
             continue;
           }
           const hodRO = hodROId(r);
-          if (recs === 1 && hodRO && hodRO === me) {
-            out.push(r);
-            continue;
+          if (recs === 1 && hodRO) {
+            let isHodRO = !!(me && hodRO === me);
+            if (!isHodRO) {
+              const meEmailLower = String(ctx.userEmail || "").toLowerCase();
+              if (meEmailLower) {
+                try {
+                  const roUser = await prisma.user.findFirst({
+                    where: { employee_id: Number(hodRO) },
+                    select: { email: true },
+                  });
+                  const roEmail = String(roUser?.email || "").toLowerCase();
+                  if (roEmail && roEmail === meEmailLower) isHodRO = true;
+                } catch (_) {}
+              }
+            }
+            if (isHodRO) {
+              out.push(r);
+              continue;
+            }
           }
         }
       }
@@ -1332,10 +1449,14 @@ module.exports = {
     const meEmail = String(ctx.userEmail || "").toLowerCase();
     const actorEmail = String(last?.actor?.user?.email || "").toLowerCase();
     const remarksEmailMatch = meEmail
-      ? String(last.remarks || "").toLowerCase().includes(meEmail)
+      ? String(last.remarks || "")
+          .toLowerCase()
+          .includes(meEmail)
       : false;
     const authorized =
-      !!ctx.isSuperAdmin || meMatchesEmpId || (meEmail && (actorEmail === meEmail || remarksEmailMatch));
+      !!ctx.isSuperAdmin ||
+      meMatchesEmpId ||
+      (meEmail && (actorEmail === meEmail || remarksEmailMatch));
     if (!authorized) throw new Error("Cannot clear another user's decision");
     await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
     if (

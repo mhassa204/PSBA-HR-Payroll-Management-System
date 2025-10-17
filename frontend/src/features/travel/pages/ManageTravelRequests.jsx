@@ -86,6 +86,54 @@ export default function ManageTravelRequests() {
       String(last.actor_employee_id) === String(meEmpId)
     );
   };
+  // Determine if current user can recommend/reject at this stage
+  const canRecommendHere = (r) => {
+    if (!r || r.status !== "CREATED") return false;
+    const entries = r.statusEntries || [];
+    const recs = entries.filter((e) => e.action === "RECOMMENDED").length;
+    // Department-origin flow: HoD first, then HoD's RO (if exists)
+    const dept = isDeptOrigin(r);
+    const er = (r?.applicant?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const hodId = Number(er?.department?.head?.id || 0);
+    const hodER = (er?.department?.head?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const hodRO = hodER?.reporting_officer_id
+      ? Number(hodER.reporting_officer_id)
+      : null;
+    if (dept) {
+      if (recs === 0) return Number(meEmpId) === hodId;
+      if (recs === 1 && hodRO) return Number(meEmpId) === Number(hodRO);
+      return false;
+    }
+    // Personal/HQ: walk RO chain; next expected is first RO not yet recommended
+    const immediateRO = er?.reporting_officer_id
+      ? String(er.reporting_officer_id)
+      : null;
+    if (!immediateRO) return false;
+    const already = new Set(
+      entries
+        .filter((e) => e.action === "RECOMMENDED")
+        .map((e) => String(e.actor_employee_id || ""))
+    );
+    // If none recommended yet, immediate RO can recommend
+    if (recs === 0) return String(meEmpId || "") === String(immediateRO);
+    // If already has recommendations, allow next RO in chain until DG
+    let currentRO = immediateRO;
+    const visited = new Set();
+    while (currentRO && !visited.has(currentRO)) {
+      visited.add(currentRO);
+      if (!already.has(currentRO)) break; // this is the next expected
+      // advance to next RO; we can't query server here, so stop if next is unknown
+      // Best-effort UI: only handle first recommender stage; subsequent is handled by server list
+      currentRO = null;
+    }
+    if (currentRO && !already.has(currentRO))
+      return String(meEmpId || "") === String(currentRO);
+    return false;
+  };
   const isDeptOrigin = (r) =>
     (r?.statusEntries || []).some(
       (se) =>
@@ -288,6 +336,25 @@ export default function ManageTravelRequests() {
                     >
                       Undo
                     </Button>
+                  )}
+                  {!canUndoRecommendation(selected) && canRecommendHere(selected) && (
+                    <>
+                      <Button
+                        disabled={submitting}
+                        size="sm"
+                        onClick={() => doAction(selected, "RECOMMEND")}
+                      >
+                        Recommend
+                      </Button>
+                      <Button
+                        disabled={submitting}
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => doAction(selected, "RECOMMENDER_REJECT")}
+                      >
+                        Reject
+                      </Button>
+                    </>
                   )}
                   {canApproveHere(selected) && (
                     <>

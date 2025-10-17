@@ -498,35 +498,44 @@ const LeftSidebar = () => {
           name: "Manage Requests",
           href: "/travel/manage",
           icon: ViewColumnsIcon,
-          show: () =>
-            // Only Establishment, Operations, or Accounts approvers should see Manage
-            travelCaps.isSuperAdmin ||
-            travelCaps.isEstablishment ||
-            travelCaps.isOps ||
-            travelCaps.isAccountsApprover ||
-            // Users with global view/manage capability or explicit manage permission
-            !!travelCaps.canViewAll ||
-            !!travelCaps.canManageRequests ||
-            can("travel.manage") ||
-            // Include DG-approve permission holders (Additional Directors who can act)
-            can("travel.request.approve.dg") ||
-            // Fallback to permission checks in case caps haven't populated yet
-            can("travel.claim.verify.establishment") ||
-            can("travel.request.approve.ops") ||
-            can("travel.claim.approve.ops") ||
-            can("travel.claim.process.start"),
+          show: () => {
+            // Hide for department/location-type accounts (no employee mapping) except Operations department
+            if (!user?.employee_id && !travelCaps.isOps) return false;
+            // Otherwise apply existing capability/permission gates
+            return (
+              travelCaps.isSuperAdmin ||
+              travelCaps.isEstablishment ||
+              travelCaps.isOps ||
+              travelCaps.isAccountsApprover ||
+              !!travelCaps.canViewAll ||
+              !!travelCaps.canManageRequests ||
+              can("travel.manage") ||
+              can("travel.request.approve.dg") ||
+              can("travel.claim.verify.establishment") ||
+              can("travel.request.approve.ops") ||
+              can("travel.claim.approve.ops") ||
+              can("travel.claim.process.start")
+            );
+          },
         },
         {
           name: "Approvals",
           href: "/travel/approvals",
           icon: ViewColumnsIcon,
-          show: () =>
-            // Visible to employee-linked users OR users with manage/approval capabilities
-            ( !!user?.employee_id && can("travel.read") ) ||
-            can("travel.manage") ||
-            can("travel.request.approve.dg") ||
-            can("travel.request.approve.ops") ||
-            travelCaps.isEstablishment || travelCaps.isOps || travelCaps.isDG,
+          show: () => {
+            // Hide for department/location-type accounts (no employee mapping) except Operations department
+            if (!user?.employee_id && !travelCaps.isOps) return false;
+            // Otherwise visible to employee-linked users OR users with manage/approval capabilities
+            return (
+              (!!user?.employee_id && can("travel.read")) ||
+              can("travel.manage") ||
+              can("travel.request.approve.dg") ||
+              can("travel.request.approve.ops") ||
+              travelCaps.isEstablishment ||
+              travelCaps.isOps ||
+              travelCaps.isDG
+            );
+          },
         },
         {
           name: "Expense Claims",
@@ -538,9 +547,17 @@ const LeftSidebar = () => {
           name: "Claim Approvals",
           href: "/travel/expense-claim-approvals",
           icon: ViewColumnsIcon,
-          show: () =>
-            // Visible only to personal (employee-linked) users with claim read access
-            !!user?.employee_id && can("travel.claim.read"),
+          show: () => {
+            // Show for Accounts, Establishment, and Operations department users (even if no employee mapping)
+            if (
+              travelCaps.isAccountsApprover ||
+              travelCaps.isEstablishment ||
+              travelCaps.isOps
+            )
+              return true;
+            // Preserve existing behavior for normal employee-based users
+            return !!user?.employee_id && can("travel.claim.read");
+          },
         },
         {
           name: "Accounts Tranches",

@@ -492,8 +492,16 @@ function App() {
               path="travel/approvals"
               element={
                 <PrivateRoute
-                  permissions={["travel.read", "travel.claim.read"]}
-                  requireEmployeeLink
+                  permissions={[
+                    // Normal employees with travel read
+                    "travel.read",
+                    // Ops and DG approvers
+                    "travel.request.approve.ops",
+                    "travel.request.approve.dg",
+                    // Management/administrators
+                    "travel.manage",
+                    "*",
+                  ]}
                 >
                   <TravelApprovalsPage />
                 </PrivateRoute>
@@ -517,8 +525,17 @@ function App() {
               path="travel/expense-claim-approvals"
               element={
                 <PrivateRoute
-                  permissions={["travel.claim.read", "travel.read"]}
-                  requireEmployeeLink
+                  permissions={[
+                    // Normal employees with claim read (recommender visibility)
+                    "travel.claim.read",
+                    "travel.read",
+                    // Accounts, Establishment, and Ops department approvers
+                    "travel.claim.process.start",
+                    "travel.claim.verify.establishment",
+                    "travel.claim.approve.ops",
+                    // Management/administrators
+                    "*",
+                  ]}
                 >
                   <ManageExpenseClaimApprovals />
                 </PrivateRoute>

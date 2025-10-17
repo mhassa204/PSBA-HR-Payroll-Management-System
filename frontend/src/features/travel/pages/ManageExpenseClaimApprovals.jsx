@@ -692,11 +692,9 @@ export default function ManageExpenseClaimApprovals() {
     };
     // Show processed/settled items in All tab regardless of role filter, plus any acted-by-me
     const roleScoped = (allClaims || []).filter((c) => {
-      const alwaysInclude = [
-        "UNDER_PROCESS",
-        "PROCESSED",
-        "SETTLED",
-      ].includes(String(c.status || ""));
+      const alwaysInclude = ["UNDER_PROCESS", "PROCESSED", "SETTLED"].includes(
+        String(c.status || "")
+      );
       return alwaysInclude || passesRoleFilter(c) || actedByMe(c);
     });
     return roleScoped.filter((c) => {
