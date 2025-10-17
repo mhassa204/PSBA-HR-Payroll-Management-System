@@ -31,6 +31,12 @@ export default function ManageExpenseClaimApprovals() {
   const [submissionTo, setSubmissionTo] = useState("");
   const [departFrom, setDepartFrom] = useState("");
   const [departTo, setDepartTo] = useState("");
+  // Pending tab extra filters (client-side)
+  const [pendingSearch, setPendingSearch] = useState("");
+  const [pendingSubFrom, setPendingSubFrom] = useState("");
+  const [pendingSubTo, setPendingSubTo] = useState("");
+  const [pendingDepartFrom, setPendingDepartFrom] = useState("");
+  const [pendingDepartTo, setPendingDepartTo] = useState("");
   // Inline edit state (Accounts only)
   const [editMode, setEditMode] = useState(false);
   const [editVals, setEditVals] = useState({
@@ -89,6 +95,7 @@ export default function ManageExpenseClaimApprovals() {
     })();
   }, []);
   const roleName = (user?.role?.name || "").toLowerCase();
+  const isAccountsRole = /^accounts/i.test(user?.role?.name || "");
   // Permission OR heuristic fallbacks mirroring backend travelRequestService
   const canOps = isSuper || can("travel.claim.approve.ops") || caps?.isOps;
   // DG UI gating: only a true DG (designation) or Super Admin should see DG actions
@@ -856,6 +863,39 @@ export default function ManageExpenseClaimApprovals() {
     return label;
   };
 
+  // Compute late days after last arrival date
+  const computeDaysLate = (c) => {
+    if (!c) return 0;
+    const subEntry = (c.statusEntries || []).find(
+      (e) => e.action === "SUBMITTED"
+    );
+    const subDateStr = subEntry?.createdAt ? String(subEntry.createdAt) : null;
+    if (!subDateStr) return 0;
+    const toDateOnly = (d) => {
+      const ds = String(d || "").slice(0, 10);
+      if (!ds) return null;
+      const [y, m, da] = ds.split("-").map((x) => Number(x));
+      return isFinite(y) && isFinite(m) && isFinite(da)
+        ? new Date(y, m - 1, da)
+        : null;
+    };
+    const submitD = toDateOnly(subDateStr);
+    if (!submitD) return 0;
+    let lastArrive = null;
+    if (Array.isArray(c.segments) && c.segments.length > 0) {
+      for (const s of c.segments) {
+        const d = toDateOnly(s?.arrive_date || s?.depart_date);
+        if (d && (!lastArrive || d > lastArrive)) lastArrive = d;
+      }
+    }
+    if (!lastArrive) lastArrive = toDateOnly(c.to_date);
+    if (!lastArrive) lastArrive = toDateOnly(c.request?.expected_return_date);
+    if (!lastArrive) return 0;
+    const ms = submitD.getTime() - lastArrive.getTime();
+    const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+    return days > 0 ? days : 0;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -886,6 +926,60 @@ export default function ManageExpenseClaimApprovals() {
             <CardTitle>Pending Claims</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            {/* Filters for Pending */}
+            <div className="p-3 flex flex-col gap-2 md:flex-row md:items-center text-sm">
+              <Input
+                value={pendingSearch}
+                onChange={(e) => setPendingSearch(e.target.value)}
+                placeholder="Search id/name/cnic"
+                className="w-full md:w-56"
+              />
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Submitted From</span>
+                <Input
+                  type="date"
+                  value={pendingSubFrom}
+                  onChange={(e) => setPendingSubFrom(e.target.value)}
+                  className="w-40"
+                />
+                <span className="text-muted-foreground">To</span>
+                <Input
+                  type="date"
+                  value={pendingSubTo}
+                  onChange={(e) => setPendingSubTo(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Departure From</span>
+                <Input
+                  type="date"
+                  value={pendingDepartFrom}
+                  onChange={(e) => setPendingDepartFrom(e.target.value)}
+                  className="w-40"
+                />
+                <span className="text-muted-foreground">To</span>
+                <Input
+                  type="date"
+                  value={pendingDepartTo}
+                  onChange={(e) => setPendingDepartTo(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => {
+                  setPendingSearch("");
+                  setPendingSubFrom("");
+                  setPendingSubTo("");
+                  setPendingDepartFrom("");
+                  setPendingDepartTo("");
+                }}
+              >
+                Clear
+              </Button>
+            </div>
             <div className="divide-y">
               {loading && (
                 <div className="p-4 text-muted-foreground text-sm">
@@ -897,132 +991,180 @@ export default function ManageExpenseClaimApprovals() {
                   No pending claims
                 </div>
               )}
-              {pendingFiltered.map((c) => {
-                const emp = c.employee;
-                const empJob = currentEmployment(emp);
-                const eligibility = computeEligibility(c);
-                const clickAction = async (claim, action) => {
-                  const labelMap = {
-                    APPROVE: "approve",
-                    REJECT: "reject",
-                    CLEAR: "clear last decision on",
-                    RECOMMEND: "recommend",
-                  };
-                  if (
-                    !window.confirm(
-                      `Confirm to ${labelMap[action]} claim #${claim.id}?`
-                    )
-                  )
-                    return;
-                  try {
-                    await decideExpenseClaim(claim.id, action, "");
-                    await load();
-                    await loadAll();
-                  } catch (e) {
-                    alert(e?.response?.data?.error || e.message);
+              {pendingFiltered
+                .filter((c) => {
+                  const q = pendingSearch.trim().toLowerCase();
+                  if (q) {
+                    const idHit = String(c.id).includes(q);
+                    const nameHit = (c.employee?.full_name || "")
+                      .toLowerCase()
+                      .includes(q);
+                    const cnicRaw = String(c.employee?.cnic || "");
+                    const cnicDigits = cnicRaw.replace(/\D+/g, "");
+                    const qDigits = q.replace(/\D+/g, "");
+                    const cnicHit =
+                      (!!qDigits && cnicDigits.includes(qDigits)) ||
+                      cnicRaw.toLowerCase().includes(q);
+                    if (!(idHit || nameHit || cnicHit)) return false;
                   }
-                };
-                const reqPart = c.travel_request_id
-                  ? ` • Req #${c.travel_request_id}`
-                  : "";
-                const recLabel = getRecommendLabel(c);
-                return (
-                  <div
-                    key={c.id}
-                    className="p-4 flex items-center justify-between text-sm"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="font-medium">
-                        Claim #{c.id}
-                        {reqPart} • {emp?.full_name || "Employee"} (
-                        {empJob?.designation?.title || "—"}) • CNIC:{" "}
-                        {String(emp?.cnic || "—")}
-                      </div>
-                      {(() => {
-                        const loc = claimLocationBadge(c);
-                        return loc ? (
-                          <div className="flex items-center gap-1">
-                            <Badge variant="secondary" className="text-[10px]">
-                              {loc}
+                  // Submission date: find SUBMITTED entry
+                  const submitted = (c.statusEntries || []).find(
+                    (e) => e.action === "SUBMITTED"
+                  );
+                  const subDate = submitted?.createdAt
+                    ? String(submitted.createdAt).slice(0, 10)
+                    : null;
+                  if (pendingSubFrom && (!subDate || subDate < pendingSubFrom))
+                    return false;
+                  if (pendingSubTo && (!subDate || subDate > pendingSubTo))
+                    return false;
+                  // Depart date: claim.from_date or request.departure_date
+                  const depBase = c.from_date || c.request?.departure_date;
+                  const dep = depBase ? String(depBase).slice(0, 10) : null;
+                  if (pendingDepartFrom && (!dep || dep < pendingDepartFrom))
+                    return false;
+                  if (pendingDepartTo && (!dep || dep > pendingDepartTo))
+                    return false;
+                  return true;
+                })
+                .map((c) => {
+                  const emp = c.employee;
+                  const empJob = currentEmployment(emp);
+                  const eligibility = computeEligibility(c);
+                  const clickAction = async (claim, action) => {
+                    const labelMap = {
+                      APPROVE: "approve",
+                      REJECT: "reject",
+                      CLEAR: "clear last decision on",
+                      RECOMMEND: "recommend",
+                    };
+                    if (
+                      !window.confirm(
+                        `Confirm to ${labelMap[action]} claim #${claim.id}?`
+                      )
+                    )
+                      return;
+                    try {
+                      await decideExpenseClaim(claim.id, action, "");
+                      await load();
+                      await loadAll();
+                    } catch (e) {
+                      alert(e?.response?.data?.error || e.message);
+                    }
+                  };
+                  const reqPart = c.travel_request_id
+                    ? ` • Req #${c.travel_request_id}`
+                    : "";
+                  const recLabel = getRecommendLabel(c);
+                  return (
+                    <div
+                      key={c.id}
+                      className="p-4 flex items-center justify-between text-sm"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="font-medium">
+                          Claim #{c.id}
+                          {reqPart} • {emp?.full_name || "Employee"} (
+                          {empJob?.designation?.title || "—"}) • CNIC:{" "}
+                          {String(emp?.cnic || "—")}
+                        </div>
+                        {(() => {
+                          const loc = claimLocationBadge(c);
+                          return loc ? (
+                            <div className="flex items-center gap-1">
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px]"
+                              >
+                                {loc}
+                              </Badge>
+                            </div>
+                          ) : null;
+                        })()}
+                        <div className="text-muted-foreground">
+                          Distance {c.total_distance_km || 0} km • Grand{" "}
+                          {formatMoney(c.grand_total)}
+                        </div>
+                        {isAccountsRole &&
+                          (() => {
+                            const d = computeDaysLate(c);
+                            return d > 0 ? (
+                              <div className="text-[11px] text-rose-600 font-medium">
+                                Submission late by {d} day(s)
+                              </div>
+                            ) : null;
+                          })()}
+                        <div className="flex flex-wrap gap-1">
+                          {(c.statusEntries || []).map((se) => (
+                            <Badge
+                              key={se.id}
+                              variant="outline"
+                              className="text-[10px]"
+                            >
+                              {se.action}
                             </Badge>
-                          </div>
-                        ) : null;
-                      })()}
-                      <div className="text-muted-foreground">
-                        Distance {c.total_distance_km || 0} km • Grand{" "}
-                        {formatMoney(c.grand_total)}
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {(c.statusEntries || []).map((se) => (
-                          <Badge
-                            key={se.id}
-                            variant="outline"
-                            className="text-[10px]"
-                          >
-                            {se.action}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => open(c)}
-                      >
-                        View
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => exportClaimToPdf(c)}
-                      >
-                        Export
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {eligibility.canRecommend && (
-                          <Button
-                            size="sm"
-                            onClick={() => clickAction(c, "RECOMMEND")}
-                          >
-                            {recLabel}
-                          </Button>
-                        )}
-                        {eligibility.canApprove && (
-                          <Button
-                            size="sm"
-                            onClick={() => clickAction(c, "APPROVE")}
-                          >
-                            {c.status === "APPROVED" && canEstablishment
-                              ? "Verify"
-                              : c.status === "VERIFIED" && canAccounts
-                              ? "Start Process"
-                              : "Approve"}
-                          </Button>
-                        )}
-                        {eligibility.canReject && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => clickAction(c, "REJECT")}
-                          >
-                            Reject
-                          </Button>
-                        )}
-                        {eligibility.canClear && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => clickAction(c, "CLEAR")}
-                          >
-                            Undo
-                          </Button>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => open(c)}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportClaimToPdf(c)}
+                        >
+                          Export
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {eligibility.canRecommend && (
+                            <Button
+                              size="sm"
+                              onClick={() => clickAction(c, "RECOMMEND")}
+                            >
+                              {recLabel}
+                            </Button>
+                          )}
+                          {eligibility.canApprove && (
+                            <Button
+                              size="sm"
+                              onClick={() => clickAction(c, "APPROVE")}
+                            >
+                              {c.status === "APPROVED" && canEstablishment
+                                ? "Verify"
+                                : c.status === "VERIFIED" && canAccounts
+                                ? "Start Process"
+                                : "Approve"}
+                            </Button>
+                          )}
+                          {eligibility.canReject && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => clickAction(c, "REJECT")}
+                            >
+                              Reject
+                            </Button>
+                          )}
+                          {eligibility.canClear && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => clickAction(c, "CLEAR")}
+                            >
+                              Undo
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </CardContent>
         </Card>
@@ -1227,6 +1369,15 @@ export default function ManageExpenseClaimApprovals() {
                           maximumFractionDigits: 2,
                         })}
                       </div>
+                      {isAccountsRole &&
+                        (() => {
+                          const d = computeDaysLate(c);
+                          return d > 0 ? (
+                            <div className="text-[11px] text-rose-600 font-medium">
+                              Submission late by {d} day(s)
+                            </div>
+                          ) : null;
+                        })()}
                       <div className="flex flex-wrap gap-1">
                         {(c.statusEntries || []).map((se) => (
                           <Badge
@@ -1561,6 +1712,18 @@ export default function ManageExpenseClaimApprovals() {
                           formatMoney(selected.rate_per_km)
                         )}
                       </div>
+                      {isAccountsRole &&
+                        (() => {
+                          const d = computeDaysLate(selected);
+                          return d > 0 ? (
+                            <>
+                              <div>Late Submission</div>
+                              <div className="text-right font-semibold text-rose-600">
+                                {d} day(s)
+                              </div>
+                            </>
+                          ) : null;
+                        })()}
                     </div>
                   </Card>
                   <Card className="p-3">

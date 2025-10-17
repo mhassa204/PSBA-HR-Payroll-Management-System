@@ -10,6 +10,7 @@ import {
 import api from "../../../lib/axios";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import EnhancedModal from "@/components/ui/EnhancedModal";
 import { useAuthStore } from "../../auth/authStore";
@@ -22,6 +23,11 @@ export default function TravelApprovalsPage() {
   const [submitting, setSubmitting] = useState(false);
   const meEmpId = useAuthStore((s) => s.user?.employee_id);
   const [caps, setCaps] = useState(null);
+  // Filters
+  const [search, setSearch] = useState("");
+  const [locFilter, setLocFilter] = useState(""); // '' | HEAD_OFFICE | BAZAAR
+  const [departFrom, setDepartFrom] = useState("");
+  const [departTo, setDepartTo] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -208,6 +214,52 @@ export default function TravelApprovalsPage() {
           <CardTitle>Pending Approvals</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          {/* Filters */}
+          <div className="p-3 flex flex-col md:flex-row md:items-center gap-2 text-sm">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name/cnic/purpose/destination"
+              className="w-full md:w-64"
+            />
+            <select
+              value={locFilter}
+              onChange={(e) => setLocFilter(e.target.value)}
+              className="border rounded px-2 py-2"
+            >
+              <option value="">All Locations</option>
+              <option value="HEAD_OFFICE">HQ</option>
+              <option value="BAZAAR">Bazaar</option>
+            </select>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Depart From</span>
+              <Input
+                type="date"
+                value={departFrom}
+                onChange={(e) => setDepartFrom(e.target.value)}
+                className="w-40"
+              />
+              <span className="text-muted-foreground">To</span>
+              <Input
+                type="date"
+                value={departTo}
+                onChange={(e) => setDepartTo(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setLocFilter("");
+                setDepartFrom("");
+                setDepartTo("");
+              }}
+            >
+              Clear
+            </Button>
+          </div>
           <div className="divide-y">
             {loading && (
               <div className="p-4 text-muted-foreground">Loading...</div>
@@ -217,110 +269,148 @@ export default function TravelApprovalsPage() {
                 No pending requests
               </div>
             )}
-            {list.map((r) => {
-              const recommended = hasRecommended(r);
-              const canUndo = canUndoRecommendation(r);
-              // Allow recommending even after first recommendation for HoD's RO stage (handled by canRecommendMe)
-              const showRecommenderActions = !canUndo && canRecommendMe(r);
-              const showApproveActions = !canUndo && canApproveMe(r);
-              return (
-                <div
-                  key={r.id}
-                  className="p-4 flex items-center justify-between text-sm"
-                >
-                  <div className="space-y-0.5">
-                    <div className="font-medium">{r.purpose || "—"}</div>
-                    <div className="text-muted-foreground">
-                      {r.destination ? `${r.destination} · ` : ""}
-                      {String(r.departure_date).slice(0, 10)}{" "}
-                      {r.departure_time ? `at ${r.departure_time}` : ""} →{" "}
-                      {String(r.expected_return_date).slice(0, 10)} ·{" "}
-                      {r.total_days ? `${r.total_days} day(s)` : "—"}
-                    </div>
-                    {(() => {
-                      const locLabel = applicantLocationBadge(r);
-                      return locLabel ? (
-                        <div className="flex items-center gap-1">
-                          <Badge variant="secondary" className="text-[10px]">
-                            {locLabel}
+            {(list || [])
+              .filter((r) => {
+                // Text search
+                const q = search.trim().toLowerCase();
+                if (q) {
+                  const name = (r?.applicant?.full_name || "").toLowerCase();
+                  const cnic = String(r?.applicant?.cnic || "").toLowerCase();
+                  const dest = (r?.destination || "").toLowerCase();
+                  const purpose = (r?.purpose || "").toLowerCase();
+                  const cnicDigits = cnic.replace(/\D+/g, "");
+                  const qDigits = q.replace(/\D+/g, "");
+                  const hit =
+                    name.includes(q) ||
+                    dest.includes(q) ||
+                    purpose.includes(q) ||
+                    (!!qDigits && cnicDigits.includes(qDigits)) ||
+                    cnic.includes(q);
+                  if (!hit) return false;
+                }
+                // Location filter
+                if (locFilter) {
+                  const er = (r?.applicant?.employmentRecords || []).find(
+                    (x) => x.is_current && !x.is_deleted
+                  );
+                  const type = er?.location?.type || "HEAD_OFFICE";
+                  if (String(type) !== String(locFilter)) return false;
+                }
+                // Depart date range
+                if (departFrom) {
+                  if (String(r.departure_date).slice(0, 10) < departFrom)
+                    return false;
+                }
+                if (departTo) {
+                  if (String(r.departure_date).slice(0, 10) > departTo)
+                    return false;
+                }
+                return true;
+              })
+              .map((r) => {
+                const recommended = hasRecommended(r);
+                const canUndo = canUndoRecommendation(r);
+                // Allow recommending even after first recommendation for HoD's RO stage (handled by canRecommendMe)
+                const showRecommenderActions = !canUndo && canRecommendMe(r);
+                const showApproveActions = !canUndo && canApproveMe(r);
+                return (
+                  <div
+                    key={r.id}
+                    className="p-4 flex items-center justify-between text-sm"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="font-medium">{r.purpose || "—"}</div>
+                      <div className="text-muted-foreground">
+                        {r.destination ? `${r.destination} · ` : ""}
+                        {String(r.departure_date).slice(0, 10)}{" "}
+                        {r.departure_time ? `at ${r.departure_time}` : ""} →{" "}
+                        {String(r.expected_return_date).slice(0, 10)} ·{" "}
+                        {r.total_days ? `${r.total_days} day(s)` : "—"}
+                      </div>
+                      {(() => {
+                        const locLabel = applicantLocationBadge(r);
+                        return locLabel ? (
+                          <div className="flex items-center gap-1">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {locLabel}
+                            </Badge>
+                          </div>
+                        ) : null;
+                      })()}
+                      <div className="flex flex-wrap gap-1">
+                        {(r.statusEntries || []).map((se) => (
+                          <Badge
+                            key={se.id}
+                            variant="outline"
+                            className="text-[11px]"
+                          >
+                            {labelAction(se.action)}
                           </Badge>
-                        </div>
-                      ) : null;
-                    })()}
-                    <div className="flex flex-wrap gap-1">
-                      {(r.statusEntries || []).map((se) => (
-                        <Badge
-                          key={se.id}
-                          variant="outline"
-                          className="text-[11px]"
-                        >
-                          {labelAction(se.action)}
-                        </Badge>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openDetail(r.id)}
+                      >
+                        View
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {canUndo && (
+                          <Button
+                            disabled={submitting}
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => doAction(r, "UNDO_RECOMMEND")}
+                          >
+                            Undo
+                          </Button>
+                        )}
+                        {showRecommenderActions && (
+                          <>
+                            <Button
+                              disabled={submitting}
+                              size="sm"
+                              onClick={() => doAction(r, "RECOMMEND")}
+                            >
+                              Recommend
+                            </Button>
+                            <Button
+                              disabled={submitting}
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => doAction(r, "RECOMMENDER_REJECT")}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                        {!canUndo && showApproveActions && (
+                          <>
+                            <Button
+                              disabled={submitting}
+                              size="sm"
+                              onClick={() => doAction(r, "APPROVE")}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              disabled={submitting}
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => doAction(r, "REJECT")}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openDetail(r.id)}
-                    >
-                      View
-                    </Button>
-                    <div className="flex items-center gap-1">
-                      {canUndo && (
-                        <Button
-                          disabled={submitting}
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => doAction(r, "UNDO_RECOMMEND")}
-                        >
-                          Undo
-                        </Button>
-                      )}
-                      {showRecommenderActions && (
-                        <>
-                          <Button
-                            disabled={submitting}
-                            size="sm"
-                            onClick={() => doAction(r, "RECOMMEND")}
-                          >
-                            Recommend
-                          </Button>
-                          <Button
-                            disabled={submitting}
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => doAction(r, "RECOMMENDER_REJECT")}
-                          >
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                      {!canUndo && showApproveActions && (
-                        <>
-                          <Button
-                            disabled={submitting}
-                            size="sm"
-                            onClick={() => doAction(r, "APPROVE")}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            disabled={submitting}
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => doAction(r, "REJECT")}
-                          >
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </CardContent>
       </Card>
