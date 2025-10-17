@@ -276,7 +276,9 @@ export default function ManageExpenseClaimApprovals() {
     // Prefer strict employee_id match when present; for department accounts without employee linkage,
     // fall back to matching email embedded in remarks.
     const entryEmail = (text) => {
-      const m = String(text || "").match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      const m = String(text || "").match(
+        /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+      );
       return m ? m[0].toLowerCase() : "";
     };
     const myEmpId = user?.employee_id ? String(user.employee_id) : "";
@@ -681,7 +683,9 @@ export default function ManageExpenseClaimApprovals() {
       return (c.statusEntries || []).some((se) => {
         const byEmp = String(se.actor_employee_id || "") === myEmp;
         const byEmail = myEmail
-          ? String(se.remarks || "").toLowerCase().includes(myEmail)
+          ? String(se.remarks || "")
+              .toLowerCase()
+              .includes(myEmail)
           : false;
         return byEmp || byEmail;
       });

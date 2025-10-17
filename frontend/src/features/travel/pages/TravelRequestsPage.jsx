@@ -188,44 +188,44 @@ export default function TravelRequestsPage() {
               {/* Attendees: Only allow selection for department accounts; personal users don't need to pick applicant */}
               {authUser?.department_id ? (
                 <div className="md:col-span-2">
-                <label className="text-sm text-muted-foreground">
-                  Employees (multi-select, optional)
-                </label>
-                <div className="flex flex-wrap gap-2 mb-2 mt-1">
-                  {selectedEmployees.map((id) => {
-                    const opt = filteredEmployeeOptions.find(
-                      (o) => String(o.value) === String(id)
-                    );
-                    return (
-                      <Badge key={id} variant="outline" className="gap-2">
-                        {opt?.label}
-                        <button
-                          className="ml-1 opacity-60 hover:opacity-100"
-                          onClick={() =>
-                            setSelectedEmployees((prev) =>
-                              prev.filter((x) => x !== id)
-                            )
-                          }
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    );
-                  })}
-                </div>
-                <SearchableSelect
-                  options={filteredEmployeeOptions}
-                  value=""
-                  onChange={(val) => {
-                    const id = Number(val);
-                    if (!id) return;
-                    setSelectedEmployees((prev) =>
-                      prev.includes(id) ? prev : [...prev, id]
-                    );
-                  }}
-                  placeholder={"Type to search employees..."}
-                  allowClear
-                />
+                  <label className="text-sm text-muted-foreground">
+                    Employees (multi-select, optional)
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-2 mt-1">
+                    {selectedEmployees.map((id) => {
+                      const opt = filteredEmployeeOptions.find(
+                        (o) => String(o.value) === String(id)
+                      );
+                      return (
+                        <Badge key={id} variant="outline" className="gap-2">
+                          {opt?.label}
+                          <button
+                            className="ml-1 opacity-60 hover:opacity-100"
+                            onClick={() =>
+                              setSelectedEmployees((prev) =>
+                                prev.filter((x) => x !== id)
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                  <SearchableSelect
+                    options={filteredEmployeeOptions}
+                    value=""
+                    onChange={(val) => {
+                      const id = Number(val);
+                      if (!id) return;
+                      setSelectedEmployees((prev) =>
+                        prev.includes(id) ? prev : [...prev, id]
+                      );
+                    }}
+                    placeholder={"Type to search employees..."}
+                    allowClear
+                  />
                 </div>
               ) : null}
               <div>

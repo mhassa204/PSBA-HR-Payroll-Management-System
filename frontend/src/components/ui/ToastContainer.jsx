@@ -17,11 +17,11 @@ const ToastProvider = ({ children }) => {
   const toast = useToast();
 
   useEffect(() => {
-    const off = toastBus.on(({ type = 'info', message }) => {
+    const off = toastBus.on(({ type = "info", message }) => {
       if (!message) return;
-      if (type === 'error') toast.showError(message);
-      else if (type === 'success') toast.showSuccess(message);
-      else if (type === 'warning') toast.showWarning(message);
+      if (type === "error") toast.showError(message);
+      else if (type === "success") toast.showSuccess(message);
+      else if (type === "warning") toast.showWarning(message);
       else toast.showInfo(message);
     });
     return () => off();
@@ -30,7 +30,7 @@ const ToastProvider = ({ children }) => {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      
+
       {/* Render all toasts */}
       {toast.toasts.map((toastItem) => (
         <Toast
