@@ -317,7 +317,16 @@ module.exports = {
       include: {
         documents: true,
         segments: true,
-        request: true,
+        // Enrich request so PDF export has attendees and request status history
+        request: {
+          include: {
+            attendees: { include: { employee: true } },
+            statusEntries: {
+              orderBy: { createdAt: "asc" },
+              include: { actor: { include: { user: true } } },
+            },
+          },
+        },
         employee: {
           include: {
             employmentRecords: {
@@ -325,6 +334,11 @@ module.exports = {
               include: { location: true, designation: true, department: true },
             },
           },
+        },
+        // Include claim status history for PDF export parity with single-claim view
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: { include: { user: true } } },
         },
       },
     });
@@ -357,7 +371,15 @@ module.exports = {
         include: {
           documents: true,
           segments: true,
-          request: true,
+          request: {
+            include: {
+              attendees: { include: { employee: true } },
+              statusEntries: {
+                orderBy: { createdAt: "asc" },
+                include: { actor: { include: { user: true } } },
+              },
+            },
+          },
           employee: {
             include: {
               employmentRecords: {
@@ -369,6 +391,10 @@ module.exports = {
                 },
               },
             },
+          },
+          statusEntries: {
+            orderBy: { createdAt: "asc" },
+            include: { actor: { include: { user: true } } },
           },
         },
       });
@@ -584,8 +610,20 @@ module.exports = {
       include: {
         documents: true,
         segments: true,
-        request: true,
+        request: {
+          include: {
+            attendees: { include: { employee: true } },
+            statusEntries: {
+              orderBy: { createdAt: "asc" },
+              include: { actor: { include: { user: true } } },
+            },
+          },
+        },
         employee: true,
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: { include: { user: true } } },
+        },
       },
     });
   },

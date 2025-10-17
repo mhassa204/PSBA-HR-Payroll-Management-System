@@ -22,7 +22,17 @@ function safe(text) {
 // Helper: get absolute URL for document path
 export function resolveDocUrl(p) {
   if (!p) return null;
-  const clean = p.replace(/^\\+|^\/+/, "");
+  // Normalize slashes and ensure uploads/ prefix for proxy
+  let clean = String(p || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "");
+  // Handle legacy paths without leading 'uploads/'
+  if (!/^uploads\//i.test(clean)) {
+    // If starts with 'Uploads/', normalize case; else prefix 'uploads/'
+    if (/^Uploads\//.test(clean))
+      clean = clean.replace(/^Uploads\//, "uploads/");
+    else clean = `uploads/${clean}`;
+  }
   const baseApi = (
     import.meta.env.VITE_API_URL || "http://localhost:3000/api"
   ).replace(/\/?$/, "");
@@ -286,11 +296,15 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }) {
       drawHeading(page, "Request Status History", margin, y, bold, 12);
       y -= 16;
       for (const se of reqEntries) {
-        // Prefer email from remarks; do not fall back to names; if missing, use neutral placeholder
+        // Prefer server-side actor info; fallback to email in remarks
+        const actorFromServer =
+          se?.actor?.user?.email || se?.actor?.email || se?.actor?.name || null;
         const emailMatch = String(se.remarks || "").match(
           /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
         );
-        const actor = emailMatch ? emailMatch[0] : "—";
+        const actor = safe(
+          actorFromServer || (emailMatch ? emailMatch[0] : "—")
+        );
         const when = se.createdAt
           ? new Date(se.createdAt).toLocaleString()
           : "";
@@ -416,10 +430,13 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }) {
     y -= 16;
   } else {
     for (const se of entries) {
+      // Prefer server-side actor info; fallback to email in remarks
+      const actorFromServer =
+        se?.actor?.user?.email || se?.actor?.email || se?.actor?.name || null;
       const emailMatch = String(se.remarks || "").match(
         /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
       );
-      const actor = emailMatch ? emailMatch[0] : "—";
+      const actor = safe(actorFromServer || (emailMatch ? emailMatch[0] : "—"));
       const when = new Date(se.createdAt).toLocaleString();
       const line = `${se.action} by ${actor} at ${when}`;
       y =
