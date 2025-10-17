@@ -105,7 +105,9 @@ export default function TravelExpenseClaimsPage() {
       const rs = await getTravelReportees();
       // For personal account, only show own employee record
       if (isPersonalAccount) {
-        const self = (rs || []).find((e) => Number(e.id) === Number(user.employee_id));
+        const self = (rs || []).find(
+          (e) => Number(e.id) === Number(user.employee_id)
+        );
         setReportees(self ? [self] : []);
       } else {
         setReportees(rs || []);
@@ -116,7 +118,9 @@ export default function TravelExpenseClaimsPage() {
     loadEligible();
     loadClaims();
     // fetch capabilities (for DG start override)
-    getTravelCapabilities().then((c) => setCaps(c || {})).catch(() => {});
+    getTravelCapabilities()
+      .then((c) => setCaps(c || {}))
+      .catch(() => {});
   }, []);
   useEffect(() => {
     if (approvalsTab === "approvals") loadPendingApprovals();

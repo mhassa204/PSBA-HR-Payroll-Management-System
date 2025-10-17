@@ -4,7 +4,12 @@ import { useAuthStore } from "./authStore";
 import { toastBus } from "../../utils/toastBus";
 import { useEffect, useMemo } from "react";
 
-const PrivateRoute = ({ roles = [], permissions = [], requireEmployeeLink = false, children }) => {
+const PrivateRoute = ({
+  roles = [],
+  permissions = [],
+  requireEmployeeLink = false,
+  children,
+}) => {
   const user = useAuthStore((s) => s.user);
   const isChecking = useAuthStore((s) => s.isChecking);
   const can = useAuthStore((s) => s.can);

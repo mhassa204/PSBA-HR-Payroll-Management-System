@@ -26,7 +26,7 @@ export function LoginForm({ className, ...props }) {
       navigate("/dashboard");
     } catch (err) {
       setError("Invalid email or password");
-      toastBus.emit({ type: 'error', message: 'Invalid email or password' });
+      toastBus.emit({ type: "error", message: "Invalid email or password" });
     } finally {
       setLoading(false);
     }
@@ -36,61 +36,79 @@ export function LoginForm({ className, ...props }) {
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <div className="flow-border">
         <Card className="flow-surface min-h-[600px] flex flex-col justify-center border-0 shadow-xl overflow-hidden">
-        <CardContent className="grid p-0 md:grid-cols-2 h-full">
-          {/* LEFT SIDE - FORM */}
-          <form onSubmit={handleSubmit} className="p-6 md:p-8">
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col items-center text-center">
-                <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
-                <p className="text-lg text-gray-700 text-balance">
-                  Login to your PSBA HR account
-                </p>
+          <CardContent className="grid p-0 md:grid-cols-2 h-full">
+            {/* LEFT SIDE - FORM */}
+            <form onSubmit={handleSubmit} className="p-6 md:p-8">
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col items-center text-center">
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    Welcome back
+                  </h1>
+                  <p className="text-lg text-gray-700 text-balance">
+                    Login to your PSBA HR account
+                  </p>
+                </div>
+
+                <div className="grid gap-3">
+                  <Label
+                    htmlFor="email"
+                    className="text-gray-900 font-semibold"
+                  >
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="m@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="bg-white text-gray-900 border border-gray-300 focus:border-blue-500 focus:ring-blue-500 placeholder-gray-400"
+                  />
+                </div>
+
+                <div className="grid gap-3">
+                  <Label
+                    htmlFor="password"
+                    className="text-gray-900 font-semibold"
+                  >
+                    Password
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="bg-white text-gray-900 border border-gray-300 focus:border-blue-500 focus:ring-blue-500 placeholder-gray-400"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-red-500 text-sm text-center -mt-2">
+                    {error}
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full text-white"
+                  disabled={loading}
+                >
+                  {loading ? "Logging in..." : "Login"}
+                </Button>
               </div>
+            </form>
 
-              <div className="grid gap-3">
-                <Label htmlFor="email" className="text-gray-900 font-semibold">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="bg-white text-gray-900 border border-gray-300 focus:border-blue-500 focus:ring-blue-500 placeholder-gray-400"
-                />
-              </div>
-
-              <div className="grid gap-3">
-                <Label htmlFor="password" className="text-gray-900 font-semibold">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="bg-white text-gray-900 border border-gray-300 focus:border-blue-500 focus:ring-blue-500 placeholder-gray-400"
-                />
-              </div>
-
-              {error && (
-                <p className="text-red-500 text-sm text-center -mt-2">{error}</p>
-              )}
-
-              <Button type="submit" className="w-full text-white" disabled={loading}>
-                {loading ? "Logging in..." : "Login"}
-              </Button>
+            {/* RIGHT SIDE - IMAGE */}
+            <div className="bg-muted relative hidden md:block">
+              <img
+                src={LoginImage}
+                alt="Login"
+                className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+              />
+              <div className="absolute inset-0" />
             </div>
-          </form>
-
-          {/* RIGHT SIDE - IMAGE */}
-          <div className="bg-muted relative hidden md:block">
-            <img
-              src={LoginImage}
-              alt="Login"
-              className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
-            />
-            <div className="absolute inset-0" />
-          </div>
           </CardContent>
         </Card>
       </div>

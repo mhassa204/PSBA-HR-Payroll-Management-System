@@ -168,7 +168,9 @@ export default function TravelRequestsPage() {
   );
 
   // Determine if this is a true department account (no personal employee mapping)
-  const isDepartmentAccount = !!(authUser?.department_id && !authUser?.employee_id);
+  const isDepartmentAccount = !!(
+    authUser?.department_id && !authUser?.employee_id
+  );
 
   return (
     <div className="space-y-6">
@@ -353,13 +355,15 @@ export default function TravelRequestsPage() {
                         "REJECTED",
                       ].includes(se.action)
                     );
-                    const isOwn = authUser?.employee_id && r.applicant_id === authUser.employee_id;
+                    const isOwn =
+                      authUser?.employee_id &&
+                      r.applicant_id === authUser.employee_id;
                     const estVerified = (r.statusEntries || []).some(
                       (se) => se.action === "ESTABLISHMENT_VERIFIED"
                     );
                     const allowNormal = r.status === "CREATED" && !hasActions;
                     const allowDG = isOwn && !estVerified && can("*");
-                    return (allowNormal || allowDG) ? (
+                    return allowNormal || allowDG ? (
                       <Button
                         variant="destructive"
                         size="sm"

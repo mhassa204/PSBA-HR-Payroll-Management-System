@@ -489,7 +489,10 @@ function App() {
             <Route
               path="travel/approvals"
               element={
-                <PrivateRoute permissions={["travel.read", "travel.claim.read"]} requireEmployeeLink>
+                <PrivateRoute
+                  permissions={["travel.read", "travel.claim.read"]}
+                  requireEmployeeLink
+                >
                   <TravelApprovalsPage />
                 </PrivateRoute>
               }
@@ -511,7 +514,10 @@ function App() {
             <Route
               path="travel/expense-claim-approvals"
               element={
-                <PrivateRoute permissions={["travel.claim.read", "travel.read"]} requireEmployeeLink>
+                <PrivateRoute
+                  permissions={["travel.claim.read", "travel.read"]}
+                  requireEmployeeLink
+                >
                   <ManageExpenseClaimApprovals />
                 </PrivateRoute>
               }

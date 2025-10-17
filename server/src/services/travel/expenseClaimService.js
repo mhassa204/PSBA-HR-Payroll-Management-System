@@ -930,7 +930,11 @@ module.exports = {
     try {
       if (employee_id && Number(employee_id) === Number(claim.employee_id)) {
         const er = await prisma.employment.findFirst({
-          where: { employee_id: Number(employee_id), is_current: true, is_deleted: false },
+          where: {
+            employee_id: Number(employee_id),
+            is_current: true,
+            is_deleted: false,
+          },
           include: { designation: true },
         });
         const isDG = /^director\s*general$/i.test(er?.designation?.title || "");

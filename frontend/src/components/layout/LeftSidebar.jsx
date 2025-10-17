@@ -173,7 +173,6 @@ const PlaneIcon = () => (
   </svg>
 );
 
-
 const LeftSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();

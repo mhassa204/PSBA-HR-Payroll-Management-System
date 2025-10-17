@@ -104,7 +104,12 @@ module.exports = {
       req.session.user?.role?.name === "Super Admin" || perms.includes("*");
     // Manage Requests visibility: approvers (Establishment/Ops/Accounts/DG) and reporting officers
     const canManageRequests =
-      isSuperAdmin || isEstablishment || isOps || isAccountsApprover || isDG || hasReportees;
+      isSuperAdmin ||
+      isEstablishment ||
+      isOps ||
+      isAccountsApprover ||
+      isDG ||
+      hasReportees;
     return {
       meEmpId,
       meUserId,
@@ -1306,7 +1311,9 @@ module.exports = {
     )
       throw new Error("Cannot clear another user's decision");
     await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
-    if (["APPROVED", "REJECTED", "RECOMMENDED_REJECTED"].includes(last.action)) {
+    if (
+      ["APPROVED", "REJECTED", "RECOMMENDED_REJECTED"].includes(last.action)
+    ) {
       await prisma.travelRequest.update({
         where: { id: Number(id) },
         data: { status: "CREATED" },

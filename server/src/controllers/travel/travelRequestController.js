@@ -298,7 +298,9 @@ module.exports = {
             where: {
               is_deleted: false,
               travel_request_id: row.id,
-              status: { in: ["VERIFIED", "UNDER_PROCESS", "PROCESSED", "SETTLED"] },
+              status: {
+                in: ["VERIFIED", "UNDER_PROCESS", "PROCESSED", "SETTLED"],
+              },
             },
           });
           if (blockingClaims > 0) {
@@ -320,7 +322,10 @@ module.exports = {
       }
     }
     // For non-DG or where no actions exist, enforce CREATED status; for DG exception above, allow regardless of status
-    if (row.status !== "CREATED" && !(ctx.isDG && row.applicant_id === ctx.meEmpId))
+    if (
+      row.status !== "CREATED" &&
+      !(ctx.isDG && row.applicant_id === ctx.meEmpId)
+    )
       return res.status(400).json({
         success: false,
         error: "Only CREATED requests can be deleted",
@@ -341,7 +346,9 @@ module.exports = {
         (a) => a.employee_id === me
       );
       // New: allow view if current user has previously acted on this request (recommend/approve/reject)
-      const meEmail = String(ctx.userEmail || "").trim().toLowerCase();
+      const meEmail = String(ctx.userEmail || "")
+        .trim()
+        .toLowerCase();
       const actedByMe = (row.statusEntries || []).some((e) => {
         if (me && Number(e.actor_employee_id || 0) === Number(me)) return true;
         const actorEmail = String(e?.actor?.user?.email || "").toLowerCase();
