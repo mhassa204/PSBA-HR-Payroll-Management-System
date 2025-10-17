@@ -6,9 +6,11 @@ import EnhancedModal from '@/components/ui/EnhancedModal';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '../../auth/authStore';
 import api from '../../../lib/axios';
+import { getTravelCapabilities } from '../../../services/travelService';
 
 export default function TravelManualEntryPage(){
   const me = useAuthStore(s=>s.user);
+  const [caps, setCaps] = useState({ isAccountsHod: false, isSuperAdmin: false });
   const [search, setSearch] = useState('');
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -25,6 +27,19 @@ export default function TravelManualEntryPage(){
     } finally { setLoading(false); }
   };
   useEffect(()=>{ loadEmployees(); },[]);
+
+  // Capability guard: only Accounts HoD or Super Admin
+  useEffect(()=>{
+    (async()=>{
+      try {
+        const c = await getTravelCapabilities();
+        setCaps(c || {});
+      } catch(_){}
+    })();
+  },[]);
+  if(!(caps.isAccountsHod || caps.isSuperAdmin)){
+    return <div className="p-6 text-sm text-red-700 bg-red-50 border border-red-200 rounded">Unauthorized: Only Accounts Head can access TADA Managed Entry.</div>;
+  }
 
   // Fetch reportees after applicant picked
   useEffect(()=>{

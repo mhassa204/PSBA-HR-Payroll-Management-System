@@ -102,6 +102,17 @@ module.exports = {
     const canViewAll = isEstablishment || isOps || isDG;
     const isSuperAdmin =
       req.session.user?.role?.name === "Super Admin" || perms.includes("*");
+    // Determine if current employee is HoD of Accounts department
+    let isAccountsHod = false;
+    try {
+      if (meEmpId) {
+        const hodOf = await prisma.department.findFirst({
+          where: { is_deleted: false, head_employee_id: Number(meEmpId) },
+          select: { id: true, name: true },
+        });
+        if (hodOf && /accounts/i.test(hodOf.name || "")) isAccountsHod = true;
+      }
+    } catch (_) {}
     // Manage Requests visibility: approvers (Establishment/Ops/Accounts/DG) and reporting officers
     const canManageRequests =
       isSuperAdmin ||
@@ -132,6 +143,7 @@ module.exports = {
       canViewAll,
       canManageRequests,
       isSuperAdmin,
+      isAccountsHod,
       userEmail,
     };
   },
@@ -1298,18 +1310,33 @@ module.exports = {
   clearLastDecision: async (id, actorEmpId, ctx) => {
     const req = await prisma.travelRequest.findUnique({
       where: { id: Number(id) },
-      include: { statusEntries: { orderBy: { createdAt: "asc" } } },
+      include: {
+        statusEntries: {
+          orderBy: { createdAt: "asc" },
+          include: { actor: { include: { user: true } } },
+        },
+      },
     });
     if (!req || req.is_deleted) throw new Error("Not found");
     const last = (req.statusEntries || [])[
       (req.statusEntries || []).length - 1
     ];
     if (!last) throw new Error("Nothing to clear");
-    if (
-      Number(last.actor_employee_id || 0) !== Number(actorEmpId || 0) &&
-      !ctx.isSuperAdmin
-    )
-      throw new Error("Cannot clear another user's decision");
+    // Authorize CLEAR if:
+    // - SuperAdmin, or
+    // - actorEmpId matches last.actor_employee_id, or
+    // - ctx.userEmail matches last.actor.user.email, or
+    // - ctx.userEmail appears in last.remarks (department accounts)
+    const meMatchesEmpId =
+      Number(last.actor_employee_id || 0) === Number(actorEmpId || 0);
+    const meEmail = String(ctx.userEmail || "").toLowerCase();
+    const actorEmail = String(last?.actor?.user?.email || "").toLowerCase();
+    const remarksEmailMatch = meEmail
+      ? String(last.remarks || "").toLowerCase().includes(meEmail)
+      : false;
+    const authorized =
+      !!ctx.isSuperAdmin || meMatchesEmpId || (meEmail && (actorEmail === meEmail || remarksEmailMatch));
+    if (!authorized) throw new Error("Cannot clear another user's decision");
     await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
     if (
       ["APPROVED", "REJECTED", "RECOMMENDED_REJECTED"].includes(last.action)

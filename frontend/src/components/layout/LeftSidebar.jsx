@@ -508,6 +508,8 @@ const LeftSidebar = () => {
             !!travelCaps.canViewAll ||
             !!travelCaps.canManageRequests ||
             can("travel.manage") ||
+            // Include DG-approve permission holders (Additional Directors who can act)
+            can("travel.request.approve.dg") ||
             // Fallback to permission checks in case caps haven't populated yet
             can("travel.claim.verify.establishment") ||
             can("travel.request.approve.ops") ||
@@ -519,8 +521,12 @@ const LeftSidebar = () => {
           href: "/travel/approvals",
           icon: ViewColumnsIcon,
           show: () =>
-            // Visible only to personal (employee-linked) users with travel read access
-            !!user?.employee_id && can("travel.read"),
+            // Visible to employee-linked users OR users with manage/approval capabilities
+            ( !!user?.employee_id && can("travel.read") ) ||
+            can("travel.manage") ||
+            can("travel.request.approve.dg") ||
+            can("travel.request.approve.ops") ||
+            travelCaps.isEstablishment || travelCaps.isOps || travelCaps.isDG,
         },
         {
           name: "Expense Claims",
@@ -547,7 +553,7 @@ const LeftSidebar = () => {
           name: "TADA Managed Entry",
           href: "/travel/manual",
           icon: ViewColumnsIcon,
-          show: () => travelCaps.isAccountsApprover || travelCaps.isSuperAdmin,
+          show: () => travelCaps.isAccountsHod || travelCaps.isSuperAdmin,
         },
       ],
     },

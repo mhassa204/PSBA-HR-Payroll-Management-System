@@ -372,7 +372,9 @@ module.exports = {
             Number(er.department_id) === deptId
         );
       }
-      if (!isApplicant && !isAttendee && !sameDept && !actedByMe)
+      // Also allow view for users who can manage requests (approvers/reporting officers)
+      const canManage = !!ctx.canManageRequests;
+      if (!isApplicant && !isAttendee && !sameDept && !actedByMe && !canManage)
         return res.status(403).json({ success: false, error: "Forbidden" });
     }
     res.json({ success: true, request: row });
@@ -469,6 +471,7 @@ module.exports = {
         isSuperAdmin: ctx.isSuperAdmin,
         locType: ctx.locType,
         isBps17Plus: ctx.isBps17Plus,
+        isAccountsHod: ctx.isAccountsHod,
       },
     });
   },
@@ -622,8 +625,6 @@ module.exports = {
     try {
       const ctx = await travelService.getAuthContext(req);
       const id = Number(req.params.id);
-      if (!ctx.meEmpId && !ctx.isSuperAdmin)
-        return res.status(403).json({ success: false, error: "Forbidden" });
       const full = await travelService.clearLastDecision(id, ctx.meEmpId, ctx);
       res.json({ success: true, request: full });
     } catch (e) {

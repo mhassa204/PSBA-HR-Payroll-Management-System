@@ -511,6 +511,8 @@ async function main() {
         "travel.claim.submit",
         "travel.claim.status",
         "travel.rates.read",
+        // Allow opening Manage screen for leadership visibility
+        "travel.manage",
         // No OPS approvals here; use Operations role
       ],
       enabled: true,
@@ -534,6 +536,8 @@ async function main() {
         "travel.claim.submit",
         "travel.claim.status",
         "travel.rates.read",
+        // Allow opening Manage screen for ADs to participate in recommender/approval flows
+        "travel.manage",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment"],

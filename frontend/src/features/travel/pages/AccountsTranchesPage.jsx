@@ -66,6 +66,13 @@ export default function AccountsTranchesPage() {
         .map(Number),
     [checked]
   );
+  const selectedTotal = useMemo(
+    () =>
+      (claims || [])
+        .filter((c) => checked[c.id])
+        .reduce((sum, c) => sum + Number(c.grand_total || 0), 0),
+    [claims, checked]
+  );
 
   const makeTranche = async () => {
     if (selectedIds.length === 0) {
@@ -241,6 +248,9 @@ export default function AccountsTranchesPage() {
               >
                 None
               </Button>
+              <div className="ml-3 text-[11px] text-muted-foreground">
+                Selected: {selectedIds.length} • Total: {selectedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
             </div>
           </div>
 

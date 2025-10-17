@@ -475,6 +475,8 @@ function App() {
                     // Only Establishment, Operations, Accounts should access Manage
                     "travel.claim.verify.establishment",
                     "travel.request.approve.ops",
+                    // DG approvers can also access Manage
+                    "travel.request.approve.dg",
                     "travel.claim.approve.ops",
                     "travel.claim.process.start",
                     // Include super-admin wildcard and travel.manage if granted

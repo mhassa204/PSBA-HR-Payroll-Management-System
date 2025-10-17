@@ -690,9 +690,15 @@ export default function ManageExpenseClaimApprovals() {
         return byEmp || byEmail;
       });
     };
-    const roleScoped = (allClaims || []).filter(
-      (c) => passesRoleFilter(c) || actedByMe(c)
-    );
+    // Show processed/settled items in All tab regardless of role filter, plus any acted-by-me
+    const roleScoped = (allClaims || []).filter((c) => {
+      const alwaysInclude = [
+        "UNDER_PROCESS",
+        "PROCESSED",
+        "SETTLED",
+      ].includes(String(c.status || ""));
+      return alwaysInclude || passesRoleFilter(c) || actedByMe(c);
+    });
     return roleScoped.filter((c) => {
       const q = search.trim().toLowerCase();
       if (q) {
@@ -964,6 +970,7 @@ export default function ManageExpenseClaimApprovals() {
                     "VERIFIED",
                     "UNDER_PROCESS",
                     "PROCESSED",
+                    "SETTLED",
                     "REJECTED",
                     "PENDING_APPROVAL",
                   ].map((s) => (
