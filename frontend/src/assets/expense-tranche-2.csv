@@ -1,0 +1,3 @@
+tranche_code,claim_id,request_id,employee_id,employee_name,cnic,dept,designation,bank_name,account_no,from_date,to_date,grand_total
+TR-1760668427156,114,,561,Muhammad Ali Hassan,3520212345750,Software Development & Operations,Assistant Director,Habib Bank Limited,PK00HBL0000000987654321,2025-10-11,2025-10-11,12200
+TR-1760668427156,117,61,560,Muhammad Ahmad,3520212345743,IT,Assistant Director,National Bank of Pakistan,PK00NBP0000001234567890,2025-10-02,2025-10-30,0

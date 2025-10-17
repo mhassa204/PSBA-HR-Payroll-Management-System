@@ -84,6 +84,17 @@ module.exports = {
           select: { id: true },
         }))
       : false;
+    // Determine if the user is an immediate reporting officer for any current employees
+    const hasReportees = meEmpId
+      ? !!(await prisma.employment.findFirst({
+          where: {
+            is_deleted: false,
+            is_current: true,
+            reporting_officer_id: String(meEmpId),
+          },
+          select: { id: true },
+        }))
+      : false;
     const isBps17Plus = scaleLevel >= 17;
     // Updated rule: permission-driven create/own, supports department accounts without employee mapping
     const canCreateOrOwn =
@@ -91,6 +102,9 @@ module.exports = {
     const canViewAll = isEstablishment || isOps || isDG;
     const isSuperAdmin =
       req.session.user?.role?.name === "Super Admin" || perms.includes("*");
+    // Manage Requests visibility: approvers (Establishment/Ops/Accounts/DG) and reporting officers
+    const canManageRequests =
+      isSuperAdmin || isEstablishment || isOps || isAccountsApprover || isDG || hasReportees;
     return {
       meEmpId,
       meUserId,
@@ -107,9 +121,11 @@ module.exports = {
       canApproveClaimOps,
       canApproveClaimDG,
       managesAnyLocation,
+      hasReportees,
       isBps17Plus,
       canCreateOrOwn,
       canViewAll,
+      canManageRequests,
       isSuperAdmin,
       userEmail,
     };
@@ -669,15 +685,20 @@ module.exports = {
         status: "CREATED",
       },
     });
-    let full = await prisma.travelRequest.findUnique({
-      where: { id: created.id },
-      include: includeShape,
+    // First record CREATED status entry so it always appears before any auto-approval
+    await prisma.travelRequestStatusEntry.create({
+      data: {
+        request_id: created.id,
+        action: "CREATED",
+        actor_employee_id: ctx.meEmpId,
+        remarks: actorLabel || null,
+      },
     });
-    // Auto-approve if applicant is true DG
+    // Auto-approve if applicant is true DG (ensure APPROVED comes after CREATED)
     try {
       const er = await prisma.employment.findFirst({
         where: {
-          employee_id: Number(full.applicant_id),
+          employee_id: Number(ctx.meEmpId),
           is_current: true,
           is_deleted: false,
         },
@@ -686,20 +707,16 @@ module.exports = {
       const isDG = /^director\s*general$/i.test(er?.designation?.title || "");
       if (isDG) {
         await prisma.travelRequest.update({
-          where: { id: full.id },
+          where: { id: created.id },
           data: { status: "APPROVED" },
         });
         await prisma.travelRequestStatusEntry.create({
           data: {
-            request_id: full.id,
+            request_id: created.id,
             action: "APPROVED",
-            actor_employee_id: Number(full.applicant_id),
+            actor_employee_id: Number(ctx.meEmpId),
             remarks: ctx.userEmail || null,
           },
-        });
-        full = await prisma.travelRequest.findUnique({
-          where: { id: full.id },
-          include: includeShape,
         });
       }
     } catch (_) {}
@@ -711,14 +728,6 @@ module.exports = {
         })),
       });
     }
-    await prisma.travelRequestStatusEntry.create({
-      data: {
-        request_id: created.id,
-        action: "CREATED",
-        actor_employee_id: ctx.meEmpId,
-        remarks: actorLabel || null,
-      },
-    });
     return prisma.travelRequest.findUnique({
       where: { id: created.id },
       include: {
@@ -1297,7 +1306,7 @@ module.exports = {
     )
       throw new Error("Cannot clear another user's decision");
     await prisma.travelRequestStatusEntry.delete({ where: { id: last.id } });
-    if (["APPROVED", "REJECTED"].includes(last.action)) {
+    if (["APPROVED", "REJECTED", "RECOMMENDED_REJECTED"].includes(last.action)) {
       await prisma.travelRequest.update({
         where: { id: Number(id) },
         data: { status: "CREATED" },

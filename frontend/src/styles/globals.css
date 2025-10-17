@@ -470,3 +470,72 @@
 
 /* No-wrap table utility */
 .table-no-wrap th, .table-no-wrap td { white-space: nowrap; }
+
+/* ===== Animated Flowing Border (Login) ===== */
+.flow-border {
+  --flow-radius: 1.25rem;        /* outer corner radius */
+  --flow-thickness: 6px;         /* visual border thickness */
+  --flow-speed: 4s;              /* animation duration */
+  position: relative;
+  border-radius: var(--flow-radius);
+  padding: var(--flow-thickness);
+  isolation: isolate; /* ensure pseudo sits above background only */
+}
+.flow-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* Smooth flowing stream around rounded corners */
+  background: conic-gradient(
+    from var(--flow-angle, 0deg),
+    #8b5cf6 0deg,
+    #06b6d4 60deg,
+    #10b981 120deg,
+    #f59e0b 180deg,
+    #ef4444 240deg,
+    #8b5cf6 360deg
+  );
+  animation: flow-hues var(--flow-speed) linear infinite;
+  z-index: -1;
+  /* Create hollow center by masking out the inner content box */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  padding: var(--flow-thickness); /* keeps the gradient only on the border area */
+}
+.flow-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--flow-angle, 0deg),
+    #8b5cf6 0deg,
+    #06b6d4 60deg,
+    #10b981 120deg,
+    #f59e0b 180deg,
+    #ef4444 240deg,
+    #8b5cf6 360deg
+  );
+  filter: blur(22px);
+  opacity: 0.22;
+  z-index: -2;
+  animation: flow-hues calc(var(--flow-speed) * 1.6) linear infinite;
+}
+.flow-surface {
+  position: relative;
+  border-radius: max(0px, calc(var(--flow-radius) - var(--flow-thickness)));
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+  border: none;
+}
+@property --flow-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes flow-hues {
+  to { --flow-angle: 360deg; }
+}

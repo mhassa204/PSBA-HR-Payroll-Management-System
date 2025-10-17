@@ -167,6 +167,9 @@ export default function TravelRequestsPage() {
     [employeeOptions]
   );
 
+  // Determine if this is a true department account (no personal employee mapping)
+  const isDepartmentAccount = !!(authUser?.department_id && !authUser?.employee_id);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -186,7 +189,7 @@ export default function TravelRequestsPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Attendees: Only allow selection for department accounts; personal users don't need to pick applicant */}
-              {authUser?.department_id ? (
+              {isDepartmentAccount ? (
                 <div className="md:col-span-2">
                   <label className="text-sm text-muted-foreground">
                     Employees (multi-select, optional)
@@ -338,15 +341,25 @@ export default function TravelRequestsPage() {
                   >
                     View
                   </Button>
-                  {r.status === "CREATED" &&
-                    !(r.statusEntries || []).some((se) =>
+                  {/* Delete rules:
+                    - Normal: only when status is CREATED and no actions exist
+                    - DG exception: allow when own request and no Establishment verification yet */}
+                  {(() => {
+                    const hasActions = (r.statusEntries || []).some((se) =>
                       [
                         "RECOMMENDED",
                         "RECOMMENDED_REJECTED",
                         "APPROVED",
                         "REJECTED",
                       ].includes(se.action)
-                    ) && (
+                    );
+                    const isOwn = authUser?.employee_id && r.applicant_id === authUser.employee_id;
+                    const estVerified = (r.statusEntries || []).some(
+                      (se) => se.action === "ESTABLISHMENT_VERIFIED"
+                    );
+                    const allowNormal = r.status === "CREATED" && !hasActions;
+                    const allowDG = isOwn && !estVerified && can("*");
+                    return (allowNormal || allowDG) ? (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -354,7 +367,8 @@ export default function TravelRequestsPage() {
                       >
                         Delete
                       </Button>
-                    )}
+                    ) : null;
+                  })()}
                 </div>
               </div>
             ))}

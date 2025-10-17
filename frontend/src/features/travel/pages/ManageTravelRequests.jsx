@@ -119,7 +119,8 @@ export default function ManageTravelRequests() {
       String(last.actor_employee_id || "") === String(meEmpId || "");
     // Allow undo if I am the actor of the last entry and next stage hasn't acted yet (best-effort in UI)
     if (!isMine) return false;
-    if (["APPROVED", "REJECTED"].includes(last.action)) return true;
+    if (["APPROVED", "REJECTED", "RECOMMENDED_REJECTED"].includes(last.action))
+      return true;
     return false;
   };
 

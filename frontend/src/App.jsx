@@ -470,7 +470,18 @@ function App() {
             <Route
               path="travel/manage"
               element={
-                <PrivateRoute permissions={["travel.read"]}>
+                <PrivateRoute
+                  permissions={[
+                    // Only Establishment, Operations, Accounts should access Manage
+                    "travel.claim.verify.establishment",
+                    "travel.request.approve.ops",
+                    "travel.claim.approve.ops",
+                    "travel.claim.process.start",
+                    // Include super-admin wildcard and travel.manage if granted
+                    "*",
+                    "travel.manage",
+                  ]}
+                >
                   <ManageTravelRequests />
                 </PrivateRoute>
               }
@@ -478,7 +489,7 @@ function App() {
             <Route
               path="travel/approvals"
               element={
-                <PrivateRoute permissions={["travel.read"]}>
+                <PrivateRoute permissions={["travel.read", "travel.claim.read"]} requireEmployeeLink>
                   <TravelApprovalsPage />
                 </PrivateRoute>
               }
@@ -500,9 +511,7 @@ function App() {
             <Route
               path="travel/expense-claim-approvals"
               element={
-                <PrivateRoute
-                  permissions={["travel.claim.read", "travel.read"]}
-                >
+                <PrivateRoute permissions={["travel.claim.read", "travel.read"]} requireEmployeeLink>
                   <ManageExpenseClaimApprovals />
                 </PrivateRoute>
               }

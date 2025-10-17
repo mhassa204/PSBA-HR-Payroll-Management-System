@@ -34,7 +34,8 @@ export function LoginForm({ className, ...props }) {
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="min-h-[600px] flex flex-col justify-center">
+      <div className="flow-border">
+        <Card className="flow-surface min-h-[600px] flex flex-col justify-center border-0 shadow-xl overflow-hidden">
         <CardContent className="grid p-0 md:grid-cols-2 h-full">
           {/* LEFT SIDE - FORM */}
           <form onSubmit={handleSubmit} className="p-6 md:p-8">
@@ -90,8 +91,9 @@ export function LoginForm({ className, ...props }) {
             />
             <div className="absolute inset-0" />
           </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Optional Footer */}
       {/* <div className="text-muted-foreground text-center text-xs">

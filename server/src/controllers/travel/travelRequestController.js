@@ -108,9 +108,13 @@ module.exports = {
             error: `total_days (${data.total_days}) does not match date range (${computedDays})`,
           });
         }
-        const attendeeIds = Array.isArray(data.employee_ids)
+        let attendeeIds = Array.isArray(data.employee_ids)
           ? data.employee_ids.map(Number).filter(Boolean)
           : [];
+        // Auto-include the current user as an attendee for personal accounts
+        if (ctx.meEmpId && !attendeeIds.includes(Number(ctx.meEmpId))) {
+          attendeeIds = [...attendeeIds, Number(ctx.meEmpId)];
+        }
         const email = String(req.session.user?.email || "");
         const label = email ? `created by ${email}` : null;
         const full = await travelService.createRequest(
@@ -275,18 +279,48 @@ module.exports = {
         return res.status(403).json({ success: false, error: "Forbidden" });
       }
     }
-    // Disallow deletion once any recommendation or decision exists
+    // Default rule: Disallow deletion once any recommendation or decision exists
+    // Exception: If the applicant is DG (true DG) deleting their own request, allow deletion
+    // as long as no associated claim has been Establishment-verified or beyond.
     const hasActions = (row.statusEntries || []).some((e) =>
       ["RECOMMENDED", "RECOMMENDED_REJECTED", "APPROVED", "REJECTED"].includes(
         e.action
       )
     );
-    if (hasActions)
-      return res.status(400).json({
-        success: false,
-        error: "Cannot delete: request has recommendations or decisions",
-      });
-    if (row.status !== "CREATED")
+    if (hasActions) {
+      const isOwn = ctx.meEmpId && row.applicant_id === ctx.meEmpId;
+      if (isOwn && ctx.isDG) {
+        // Check for any related claims that are verified or further processed
+        const { PrismaClient } = require("@prisma/client");
+        const p = new PrismaClient();
+        try {
+          const blockingClaims = await p.travelClaim.count({
+            where: {
+              is_deleted: false,
+              travel_request_id: row.id,
+              status: { in: ["VERIFIED", "UNDER_PROCESS", "PROCESSED", "SETTLED"] },
+            },
+          });
+          if (blockingClaims > 0) {
+            return res.status(400).json({
+              success: false,
+              error:
+                "Cannot delete: related claim has been Establishment-verified or processed",
+            });
+          }
+          // Allow deletion otherwise (e.g., auto-approved by DG, or claims not yet verified)
+        } finally {
+          await p.$disconnect().catch(() => {});
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: "Cannot delete: request has recommendations or decisions",
+        });
+      }
+    }
+    // For non-DG or where no actions exist, enforce CREATED status; for DG exception above, allow regardless of status
+    if (row.status !== "CREATED" && !(ctx.isDG && row.applicant_id === ctx.meEmpId))
       return res.status(400).json({
         success: false,
         error: "Only CREATED requests can be deleted",
@@ -306,6 +340,20 @@ module.exports = {
       const isAttendee = (row.attendees || []).some(
         (a) => a.employee_id === me
       );
+      // New: allow view if current user has previously acted on this request (recommend/approve/reject)
+      const meEmail = String(ctx.userEmail || "").trim().toLowerCase();
+      const actedByMe = (row.statusEntries || []).some((e) => {
+        if (me && Number(e.actor_employee_id || 0) === Number(me)) return true;
+        const actorEmail = String(e?.actor?.user?.email || "").toLowerCase();
+        if (meEmail && actorEmail && actorEmail === meEmail) return true;
+        if (
+          meEmail &&
+          e.remarks &&
+          String(e.remarks).toLowerCase().includes(meEmail)
+        )
+          return true;
+        return false;
+      });
       // Department account access: allow if applicant is currently in same department
       let sameDept = false;
       if (!me && req.session.user?.department_id) {
@@ -317,7 +365,7 @@ module.exports = {
             Number(er.department_id) === deptId
         );
       }
-      if (!isApplicant && !isAttendee && !sameDept)
+      if (!isApplicant && !isAttendee && !sameDept && !actedByMe)
         return res.status(403).json({ success: false, error: "Forbidden" });
     }
     res.json({ success: true, request: row });
@@ -403,6 +451,7 @@ module.exports = {
       capabilities: {
         canCreateOrOwn: ctx.canCreateOrOwn || ctx.isSuperAdmin,
         canViewAll: ctx.canViewAll || ctx.isSuperAdmin,
+        canManageRequests: ctx.canManageRequests || ctx.isSuperAdmin,
         isOps: ctx.isOps,
         isEstablishment: ctx.isEstablishment,
         isDG: ctx.isDG,

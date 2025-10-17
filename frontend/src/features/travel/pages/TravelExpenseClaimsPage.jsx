@@ -16,6 +16,7 @@ import {
   listPendingExpenseClaimApprovals,
   decideExpenseClaim,
   getTravelReportees,
+  getTravelCapabilities,
 } from "../../../services/travelService";
 import { useAuthStore } from "../../auth/authStore";
 import {
@@ -31,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function TravelExpenseClaimsPage() {
   const can = useAuthStore((s) => s.can);
+  const [caps, setCaps] = useState({ isDG: false });
   const [eligible, setEligible] = useState([]);
   const [claims, setClaims] = useState([]);
   const [loadingEligible, setLoadingEligible] = useState(false);
@@ -66,6 +68,8 @@ export default function TravelExpenseClaimsPage() {
   const [decisionTarget, setDecisionTarget] = useState(null);
   const [withinCityTab, setWithinCityTab] = useState("with-request"); // with-request | within-city
   const [reportees, setReportees] = useState([]);
+  const user = useAuthStore((s) => s.user);
+  const isPersonalAccount = !!user?.employee_id; // non-department/non-location users (including DG)
   // Flag: within-city claims have no linked travel request
   const isWithinCity = !!(claim && !claim.travel_request_id);
 
@@ -99,12 +103,20 @@ export default function TravelExpenseClaimsPage() {
   const loadReportees = async () => {
     try {
       const rs = await getTravelReportees();
-      setReportees(rs || []);
+      // For personal account, only show own employee record
+      if (isPersonalAccount) {
+        const self = (rs || []).find((e) => Number(e.id) === Number(user.employee_id));
+        setReportees(self ? [self] : []);
+      } else {
+        setReportees(rs || []);
+      }
     } catch (_) {}
   };
   useEffect(() => {
     loadEligible();
     loadClaims();
+    // fetch capabilities (for DG start override)
+    getTravelCapabilities().then((c) => setCaps(c || {})).catch(() => {});
   }, []);
   useEffect(() => {
     if (approvalsTab === "approvals") loadPendingApprovals();
@@ -434,7 +446,7 @@ export default function TravelExpenseClaimsPage() {
                       </div>
                     </div>
                     <Button
-                      disabled={!can("travel.claim.create")}
+                      disabled={!(can("travel.claim.create") || caps.isDG)}
                       onClick={() => startClaim(r)}
                     >
                       Start

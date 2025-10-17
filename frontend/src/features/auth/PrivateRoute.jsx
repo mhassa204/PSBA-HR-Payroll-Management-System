@@ -4,7 +4,7 @@ import { useAuthStore } from "./authStore";
 import { toastBus } from "../../utils/toastBus";
 import { useEffect, useMemo } from "react";
 
-const PrivateRoute = ({ roles = [], permissions = [], children }) => {
+const PrivateRoute = ({ roles = [], permissions = [], requireEmployeeLink = false, children }) => {
   const user = useAuthStore((s) => s.user);
   const isChecking = useAuthStore((s) => s.isChecking);
   const can = useAuthStore((s) => s.can);
@@ -27,6 +27,9 @@ const PrivateRoute = ({ roles = [], permissions = [], children }) => {
     if (permissions.length > 0) {
       const ok = permissions.some((p) => can(p));
       if (!ok) return { type: "forbidden" };
+    }
+    if (requireEmployeeLink && !user?.employee_id) {
+      return { type: "forbidden" };
     }
     return null;
   }, [isChecking, user, roles, permissions, can]);

@@ -173,17 +173,6 @@ const PlaneIcon = () => (
   </svg>
 );
 
-/**
- * Futuristic Left Sidebar Navigation
- *
- * Features:
- * - Beautiful gradient backgrounds
- * - Glassmorphism effects
- * - Smooth animations and transitions
- * - Active state indicators with glowing effects
- * - Responsive design
- * - Modern iconography
- */
 
 const LeftSidebar = () => {
   const location = useLocation();
@@ -510,17 +499,29 @@ const LeftSidebar = () => {
           name: "Manage Requests",
           href: "/travel/manage",
           icon: ViewColumnsIcon,
-          show: () => true,
+          show: () =>
+            // Only Establishment, Operations, or Accounts approvers should see Manage
+            travelCaps.isSuperAdmin ||
+            travelCaps.isEstablishment ||
+            travelCaps.isOps ||
+            travelCaps.isAccountsApprover ||
+            // Users with global view/manage capability or explicit manage permission
+            !!travelCaps.canViewAll ||
+            !!travelCaps.canManageRequests ||
+            can("travel.manage") ||
+            // Fallback to permission checks in case caps haven't populated yet
+            can("travel.claim.verify.establishment") ||
+            can("travel.request.approve.ops") ||
+            can("travel.claim.approve.ops") ||
+            can("travel.claim.process.start"),
         },
         {
           name: "Approvals",
           href: "/travel/approvals",
           icon: ViewColumnsIcon,
           show: () =>
-            travelCaps.isOps ||
-            travelCaps.isDG ||
-            travelCaps.isAccountsApprover ||
-            travelCaps.isEstablishment,
+            // Visible only to personal (employee-linked) users with travel read access
+            !!user?.employee_id && can("travel.read"),
         },
         {
           name: "Expense Claims",
@@ -533,10 +534,8 @@ const LeftSidebar = () => {
           href: "/travel/expense-claim-approvals",
           icon: ViewColumnsIcon,
           show: () =>
-            travelCaps.isOps ||
-            travelCaps.isDG ||
-            travelCaps.isEstablishment ||
-            travelCaps.isAccountsApprover,
+            // Visible only to personal (employee-linked) users with claim read access
+            !!user?.employee_id && can("travel.claim.read"),
         },
         {
           name: "Accounts Tranches",

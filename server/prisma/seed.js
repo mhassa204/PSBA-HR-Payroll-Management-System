@@ -484,7 +484,6 @@ async function main() {
       allowed_actions: [
         // Minimal, explicit DG privileges (no wildcard)
         "travel.read",
-        "travel.manage",
         // Visibility to Requests/Expense Claims screens
         "travel.create",
         "travel.claim.read",
@@ -502,7 +501,6 @@ async function main() {
       allowed_actions: [
         // TADA module only
         "travel.read",
-        "travel.manage",
         "travel.create",
         "travel.update",
         "travel.submit",
@@ -526,7 +524,6 @@ async function main() {
       allowed_actions: [
         // TADA module only (no Accounts processing)
         "travel.read",
-        "travel.manage",
         "travel.create",
         "travel.update",
         "travel.submit",
@@ -647,7 +644,6 @@ async function main() {
         "profile.read",
         "profile.update",
         "travel.read",
-        "travel.manage",
         "travel.create",
         "travel.update",
         "travel.submit",

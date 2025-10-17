@@ -916,6 +916,7 @@ module.exports = {
       where: { id: claim.id },
       data: updateData,
     });
+    // Record SUBMITTED
     await prisma.travelClaimStatusEntry.create({
       data: {
         claim_id: claim.id,
@@ -924,6 +925,33 @@ module.exports = {
         remarks: actorLabel || null,
       },
     });
+
+    // Auto-approve when DG submits their own claim (normal or within-city), then route to Establishment
+    try {
+      if (employee_id && Number(employee_id) === Number(claim.employee_id)) {
+        const er = await prisma.employment.findFirst({
+          where: { employee_id: Number(employee_id), is_current: true, is_deleted: false },
+          include: { designation: true },
+        });
+        const isDG = /^director\s*general$/i.test(er?.designation?.title || "");
+        if (isDG) {
+          // Mark claim as APPROVED and add DG_APPROVED entry
+          await prisma.travelClaim.update({
+            where: { id: claim.id },
+            data: { status: "APPROVED" },
+          });
+          await prisma.travelClaimStatusEntry.create({
+            data: {
+              claim_id: claim.id,
+              action: "DG_APPROVED",
+              actor_employee_id: Number(employee_id),
+              remarks: actorLabel || null,
+            },
+          });
+        }
+      }
+    } catch (_) {}
+
     return prisma.travelClaim.findUnique({
       where: { id: claim.id },
       include: {
@@ -1702,15 +1730,11 @@ module.exports = {
     // - For low-BPS and HoD set: HoD first, then HoD's RO; DG direct reports bypass recommender
     // - Else (high-BPS or no HoD): immediate in-charge of applicant (request-linked) or employee (within-city)
     const expectedRecommenderId = (() => {
-      if ((isDeptOrigin || isHQOrigin) && hodId && !isDirectReportToDG()) {
+      // Department-origin: HoD first, then HoD's RO (if exists)
+      if (isDeptOrigin && hodId && !isDirectReportToDG()) {
         if (recommendationCount === 0) return hodId;
         if (recommendationCount === 1) return hodRoId || null;
         return null; // already completed recommendations
-      }
-      if (isLowBps && hodId && !isDirectReportToDG()) {
-        if (recommendationCount === 0) return hodId;
-        if (recommendationCount === 1) return hodRoId || null;
-        return null;
       }
       // Fallback to immediate in-charge
       const appRo = applicantEmps.find(
