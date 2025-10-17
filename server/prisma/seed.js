@@ -1530,7 +1530,7 @@ async function main() {
 
     // DG (BPS 19-20) - Director General
     {
-      email: "adg.hfp@psba.gop.pk",
+      email: "dg@psba.gop.pk",
       password: encrypt("abc123"),
       role_id: getRoleId("Director General"),
       employee_id: findEmpId("Naveed Rafaqat Ahmad"),
