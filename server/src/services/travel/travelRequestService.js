@@ -638,6 +638,25 @@ module.exports = {
   },
 
   createRequest: async (ctx, data, attendeeIds, totalDays, actorLabel) => {
+    const includeShape = {
+      attendees: { include: { employee: true } },
+      statusEntries: {
+        orderBy: { createdAt: "asc" },
+        include: { actor: true },
+      },
+      applicant: {
+        include: {
+          employmentRecords: {
+            where: { is_current: true, is_deleted: false },
+            include: {
+              location: true,
+              department: { include: { head: true } },
+              designation: true,
+            },
+          },
+        },
+      },
+    };
     const created = await prisma.travelRequest.create({
       data: {
         applicant_id: ctx.meEmpId,
@@ -707,6 +726,14 @@ module.exports = {
         statusEntries: {
           orderBy: { createdAt: "asc" },
           include: { actor: true },
+        },
+        applicant: {
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: { location: true, department: { include: { head: true } }, designation: true },
+            },
+          },
         },
       },
     });

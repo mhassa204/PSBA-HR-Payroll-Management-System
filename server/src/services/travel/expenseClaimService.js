@@ -2011,7 +2011,9 @@ module.exports = {
           (isApprovalAction(lastEntry.action) ||
             lastEntry.action === "RECOMMENDED" ||
             lastEntry.action === "RECOMMENDER_REJECTED") &&
-          (lastEntry.actor_employee_id === actorEmpId ||
+          ((lastEntry.actor_employee_id != null &&
+            actorEmpId != null &&
+            Number(lastEntry.actor_employee_id) === Number(actorEmpId)) ||
             (ctx.userEmail &&
               String(lastEntry.remarks || "")
                 .toLowerCase()
@@ -2107,7 +2109,9 @@ module.exports = {
           (isApprovalAction(lastEntry.action) ||
             lastEntry.action === "RECOMMENDED" ||
             lastEntry.action === "RECOMMENDER_REJECTED") &&
-          (lastEntry.actor_employee_id === actorEmpId ||
+          ((lastEntry.actor_employee_id != null &&
+            actorEmpId != null &&
+            Number(lastEntry.actor_employee_id) === Number(actorEmpId)) ||
             (ctx.userEmail &&
               String(lastEntry.remarks || "")
                 .toLowerCase()
@@ -2496,6 +2500,16 @@ module.exports = {
     if (ctx.meEmpId) {
       orFilters.push({
         statusEntries: { some: { actor_employee_id: Number(ctx.meEmpId) } },
+      });
+    }
+    // Department-account acted-by-me: include when any status entry remarks contain my email
+    if (ctx.userEmail) {
+      orFilters.push({
+        statusEntries: {
+          some: {
+            remarks: { contains: String(ctx.userEmail), mode: "insensitive" },
+          },
+        },
       });
     }
 

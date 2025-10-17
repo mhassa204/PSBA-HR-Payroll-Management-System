@@ -485,6 +485,9 @@ async function main() {
         // Minimal, explicit DG privileges (no wildcard)
         "travel.read",
         "travel.manage",
+        // Visibility to Requests/Expense Claims screens
+        "travel.create",
+        "travel.claim.read",
         "travel.request.approve.dg",
         "travel.claim.approve.dg",
       ],

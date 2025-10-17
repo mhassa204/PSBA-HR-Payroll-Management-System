@@ -33,6 +33,8 @@ const PrivateRoute = ({ roles = [], permissions = [], children }) => {
 
   useEffect(() => {
     if (!violation || violation.type !== "forbidden") return;
+    // Emit a single deduped toast. axios interceptors may also emit a 403 toast; the toastBus
+    // will suppress duplicates within a short window.
     toastBus.emit({ type: "error", message: "Forbidden. You do not have permission." });
   }, [violation]);
 

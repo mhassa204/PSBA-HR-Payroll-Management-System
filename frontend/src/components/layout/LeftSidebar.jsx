@@ -199,6 +199,8 @@ const LeftSidebar = () => {
     isOps: false,
     isEstablishment: false,
     isDG: false,
+    isAccountsApprover: false,
+    isSuperAdmin: user?.role?.name === "Super Admin",
   });
 
   // Fetch current user's employee record (for avatar)
@@ -493,13 +495,7 @@ const LeftSidebar = () => {
       icon: PlaneIcon,
       description: "TADA",
       color: "bg-fuchsia-600",
-      show: () =>
-        travelCaps.canCreateOrOwn ||
-        can("travel.create") ||
-        travelCaps.canViewAll ||
-        can("travel.claim.read") ||
-        travelCaps.isEstablishment ||
-        travelCaps.isDG,
+      show: () => true,
       children: [
         {
           name: "Requests",
@@ -514,11 +510,7 @@ const LeftSidebar = () => {
           name: "Manage Requests",
           href: "/travel/manage",
           icon: ViewColumnsIcon,
-          show: () =>
-            travelCaps.canViewAll ||
-            travelCaps.isAccountsApprover ||
-            travelCaps.isDG ||
-            travelCaps.isEstablishment,
+          show: () => true,
         },
         {
           name: "Approvals",

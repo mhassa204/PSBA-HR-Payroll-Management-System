@@ -272,8 +272,21 @@ export default function ManageExpenseClaimApprovals() {
       return false;
     };
 
-    const lastApprovalIsMine =
-      lastApproval && lastApproval.actor_employee_id === user?.employee_id;
+    // Determine if the last approval/recommendation entry was performed by me.
+    // Prefer strict employee_id match when present; for department accounts without employee linkage,
+    // fall back to matching email embedded in remarks.
+    const entryEmail = (text) => {
+      const m = String(text || "").match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      return m ? m[0].toLowerCase() : "";
+    };
+    const myEmpId = user?.employee_id ? String(user.employee_id) : "";
+    const myEmail = (user?.email || "").toLowerCase();
+    const lastApprovalIsMine = !!(
+      lastApproval &&
+      ((lastApproval.actor_employee_id != null &&
+        String(lastApproval.actor_employee_id) === myEmpId) ||
+        (myEmail && entryEmail(lastApproval.remarks) === myEmail))
+    );
 
     // If Accounts has started processing, lock further actions (except CLEAR by same actor)
     if (hasProcessStarted) {
@@ -298,13 +311,29 @@ export default function ManageExpenseClaimApprovals() {
     }
 
     if (lastApprovalIsMine && !nextStageHasActed()) {
-      const canClear = true;
-      return {
-        canApprove: false,
-        canReject: false,
-        canClear,
-        canRecommend: false,
-      };
+      // Only allow CLEAR (Undo) if I have capability for the same stage of the last action.
+      const act = lastApproval?.action || "";
+      const stage = act === "RECOMMENDED" ? "RECOMMENDER" : act.split("_")[0];
+      let canClear = false;
+      if (stage === "RECOMMENDER") {
+        canClear = isRecommenderFor(claim);
+      } else if (stage === "OPS") {
+        canClear = !!canOps;
+      } else if (stage === "DG") {
+        canClear = !!canDG;
+      } else if (stage === "ESTABLISHMENT") {
+        canClear = !!canEstablishment;
+      } else if (stage === "ACCOUNTS" || stage === "PROCESS") {
+        canClear = !!canAccounts;
+      }
+      if (canClear)
+        return {
+          canApprove: false,
+          canReject: false,
+          canClear: true,
+          canRecommend: false,
+        };
+      // If I don't have capability for that stage, fall through to forward-stage actions
     }
 
     // DG fast-track: skip recommender if direct report to DG
@@ -646,10 +675,17 @@ export default function ManageExpenseClaimApprovals() {
   );
 
   const filteredAll = useMemo(() => {
-    const actedByMe = (c) =>
-      (c.statusEntries || []).some(
-        (se) => String(se.actor_employee_id || "") === String(meEmpId || "")
-      );
+    const actedByMe = (c) => {
+      const myEmp = String(meEmpId || "");
+      const myEmail = String(user?.email || "").toLowerCase();
+      return (c.statusEntries || []).some((se) => {
+        const byEmp = String(se.actor_employee_id || "") === myEmp;
+        const byEmail = myEmail
+          ? String(se.remarks || "").toLowerCase().includes(myEmail)
+          : false;
+        return byEmp || byEmail;
+      });
+    };
     const roleScoped = (allClaims || []).filter(
       (c) => passesRoleFilter(c) || actedByMe(c)
     );

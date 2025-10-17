@@ -35,7 +35,7 @@ export default function TravelRequestsPage() {
     total_days: "",
   });
   const [employeeOptions, setEmployeeOptions] = useState([]);
-  const [selectedEmployees, setSelectedEmployees] = useState([]); // array of ids
+  const [selectedEmployees, setSelectedEmployees] = useState([]); // array of ids (attendees)
   const [caps, setCaps] = useState({
     isBps17Plus: false,
     canCreateOrOwn: false,
@@ -69,7 +69,7 @@ export default function TravelRequestsPage() {
     })();
   }, []);
 
-  // load reportees + self or department employees for selector
+  // load reportees + self or department employees for selector (attendees)
   useEffect(() => {
     (async () => {
       try {
@@ -185,8 +185,9 @@ export default function TravelRequestsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Always allow adding attendees (optional) */}
-              <div className="md:col-span-2">
+              {/* Attendees: Only allow selection for department accounts; personal users don't need to pick applicant */}
+              {authUser?.department_id ? (
+                <div className="md:col-span-2">
                 <label className="text-sm text-muted-foreground">
                   Employees (multi-select, optional)
                 </label>
@@ -225,7 +226,8 @@ export default function TravelRequestsPage() {
                   placeholder={"Type to search employees..."}
                   allowClear
                 />
-              </div>
+                </div>
+              ) : null}
               <div>
                 <label className="text-sm text-muted-foreground">
                   Departure Date

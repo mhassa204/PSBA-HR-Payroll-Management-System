@@ -38,7 +38,8 @@ const ToastProvider = ({ children }) => {
           isVisible={true}
           message={toastItem.message}
           type={toastItem.type}
-          duration={0} // Duration is handled by the hook
+          // Pass duration so the component timer/progress bar can reflect and be cancelled on close
+          duration={toastItem.duration || 4000}
           position={toastItem.position}
           onClose={() => toast.removeToast(toastItem.id)}
         />
