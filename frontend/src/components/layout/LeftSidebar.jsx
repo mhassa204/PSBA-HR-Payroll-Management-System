@@ -659,7 +659,7 @@ const LeftSidebar = () => {
             <img
               src="/psba.png"
               alt="PSBA"
-              className="w-12 h-12 rounded-xl object-contain bg-white p-1 shadow-md"
+              className="w-12 h-12 object-contain"
             />
             <div>
               <h1 className="text-xl font-bold text-white">PSBA Portal</h1>
