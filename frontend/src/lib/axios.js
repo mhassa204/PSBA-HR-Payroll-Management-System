@@ -1,7 +1,22 @@
 import axios from "axios";
 import { toastBus } from "../utils/toastBus";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+// Prefer localhost inference when app is opened on localhost to keep cookies same-site.
+const inferredApi = (() => {
+  try {
+    const { protocol, hostname } = window.location;
+    return `${protocol}//${hostname}:3000/api`;
+  } catch {
+    return "";
+  }
+})();
+const preferLocal = (() => {
+  try {
+    const h = window.location.hostname;
+    return h === "localhost" || h === "127.0.0.1";
+  } catch { return false; }
+})();
+const API_URL = preferLocal ? inferredApi : (import.meta.env.VITE_API_URL || inferredApi);
 
 const axiosInstance = axios.create({
   baseURL: API_URL,

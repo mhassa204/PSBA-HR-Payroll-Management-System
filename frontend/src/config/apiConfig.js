@@ -20,7 +20,7 @@ const apiConfig = {
   useApi: process.env.REACT_APP_USE_API === 'true' || false,
   
   // API endpoints
-  baseUrl: process.env.REACT_APP_API_BASE_URL || 'http://172.16.21.178:3000/api',
+  baseUrl: process.env.REACT_APP_API_BASE_URL || 'http://113.197.55.94:3000/api',
   
   // Timeout settings
   timeout: parseInt(process.env.REACT_APP_API_TIMEOUT) || 30000, // 30 seconds

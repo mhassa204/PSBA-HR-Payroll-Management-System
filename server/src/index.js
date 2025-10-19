@@ -3,6 +3,13 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
+const session = require("express-session");
+const PgSession = require("connect-pg-simple")(session);
+const { Pool } = require("pg");
+const multer = require("multer");
+
+// Routes
+const authRoutes = require("./routes/authRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const employmentRoutes = require("./routes/employmentRoutes");
 const departmentRoutes = require("./routes/departmentRoutes");
@@ -12,11 +19,6 @@ const scaleGradeRoutes = require("./routes/scaleGradeRoutes");
 const roleRoutes = require("./routes/roleRoutes");
 const userRoutes = require("./routes/userRoutes");
 const adminRoutes = require("./routes/adminRoutes");
-const multer = require("multer");
-const session = require("express-session");
-const PgSession = require("connect-pg-simple")(session);
-const { Pool } = require("pg");
-const authRoutes = require("./routes/authRoutes");
 const permissionRoutes = require("./routes/permissionRoutes");
 const systemSettingsRoutes = require("./routes/systemSettingsRoutes");
 const locationRoutes = require("./routes/locationRoutes");
@@ -30,53 +32,58 @@ const cityRoutes = require("./routes/cityRoutes");
 const educationLevelRoutes = require("./routes/educationLevelRoutes");
 const travelRoutes = require("./routes/travelRoutes");
 const travelRateRoutes = require("./routes/travelRateRoutes");
+const { isAuthenticated } = require("./middleware/auth");
 
-const app = express(); 
+const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Use project root for consistent relative paths
+// ✅ CORS must come before everything else
+const corsOptions = {
+  origin: [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://113.197.55.94:5175"
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200, // ✅ fixed spelling
+};
+app.use(cors(corsOptions));
+
+// ✅ Ensure body parsing is before routes
+app.use(express.json());
+
+// ✅ Handle uploads
 const projectRoot = path.resolve(__dirname, "..");
 const uploadDir = path.join(projectRoot, "uploads");
-
-// Ensure upload folder exists
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
   console.log("Upload directory created:", uploadDir);
 }
-
-// Serve uploads folder
 app.use("/uploads", express.static(uploadDir));
-// Also serve under /api/uploads for frontends that use relative API base (e.g. Vite dev proxy)
 app.use("/api/uploads", express.static(uploadDir));
 
-// CORS config
-const corsOptions = {
-  origin: ["http://localhost:5173","http://localhost:5174"],
-  credentials: true,
-  optionSuccessStatus: 200,
-};
-app.use(cors(corsOptions));
-app.use(express.json());
-
-// Postgres connection pool for session store
+// ✅ Sessions
 const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
-
 app.use(session({
   store: new PgSession({
     pool: pgPool,
     tableName: "session",
     createTableIfMissing: true,
   }),
-  secret: process.env.SESSION_SECRET || "supersecret", // Change for production
+  secret: process.env.SESSION_SECRET || "supersecret",
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, httpOnly: true, maxAge: 3600000 },
+  cookie: {
+    secure: false,          // use HTTPS + true in production
+    httpOnly: true,
+    sameSite: "lax",        // ✅ use lax instead of none for dev (browser safe)
+    maxAge: 3600000,
+  },
 }));
 
-// Mount auth routes so frontend can call /api/login, /api/logout, /api/me
+// ✅ Routes
 app.use("/api", authRoutes);
-
-// Routes
 app.use("/api/permissions", permissionRoutes);
 app.use("/api/settings", systemSettingsRoutes);
 app.use("/api/employees", employeeRoutes);
@@ -97,11 +104,10 @@ app.use("/api/districts", districtRoutes);
 app.use("/api/cities", cityRoutes);
 app.use("/api/education-levels", educationLevelRoutes);
 app.use("/api/travel", travelRoutes);
-app.use("/api", travelRateRoutes); // Mount travel rates (endpoints: GET /api/travel-rates, etc.)
-const { isAuthenticated } = require("./middleware/auth");
+app.use("/api", travelRateRoutes);
 app.use("/api/admin", isAuthenticated, adminRoutes);
 
-// Error handling middleware
+// ✅ Error handler
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err) {
     console.error("Upload error:", err);
@@ -110,21 +116,11 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// Error handling for uncaught exceptions
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
-});
-
-// Start server
+// ✅ Start server
 const server = app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Server also accessible on http://172.16.21.178:${PORT}`);
+  console.log(`✅ Server running on:`);
+  console.log(`   http://localhost:${PORT}`);
+  console.log(`   http://172.16.21.178:${PORT}`);
 });
 
 server.on('error', (err) => {

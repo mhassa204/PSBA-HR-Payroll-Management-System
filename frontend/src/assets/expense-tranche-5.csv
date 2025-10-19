@@ -1,7 +1,0 @@
-tranche_code,claim_id,request_id,employee_id,employee_name,cnic,dept,designation,bank_name,account_no,from_date,to_date,grand_total
-TR-1760697263962,158,,766,Hassan Javed,3520212346004,HQ Admin / Operations,,,,,,0
-TR-1760697263962,157,,768,Hamza Tariq,3520212346020,HQ Admin / Operations,,,,,,0
-TR-1760697263962,156,,767,Ayesha Khan,3520212346012,HQ Admin / Operations,Manager,,,,,0
-TR-1760697263962,155,,749,Rizwan Haider Shah,3520212345735,Projects, Planning & Initiatives,Assistant Director,United Bank Limited,PK00UBL0000001111222233,2025-10-13,2025-10-13,15100
-TR-1760697263962,154,,751,Muhammad Ali Hassan,3520212345750,Software Development & Operations,Assistant Director,Habib Bank Limited,PK00HBL0000000987654321,2025-10-11,2025-10-11,12200
-TR-1760697263962,153,,750,Muhammad Ahmad,3520212345743,IT,Assistant Director,National Bank of Pakistan,PK00NBP0000001234567890,2025-10-09,2025-10-09,12200

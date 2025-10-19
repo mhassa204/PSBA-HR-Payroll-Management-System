@@ -32,10 +32,18 @@ class EmploymentService {
    * @returns {string} API base URL
    */
   getApiBaseUrl() {
-    if (typeof process !== "undefined" && process.env) {
-      return process.env.REACT_APP_API_BASE_URL || "http://localhost:3000/api";
+    // Use Vite env when available; otherwise infer from current host
+    try {
+      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+        return import.meta.env.VITE_API_URL;
+      }
+    } catch {}
+    try {
+      const { protocol, hostname } = window.location;
+      return `${protocol}//${hostname}:3000/api`;
+    } catch {
+      return "";
     }
-    return "http://localhost:3000/api";
   }
 
   /**

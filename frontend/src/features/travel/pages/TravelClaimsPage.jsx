@@ -9,7 +9,10 @@ import EnhancedModal from '@/components/ui/EnhancedModal';
 
 export default function TravelClaimsPage() {
   const can = useAuthStore(s => s.can);
-  const apiOrigin = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+  const apiOrigin = (
+    import.meta.env.VITE_API_URL ||
+    (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000/api` : '')
+  ).replace(/\/api\/?$/, '');
 
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);

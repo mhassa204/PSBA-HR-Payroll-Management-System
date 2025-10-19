@@ -22,7 +22,11 @@ export function LoginForm({ className, ...props }) {
     setError("");
     setLoading(true);
     try {
-      await login({ email, password });
+      const payload = {
+        email: (email || "").trim(),
+        password: (password || "").trim(),
+      };
+      await login(payload);
       navigate("/dashboard");
     } catch (err) {
       setError("Invalid email or password");

@@ -10,7 +10,20 @@
  */
 export const getServerBaseUrl = () => {
   // Get API base URL and remove /api suffix
-  const apiBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+  const preferLocal = (() => {
+    try {
+      const h = window.location.hostname;
+      return h === 'localhost' || h === '127.0.0.1';
+    } catch { return false; }
+  })();
+  const apiBaseUrl = (preferLocal ? null : import.meta.env.VITE_API_URL) || (() => {
+    try {
+      const { protocol, hostname } = window.location;
+      return `${protocol}//${hostname}:3000/api`;
+    } catch {
+      return "";
+    }
+  })();
   return apiBaseUrl.replace('/api', '');
 };
 

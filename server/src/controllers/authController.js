@@ -4,24 +4,28 @@ const { decrypt } = require("../utils/cryptoUtil");
 
 const authController = {
   login: async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!email || !password) {
       return res
         .status(400)
         .json({ success: false, error: "Email and password required" });
     }
 
+    // Normalize inputs
+    const emailNorm = String(email).trim();
+    const passNorm = String(password).trim();
+
     // Only allow non-deleted users whose roles are enabled and not deleted
     const user = await prisma.user.findFirst({
       where: {
-        email,
+        email: { equals: emailNorm, mode: 'insensitive' },
         is_deleted: false,
         role: { is: { is_deleted: false, enabled: true } },
       },
       include: { role: true, employee: true, department: true, location: true },
     });
 
-    if (!user || decrypt(user.password) !== password) {
+    if (!user || decrypt(user.password) !== passNorm) {
       return res
         .status(401)
         .json({ success: false, error: "Invalid credentials" });
