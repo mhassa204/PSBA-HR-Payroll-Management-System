@@ -14,19 +14,28 @@ router.get(
   "/",
   isAuthenticated,
   // Allow either explicit scale-grades.read or travel.rates.read (for Accounts using Travel Rates page)
-  require("../middleware/auth").authorizeAny(["scale-grades.read", "travel.rates.read"]),
+  require("../middleware/auth").authorizeAny([
+    "scale-grades.read",
+    "travel.rates.read",
+  ]),
   scaleGradeController.getAllScaleGrades
 );
 router.get(
   "/statistics",
   isAuthenticated,
-  require("../middleware/auth").authorizeAny(["scale-grades.read", "travel.rates.read"]),
+  require("../middleware/auth").authorizeAny([
+    "scale-grades.read",
+    "travel.rates.read",
+  ]),
   scaleGradeController.getScaleGradeStatistics
 );
 router.get(
   "/:id",
   isAuthenticated,
-  require("../middleware/auth").authorizeAny(["scale-grades.read", "travel.rates.read"]),
+  require("../middleware/auth").authorizeAny([
+    "scale-grades.read",
+    "travel.rates.read",
+  ]),
   scaleGradeController.getScaleGradeById
 );
 router.put(

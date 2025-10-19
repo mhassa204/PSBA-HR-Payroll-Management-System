@@ -630,7 +630,7 @@ async function main() {
         "travel.claim.create",
         "travel.claim.submit",
         "travel.claim.verify.establishment",
-  "travel.claim.status",
+        "travel.claim.status",
         // Full Employee Module access
         "employees.read",
         "employees.create",
@@ -737,16 +737,16 @@ async function main() {
     "employment.create",
     "employment.update",
     "employment.delete",
-  // Employment granular routes
-  "employment.salary.create",
-  "employment.salary.update",
-  "employment.salary.delete",
-  "employment.location.create",
-  "employment.location.update",
-  "employment.location.delete",
-  "employment.contract.create",
-  "employment.contract.update",
-  "employment.contract.delete",
+    // Employment granular routes
+    "employment.salary.create",
+    "employment.salary.update",
+    "employment.salary.delete",
+    "employment.location.create",
+    "employment.location.update",
+    "employment.location.delete",
+    "employment.contract.create",
+    "employment.contract.update",
+    "employment.contract.delete",
     // granular stage permissions
     "travel.request.approve.ops",
     "travel.request.approve.dg",
@@ -842,13 +842,48 @@ async function main() {
       category: "BPS",
     },
     // Add BPS scales below 17
-    { name: "BPS-16", description: "Basic Pay Scale 16", level: 16, category: "BPS" },
-    { name: "BPS-15", description: "Basic Pay Scale 15", level: 15, category: "BPS" },
-    { name: "BPS-14", description: "Basic Pay Scale 14", level: 14, category: "BPS" },
-    { name: "BPS-13", description: "Basic Pay Scale 13", level: 13, category: "BPS" },
-    { name: "BPS-12", description: "Basic Pay Scale 12", level: 12, category: "BPS" },
-    { name: "BPS-11", description: "Basic Pay Scale 11", level: 11, category: "BPS" },
-    { name: "BPS-10", description: "Basic Pay Scale 10", level: 10, category: "BPS" },
+    {
+      name: "BPS-16",
+      description: "Basic Pay Scale 16",
+      level: 16,
+      category: "BPS",
+    },
+    {
+      name: "BPS-15",
+      description: "Basic Pay Scale 15",
+      level: 15,
+      category: "BPS",
+    },
+    {
+      name: "BPS-14",
+      description: "Basic Pay Scale 14",
+      level: 14,
+      category: "BPS",
+    },
+    {
+      name: "BPS-13",
+      description: "Basic Pay Scale 13",
+      level: 13,
+      category: "BPS",
+    },
+    {
+      name: "BPS-12",
+      description: "Basic Pay Scale 12",
+      level: 12,
+      category: "BPS",
+    },
+    {
+      name: "BPS-11",
+      description: "Basic Pay Scale 11",
+      level: 11,
+      category: "BPS",
+    },
+    {
+      name: "BPS-10",
+      description: "Basic Pay Scale 10",
+      level: 10,
+      category: "BPS",
+    },
   ];
 
   console.log("📊 Seeding scale grades...");
