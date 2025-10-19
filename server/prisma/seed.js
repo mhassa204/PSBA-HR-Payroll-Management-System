@@ -535,7 +535,6 @@ async function main() {
         "travel.claim.update",
         "travel.claim.submit",
         "travel.claim.status",
-        "travel.rates.read",
         // Allow opening Manage screen for ADs to participate in recommender/approval flows
         "travel.manage",
       ],
@@ -558,7 +557,6 @@ async function main() {
         "travel.claim.create",
         "travel.claim.submit",
         "travel.claim.status",
-        "travel.rates.read",
         // OPS approvals
         "travel.request.approve.ops",
         "travel.claim.approve.ops",
@@ -633,7 +631,36 @@ async function main() {
         "travel.claim.submit",
         "travel.claim.verify.establishment",
         "travel.claim.status",
-        "travel.rates.read",
+        // Full Employee Module access
+        "employees.read",
+        "employees.create",
+        "employees.update",
+        "employees.delete",
+        // Employment sub-module
+        "employment.read",
+        "employment.create",
+        "employment.update",
+        "employment.delete",
+        // Employment granular management
+        "employment.salary.create",
+        "employment.salary.update",
+        "employment.salary.delete",
+        "employment.location.create",
+        "employment.location.update",
+        "employment.location.delete",
+        "employment.contract.create",
+        "employment.contract.update",
+        "employment.contract.delete",
+        // Settings module (read-only; exclude roles.read)
+        "departments.read",
+        "designations.read",
+        "role-tags.read",
+        "scale-grades.read",
+        "locations.read",
+        "devices.read",
+        "districts.read",
+        "cities.read",
+        "education-levels.read",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -700,6 +727,26 @@ async function main() {
     "travel.claim.settle",
     "travel.rates.read",
     "travel.rates.manage",
+    // Employee Module routes
+    "employees.read",
+    "employees.create",
+    "employees.update",
+    "employees.delete",
+    // Employment sub-module routes
+    "employment.read",
+    "employment.create",
+    "employment.update",
+    "employment.delete",
+    // Employment granular routes
+    "employment.salary.create",
+    "employment.salary.update",
+    "employment.salary.delete",
+    "employment.location.create",
+    "employment.location.update",
+    "employment.location.delete",
+    "employment.contract.create",
+    "employment.contract.update",
+    "employment.contract.delete",
     // granular stage permissions
     "travel.request.approve.ops",
     "travel.request.approve.dg",
@@ -794,41 +841,48 @@ async function main() {
       level: 20,
       category: "BPS",
     },
+    // Add BPS scales below 17
     {
-      name: "Grade-A",
-      description: "Grade A level",
-      level: 1,
-      category: "Grade",
+      name: "BPS-16",
+      description: "Basic Pay Scale 16",
+      level: 16,
+      category: "BPS",
     },
     {
-      name: "Grade-B",
-      description: "Grade B level",
-      level: 2,
-      category: "Grade",
+      name: "BPS-15",
+      description: "Basic Pay Scale 15",
+      level: 15,
+      category: "BPS",
     },
     {
-      name: "Grade-C",
-      description: "Grade C level",
-      level: 3,
-      category: "Grade",
+      name: "BPS-14",
+      description: "Basic Pay Scale 14",
+      level: 14,
+      category: "BPS",
     },
     {
-      name: "Level-1",
-      description: "Entry level position",
-      level: 1,
-      category: "Level",
+      name: "BPS-13",
+      description: "Basic Pay Scale 13",
+      level: 13,
+      category: "BPS",
     },
     {
-      name: "Level-2",
-      description: "Intermediate level position",
-      level: 2,
-      category: "Level",
+      name: "BPS-12",
+      description: "Basic Pay Scale 12",
+      level: 12,
+      category: "BPS",
     },
     {
-      name: "Level-3",
-      description: "Senior level position",
-      level: 3,
-      category: "Level",
+      name: "BPS-11",
+      description: "Basic Pay Scale 11",
+      level: 11,
+      category: "BPS",
+    },
+    {
+      name: "BPS-10",
+      description: "Basic Pay Scale 10",
+      level: 10,
+      category: "BPS",
     },
   ];
 
@@ -2454,7 +2508,7 @@ async function main() {
       effective_from: new Date("2022-01-01"),
       office_location: "Sahulat Bazaar Mian Plaza",
       remarks: "Bazaar Manager at Bazaar location",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-3").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-16").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2471,8 +2525,8 @@ async function main() {
       employment_type: "Regular",
       effective_from: new Date("2022-02-01"),
       office_location: "Head Quarter",
-      remarks: "HO staff with Level-3 (below BPS-17)",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-3").id,
+      remarks: "HO staff with BPS-16 (below BPS-17)",
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-16").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2490,7 +2544,7 @@ async function main() {
       effective_from: new Date("2022-03-01"),
       office_location: "Head Quarter",
       remarks: "Establishment viewer for Manage list",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-3").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-16").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2508,7 +2562,7 @@ async function main() {
       effective_from: new Date("2023-01-01"),
       office_location: "Head Quarter",
       remarks: "Dummy employee for IT department testing",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Grade-A").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-14").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2524,7 +2578,7 @@ async function main() {
       effective_from: new Date("2023-02-01"),
       office_location: "Head Quarter",
       remarks: "Dummy employee for Accounts department testing",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Grade-B").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-13").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2544,7 +2598,7 @@ async function main() {
       effective_from: new Date("2023-08-01"),
       office_location: "Sahulat Bazaar Township",
       remarks: "Assigned to Township bazaar",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-2").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-12").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2594,21 +2648,19 @@ async function main() {
     }
   }
 
-  // 🔐 Create personal user accounts for employees below BPS-17 (BPS 16 and below don't get accounts per requirements)
+  // 🔐 Create personal user accounts for employees below BPS-17 (BPS-16 and below)
   console.log("👤 Seeding personal user accounts for remaining employees...");
   const employeeRoleId = getRoleId("Employee");
 
-  // Only create Employee accounts for staff below management level (non-BPS or Level grades)
+  // Only create Employee accounts for staff below management level (BPS 16 and below)
   const belowManagementLevel = await prisma.employment.findMany({
     where: {
       is_current: true,
       scale_grade_id: { not: null },
       scale_grade: {
         is: {
-          OR: [
-            { category: "Level" }, // Level-1, Level-2, Level-3 grades get Employee accounts
-            { category: "Grade" }, // Grade-A, Grade-B, Grade-C grades get Employee accounts
-          ],
+          category: "BPS",
+          level: { lte: 16 },
         },
       },
     },
@@ -2716,387 +2768,7 @@ async function main() {
   );
 
   // Helper to get employee id by full name for subsequent seeding
-  const empByName = (n) => createdEmployees.find((e) => e.full_name === n)?.id;
-  // Helper to get a date N days from now
-  const daysFromNow = (d) => {
-    const dt = new Date();
-    dt.setDate(dt.getDate() + d);
-    return dt;
-  };
-  // Helper to recompute totals for a claim (distance, travel_total, per_diem_amount, grand_total)
-  const recomputeClaimTotals = async (claimId) => {
-    const claim = await prisma.travelClaim.findUnique({
-      where: { id: Number(claimId) },
-      include: { segments: true },
-    });
-    if (!claim) return;
-    const total_distance_km = (claim.segments || []).reduce(
-      (s, a) => s + Number(a.distance_km || 0),
-      0
-    );
-    const distance_amount = total_distance_km * Number(claim.rate_per_km || 0);
-    const travel_total = distance_amount + Number(claim.toll_tax_total || 0);
-    const per_diem_amount =
-      Number(claim.per_diem_days || 0) * Number(claim.per_diem_rate || 0);
-    const grand_total = travel_total + per_diem_amount;
-    await prisma.travelClaim.update({
-      where: { id: claim.id },
-      data: {
-        total_distance_km,
-        distance_amount,
-        travel_total,
-        per_diem_amount,
-        grand_total,
-      },
-    });
-  };
-
-  // ✅ Insert sample approved travel request + expense claims (with segments & documents)
-  console.log("🧪 Seeding sample expense claim data...");
-  const sampleApplicantId = empByName("Muhammad Ahmad");
-  const sampleAttendeeId = empByName("Muhammad Ali Hassan");
-  if (sampleApplicantId && sampleAttendeeId) {
-    const recentApprovedReq = await prisma.travelRequest.create({
-      data: {
-        applicant_id: sampleApplicantId,
-        departure_date: daysFromNow(-2),
-        departure_time: "07:45",
-        expected_return_date: daysFromNow(-1),
-        purpose: "Field inspection for expense claim demo",
-        destination: "Sheikhupura",
-        total_days: 1,
-        status: "APPROVED",
-      },
-    });
-    await prisma.travelRequestEmployee.createMany({
-      data: [
-        { request_id: recentApprovedReq.id, employee_id: sampleApplicantId },
-        { request_id: recentApprovedReq.id, employee_id: sampleAttendeeId },
-      ],
-    });
-    await prisma.travelRequestStatusEntry.create({
-      data: {
-        request_id: recentApprovedReq.id,
-        action: "CREATED",
-        actor_employee_id: sampleApplicantId,
-      },
-    });
-    await prisma.travelRequestStatusEntry.create({
-      data: {
-        request_id: recentApprovedReq.id,
-        action: "APPROVED",
-        actor_employee_id: empByName("Naveed Rafaqat Ahmad"),
-      },
-    });
-
-    // Create claim for attendee (not applicant) to demonstrate multi-attendee scenario
-    const claim = await prisma.travelClaim.create({
-      data: {
-        employee_id: sampleAttendeeId,
-        travel_request_id: recentApprovedReq.id,
-        from_date: recentApprovedReq.departure_date,
-        to_date: recentApprovedReq.expected_return_date,
-        per_diem_days: 0,
-        per_diem_rate: 1500,
-        rate_per_km: 35,
-        toll_tax_total: 500,
-        status: "DRAFT",
-      },
-    });
-
-    // Segments
-    await prisma.travelClaimSegment.createMany({
-      data: [
-        {
-          claim_id: claim.id,
-          departure_from: "Lahore",
-          departure_to: "Sheikhupura",
-          depart_time: "07:45",
-          arrive_time: "09:00",
-          mode: "Car",
-          distance_km: 55,
-        },
-        {
-          claim_id: claim.id,
-          departure_from: "Sheikhupura",
-          departure_to: "Lahore",
-          depart_time: "17:30",
-          arrive_time: "18:40",
-          mode: "Car",
-          distance_km: 55,
-        },
-      ],
-    });
-
-    // Documents (include mandatory REPORT and one FUEL)
-    await prisma.travelClaimDocument.createMany({
-      data: [
-        {
-          claim_id: claim.id,
-          category: "REPORT",
-          file_path: "uploads/Travel/Claims/demo/report.pdf",
-          mime_type: "application/pdf",
-          file_size: 12000,
-        },
-        {
-          claim_id: claim.id,
-          category: "FUEL",
-          file_path: "uploads/Travel/Claims/demo/fuel_receipt.jpg",
-          mime_type: "image/jpeg",
-          file_size: 8000,
-        },
-      ],
-    });
-
-    // Recompute totals
-    const segs = await prisma.travelClaimSegment.findMany({
-      where: { claim_id: claim.id },
-    });
-    const total_distance = segs.reduce(
-      (s, a) => s + Number(a.distance_km || 0),
-      0
-    );
-    const distance_amount = total_distance * 35;
-    const travel_total = distance_amount + 500;
-    const per_diem_amount = 1 * 1500;
-    const grand_total = travel_total + per_diem_amount;
-    await prisma.travelClaim.update({
-      where: { id: claim.id },
-      data: {
-        total_distance_km: total_distance,
-        distance_amount,
-        travel_total,
-        per_diem_amount,
-        grand_total,
-      },
-    });
-    console.log(
-      "✅ Sample expense claim seeded: Request",
-      recentApprovedReq.id,
-      "Claim",
-      claim.id
-    );
-  } else {
-    console.log("⚠️ Skipped sample expense claim seeding (missing employees)");
-  }
-
-  // NEW: Seed VERIFIED claims for Accounts tranche testing
-  console.log("🧾 Seeding Establishment-VERIFIED claims for Accounts...");
-  const seedVerifiedClaim = async (empName, fromDaysAgo, toDaysAgo) => {
-    const empIdLocal = empByName(empName);
-    if (!empIdLocal) return null;
-    const rates17 = { rate_per_km: 300, per_diem_rate: 1500 };
-    const c = await prisma.travelClaim.create({
-      data: {
-        employee_id: empIdLocal,
-        travel_request_id: null, // within-city claim
-        from_date: daysFromNow(-fromDaysAgo),
-        to_date: daysFromNow(-toDaysAgo),
-        per_diem_days: 0,
-        rate_per_km: rates17.rate_per_km,
-        per_diem_rate: rates17.per_diem_rate,
-        toll_tax_total: 200,
-        transport_mode: "OWN",
-        fuel_total: 0,
-        fare_total: 0,
-        status: "VERIFIED",
-      },
-    });
-    await prisma.travelClaimSegment.createMany({
-      data: [
-        {
-          claim_id: c.id,
-          departure_from: "Lahore",
-          departure_to: "HQ",
-          depart_time: "09:00",
-          arrive_time: "10:00",
-          mode: "Car",
-          distance_km: 20,
-        },
-        {
-          claim_id: c.id,
-          departure_from: "HQ",
-          departure_to: "Lahore",
-          depart_time: "16:00",
-          arrive_time: "17:00",
-          mode: "Car",
-          distance_km: 20,
-        },
-      ],
-    });
-    await prisma.travelClaimDocument.create({
-      data: {
-        claim_id: c.id,
-        category: "REPORT",
-        file_path: "uploads/Travel/Claims/demo/within_city_report.pdf",
-        mime_type: "application/pdf",
-        file_size: 10000,
-      },
-    });
-    // Status history: SUBMITTED -> RECOMMENDED -> DG_APPROVED -> ESTABLISHMENT_VERIFIED
-    await prisma.travelClaimStatusEntry.create({
-      data: {
-        claim_id: c.id,
-        action: "SUBMITTED",
-        actor_employee_id: empIdLocal,
-      },
-    });
-    await prisma.travelClaimStatusEntry.create({
-      data: {
-        claim_id: c.id,
-        action: "RECOMMENDED",
-        actor_employee_id: empByName("Roshan Zameer"),
-      },
-    });
-    await prisma.travelClaimStatusEntry.create({
-      data: {
-        claim_id: c.id,
-        action: "DG_APPROVED",
-        actor_employee_id: empByName("Naveed Rafaqat Ahmad"),
-      },
-    });
-    await prisma.travelClaimStatusEntry.create({
-      data: {
-        claim_id: c.id,
-        action: "ESTABLISHMENT_VERIFIED",
-        actor_employee_id: empByName("Mariya Iqbal"),
-      },
-    });
-    // Totals recompute
-    await recomputeClaimTotals(c.id);
-    console.log("✅ Seeded VERIFIED claim for", empName, "→ Claim", c.id);
-    return c.id;
-  };
-  const v1 = await seedVerifiedClaim("Muhammad Ahmad", 8, 8);
-  const v2 = await seedVerifiedClaim("Muhammad Ali Hassan", 6, 6);
-
-  // Seed an APPROVED claim (DG-approved, awaiting Establishment verification)
-  console.log("🧾 Seeding DG-APPROVED claim for Establishment stage...");
-  const seedApprovedForEstablishment = async (
-    empName,
-    fromDaysAgo,
-    toDaysAgo
-  ) => {
-    const empIdLocal = empByName(empName);
-    if (!empIdLocal) return null;
-    const c = await prisma.travelClaim.create({
-      data: {
-        employee_id: empIdLocal,
-        travel_request_id: null, // within-city claim for simplicity
-        from_date: daysFromNow(-fromDaysAgo),
-        to_date: daysFromNow(-toDaysAgo),
-        per_diem_days: 0,
-        rate_per_km: 300,
-        per_diem_rate: 1500,
-        toll_tax_total: 100,
-        transport_mode: "OWN",
-        fuel_total: 0,
-        fare_total: 0,
-        status: "APPROVED",
-      },
-    });
-    await prisma.travelClaimSegment.createMany({
-      data: [
-        {
-          claim_id: c.id,
-          departure_from: "Lahore",
-          departure_to: "Field",
-          depart_time: "09:15",
-          arrive_time: "10:00",
-          mode: "Car",
-          distance_km: 25,
-        },
-        {
-          claim_id: c.id,
-          departure_from: "Field",
-          departure_to: "Lahore",
-          depart_time: "16:30",
-          arrive_time: "17:10",
-          mode: "Car",
-          distance_km: 25,
-        },
-      ],
-    });
-    await prisma.travelClaimDocument.create({
-      data: {
-        claim_id: c.id,
-        category: "REPORT",
-        file_path: "uploads/Travel/Claims/demo/approved_report.pdf",
-        mime_type: "application/pdf",
-        file_size: 9000,
-      },
-    });
-    // Status history: SUBMITTED -> RECOMMENDED -> DG_APPROVED (no Establishment action yet)
-    await prisma.travelClaimStatusEntry.create({
-      data: {
-        claim_id: c.id,
-        action: "SUBMITTED",
-        actor_employee_id: empIdLocal,
-      },
-    });
-    await prisma.travelClaimStatusEntry.create({
-      data: {
-        claim_id: c.id,
-        action: "RECOMMENDED",
-        actor_employee_id: empByName("Roshan Zameer"),
-      },
-    });
-    await prisma.travelClaimStatusEntry.create({
-      data: {
-        claim_id: c.id,
-        action: "DG_APPROVED",
-        actor_employee_id: empByName("Naveed Rafaqat Ahmad"),
-      },
-    });
-    await recomputeClaimTotals(c.id);
-    console.log(
-      "✅ Seeded APPROVED claim (awaiting Establishment) for",
-      empName,
-      "→ Claim",
-      c.id
-    );
-    return c.id;
-  };
-  const estPending = await seedApprovedForEstablishment(
-    "Rizwan Haider Shah",
-    4,
-    4
-  );
-
-  // Seed Travel Rates (sample)
-  console.log("🧮 Seeding travel rates...");
-  const sampleGrades = await prisma.scaleGrade.findMany({
-    where: { name: { in: ["BPS-17", "BPS-18", "BPS-19", "Level-3"] } },
-  });
-  for (const g of sampleGrades) {
-    const exists = await prisma.travelRate.findFirst({
-      where: { scale_grade_id: g.id },
-    });
-    if (!exists) {
-      await prisma.travelRate.create({
-        data: {
-          scale_grade_id: g.id,
-          rate_per_km:
-            g.name === "BPS-17"
-              ? 300
-              : g.name === "BPS-18"
-              ? 320
-              : g.name === "BPS-19"
-              ? 350
-              : 150,
-          per_diem_rate:
-            g.name === "BPS-17"
-              ? 1500
-              : g.name === "BPS-18"
-              ? 1700
-              : g.name === "BPS-19"
-              ? 2000
-              : 800,
-        },
-      });
-      console.log("  • Rate added for", g.name);
-    }
-  }
+  // ...existing code...
 
   console.log("🎉 Database seeding completed successfully!");
   console.log(`📊 Summary:`);

@@ -11,6 +11,7 @@ import {
 } from "../../../services/travelService";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import EnhancedModal from "@/components/ui/EnhancedModal";
 import { useAuthStore } from "../../auth/authStore";
@@ -23,6 +24,11 @@ export default function ManageTravelRequests() {
   const [submitting, setSubmitting] = useState(false);
   const [caps, setCaps] = useState({ isDG: false, isOps: false });
   const meEmpId = useAuthStore((s) => s.user?.employee_id);
+  // Filters
+  const [search, setSearch] = useState("");
+  const [locFilter, setLocFilter] = useState(""); // '' | HQ | BAZAAR (derived)
+  const [departFrom, setDepartFrom] = useState("");
+  const [departTo, setDepartTo] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -252,6 +258,51 @@ export default function ManageTravelRequests() {
           <CardTitle>Related TADA Requests</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="p-3 flex flex-col md:flex-row md:items-center gap-2 text-sm">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search purpose/destination"
+              className="w-full md:w-64"
+            />
+            <select
+              value={locFilter}
+              onChange={(e) => setLocFilter(e.target.value)}
+              className="border rounded px-2 py-2"
+            >
+              <option value="">All Locations</option>
+              <option value="HQ">HQ</option>
+              <option value="BAZAAR">Bazaar</option>
+            </select>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Depart From</span>
+              <Input
+                type="date"
+                value={departFrom}
+                onChange={(e) => setDepartFrom(e.target.value)}
+                className="w-40"
+              />
+              <span className="text-muted-foreground">To</span>
+              <Input
+                type="date"
+                value={departTo}
+                onChange={(e) => setDepartTo(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setLocFilter("");
+                setDepartFrom("");
+                setDepartTo("");
+              }}
+            >
+              Clear
+            </Button>
+          </div>
           <div className="divide-y">
             {loading && (
               <div className="p-4 text-muted-foreground">Loading...</div>
@@ -259,43 +310,72 @@ export default function ManageTravelRequests() {
             {!loading && list.length === 0 && (
               <div className="p-6 text-muted-foreground">No requests found</div>
             )}
-            {list.map((r) => (
-              <div
-                key={r.id}
-                className="p-4 flex items-center justify-between text-sm"
-              >
-                <div className="space-y-0.5">
-                  <div className="font-medium">{r.purpose || "—"}</div>
-                  <div className="text-muted-foreground">
-                    {r.destination ? `${r.destination} · ` : ""}
-                    {String(r.departure_date).slice(0, 10)}{" "}
-                    {r.departure_time ? `at ${r.departure_time}` : ""} →{" "}
-                    {String(r.expected_return_date).slice(0, 10)} ·{" "}
-                    {r.total_days ? `${r.total_days} day(s)` : "—"}
+            {(list || [])
+              .filter((r) => {
+                const q = search.trim().toLowerCase();
+                if (q) {
+                  const dest = (r.destination || "").toLowerCase();
+                  const purpose = (r.purpose || "").toLowerCase();
+                  if (!(dest.includes(q) || purpose.includes(q))) return false;
+                }
+                if (locFilter) {
+                  // Fallback via CREATED remarks marker
+                  const created = (r.statusEntries || []).find(
+                    (e) => e.action === "CREATED"
+                  );
+                  const rem = String(created?.remarks || "");
+                  if (locFilter === "BAZAAR" && !/\[LOC\]/i.test(rem))
+                    return false;
+                  if (locFilter === "HQ" && !/\[DEPT\]/i.test(rem))
+                    return false;
+                }
+                if (departFrom) {
+                  if (String(r.departure_date).slice(0, 10) < departFrom)
+                    return false;
+                }
+                if (departTo) {
+                  if (String(r.departure_date).slice(0, 10) > departTo)
+                    return false;
+                }
+                return true;
+              })
+              .map((r) => (
+                <div
+                  key={r.id}
+                  className="p-4 flex items-center justify-between text-sm"
+                >
+                  <div className="space-y-0.5">
+                    <div className="font-medium">{r.purpose || "—"}</div>
+                    <div className="text-muted-foreground">
+                      {r.destination ? `${r.destination} · ` : ""}
+                      {String(r.departure_date).slice(0, 10)}{" "}
+                      {r.departure_time ? `at ${r.departure_time}` : ""} →{" "}
+                      {String(r.expected_return_date).slice(0, 10)} ·{" "}
+                      {r.total_days ? `${r.total_days} day(s)` : "—"}
+                    </div>
+                    {(() => {
+                      const loc = applicantLocationBadge(r);
+                      return loc ? (
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {loc}
+                          </Badge>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
-                  {(() => {
-                    const loc = applicantLocationBadge(r);
-                    return loc ? (
-                      <div className="flex items-center gap-1">
-                        <Badge variant="secondary" className="text-[10px]">
-                          {loc}
-                        </Badge>
-                      </div>
-                    ) : null;
-                  })()}
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{r.status || "CREATED"}</Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDetail(r.id)}
+                    >
+                      View
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{r.status || "CREATED"}</Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openDetail(r.id)}
-                  >
-                    View
-                  </Button>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </CardContent>
       </Card>

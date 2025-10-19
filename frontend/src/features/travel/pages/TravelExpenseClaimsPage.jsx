@@ -44,6 +44,11 @@ export default function TravelExpenseClaimsPage() {
   const [claim, setClaim] = useState(null);
   const [saving, setSaving] = useState(false);
   const [pendingCreationAttendee, setPendingCreationAttendee] = useState(null); // holds attendee until user confirms creation
+  // Filters for Existing Claims list
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState(""); // claim.from_date (or request.departure_date)
+  const [dateTo, setDateTo] = useState("");
 
   // Form core fields
   const [form, setForm] = useState({
@@ -383,12 +388,12 @@ export default function TravelExpenseClaimsPage() {
     (req.claims || []).some((c) => c.employee_id === empId);
 
   const claimLocationBadge = (c) => {
-    const er = c?.employee?.employmentRecords?.[0];
-    if (!er || er.is_deleted) return null;
-    const loc = er.location || null;
+    const er = (c?.employee?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const loc = er?.location || null;
     if (!loc) return null;
-    const label = loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
-    return label;
+    return loc.type === "HEAD_OFFICE" ? "HQ" : loc.name || "Bazaar";
   };
 
   return (
@@ -525,6 +530,64 @@ export default function TravelExpenseClaimsPage() {
                   Refresh
                 </Button>
               </div>
+              {/* Filters */}
+              <div className="flex flex-col md:flex-row md:items-center gap-2 text-sm">
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search id/name/cnic"
+                  className="w-full md:w-56"
+                />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="border rounded px-2 py-2"
+                >
+                  <option value="">All Statuses</option>
+                  {[
+                    "DRAFT",
+                    "SUBMITTED",
+                    "APPROVED",
+                    "VERIFIED",
+                    "UNDER_PROCESS",
+                    "PROCESSED",
+                    "SETTLED",
+                    "REJECTED",
+                  ].map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">From</span>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-40"
+                  />
+                  <span className="text-muted-foreground">To</span>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => {
+                    setSearch("");
+                    setStatusFilter("");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
               {loadingClaims && (
                 <div className="text-sm text-muted-foreground">
                   Loading claims...
@@ -536,63 +599,98 @@ export default function TravelExpenseClaimsPage() {
                 </div>
               )}
               <div className="divide-y">
-                {claims.map((c) => (
-                  <div
-                    key={c.id}
-                    className="p-3 flex items-center justify-between text-sm"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="font-medium">
-                        Claim #{c.id} • Req #{c.travel_request_id || "—"} •{" "}
-                        {c.employee?.full_name || `Emp #${c.employee_id}`}{" "}
-                        {c.employee?.cnic ? `— CNIC ${c.employee.cnic}` : ""}
+                {(claims || [])
+                  .filter((c) => {
+                    const q = search.trim().toLowerCase();
+                    if (q) {
+                      const idHit = String(c.id).includes(q);
+                      const nameHit = (c.employee?.full_name || "")
+                        .toLowerCase()
+                        .includes(q);
+                      const cnicRaw = String(c.employee?.cnic || "");
+                      const cnicDigits = cnicRaw.replace(/\D+/g, "");
+                      const qDigits = q.replace(/\D+/g, "");
+                      const cnicHit =
+                        (!!qDigits && cnicDigits.includes(qDigits)) ||
+                        cnicRaw.toLowerCase().includes(q);
+                      if (!(idHit || nameHit || cnicHit)) return false;
+                    }
+                    if (statusFilter && String(c.status) !== statusFilter)
+                      return false;
+                    // Date range: prefer claim.from_date; fallback to request.departure_date if missing
+                    const baseDate = c.from_date || c.request?.departure_date;
+                    if (
+                      dateFrom &&
+                      (!baseDate || String(baseDate).slice(0, 10) < dateFrom)
+                    )
+                      return false;
+                    if (
+                      dateTo &&
+                      (!baseDate || String(baseDate).slice(0, 10) > dateTo)
+                    )
+                      return false;
+                    return true;
+                  })
+                  .map((c) => (
+                    <div
+                      key={c.id}
+                      className="p-3 flex items-center justify-between text-sm"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="font-medium">
+                          Claim #{c.id} • Req #{c.travel_request_id || "—"} •{" "}
+                          {c.employee?.full_name || `Emp #${c.employee_id}`}{" "}
+                          {c.employee?.cnic ? `— CNIC ${c.employee.cnic}` : ""}
+                        </div>
+                        {(() => {
+                          const loc = claimLocationBadge(c);
+                          return loc ? (
+                            <div className="flex items-center gap-1">
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px]"
+                              >
+                                {loc}
+                              </Badge>
+                            </div>
+                          ) : null;
+                        })()}
+                        <div className="text-muted-foreground">
+                          Distance {c.total_distance_km || 0} km • Grand{" "}
+                          {c.grand_total || 0}
+                        </div>
                       </div>
-                      {(() => {
-                        const loc = claimLocationBadge(c);
-                        return loc ? (
-                          <div className="flex items-center gap-1">
-                            <Badge variant="secondary" className="text-[10px]">
-                              {loc}
-                            </Badge>
-                          </div>
-                        ) : null;
-                      })()}
-                      <div className="text-muted-foreground">
-                        Distance {c.total_distance_km || 0} km • Grand{" "}
-                        {c.grand_total || 0}
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => {
+                            setClaim(null);
+                            setSelectedRequest(null);
+                            setSelectedAttendee(null);
+                            setStep(3);
+                            getExpenseClaim(c.id).then((full) => {
+                              setClaim(full);
+                              setForm((f) => ({
+                                ...f,
+                                from_date: full.from_date?.slice(0, 10) || "",
+                                to_date: full.to_date?.slice(0, 10) || "",
+                                rate_per_km: full.rate_per_km || 0,
+                                per_diem_rate: full.per_diem_rate || 0,
+                                per_diem_days: full.per_diem_days || "",
+                                toll_tax_total:
+                                  full.toll_tax_total ?? f.toll_tax_total,
+                                transport_mode:
+                                  full.transport_mode || f.transport_mode,
+                                fuel_total: full.fuel_total ?? f.fuel_total,
+                                fare_total: full.fare_total ?? f.fare_total,
+                              }));
+                            });
+                          }}
+                        >
+                          Open
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => {
-                          setClaim(null);
-                          setSelectedRequest(null);
-                          setSelectedAttendee(null);
-                          setStep(3);
-                          getExpenseClaim(c.id).then((full) => {
-                            setClaim(full);
-                            setForm((f) => ({
-                              ...f,
-                              from_date: full.from_date?.slice(0, 10) || "",
-                              to_date: full.to_date?.slice(0, 10) || "",
-                              rate_per_km: full.rate_per_km || 0,
-                              per_diem_rate: full.per_diem_rate || 0,
-                              per_diem_days: full.per_diem_days || "",
-                              toll_tax_total:
-                                full.toll_tax_total ?? f.toll_tax_total,
-                              transport_mode:
-                                full.transport_mode || f.transport_mode,
-                              fuel_total: full.fuel_total ?? f.fuel_total,
-                              fare_total: full.fare_total ?? f.fare_total,
-                            }));
-                          });
-                        }}
-                      >
-                        Open
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </CardContent>
           )}

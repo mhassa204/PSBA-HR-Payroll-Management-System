@@ -193,6 +193,11 @@ export default function TravelRequestsPage() {
     return null;
   };
 
+  // Filters for My TADA Requests list
+  const [search, setSearch] = useState("");
+  const [departFrom, setDepartFrom] = useState("");
+  const [departTo, setDepartTo] = useState("");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -333,6 +338,41 @@ export default function TravelRequestsPage() {
           <CardTitle>My TADA Requests</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="p-3 flex flex-col md:flex-row md:items-center gap-2 text-sm">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search purpose/destination"
+              className="w-full md:w-64"
+            />
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Depart From</span>
+              <Input
+                type="date"
+                value={departFrom}
+                onChange={(e) => setDepartFrom(e.target.value)}
+                className="w-40"
+              />
+              <span className="text-muted-foreground">To</span>
+              <Input
+                type="date"
+                value={departTo}
+                onChange={(e) => setDepartTo(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setDepartFrom("");
+                setDepartTo("");
+              }}
+            >
+              Clear
+            </Button>
+          </div>
           <div className="divide-y">
             {loading && (
               <div className="p-4 text-muted-foreground">Loading...</div>
@@ -340,73 +380,91 @@ export default function TravelRequestsPage() {
             {!loading && list.length === 0 && (
               <div className="p-6 text-muted-foreground">No requests found</div>
             )}
-            {list.map((r) => (
-              <div
-                key={r.id}
-                className="p-4 flex items-center justify-between text-sm"
-              >
-                <div className="space-y-0.5">
-                  <div className="font-medium">{r.purpose || "—"}</div>
-                  <div className="text-muted-foreground">
-                    {r.destination ? `${r.destination} · ` : ""}
-                    {String(r.departure_date).slice(0, 10)}{" "}
-                    {r.departure_time ? `at ${r.departure_time}` : ""} →{" "}
-                    {String(r.expected_return_date).slice(0, 10)} ·{" "}
-                    {r.total_days ? `${r.total_days} day(s)` : "—"}
+            {(list || [])
+              .filter((r) => {
+                const q = search.trim().toLowerCase();
+                if (q) {
+                  const dest = (r.destination || "").toLowerCase();
+                  const purpose = (r.purpose || "").toLowerCase();
+                  if (!(dest.includes(q) || purpose.includes(q))) return false;
+                }
+                if (departFrom) {
+                  if (String(r.departure_date).slice(0, 10) < departFrom)
+                    return false;
+                }
+                if (departTo) {
+                  if (String(r.departure_date).slice(0, 10) > departTo)
+                    return false;
+                }
+                return true;
+              })
+              .map((r) => (
+                <div
+                  key={r.id}
+                  className="p-4 flex items-center justify-between text-sm"
+                >
+                  <div className="space-y-0.5">
+                    <div className="font-medium">{r.purpose || "—"}</div>
+                    <div className="text-muted-foreground">
+                      {r.destination ? `${r.destination} · ` : ""}
+                      {String(r.departure_date).slice(0, 10)}{" "}
+                      {r.departure_time ? `at ${r.departure_time}` : ""} →{" "}
+                      {String(r.expected_return_date).slice(0, 10)} ·{" "}
+                      {r.total_days ? `${r.total_days} day(s)` : "—"}
+                    </div>
+                    {(() => {
+                      const loc = applicantLocationBadge(r);
+                      return loc ? (
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {loc}
+                          </Badge>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
-                  {(() => {
-                    const loc = applicantLocationBadge(r);
-                    return loc ? (
-                      <div className="flex items-center gap-1">
-                        <Badge variant="secondary" className="text-[10px]">
-                          {loc}
-                        </Badge>
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{r.status || "CREATED"}</Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openDetail(r.id)}
-                  >
-                    View
-                  </Button>
-                  {/* Delete rules:
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{r.status || "CREATED"}</Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDetail(r.id)}
+                    >
+                      View
+                    </Button>
+                    {/* Delete rules:
                     - Normal: only when status is CREATED and no actions exist
                     - DG exception: allow when own request and no Establishment verification yet */}
-                  {(() => {
-                    const hasActions = (r.statusEntries || []).some((se) =>
-                      [
-                        "RECOMMENDED",
-                        "RECOMMENDED_REJECTED",
-                        "APPROVED",
-                        "REJECTED",
-                      ].includes(se.action)
-                    );
-                    const isOwn =
-                      authUser?.employee_id &&
-                      r.applicant_id === authUser.employee_id;
-                    const estVerified = (r.statusEntries || []).some(
-                      (se) => se.action === "ESTABLISHMENT_VERIFIED"
-                    );
-                    const allowNormal = r.status === "CREATED" && !hasActions;
-                    const allowDG = isOwn && !estVerified && can("*");
-                    return allowNormal || allowDG ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => onDelete(r.id)}
-                      >
-                        Delete
-                      </Button>
-                    ) : null;
-                  })()}
+                    {(() => {
+                      const hasActions = (r.statusEntries || []).some((se) =>
+                        [
+                          "RECOMMENDED",
+                          "RECOMMENDED_REJECTED",
+                          "APPROVED",
+                          "REJECTED",
+                        ].includes(se.action)
+                      );
+                      const isOwn =
+                        authUser?.employee_id &&
+                        r.applicant_id === authUser.employee_id;
+                      const estVerified = (r.statusEntries || []).some(
+                        (se) => se.action === "ESTABLISHMENT_VERIFIED"
+                      );
+                      const allowNormal = r.status === "CREATED" && !hasActions;
+                      const allowDG = isOwn && !estVerified && can("*");
+                      return allowNormal || allowDG ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => onDelete(r.id)}
+                        >
+                          Delete
+                        </Button>
+                      ) : null;
+                    })()}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         </CardContent>
       </Card>

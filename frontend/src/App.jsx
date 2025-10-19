@@ -246,6 +246,7 @@ function App() {
                     "designations.read",
                     "role-tags.read",
                     "scale-grades.read",
+                    "travel.rates.read",
                   ]}
                 >
                   <SettingsDashboard />
@@ -552,7 +553,7 @@ function App() {
             <Route
               path="travel/manual"
               element={
-                <PrivateRoute permissions={["travel.claim.process.start"]}>
+                <PrivateRoute roles={["Super Admin"]}>
                   <TravelManualEntryPage />
                 </PrivateRoute>
               }

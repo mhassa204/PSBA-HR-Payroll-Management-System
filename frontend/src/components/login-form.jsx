@@ -45,6 +45,11 @@ export function LoginForm({ className, ...props }) {
             <form onSubmit={handleSubmit} className="p-6 md:p-8">
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col items-center text-center">
+                  <img
+                    src="/psba.png"
+                    alt="PSBA"
+                    className="h-32 w-32 md:h-40 md:w-40 mb-5 object-contain"
+                  />
                   <h1 className="text-2xl font-bold text-gray-900">
                     Welcome back
                   </h1>
