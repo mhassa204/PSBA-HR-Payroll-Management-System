@@ -510,7 +510,7 @@ async function main() {
         "travel.claim.update",
         "travel.claim.submit",
         "travel.claim.status",
-        "travel.rates.read",
+        // remove travel rates access from non-Accounts roles
         // Allow opening Manage screen for leadership visibility
         "travel.manage",
         // No OPS approvals here; use Operations role
@@ -581,7 +581,9 @@ async function main() {
         "travel.claim.submit",
         "travel.claim.process.start",
         "travel.claim.status",
+        // Travel rates settings (read/manage)
         "travel.rates.read",
+        "travel.rates.manage",
         // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
@@ -606,7 +608,9 @@ async function main() {
         "travel.claim.submit",
         "travel.claim.process.start",
         "travel.claim.status",
+        // Travel rates settings (read only)
         "travel.rates.read",
+        "travel.rates.manage",
         // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
@@ -684,7 +688,7 @@ async function main() {
         "travel.claim.update",
         "travel.claim.submit",
         "travel.claim.status",
-        "travel.rates.read",
+        // remove travel rates from general employees
       ],
       enabled: true,
       fields: ["own_personal", "own_employment"],
@@ -896,6 +900,24 @@ async function main() {
       `✅ Created Scale Grade: ${scaleGrade.name} (${scaleGrade.category})`
     );
     createdScaleGrades.push(scaleGrade);
+  }
+
+  // Seed dummy travel rates for each scale grade
+  console.log("💸 Seeding dummy travel rates for each scale grade...");
+  for (const sg of createdScaleGrades) {
+    const baseRate = 10; // base per-km
+    const basePerDiem = 500; // base per-diem
+    const bump = Math.max(0, (sg.level || 0) - 10); // simple increment by level
+    await prisma.travelRate.upsert({
+      where: { scale_grade_id: sg.id },
+      update: {},
+      create: {
+        scale_grade_id: sg.id,
+        rate_per_km: baseRate + bump,
+        per_diem_rate: basePerDiem + bump * 50,
+        is_active: true,
+      },
+    });
   }
 
   // Seed employees

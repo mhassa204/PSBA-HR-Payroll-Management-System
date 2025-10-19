@@ -454,13 +454,40 @@ module.exports = {
   },
 
   computeTotalDays: (departureDate, departureTime, expectedReturnDate) => {
-    const dep = new Date(departureDate);
+    // Parse dates in LOCAL time to avoid 'YYYY-MM-DD' being treated as UTC by Date constructor.
+    // Accepts either Date objects or 'YYYY-MM-DD' strings for departure/return dates.
+    const toLocalDateAtMidnight = (d) => {
+      if (d instanceof Date) {
+        // Construct a new local date at 00:00 using Y/M/D from the provided Date
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+      }
+      const s = String(d || "").slice(0, 10);
+      const [y, m, day] = s.split("-").map((x) => Number(x));
+      if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(day)) {
+        return new Date(y, m - 1, day, 0, 0, 0, 0); // local midnight
+      }
+      // Fallback to Date parsing (should rarely happen)
+      const parsed = new Date(d);
+      return new Date(
+        parsed.getFullYear(),
+        parsed.getMonth(),
+        parsed.getDate(),
+        0,
+        0,
+        0,
+        0
+      );
+    };
+
+    const dep = toLocalDateAtMidnight(departureDate);
     if (departureTime) {
       const [hh, mm] = String(departureTime).split(":");
-      if (!Number.isNaN(Number(hh)))
-        dep.setHours(Number(hh), Number(mm || 0), 0, 0);
+      const H = Number(hh);
+      const M = Number(mm || 0);
+      if (Number.isFinite(H)) dep.setHours(H, Number.isFinite(M) ? M : 0, 0, 0);
     }
-    const ret = new Date(expectedReturnDate);
+    const ret = toLocalDateAtMidnight(expectedReturnDate);
+
     const ms = ret.getTime() - dep.getTime();
     const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
     return Math.max(1, days);

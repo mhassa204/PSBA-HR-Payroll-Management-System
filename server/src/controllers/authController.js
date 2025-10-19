@@ -101,17 +101,16 @@ const authController = {
           .json({ success: false, error: "Not authenticated" });
       }
 
-      let permissions = req.session.user.permissions || [];
-      if (!permissions || permissions.length === 0) {
-        if (dbUser.role?.name === "Super Admin") {
-          permissions = ["*"];
-        } else {
-          const rolePerms = await prisma.rolePermission.findMany({
-            where: { role_id: dbUser.role_id },
-            include: { permission: true },
-          });
-          permissions = rolePerms.map((rp) => rp.permission.key);
-        }
+      // Always reload permissions so any role/permission changes reflect immediately after refresh
+      let permissions = [];
+      if (dbUser.role?.name === "Super Admin") {
+        permissions = ["*"];
+      } else {
+        const rolePerms = await prisma.rolePermission.findMany({
+          where: { role_id: dbUser.role_id },
+          include: { permission: true },
+        });
+        permissions = rolePerms.map((rp) => rp.permission.key);
       }
 
       req.session.user = {
