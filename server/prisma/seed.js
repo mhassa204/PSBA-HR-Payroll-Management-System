@@ -535,7 +535,6 @@ async function main() {
         "travel.claim.update",
         "travel.claim.submit",
         "travel.claim.status",
-        "travel.rates.read",
         // Allow opening Manage screen for ADs to participate in recommender/approval flows
         "travel.manage",
       ],
@@ -558,7 +557,6 @@ async function main() {
         "travel.claim.create",
         "travel.claim.submit",
         "travel.claim.status",
-        "travel.rates.read",
         // OPS approvals
         "travel.request.approve.ops",
         "travel.claim.approve.ops",
@@ -632,8 +630,37 @@ async function main() {
         "travel.claim.create",
         "travel.claim.submit",
         "travel.claim.verify.establishment",
-        "travel.claim.status",
-        "travel.rates.read",
+  "travel.claim.status",
+        // Full Employee Module access
+        "employees.read",
+        "employees.create",
+        "employees.update",
+        "employees.delete",
+        // Employment sub-module
+        "employment.read",
+        "employment.create",
+        "employment.update",
+        "employment.delete",
+        // Employment granular management
+        "employment.salary.create",
+        "employment.salary.update",
+        "employment.salary.delete",
+        "employment.location.create",
+        "employment.location.update",
+        "employment.location.delete",
+        "employment.contract.create",
+        "employment.contract.update",
+        "employment.contract.delete",
+        // Settings module (read-only; exclude roles.read)
+        "departments.read",
+        "designations.read",
+        "role-tags.read",
+        "scale-grades.read",
+        "locations.read",
+        "devices.read",
+        "districts.read",
+        "cities.read",
+        "education-levels.read",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -700,6 +727,26 @@ async function main() {
     "travel.claim.settle",
     "travel.rates.read",
     "travel.rates.manage",
+    // Employee Module routes
+    "employees.read",
+    "employees.create",
+    "employees.update",
+    "employees.delete",
+    // Employment sub-module routes
+    "employment.read",
+    "employment.create",
+    "employment.update",
+    "employment.delete",
+  // Employment granular routes
+  "employment.salary.create",
+  "employment.salary.update",
+  "employment.salary.delete",
+  "employment.location.create",
+  "employment.location.update",
+  "employment.location.delete",
+  "employment.contract.create",
+  "employment.contract.update",
+  "employment.contract.delete",
     // granular stage permissions
     "travel.request.approve.ops",
     "travel.request.approve.dg",
@@ -794,42 +841,14 @@ async function main() {
       level: 20,
       category: "BPS",
     },
-    {
-      name: "Grade-A",
-      description: "Grade A level",
-      level: 1,
-      category: "Grade",
-    },
-    {
-      name: "Grade-B",
-      description: "Grade B level",
-      level: 2,
-      category: "Grade",
-    },
-    {
-      name: "Grade-C",
-      description: "Grade C level",
-      level: 3,
-      category: "Grade",
-    },
-    {
-      name: "Level-1",
-      description: "Entry level position",
-      level: 1,
-      category: "Level",
-    },
-    {
-      name: "Level-2",
-      description: "Intermediate level position",
-      level: 2,
-      category: "Level",
-    },
-    {
-      name: "Level-3",
-      description: "Senior level position",
-      level: 3,
-      category: "Level",
-    },
+    // Add BPS scales below 17
+    { name: "BPS-16", description: "Basic Pay Scale 16", level: 16, category: "BPS" },
+    { name: "BPS-15", description: "Basic Pay Scale 15", level: 15, category: "BPS" },
+    { name: "BPS-14", description: "Basic Pay Scale 14", level: 14, category: "BPS" },
+    { name: "BPS-13", description: "Basic Pay Scale 13", level: 13, category: "BPS" },
+    { name: "BPS-12", description: "Basic Pay Scale 12", level: 12, category: "BPS" },
+    { name: "BPS-11", description: "Basic Pay Scale 11", level: 11, category: "BPS" },
+    { name: "BPS-10", description: "Basic Pay Scale 10", level: 10, category: "BPS" },
   ];
 
   console.log("📊 Seeding scale grades...");
@@ -2454,7 +2473,7 @@ async function main() {
       effective_from: new Date("2022-01-01"),
       office_location: "Sahulat Bazaar Mian Plaza",
       remarks: "Bazaar Manager at Bazaar location",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-3").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-16").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2471,8 +2490,8 @@ async function main() {
       employment_type: "Regular",
       effective_from: new Date("2022-02-01"),
       office_location: "Head Quarter",
-      remarks: "HO staff with Level-3 (below BPS-17)",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-3").id,
+      remarks: "HO staff with BPS-16 (below BPS-17)",
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-16").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2490,7 +2509,7 @@ async function main() {
       effective_from: new Date("2022-03-01"),
       office_location: "Head Quarter",
       remarks: "Establishment viewer for Manage list",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-3").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-16").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2508,7 +2527,7 @@ async function main() {
       effective_from: new Date("2023-01-01"),
       office_location: "Head Quarter",
       remarks: "Dummy employee for IT department testing",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Grade-A").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-14").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2524,7 +2543,7 @@ async function main() {
       effective_from: new Date("2023-02-01"),
       office_location: "Head Quarter",
       remarks: "Dummy employee for Accounts department testing",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Grade-B").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-13").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2544,7 +2563,7 @@ async function main() {
       effective_from: new Date("2023-08-01"),
       office_location: "Sahulat Bazaar Township",
       remarks: "Assigned to Township bazaar",
-      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "Level-2").id,
+      scale_grade_id: createdScaleGrades.find((sg) => sg.name === "BPS-12").id,
       employment_status: "active",
       is_current: true,
       filer_status: "non_filer",
@@ -2594,21 +2613,19 @@ async function main() {
     }
   }
 
-  // 🔐 Create personal user accounts for employees below BPS-17 (BPS 16 and below don't get accounts per requirements)
+  // 🔐 Create personal user accounts for employees below BPS-17 (BPS-16 and below)
   console.log("👤 Seeding personal user accounts for remaining employees...");
   const employeeRoleId = getRoleId("Employee");
 
-  // Only create Employee accounts for staff below management level (non-BPS or Level grades)
+  // Only create Employee accounts for staff below management level (BPS 16 and below)
   const belowManagementLevel = await prisma.employment.findMany({
     where: {
       is_current: true,
       scale_grade_id: { not: null },
       scale_grade: {
         is: {
-          OR: [
-            { category: "Level" }, // Level-1, Level-2, Level-3 grades get Employee accounts
-            { category: "Grade" }, // Grade-A, Grade-B, Grade-C grades get Employee accounts
-          ],
+          category: "BPS",
+          level: { lte: 16 },
         },
       },
     },
@@ -3066,7 +3083,7 @@ async function main() {
   // Seed Travel Rates (sample)
   console.log("🧮 Seeding travel rates...");
   const sampleGrades = await prisma.scaleGrade.findMany({
-    where: { name: { in: ["BPS-17", "BPS-18", "BPS-19", "Level-3"] } },
+    where: { name: { in: ["BPS-16", "BPS-17", "BPS-18", "BPS-19"] } },
   });
   for (const g of sampleGrades) {
     const exists = await prisma.travelRate.findFirst({
@@ -3077,21 +3094,21 @@ async function main() {
         data: {
           scale_grade_id: g.id,
           rate_per_km:
-            g.name === "BPS-17"
+            g.name === "BPS-16"
+              ? 260
+              : g.name === "BPS-17"
               ? 300
               : g.name === "BPS-18"
               ? 320
-              : g.name === "BPS-19"
-              ? 350
-              : 150,
+              : 350,
           per_diem_rate:
-            g.name === "BPS-17"
+            g.name === "BPS-16"
+              ? 1200
+              : g.name === "BPS-17"
               ? 1500
               : g.name === "BPS-18"
               ? 1700
-              : g.name === "BPS-19"
-              ? 2000
-              : 800,
+              : 2000,
         },
       });
       console.log("  • Rate added for", g.name);

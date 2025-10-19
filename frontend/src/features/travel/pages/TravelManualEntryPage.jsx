@@ -53,7 +53,7 @@ export default function TravelManualEntryPage() {
     loadEmployees();
   }, []);
 
-  // Capability guard: only Accounts HoD or Super Admin
+  // Capability guard: Super Admin only
   useEffect(() => {
     (async () => {
       try {
@@ -62,10 +62,10 @@ export default function TravelManualEntryPage() {
       } catch (_) {}
     })();
   }, []);
-  if (!(caps.isAccountsHod || caps.isSuperAdmin)) {
+  if (!caps.isSuperAdmin) {
     return (
       <div className="p-6 text-sm text-red-700 bg-red-50 border border-red-200 rounded">
-        Unauthorized: Only Accounts Head can access TADA Managed Entry.
+        Unauthorized: Only Super Admin can access TADA Managed Entry.
       </div>
     );
   }

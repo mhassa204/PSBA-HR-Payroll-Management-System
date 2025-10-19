@@ -127,6 +127,15 @@ const SettingsDashboard = () => {
           color: 'indigo',
           required: ['education-levels.read']
         }
+        ,
+        {
+          name: 'Travel Rates',
+          description: 'Manage per-km and per-diem rates by grade',
+          path: '/settings/travel-rates',
+          icon: Users,
+          color: 'red',
+          required: ['travel.rates.read']
+        }
       ]
     }
   ];

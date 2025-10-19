@@ -13,19 +13,20 @@ router.post(
 router.get(
   "/",
   isAuthenticated,
-  authorize("scale-grades.read"),
+  // Allow either explicit scale-grades.read or travel.rates.read (for Accounts using Travel Rates page)
+  require("../middleware/auth").authorizeAny(["scale-grades.read", "travel.rates.read"]),
   scaleGradeController.getAllScaleGrades
 );
 router.get(
   "/statistics",
   isAuthenticated,
-  authorize("scale-grades.read"),
+  require("../middleware/auth").authorizeAny(["scale-grades.read", "travel.rates.read"]),
   scaleGradeController.getScaleGradeStatistics
 );
 router.get(
   "/:id",
   isAuthenticated,
-  authorize("scale-grades.read"),
+  require("../middleware/auth").authorizeAny(["scale-grades.read", "travel.rates.read"]),
   scaleGradeController.getScaleGradeById
 );
 router.put(

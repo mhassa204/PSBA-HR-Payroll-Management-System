@@ -392,92 +392,6 @@ const LeftSidebar = () => {
       show: () => can("audit.read"),
     },
     {
-      name: "Settings",
-      href: "/settings",
-      icon: CogIcon,
-      description: "Configuration",
-      color: "bg-gray-600",
-      show: () =>
-        can("departments.read") ||
-        can("designations.read") ||
-        can("role-tags.read") ||
-        can("scale-grades.read") ||
-        can("locations.read") ||
-        can("devices.read") ||
-        can("roles.read") ||
-        can("districts.read") ||
-        can("cities.read") ||
-        can("education-levels.read"),
-      children: [
-        {
-          name: "Departments",
-          href: "/settings/departments",
-          icon: ViewColumnsIcon,
-          show: () => can("departments.read"),
-        },
-        {
-          name: "Designations",
-          href: "/settings/designations",
-          icon: ViewColumnsIcon,
-          show: () => can("designations.read"),
-        },
-        {
-          name: "Role Tags",
-          href: "/settings/role-tags",
-          icon: ViewColumnsIcon,
-          show: () => can("role-tags.read"),
-        },
-        {
-          name: "Scale Grades",
-          href: "/settings/scale-grades",
-          icon: ViewColumnsIcon,
-          show: () => can("scale-grades.read"),
-        },
-        {
-          name: "Locations",
-          href: "/settings/locations",
-          icon: ViewColumnsIcon,
-          show: () => can("locations.read"),
-        },
-        {
-          name: "Devices",
-          href: "/settings/devices",
-          icon: ViewColumnsIcon,
-          show: () => can("devices.read"),
-        },
-        {
-          name: "Roles",
-          href: "/settings/roles",
-          icon: ViewColumnsIcon,
-          show: () => can("roles.read"),
-        },
-        {
-          name: "Districts",
-          href: "/settings/districts",
-          icon: ViewColumnsIcon,
-          show: () => can("districts.read"),
-        },
-        {
-          name: "Cities",
-          href: "/settings/cities",
-          icon: ViewColumnsIcon,
-          show: () => can("cities.read"),
-        },
-        {
-          name: "Education Levels",
-          href: "/settings/education-levels",
-          icon: ViewColumnsIcon,
-          show: () => can("education-levels.read"),
-        },
-        {
-          name: "Travel Rates",
-          href: "/settings/travel-rates",
-          icon: ViewColumnsIcon,
-          show: () => can("travel.rates.read"),
-        },
-      ],
-    },
-    {
       name: "Travel",
       href: "/travel",
       icon: PlaneIcon,
@@ -570,12 +484,98 @@ const LeftSidebar = () => {
           name: "TADA Managed Entry",
           href: "/travel/manual",
           icon: ViewColumnsIcon,
-          show: () => travelCaps.isAccountsHod || travelCaps.isSuperAdmin,
+          show: () => travelCaps.isSuperAdmin,
+        },
+      ],
+    },
+    {
+      name: "Settings",
+      href: "/settings",
+      icon: CogIcon,
+      description: "Configuration",
+      color: "bg-gray-600",
+      show: () =>
+        can("departments.read") ||
+        can("designations.read") ||
+        can("role-tags.read") ||
+        can("scale-grades.read") ||
+        can("locations.read") ||
+        can("devices.read") ||
+        can("roles.read") ||
+        can("districts.read") ||
+        can("cities.read") ||
+        can("education-levels.read") ||
+        can("travel.rates.read"),
+      children: [
+        {
+          name: "Departments",
+          href: "/settings/departments",
+          icon: ViewColumnsIcon,
+          show: () => can("departments.read"),
+        },
+        {
+          name: "Designations",
+          href: "/settings/designations",
+          icon: ViewColumnsIcon,
+          show: () => can("designations.read"),
+        },
+        {
+          name: "Role Tags",
+          href: "/settings/role-tags",
+          icon: ViewColumnsIcon,
+          show: () => can("role-tags.read"),
+        },
+        {
+          name: "Scale Grades",
+          href: "/settings/scale-grades",
+          icon: ViewColumnsIcon,
+          show: () => can("scale-grades.read"),
+        },
+        {
+          name: "Locations",
+          href: "/settings/locations",
+          icon: ViewColumnsIcon,
+          show: () => can("locations.read"),
+        },
+        {
+          name: "Devices",
+          href: "/settings/devices",
+          icon: ViewColumnsIcon,
+          show: () => can("devices.read"),
+        },
+        {
+          name: "Roles",
+          href: "/settings/roles",
+          icon: ViewColumnsIcon,
+          show: () => can("roles.read"),
+        },
+        {
+          name: "Districts",
+          href: "/settings/districts",
+          icon: ViewColumnsIcon,
+          show: () => can("districts.read"),
+        },
+        {
+          name: "Cities",
+          href: "/settings/cities",
+          icon: ViewColumnsIcon,
+          show: () => can("cities.read"),
+        },
+        {
+          name: "Education Levels",
+          href: "/settings/education-levels",
+          icon: ViewColumnsIcon,
+          show: () => can("education-levels.read"),
+        },
+        {
+          name: "Travel Rates",
+          href: "/settings/travel-rates",
+          icon: ViewColumnsIcon,
+          show: () => can("travel.rates.read"),
         },
       ],
     },
   ];
-
   const isChildActive = (children) => {
     return children?.some((child) => location.pathname.startsWith(child.href));
   };
