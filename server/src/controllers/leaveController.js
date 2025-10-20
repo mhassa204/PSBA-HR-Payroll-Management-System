@@ -36,13 +36,79 @@ module.exports = {
         const isSelf = userEmpId && Number(employeeId) === Number(userEmpId);
         const ok = isSelf
           ? true
-          : await leaveService.checkSubordinate(employeeId, req);
+          : (await leaveService.checkSubordinate(employeeId, req)) ||
+            (await leaveService.checkDeptOrLocation(employeeId, req));
         if (!ok)
           return res.status(403).json({ success: false, error: "Forbidden" });
       }
       const data = await leaveService.getEmployeeLeavesWithSummary(employeeId);
       res.json({ success: true, leaves: data.leaves, summary: data.summary });
     } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  listApprovals: async (req, res) => {
+    try {
+      const items = await leaveService.listApprovalsForUser(req);
+      res.json({ success: true, approvals: items });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  listAllApprovals: async (req, res) => {
+    try {
+      const items = await leaveService.listAllApprovalsForUser(req);
+      res.json({ success: true, approvals: items });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  actOnLeave: async (req, res) => {
+    try {
+      const leaveId = Number(req.params.id);
+      const userId = req.session?.user?.id;
+      if (!userId)
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      const { action, comments } = req.body || {};
+      const updated = await leaveService.actOnLeave(
+        {
+          leaveId,
+          userId,
+          action,
+          comments,
+        },
+        req
+      );
+      res.json({ success: true, leave: updated });
+    } catch (e) {
+      const client = [
+        "Invalid action",
+        "Not found",
+        "Leave already finalized",
+        "Not authorized for this stage",
+      ];
+      if (client.includes(e.message))
+        return res.status(400).json({ success: false, error: e.message });
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  undoAction: async (req, res) => {
+    try {
+      const leaveId = Number(req.params.id);
+      const userId = req.session?.user?.id;
+      if (!userId)
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      const result = await leaveService.undoLastAction({ leaveId, userId });
+      res.json({ success: true, ...result });
+    } catch (e) {
+      const client = [
+        "Not found",
+        "Nothing to undo",
+        "Not authorized to undo",
+        "Cannot undo finalized",
+      ];
+      if (client.includes(e.message))
+        return res.status(400).json({ success: false, error: e.message });
       res.status(500).json({ success: false, error: e.message });
     }
   },
@@ -75,7 +141,8 @@ module.exports = {
         const isSelf = userEmpId && Number(employeeId) === Number(userEmpId);
         const ok = isSelf
           ? true
-          : await leaveService.checkSubordinate(employeeId, req);
+          : (await leaveService.checkSubordinate(employeeId, req)) ||
+            (await leaveService.checkDeptOrLocation(employeeId, req));
         if (!ok)
           return res.status(403).json({ success: false, error: "Forbidden" });
       }
@@ -83,25 +150,28 @@ module.exports = {
         return res
           .status(400)
           .json({ success: false, error: "type is required" });
-      const result = await leaveService.createLeaves({
-        employeeId,
-        type,
-        remarks,
-        date,
-        start,
-        end,
-        dates,
-        duty_from,
-        duty_to,
-        // New fields
-        submission_time,
-        custom_type,
-        backup_employee_id,
-        backup_duty_from,
-        backup_duty_to,
-        documents,
-        routes,
-      });
+      const result = await leaveService.createLeaves(
+        {
+          employeeId,
+          type,
+          remarks,
+          date,
+          start,
+          end,
+          dates,
+          duty_from,
+          duty_to,
+          // New fields
+          submission_time,
+          custom_type,
+          backup_employee_id,
+          backup_duty_from,
+          backup_duty_to,
+          documents,
+          routes,
+        },
+        req
+      );
       res.status(201).json({ success: true, ...result });
     } catch (e) {
       const clientErrors = [

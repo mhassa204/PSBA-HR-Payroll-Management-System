@@ -377,6 +377,8 @@ model User {
   createdTranches TravelClaimTranche[]
   // Back-relation: leaves where this user is set as approver (manual routing)
   approvalRoutes LeaveApprovalRoute[] @relation(name: "LeaveApprovalApprover")
+  // Back-relation: leave status history entries authored by this user
+  leaveStatusEntries LeaveStatusHistory[]
 
   @@index([department_id])
   @@index([location_id])
@@ -553,6 +555,9 @@ model Leave {
   duty_from          String? // Duty time from (HH:mm format)
   duty_to            String? // Duty time to (HH:mm format)
   documents          String? // JSON array of document file paths
+  // Workflow tracking
+  current_status  LeaveWorkflowStatus @default(PENDING)
+  current_stage   Int                 @default(0) // 0 before routing starts; increments per sequence
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @default(now())
   is_deleted   Boolean      @default(false)
@@ -561,6 +566,8 @@ model Leave {
   backup_employee Employee?  @relation("LeaveBackupEmployee", fields: [backup_employee_id], references: [id])
   // Manual approval routing entries for this leave
   routes       LeaveApprovalRoute[]
+  // Status history entries
+  statusHistory LeaveStatusHistory[]
 
   @@index([employee_id, date])
   @@index([backup_employee_id])
@@ -569,6 +576,15 @@ model Leave {
 // New: enum for Leave status
 enum LeaveStatus {
   PENDING
+  APPROVED
+  REJECTED
+}
+
+// Workflow status for multi-stage routing
+enum LeaveWorkflowStatus {
+  PENDING
+  RECOMMENDED
+  ALLOWED
   APPROVED
   REJECTED
 }
@@ -584,6 +600,7 @@ model LeaveApprovalRoute {
   id                Int                @id @default(autoincrement())
   leave_id          Int
   type              LeaveApprovalType
+  sequence          Int                @default(1) // 1-based order
   approver_user_id  Int
   createdAt         DateTime           @default(now())
 
@@ -592,6 +609,30 @@ model LeaveApprovalRoute {
 
   @@index([leave_id])
   @@index([approver_user_id])
+}
+
+// Status history per leave action
+model LeaveStatusHistory {
+  id           Int                  @id @default(autoincrement())
+  leave_id     Int
+  user_id      Int
+  action_type  LeaveHistoryAction
+  action_time  DateTime             @default(now())
+  comments     String?
+
+  leave        Leave                @relation(fields: [leave_id], references: [id], onDelete: Cascade)
+  user         User                 @relation(fields: [user_id], references: [id])
+
+  @@index([leave_id])
+  @@index([user_id])
+}
+
+enum LeaveHistoryAction {
+  SUBMITTED
+  RECOMMENDED
+  ALLOWED
+  APPROVED
+  REJECTED
 }
 
 // New: Leave Types for configuring bankable leave categories

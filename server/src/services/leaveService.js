@@ -399,7 +399,23 @@ module.exports = {
           select: {
             id: true,
             full_name: true,
+            cnic: true,
+            email: true,
             employee_id: true,
+          },
+        },
+        statusHistory: {
+          orderBy: { action_time: "asc" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                employee: {
+                  select: { id: true, full_name: true, employee_id: true },
+                },
+              },
+            },
           },
         },
         routes: {
@@ -455,25 +471,28 @@ module.exports = {
     }
     return { leaves, summary };
   },
-  createLeaves: async ({
-    employeeId,
-    type,
-    remarks,
-    date,
-    start,
-    end,
-    dates,
-    duty_from,
-    duty_to,
-    // New fields
-    submission_time,
-    custom_type,
-    backup_employee_id,
-    backup_duty_from,
-    backup_duty_to,
-    documents,
-    routes,
-  }) => {
+  createLeaves: async (
+    {
+      employeeId,
+      type,
+      remarks,
+      date,
+      start,
+      end,
+      dates,
+      duty_from,
+      duty_to,
+      // New fields
+      submission_time,
+      custom_type,
+      backup_employee_id,
+      backup_duty_from,
+      backup_duty_to,
+      documents,
+      routes,
+    },
+    req
+  ) => {
     const toInsert = new Set();
     if (Array.isArray(dates) && dates.length) {
       for (const d of dates) {
@@ -576,18 +595,32 @@ module.exports = {
           : [];
         if (validRoutes.length) {
           const routeRows = [];
+          // Assign sequence in the exact order provided (1-based)
           for (const leaveId of createdLeaveIds) {
-            for (const r of validRoutes) {
+            validRoutes.forEach((r, idx) => {
               routeRows.push({
                 leave_id: leaveId,
                 type: r.type,
                 approver_user_id: r.approver_user_id,
+                sequence: idx + 1,
               });
-            }
+            });
           }
           if (routeRows.length) {
             await tx.leaveApprovalRoute.createMany({ data: routeRows });
           }
+        }
+        // Create SUBMITTED status history for each created leave
+        const submittedBy = req?.session?.user?.id || null;
+        for (const leaveId of createdLeaveIds) {
+          await tx.leaveStatusHistory.create({
+            data: {
+              leave_id: leaveId,
+              user_id: submittedBy || 0,
+              action_type: "SUBMITTED",
+              comments: null,
+            },
+          });
         }
         created = createdLeaveIds.length;
       });
@@ -600,6 +633,8 @@ module.exports = {
           select: {
             id: true,
             full_name: true,
+            cnic: true,
+            email: true,
             employee_id: true,
           },
         },
@@ -679,6 +714,293 @@ module.exports = {
       employee: u.employee,
     }));
   },
+  // List approvals visible to the current user based on manual routing and stage
+  listApprovalsForUser: async (req) => {
+    const userId = req.session?.user?.id;
+    const roleName = req.session?.user?.role?.name || "";
+    if (!userId) return [];
+
+    // Leaves not deleted and not finalized; include those with any routes
+    const awaitingMe = await prisma.leave.findMany({
+      where: {
+        is_deleted: false,
+        current_status: { notIn: ["APPROVED", "REJECTED"] },
+        routes: { some: {} },
+      },
+      include: { routes: { orderBy: { sequence: "asc" } } },
+      orderBy: { date: "desc" },
+    });
+    const mine = awaitingMe.filter((lv) => {
+      const orderedRoutes = (lv.routes || [])
+        .slice()
+        .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+      const nextSeq = (lv.current_stage || 0) + 1;
+      const nextRoute =
+        orderedRoutes.find((r) => (r.sequence || 0) === nextSeq) ||
+        orderedRoutes[nextSeq - 1] ||
+        null;
+      return nextRoute && Number(nextRoute.approver_user_id) === Number(userId);
+    });
+
+    // Establishment role final approvals: when all routes completed but not finalized
+    let establishmentItems = [];
+    const looksEstablishment = /^\s*establishment/i.test(roleName);
+    if (looksEstablishment) {
+      establishmentItems = awaitingMe.filter((lv) => {
+        const orderedRoutes = (lv.routes || [])
+          .slice()
+          .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+        const maxSeq = orderedRoutes.length;
+        return (
+          maxSeq > 0 &&
+          (lv.current_stage || 0) >= maxSeq &&
+          lv.current_status !== "APPROVED" &&
+          lv.current_status !== "REJECTED"
+        );
+      });
+    }
+
+    const combined = [...mine, ...establishmentItems];
+    const leaveIds = Array.from(new Set(combined.map((x) => x.id)));
+    if (!leaveIds.length) return [];
+
+    const leaves = await prisma.leave.findMany({
+      where: { id: { in: leaveIds } },
+      include: {
+        employee: {
+          select: { id: true, full_name: true, employee_id: true, cnic: true },
+        },
+        backup_employee: {
+          select: {
+            id: true,
+            full_name: true,
+            cnic: true,
+            email: true,
+            employee_id: true,
+          },
+        },
+        routes: {
+          orderBy: { sequence: "asc" },
+          include: {
+            approver_user: {
+              select: {
+                id: true,
+                email: true,
+                employee: { select: { full_name: true, employee_id: true } },
+              },
+            },
+          },
+        },
+        statusHistory: {
+          orderBy: { action_time: "asc" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                employee: { select: { full_name: true, employee_id: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+    });
+    return leaves;
+  },
+  // List all approvals involving the current user (appears anywhere in routing)
+  listAllApprovalsForUser: async (req) => {
+    const userId = req.session?.user?.id;
+    if (!userId) return [];
+    const leaves = await prisma.leave.findMany({
+      where: {
+        is_deleted: false,
+        OR: [
+          { routes: { some: { approver_user_id: Number(userId) } } },
+          { statusHistory: { some: { user_id: Number(userId) } } },
+        ],
+      },
+      include: {
+        employee: {
+          select: { id: true, full_name: true, employee_id: true, cnic: true },
+        },
+        backup_employee: {
+          select: {
+            id: true,
+            full_name: true,
+            cnic: true,
+            email: true,
+            employee_id: true,
+          },
+        },
+        routes: {
+          orderBy: { sequence: "asc" },
+          include: {
+            approver_user: {
+              select: {
+                id: true,
+                email: true,
+                employee: { select: { full_name: true, employee_id: true } },
+              },
+            },
+          },
+        },
+        statusHistory: {
+          orderBy: { action_time: "asc" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                employee: { select: { full_name: true, employee_id: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+    });
+    return leaves;
+  },
+  // Undo last action by current user if no subsequent actions exist
+  undoLastAction: async ({ leaveId, userId }) => {
+    return await prisma.$transaction(async (tx) => {
+      const leave = await tx.leave.findUnique({
+        where: { id: leaveId },
+        include: {
+          statusHistory: { orderBy: { action_time: "asc" } },
+          routes: { orderBy: { sequence: "asc" } },
+        },
+      });
+      if (!leave || leave.is_deleted) throw new Error("Not found");
+      const hist = leave.statusHistory || [];
+      if (!hist.length) throw new Error("Nothing to undo");
+      const last = hist[hist.length - 1];
+      if (Number(last.user_id) !== Number(userId))
+        throw new Error("Not authorized to undo");
+      // Allow undo even if finalized (including APPROVED) as long as this user authored the last action
+
+      // Delete last history entry
+      await tx.leaveStatusHistory.delete({ where: { id: last.id } });
+
+      // Recompute workflow from remaining history
+      const remaining = await tx.leaveStatusHistory.findMany({
+        where: { leave_id: leaveId },
+        orderBy: { action_time: "asc" },
+      });
+      let newStatus = "PENDING";
+      let newStage = 0;
+      for (const h of remaining) {
+        if (h.action_type === "REJECTED") {
+          newStatus = "REJECTED";
+          break;
+        }
+        if (h.action_type === "RECOMMENDED") {
+          newStatus = "RECOMMENDED";
+          newStage += 1;
+        }
+        if (h.action_type === "ALLOWED") {
+          newStatus = "ALLOWED";
+          newStage += 1;
+        }
+        if (h.action_type === "APPROVED") {
+          newStatus = "APPROVED";
+        }
+      }
+      // Sync legacy status when finalized
+      const updateData = { current_status: newStatus, current_stage: newStage };
+      if (newStatus === "APPROVED") updateData["status"] = "APPROVED";
+      if (newStatus === "REJECTED") updateData["status"] = "REJECTED";
+      await tx.leave.update({ where: { id: leaveId }, data: updateData });
+      return { success: true };
+    });
+  },
+  // Perform action on a leave with history and progression
+  actOnLeave: async ({ leaveId, userId, action, comments }, req) => {
+    const allowed = new Set(["RECOMMEND", "ALLOW", "APPROVE", "REJECT"]);
+    const upper = String(action || "").toUpperCase();
+    if (!allowed.has(upper)) throw new Error("Invalid action");
+
+    return await prisma.$transaction(async (tx) => {
+      const leave = await tx.leave.findUnique({
+        where: { id: leaveId },
+        include: { routes: { orderBy: { sequence: "asc" } } },
+      });
+      if (!leave || leave.is_deleted) throw new Error("Not found");
+      if (
+        leave.current_status === "APPROVED" ||
+        leave.current_status === "REJECTED"
+      ) {
+        throw new Error("Leave already finalized");
+      }
+
+      // Determine next route strictly by ordered sequence. If sequence missing, use index.
+      const orderedRoutes = (leave.routes || [])
+        .slice()
+        .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+      const nextSeq = (leave.current_stage || 0) + 1;
+      const nextRoute =
+        orderedRoutes.find((r) => (r.sequence || 0) === nextSeq) ||
+        orderedRoutes[nextSeq - 1] ||
+        null;
+
+      // Validate actor: either the next approver, or (no more routes) establishment approver can APPROVE
+      if (upper !== "APPROVE" && upper !== "REJECT") {
+        if (
+          !nextRoute ||
+          Number(nextRoute.approver_user_id) !== Number(userId)
+        ) {
+          throw new Error("Not authorized for this stage");
+        }
+      }
+
+      // Map to workflow status and history action
+      let historyAction = null;
+      let newWorkflow = leave.current_status;
+      let newStage = leave.current_stage || 0;
+
+      if (upper === "REJECT") {
+        historyAction = "REJECTED";
+        newWorkflow = "REJECTED";
+      } else if (upper === "RECOMMEND") {
+        historyAction = "RECOMMENDED";
+        newWorkflow = "RECOMMENDED";
+        newStage = nextSeq;
+      } else if (upper === "ALLOW") {
+        historyAction = "ALLOWED";
+        newWorkflow = "ALLOWED";
+        newStage = nextSeq;
+      } else if (upper === "APPROVE") {
+        historyAction = "APPROVED";
+        newWorkflow = "APPROVED";
+      }
+
+      // Create history
+      await tx.leaveStatusHistory.create({
+        data: {
+          leave_id: leave.id,
+          user_id: userId,
+          action_type: historyAction,
+          comments: comments || null,
+        },
+      });
+
+      // Update leave
+      const updateData = {
+        current_status: newWorkflow,
+        current_stage: newStage,
+      };
+      // Keep legacy status in sync on final approve/reject
+      if (newWorkflow === "APPROVED") updateData["status"] = "APPROVED";
+      if (newWorkflow === "REJECTED") updateData["status"] = "REJECTED";
+
+      const updated = await tx.leave.update({
+        where: { id: leave.id },
+        data: updateData,
+      });
+      return updated;
+    });
+  },
   updateLeave: (id, data) => prisma.leave.update({ where: { id }, data }),
   updateStatus: (id, status) =>
     prisma.leave.update({ where: { id }, data: { status } }),
@@ -691,6 +1013,28 @@ module.exports = {
       data: { is_deleted: true },
     }),
   checkSubordinate: isSubordinateOfLoggedIn,
+  checkDeptOrLocation: async (employeeId, req) => {
+    try {
+      const deptId = Number(req.session?.user?.department_id || 0);
+      const locId = Number(req.session?.user?.location_id || 0);
+      if (!deptId && !locId) return false;
+      const emp = await prisma.employment.findFirst({
+        where: {
+          is_current: true,
+          is_deleted: false,
+          employee_id: Number(employeeId),
+          OR: [
+            deptId ? { department_id: deptId } : undefined,
+            locId ? { location_id: locId } : undefined,
+          ].filter(Boolean),
+        },
+        select: { id: true },
+      });
+      return !!emp;
+    } catch (_) {
+      return false;
+    }
+  },
   getBackupEmployees: async (user, applicantId) => {
     try {
       let employees = [];
@@ -833,6 +1177,7 @@ module.exports = {
           id: emp.id,
           full_name: emp.full_name,
           employee_id: emp.employee_id,
+          cnic: emp.cnic || null,
           email: emp.email,
         }));
     } catch (error) {

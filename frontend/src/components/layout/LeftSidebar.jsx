@@ -381,6 +381,13 @@ const LeftSidebar = () => {
           icon: ViewColumnsIcon,
           show: () => can("leaves.apply"),
         },
+        {
+          name: "Leave Approvals",
+          href: "/attendance/leave-approvals",
+          icon: ViewColumnsIcon,
+          show: () =>
+            can("leaves.read") || can("leaves.status") || can("leaves.apply"),
+        },
       ],
     },
     {

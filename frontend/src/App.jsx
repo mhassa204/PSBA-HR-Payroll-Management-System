@@ -49,6 +49,7 @@ import LeaveManagement from "./features/attendance/pages/LeaveManagement";
 import LeaveBankPage from "./features/attendance/pages/LeaveBankPage";
 import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
 import LeaveApply from "./features/attendance/pages/LeaveApply";
+import LeaveApprovalsPage from "./features/attendance/pages/LeaveApprovalsPage";
 import TravelRequestsPage from "./features/travel/pages/TravelRequestsPage";
 import TravelClaimsPage from "./features/travel/pages/TravelClaimsPage";
 import ManageTravelRequests from "./features/travel/pages/ManageTravelRequests";
@@ -447,6 +448,16 @@ function App() {
               element={
                 <PrivateRoute permissions={["leaves.apply"]}>
                   <LeaveApply />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance/leave-approvals"
+              element={
+                <PrivateRoute
+                  permissions={["leaves.read", "leaves.status", "leaves.apply"]}
+                >
+                  <LeaveApprovalsPage />
                 </PrivateRoute>
               }
             />

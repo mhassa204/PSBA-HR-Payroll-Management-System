@@ -15,6 +15,12 @@ const canCreate = authorizeAny(["*", "leaves.create", "leaves.apply"]);
 const canUpdate = authorizeAny(["*", "leaves.update"]);
 const canDelete = authorizeAny(["*", "leaves.delete"]);
 const canStatus = authorizeAny(["*", "leaves.status"]);
+const canAct = authorizeAny([
+  "*",
+  "leaves.status",
+  "leaves.read",
+  "leaves.apply",
+]);
 
 router.use(isAuthenticated);
 
@@ -47,5 +53,19 @@ router.post("/:employeeId", canCreate, leaveController.createLeaves);
 router.put("/:id", canUpdate, leaveController.updateLeave);
 router.patch("/:id/status", canStatus, leaveController.updateStatus);
 router.delete("/:id", leaveController.deleteLeave);
+
+// Approvals listing and action routes
+router.get(
+  "/approvals/mine",
+  authorizeAny(["*", "leaves.read", "leaves.status", "leaves.apply"]),
+  leaveController.listApprovals
+);
+router.get(
+  "/approvals/all",
+  authorizeAny(["*", "leaves.read", "leaves.status", "leaves.apply"]),
+  leaveController.listAllApprovals
+);
+router.post("/:id/act", canAct, leaveController.actOnLeave);
+router.post("/:id/undo", canAct, leaveController.undoAction);
 
 module.exports = router;

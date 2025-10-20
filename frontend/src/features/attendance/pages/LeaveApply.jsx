@@ -3,6 +3,7 @@ import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import SearchableSelect from "../../../components/ui/SearchableSelect";
 import { toastBus } from "../../../utils/toastBus";
+import { useAuthStore } from "../../auth/authStore";
 
 const ApplyDialog = ({ employee, open, onClose }) => {
   const [loading, setLoading] = useState(false);
@@ -13,6 +14,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
   const [routeType, setRouteType] = useState("RECOMMEND");
   const [routes, setRoutes] = useState([]); // { type: 'RECOMMEND'|'ALLOW', approver_user_id, display }
   const [selectedLeave, setSelectedLeave] = useState(null);
+  const user = useAuthStore((s) => s.user);
   const [form, setForm] = useState({
     date: "",
     type: "",
@@ -153,13 +155,11 @@ const ApplyDialog = ({ employee, open, onClose }) => {
   const loadApprovers = async () => {
     try {
       const { data } = await axios.get("/leaves/approver-users");
-      const options = (data.users || []).map((user) => ({
-        value: user.id,
-        label: user.email,
-        description: user.employee?.full_name
-          ? `${user.employee.full_name} (${user.employee.employee_id || ""})`
-          : "",
-      }));
+      const meId = user?.id;
+      const meEmail = user?.email;
+      const options = (data.users || [])
+        .filter((u) => Number(u.id) !== Number(meId) && u.email !== meEmail)
+        .map((u) => ({ value: u.id, label: u.email, description: "" }));
       setApproverOptions(options);
     } catch (e) {}
   };
@@ -386,7 +386,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                     <option value="">Select backup employee</option>
                     {backupEmployees.map((emp) => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.full_name} ({emp.employee_id})
+                        {emp.full_name} ({emp.cnic || "-"})
                       </option>
                     ))}
                   </select>
@@ -729,94 +729,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                             </div>
                           </div>
 
-                          {/* Backup Info */}
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">
-                                Backup:
-                              </span>
-                              <span className="text-sm">
-                                {l.backup_employee
-                                  ? `${l.backup_employee.full_name}`
-                                  : "Not assigned"}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">
-                                Backup Time:
-                              </span>
-                              <span className="text-sm">
-                                {l.backup_duty_from && l.backup_duty_to
-                                  ? `${l.backup_duty_from} - ${l.backup_duty_to}`
-                                  : "Not specified"}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Documents */}
-                          {l.documents &&
-                            JSON.parse(l.documents).length > 0 && (
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-gray-600">
-                                    Documents:
-                                  </span>
-                                  <div className="flex flex-wrap gap-1">
-                                    {JSON.parse(l.documents).map((doc, idx) => {
-                                      // Convert relative path to full backend URL
-                                      const backendUrl = doc.startsWith("/")
-                                        ? `${window.location.protocol}//${window.location.hostname}:3000${doc}`
-                                        : doc;
-                                      return (
-                                        <a
-                                          key={idx}
-                                          href={backendUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 cursor-pointer"
-                                        >
-                                          📄 {doc.split("/").pop()}
-                                        </a>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                          {/* Manual Routes Display */}
-                          {!!l.routes?.length && (
-                            <div className="space-y-2">
-                              <div className="text-xs font-medium text-gray-600">
-                                Approval Routing:
-                              </div>
-                              <div className="space-y-1">
-                                {l.routes.map((rt, idx) => {
-                                  const label =
-                                    rt.type === "RECOMMEND"
-                                      ? "Recommendation"
-                                      : "Allow";
-                                  const approver =
-                                    rt.approver_user?.employee?.full_name ||
-                                    rt.approver_user?.email ||
-                                    `User #${rt.approver_user_id}`;
-                                  return (
-                                    <div
-                                      key={`${rt.id || idx}-${rt.type}`}
-                                      className="flex items-center gap-2 text-xs"
-                                    >
-                                      <span className="badge badge-gray text-[10px] px-2 py-1">
-                                        {label}
-                                      </span>
-                                      <span className="text-gray-700 font-medium">
-                                        {approver}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
+                          {/* Minimal list: Backup, documents, and routing moved to Details modal */}
                         </div>
 
                         {/* Actions */}
@@ -959,9 +872,9 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                       <span className="font-medium text-gray-600">
                         Backup Employee:
                       </span>
-                      <span className="ml-2">
-                        {selectedLeave.backup_employee.full_name}
-                      </span>
+                      <span className="ml-2">{`${
+                        selectedLeave.backup_employee.full_name || "User"
+                      }_${selectedLeave.backup_employee.cnic || "-"}`}</span>
                     </div>
                     <div>
                       <span className="font-medium text-gray-600">
@@ -978,6 +891,34 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                 </div>
               )}
 
+              {/* Status History */}
+              {Array.isArray(selectedLeave.statusHistory) &&
+                selectedLeave.statusHistory.length > 0 && (
+                  <div className="card-soft p-4 space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-700">
+                      Status History
+                    </h3>
+                    <div className="space-y-1">
+                      {selectedLeave.statusHistory.map((h, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="badge badge-gray">
+                              {h.action_type}
+                            </span>
+                            <span>{h.user?.email || "User"}</span>
+                          </div>
+                          <div className="text-gray-600">
+                            {new Date(h.action_time).toLocaleString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               {/* Approval Routing */}
               {selectedLeave.routes && selectedLeave.routes.length > 0 && (
                 <div className="card-soft p-4 space-y-3">
@@ -989,7 +930,6 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                       const label =
                         rt.type === "RECOMMEND" ? "Recommendation" : "Allow";
                       const approver =
-                        rt.approver_user?.employee?.full_name ||
                         rt.approver_user?.email ||
                         `User #${rt.approver_user_id}`;
                       return (
@@ -1095,7 +1035,6 @@ const LeaveApply = () => {
           <table className="table-enhanced">
             <thead>
               <tr>
-                <th>Employee ID</th>
                 <th>CNIC</th>
                 <th>Name</th>
                 <th>Designation</th>
@@ -1106,7 +1045,6 @@ const LeaveApply = () => {
             <tbody>
               {employees.map((emp) => (
                 <tr key={emp.id}>
-                  <td>{emp.employee_id || "-"}</td>
                   <td>{emp.cnic || "-"}</td>
                   <td className="text-left">{emp.full_name}</td>
                   <td className="text-left">

@@ -10,6 +10,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   const [types, setTypes] = useState([]);
   const [summary, setSummary] = useState(null);
   const [backupEmployees, setBackupEmployees] = useState([]);
+  const [selectedDetail, setSelectedDetail] = useState(null);
   const [form, setForm] = useState({
     date: "",
     type: "",
@@ -589,7 +590,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                     <option value="">Select backup employee</option>
                     {backupEmployees.map((emp) => (
                       <option key={emp.id} value={emp.id}>
-                        {emp.full_name} ({emp.employee_id})
+                        {emp.full_name} ({emp.cnic || "-"})
                       </option>
                     ))}
                   </select>
@@ -785,213 +786,310 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                   <div className="text-sm">No leave records found</div>
                 </div>
               ) : (
-                <div className="grid gap-4">
+                <div className="grid gap-3">
                   {leaves.map((l) => (
-                    <div
-                      key={l.id}
-                      className="card-soft p-4 border border-gray-200 hover:border-gray-300 transition-colors"
-                    >
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Left Column - Basic Info */}
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="form-label text-xs mb-1">
-                                Leave Date
-                              </label>
-                              <input
-                                type="date"
-                                className="form-input text-sm"
-                                value={l.date?.slice(0, 10)}
-                                onChange={(e) =>
-                                  update(l.id, { date: e.target.value })
-                                }
-                              />
-                            </div>
-                            <div>
-                              <label className="form-label text-xs mb-1">
-                                Status
-                              </label>
-                              {canStatus ? (
-                                <select
-                                  className="form-input text-sm"
-                                  value={l.status}
-                                  onChange={(e) =>
-                                    updateStatus(l.id, e.target.value)
-                                  }
-                                >
-                                  <option value="PENDING">PENDING</option>
-                                  <option value="APPROVED">APPROVED</option>
-                                  <option value="REJECTED">REJECTED</option>
-                                </select>
-                              ) : (
-                                <span
-                                  className={`badge text-xs ${
-                                    l.status === "APPROVED"
-                                      ? "badge-success"
-                                      : l.status === "REJECTED"
-                                      ? "badge-error"
-                                      : "badge-gray"
-                                  }`}
-                                >
-                                  {l.status}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
+                    <div key={l.id} className="card-soft p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap gap-4 text-sm">
                           <div>
-                            <label className="form-label text-xs mb-1">
-                              Leave Type
-                            </label>
-                            <div className="space-y-2">
-                              <select
-                                className="form-input text-sm"
-                                value={l.type}
-                                onChange={(e) =>
-                                  update(l.id, { type: e.target.value })
-                                }
-                              >
-                                {types.map((t) => (
-                                  <option key={t.id} value={t.name}>
-                                    {t.name}
-                                  </option>
-                                ))}
-                                <option value="Other">Other</option>
-                                {!types.length && (
-                                  <option value={l.type}>{l.type}</option>
-                                )}
-                              </select>
-                              {l.type === "Other" && (
-                                <input
-                                  type="text"
-                                  className="form-input text-sm"
-                                  placeholder="Enter custom leave type"
-                                  value={l.custom_type || ""}
-                                  onChange={(e) =>
-                                    update(l.id, {
-                                      custom_type: e.target.value,
-                                    })
-                                  }
-                                />
-                              )}
-                            </div>
+                            <span className="text-gray-600 text-xs">Date:</span>
+                            <span className="ml-1 font-medium">
+                              {l.date?.slice(0, 10)}
+                            </span>
                           </div>
-
                           <div>
-                            <label className="form-label text-xs mb-1">
-                              Reason
-                            </label>
-                            <textarea
-                              className="form-input text-sm"
-                              rows={2}
-                              value={l.remarks || ""}
-                              onChange={(e) =>
-                                update(l.id, { remarks: e.target.value })
-                              }
-                              placeholder="Enter reason for leave"
-                            />
+                            <span className="text-gray-600 text-xs">Type:</span>
+                            <span className="ml-1 font-medium">{l.type}</span>
+                            {l.type === "Other" && l.custom_type && (
+                              <span className="ml-2 text-[11px] bg-gray-100 px-2 py-0.5 rounded">
+                                {l.custom_type}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-gray-600 text-xs">
+                              Status:
+                            </span>
+                            <span
+                              className={`ml-1 badge text-xs ${
+                                l.status === "APPROVED"
+                                  ? "badge-success"
+                                  : l.status === "REJECTED"
+                                  ? "badge-error"
+                                  : "badge-gray"
+                              }`}
+                            >
+                              {l.status}
+                            </span>
+                          </div>
+                          <div className="max-w-[320px] truncate">
+                            <span className="text-gray-600 text-xs">
+                              Reason:
+                            </span>
+                            <span className="ml-1">{l.remarks || "-"}</span>
                           </div>
                         </div>
-
-                        {/* Right Column - Advanced Info */}
-                        <div className="space-y-4">
-                          <div>
-                            <label className="form-label text-xs mb-1">
-                              Submission Time
-                            </label>
-                            <input
-                              type="datetime-local"
-                              className="form-input text-sm"
-                              value={toLocalDateTime(l.submission_time)}
-                              onChange={(e) =>
-                                update(l.id, {
-                                  submission_time: fromLocalDateTime(
-                                    e.target.value
-                                  ),
-                                })
-                              }
-                            />
-                          </div>
-
-                          <div>
-                            <label className="form-label text-xs mb-1">
-                              Backup Resource
-                            </label>
-                            <select
-                              className="form-input text-sm"
-                              value={l.backup_employee_id || ""}
-                              onChange={(e) =>
-                                update(l.id, {
-                                  backup_employee_id: e.target.value,
-                                })
-                              }
-                            >
-                              <option value="">Select backup employee</option>
-                              {backupEmployees.map((emp) => (
-                                <option key={emp.id} value={emp.id}>
-                                  {emp.full_name} ({emp.employee_id})
-                                </option>
-                              ))}
-                              {l.backup_employee &&
-                                !backupEmployees.find(
-                                  (emp) => emp.id === l.backup_employee_id
-                                ) && (
-                                  <option value={l.backup_employee_id} selected>
-                                    {l.backup_employee.full_name} (
-                                    {l.backup_employee.employee_id})
-                                  </option>
-                                )}
-                            </select>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="form-label text-xs mb-1">
-                                Backup Duty From
-                              </label>
-                              <input
-                                type="time"
-                                className="form-input text-sm"
-                                value={l.backup_duty_from || ""}
-                                onChange={(e) =>
-                                  update(l.id, {
-                                    backup_duty_from: e.target.value,
-                                  })
-                                }
-                              />
-                            </div>
-                            <div>
-                              <label className="form-label text-xs mb-1">
-                                Backup Duty To
-                              </label>
-                              <input
-                                type="time"
-                                className="form-input text-sm"
-                                value={l.backup_duty_to || ""}
-                                onChange={(e) =>
-                                  update(l.id, {
-                                    backup_duty_to: e.target.value,
-                                  })
-                                }
-                              />
-                            </div>
-                          </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="btn btn-outline text-[11px]"
+                            onClick={() => setSelectedDetail(l)}
+                          >
+                            View Details
+                          </button>
+                          <button
+                            className="btn btn-error-soft text-[11px]"
+                            onClick={() => remove(l.id)}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-                      {/* Documents */}
-                      {l.documents && JSON.parse(l.documents).length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-600">
-                                Documents:
-                              </span>
-                              <div className="flex flex-wrap gap-1">
-                                {JSON.parse(l.documents).map((doc, idx) => {
-                                  // Convert relative path to full backend URL
-                                  const backendUrl = doc.startsWith("/")
+            {/* Details Modal with inline editing */}
+            {selectedDetail && (
+              <div className="fixed inset-0 backdrop-fade bg-black/40 z-50 flex items-center justify-center p-4">
+                <div className="modal-surface w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-thin-scroll">
+                  <div className="modal-header">
+                    <h2 className="text-sm font-semibold tracking-wide">
+                      Leave Details - {String(selectedDetail.date).slice(0, 10)}
+                    </h2>
+                    <button
+                      className="btn btn-outline btn-sm text-xs"
+                      onClick={() => setSelectedDetail(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-4 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-gray-600 text-xs">Date</span>
+                        <input
+                          type="date"
+                          className="form-input mt-1"
+                          value={selectedDetail.date?.slice(0, 10)}
+                          onChange={(e) => {
+                            update(selectedDetail.id, { date: e.target.value });
+                            setSelectedDetail({
+                              ...selectedDetail,
+                              date: e.target.value,
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <span className="text-gray-600 text-xs">Status</span>
+                        {canStatus ? (
+                          <select
+                            className="form-input mt-1"
+                            value={selectedDetail.status}
+                            onChange={(e) => {
+                              updateStatus(selectedDetail.id, e.target.value);
+                              setSelectedDetail({
+                                ...selectedDetail,
+                                status: e.target.value,
+                              });
+                            }}
+                          >
+                            <option value="PENDING">PENDING</option>
+                            <option value="APPROVED">APPROVED</option>
+                            <option value="REJECTED">REJECTED</option>
+                          </select>
+                        ) : (
+                          <div
+                            className={`mt-1 badge text-xs ${
+                              selectedDetail.status === "APPROVED"
+                                ? "badge-success"
+                                : selectedDetail.status === "REJECTED"
+                                ? "badge-error"
+                                : "badge-gray"
+                            }`}
+                          >
+                            {selectedDetail.status}
+                          </div>
+                        )}
+                      </div>
+                      <div className="md:col-span-2">
+                        <span className="text-gray-600 text-xs">Type</span>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          <select
+                            className="form-input"
+                            value={selectedDetail.type}
+                            onChange={(e) => {
+                              update(selectedDetail.id, {
+                                type: e.target.value,
+                              });
+                              setSelectedDetail({
+                                ...selectedDetail,
+                                type: e.target.value,
+                              });
+                            }}
+                          >
+                            {types.map((t) => (
+                              <option key={t.id} value={t.name}>
+                                {t.name}
+                              </option>
+                            ))}
+                            <option value="Other">Other</option>
+                            {!types.length && (
+                              <option value={selectedDetail.type}>
+                                {selectedDetail.type}
+                              </option>
+                            )}
+                          </select>
+                          {selectedDetail.type === "Other" && (
+                            <input
+                              className="form-input"
+                              placeholder="Custom type"
+                              value={selectedDetail.custom_type || ""}
+                              onChange={(e) => {
+                                update(selectedDetail.id, {
+                                  custom_type: e.target.value,
+                                });
+                                setSelectedDetail({
+                                  ...selectedDetail,
+                                  custom_type: e.target.value,
+                                });
+                              }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                      <div className="md:col-span-2">
+                        <span className="text-gray-600 text-xs">Reason</span>
+                        <textarea
+                          className="form-input mt-1"
+                          rows={2}
+                          value={selectedDetail.remarks || ""}
+                          onChange={(e) => {
+                            update(selectedDetail.id, {
+                              remarks: e.target.value,
+                            });
+                            setSelectedDetail({
+                              ...selectedDetail,
+                              remarks: e.target.value,
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <span className="text-gray-600 text-xs">
+                          Submission Time
+                        </span>
+                        <input
+                          type="datetime-local"
+                          className="form-input mt-1"
+                          value={toLocalDateTime(
+                            selectedDetail.submission_time
+                          )}
+                          onChange={(e) => {
+                            update(selectedDetail.id, {
+                              submission_time: fromLocalDateTime(
+                                e.target.value
+                              ),
+                            });
+                            setSelectedDetail({
+                              ...selectedDetail,
+                              submission_time: e.target.value,
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <span className="text-gray-600 text-xs">
+                          Backup Resource
+                        </span>
+                        <select
+                          className="form-input mt-1"
+                          value={selectedDetail.backup_employee_id || ""}
+                          onChange={(e) => {
+                            update(selectedDetail.id, {
+                              backup_employee_id: e.target.value,
+                            });
+                            setSelectedDetail({
+                              ...selectedDetail,
+                              backup_employee_id: e.target.value,
+                            });
+                          }}
+                        >
+                          <option value="">Select backup employee</option>
+                          {backupEmployees.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.full_name} ({emp.cnic || "-"})
+                            </option>
+                          ))}
+                          {selectedDetail.backup_employee &&
+                            !backupEmployees.find(
+                              (emp) =>
+                                emp.id === selectedDetail.backup_employee_id
+                            ) && (
+                              <option
+                                value={selectedDetail.backup_employee_id}
+                                selected
+                              >
+                                {selectedDetail.backup_employee.full_name} (
+                                {selectedDetail.backup_employee.cnic || "-"})
+                              </option>
+                            )}
+                        </select>
+                      </div>
+                      <div>
+                        <span className="text-gray-600 text-xs">
+                          Backup Duty (From)
+                        </span>
+                        <input
+                          type="time"
+                          className="form-input mt-1"
+                          value={selectedDetail.backup_duty_from || ""}
+                          onChange={(e) => {
+                            update(selectedDetail.id, {
+                              backup_duty_from: e.target.value,
+                            });
+                            setSelectedDetail({
+                              ...selectedDetail,
+                              backup_duty_from: e.target.value,
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <span className="text-gray-600 text-xs">
+                          Backup Duty (To)
+                        </span>
+                        <input
+                          type="time"
+                          className="form-input mt-1"
+                          value={selectedDetail.backup_duty_to || ""}
+                          onChange={(e) => {
+                            update(selectedDetail.id, {
+                              backup_duty_to: e.target.value,
+                            });
+                            setSelectedDetail({
+                              ...selectedDetail,
+                              backup_duty_to: e.target.value,
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {selectedDetail.documents &&
+                      (() => {
+                        try {
+                          const docs = JSON.parse(selectedDetail.documents);
+                          return Array.isArray(docs) && docs.length ? (
+                            <div className="pt-2">
+                              <div className="text-xs font-semibold text-gray-700 mb-1">
+                                Documents
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {docs.map((doc, idx) => {
+                                  const backendUrl = String(doc).startsWith("/")
                                     ? `${window.location.protocol}//${window.location.hostname}:3000${doc}`
                                     : doc;
                                   return (
@@ -1000,32 +1098,50 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                                       href={backendUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 cursor-pointer"
+                                      className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
                                     >
-                                      📄 {doc.split("/").pop()}
+                                      📄 {String(doc).split("/").pop()}
                                     </a>
                                   );
                                 })}
                               </div>
                             </div>
+                          ) : null;
+                        } catch {
+                          return null;
+                        }
+                      })()}
+
+                    {Array.isArray(selectedDetail.statusHistory) &&
+                      selectedDetail.statusHistory.length > 0 && (
+                        <div className="pt-2">
+                          <div className="text-xs font-semibold text-gray-700 mb-1">
+                            Status History
+                          </div>
+                          <div className="space-y-1">
+                            {selectedDetail.statusHistory.map((h, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="badge badge-gray">
+                                    {h.action_type}
+                                  </span>
+                                  <span>{h.user?.email || "User"}</span>
+                                </div>
+                                <div className="text-gray-600">
+                                  {new Date(h.action_time).toLocaleString()}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )}
-
-                      {/* Actions */}
-                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
-                        <button
-                          className="btn btn-error-soft text-xs px-3 py-1"
-                          onClick={() => remove(l.id)}
-                        >
-                          Delete Leave
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1109,7 +1225,6 @@ const LeaveManagement = () => {
           <table className="table-enhanced">
             <thead>
               <tr>
-                <th>Employee ID</th>
                 <th>CNIC</th>
                 <th>Name</th>
                 <th>Designation</th>
@@ -1121,7 +1236,6 @@ const LeaveManagement = () => {
             <tbody>
               {filtered.map((emp) => (
                 <tr key={emp.id}>
-                  <td>{emp.employee_id || "-"}</td>
                   <td>{emp.cnic || "-"}</td>
                   <td className="text-left">{emp.full_name}</td>
                   <td className="text-left">
