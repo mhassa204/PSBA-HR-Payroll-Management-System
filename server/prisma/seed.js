@@ -489,6 +489,8 @@ async function main() {
         "travel.claim.read",
         "travel.request.approve.dg",
         "travel.claim.approve.dg",
+        // Leave permissions (only apply, no management access)
+        "leaves.apply",
       ],
       enabled: true,
       fields: ["*"],
@@ -514,6 +516,8 @@ async function main() {
         // Allow opening Manage screen for leadership visibility
         "travel.manage",
         // No OPS approvals here; use Operations role
+        // Leave permissions (only apply, no management access)
+        "leaves.apply",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment"],
@@ -537,6 +541,8 @@ async function main() {
         "travel.claim.status",
         // Allow opening Manage screen for ADs to participate in recommender/approval flows
         "travel.manage",
+        // Leave permissions (only apply, no management access)
+        "leaves.apply",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment"],
@@ -560,6 +566,10 @@ async function main() {
         // OPS approvals
         "travel.request.approve.ops",
         "travel.claim.approve.ops",
+        // Leave permissions (full access for Operations)
+        "leaves.read",
+        "leaves.apply",
+        "leaves.status",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -587,6 +597,8 @@ async function main() {
         // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
+        // Leave permissions (only apply, no management access)
+        "leaves.apply",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment", "employee_salary"],
@@ -614,6 +626,8 @@ async function main() {
         // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
+        // Leave permissions (only apply, no management access)
+        "leaves.apply",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -665,6 +679,10 @@ async function main() {
         "districts.read",
         "cities.read",
         "education-levels.read",
+        // Leave permissions (full access for Establishment)
+        "leaves.read",
+        "leaves.apply",
+        "leaves.status",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -689,6 +707,8 @@ async function main() {
         "travel.claim.submit",
         "travel.claim.status",
         // remove travel rates from general employees
+        // Leave permissions (only apply, no management access)
+        "leaves.apply",
       ],
       enabled: true,
       fields: ["own_personal", "own_employment"],
@@ -751,6 +771,14 @@ async function main() {
     "employment.contract.create",
     "employment.contract.update",
     "employment.contract.delete",
+    // Leave module routes
+    "leaves.read",
+    "leaves.create",
+    "leaves.update",
+    "leaves.delete",
+    "leaves.status",
+    "leaves.apply",
+    "leave-types.read",
     // granular stage permissions
     "travel.request.approve.ops",
     "travel.request.approve.dg",

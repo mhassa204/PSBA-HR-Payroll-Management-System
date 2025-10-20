@@ -49,8 +49,22 @@ module.exports = {
   createLeaves: async (req, res) => {
     try {
       const employeeId = Number(req.params.employeeId);
-      const { date, type, remarks, start, end, dates, duty_from, duty_to } =
-        req.body || {};
+      const {
+        date,
+        type,
+        remarks,
+        start,
+        end,
+        dates,
+        duty_from,
+        duty_to,
+        // New fields
+        submission_time,
+        custom_type,
+        backup_employee_id,
+        backup_duty_from,
+        backup_duty_to,
+      } = req.body || {};
       const perms = req.session?.user?.permissions || [];
       const userEmpId = req.session?.user?.employee_id || null;
       const hasCreate = perms.includes("*") || perms.includes("leaves.create");
@@ -77,6 +91,12 @@ module.exports = {
         dates,
         duty_from,
         duty_to,
+        // New fields
+        submission_time,
+        custom_type,
+        backup_employee_id,
+        backup_duty_from,
+        backup_duty_to,
       });
       res.status(201).json({ success: true, ...result });
     } catch (e) {
@@ -95,11 +115,31 @@ module.exports = {
   updateLeave: async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const { date, type, remarks, duty_from, duty_to } = req.body || {};
+      const {
+        date,
+        type,
+        remarks,
+        duty_from,
+        duty_to,
+        // New fields
+        submission_time,
+        custom_type,
+        backup_employee_id,
+        backup_duty_from,
+        backup_duty_to,
+      } = req.body || {};
       const data = {};
       if (date) data.date = new Date(date);
       if (type) data.type = String(type);
-      if (remarks !== undefined) data.remarks = remarks; // duty_from/to are not stored separately in DB yet
+      if (remarks !== undefined) data.remarks = remarks;
+      // New fields
+      if (submission_time) data.submission_time = new Date(submission_time);
+      if (custom_type !== undefined) data.custom_type = custom_type;
+      if (backup_employee_id !== undefined)
+        data.backup_employee_id = backup_employee_id;
+      if (backup_duty_from !== undefined)
+        data.backup_duty_from = backup_duty_from;
+      if (backup_duty_to !== undefined) data.backup_duty_to = backup_duty_to;
       const updated = await leaveService.updateLeave(id, data);
       res.json({ success: true, leave: updated });
     } catch (e) {
@@ -137,12 +177,10 @@ module.exports = {
         if (!leave || leave.is_deleted)
           return res.status(404).json({ success: false, error: "Not found" });
         if (leave.status !== "PENDING")
-          return res
-            .status(400)
-            .json({
-              success: false,
-              error: "Only pending leaves can be deleted",
-            });
+          return res.status(400).json({
+            success: false,
+            error: "Only pending leaves can be deleted",
+          });
         const isSelf =
           userEmpId && Number(leave.employee_id) === Number(userEmpId);
         const ok = isSelf
@@ -155,6 +193,20 @@ module.exports = {
       }
       return res.status(403).json({ success: false, error: "Forbidden" });
     } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  getBackupEmployees: async (req, res) => {
+    try {
+      const user = req.session?.user;
+      if (!user) {
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      }
+
+      const employees = await leaveService.getBackupEmployees(user);
+      res.json({ success: true, employees });
+    } catch (e) {
+      console.error("Get backup employees error:", e);
       res.status(500).json({ success: false, error: e.message });
     }
   },

@@ -7,13 +7,38 @@ const ApplyDialog = ({ employee, open, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [leaves, setLeaves] = useState([]);
   const [types, setTypes] = useState([]);
+  const [backupEmployees, setBackupEmployees] = useState([]);
   const [form, setForm] = useState({
     date: "",
     type: "",
     remarks: "",
     duty_from: "",
     duty_to: "",
+    // New fields
+    submission_time: "",
+    custom_type: "",
+    backup_employee_id: "",
+    backup_duty_from: "",
+    backup_duty_to: "",
   });
+
+  // Helper function to convert UTC+5 time to local datetime-local format
+  const toLocalDateTime = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    // Adjust for UTC+5 (5 hours ahead of UTC)
+    const localDate = new Date(date.getTime() - 5 * 60 * 60 * 1000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  // Helper function to convert local datetime-local to UTC+5
+  const fromLocalDateTime = (localDateTime) => {
+    if (!localDateTime) return null;
+    const localDate = new Date(localDateTime);
+    // Adjust for UTC+5 (5 hours ahead of UTC)
+    const utc5Date = new Date(localDate.getTime() + 5 * 60 * 60 * 1000);
+    return utc5Date.toISOString();
+  };
   const [mode, setMode] = useState("single");
   const [range, setRange] = useState({ start: "", end: "" });
   const [multiDates, setMultiDates] = useState([""]);
@@ -24,13 +49,16 @@ const ApplyDialog = ({ employee, open, onClose }) => {
     const load = async () => {
       try {
         setLoading(true);
-        const [{ data: leavesRes }, { data: typesRes }] = await Promise.all([
-          axios.get(`/leaves/${employee.id}`),
-          axios.get("/leave-banks/types"),
-        ]);
+        const [{ data: leavesRes }, { data: typesRes }, { data: backupRes }] =
+          await Promise.all([
+            axios.get(`/leaves/${employee.id}`),
+            axios.get("/leave-banks/types"),
+            axios.get("/leaves/backup-employees"),
+          ]);
         if (ignore) return;
         setLeaves(leavesRes.leaves || []);
         setTypes(typesRes.types || []);
+        setBackupEmployees(backupRes.employees || []);
       } catch {
       } finally {
         setLoading(false);
@@ -50,6 +78,14 @@ const ApplyDialog = ({ employee, open, onClose }) => {
       remarks: form.remarks,
       duty_from: form.duty_from || null,
       duty_to: form.duty_to || null,
+      // New fields
+      submission_time: form.submission_time
+        ? fromLocalDateTime(form.submission_time)
+        : null,
+      custom_type: form.custom_type || null,
+      backup_employee_id: form.backup_employee_id || null,
+      backup_duty_from: form.backup_duty_from || null,
+      backup_duty_to: form.backup_duty_to || null,
     };
     if (mode === "single") {
       if (!form.date) return;
@@ -66,7 +102,18 @@ const ApplyDialog = ({ employee, open, onClose }) => {
 
     try {
       await axios.post(`/leaves/${employee.id}`, body);
-      setForm({ date: "", type: "", remarks: "", duty_from: "", duty_to: "" });
+      setForm({
+        date: "",
+        type: "",
+        remarks: "",
+        duty_from: "",
+        duty_to: "",
+        submission_time: "",
+        custom_type: "",
+        backup_employee_id: "",
+        backup_duty_from: "",
+        backup_duty_to: "",
+      });
       setRange({ start: "", end: "" });
       setMultiDates([""]);
       const { data } = await axios.get(`/leaves/${employee.id}`);
@@ -129,8 +176,24 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                         {t.name}
                       </option>
                     ))}
+                    <option value="Other">Other</option>
                   </select>
                 </div>
+                {form.type === "Other" && (
+                  <div className="col-span-2">
+                    <label className="form-label text-[11px] mb-1">
+                      Custom Leave Type
+                    </label>
+                    <input
+                      className="form-input"
+                      placeholder="Enter custom leave type"
+                      value={form.custom_type}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, custom_type: e.target.value }))
+                      }
+                    />
+                  </div>
+                )}
                 <div className="col-span-2">
                   <label className="form-label text-[11px] mb-1">
                     Reason for availing leave
@@ -167,6 +230,73 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                     value={form.duty_to}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, duty_to: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">
+                    Submission Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className="form-input"
+                    value={form.submission_time}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        submission_time: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="form-label text-[11px] mb-1">
+                    Backup Resource
+                  </label>
+                  <select
+                    className="form-input"
+                    value={form.backup_employee_id}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        backup_employee_id: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select backup employee</option>
+                    {backupEmployees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.full_name} ({emp.employee_id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">
+                    Backup Duty Time (From)
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={form.backup_duty_from}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        backup_duty_from: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">
+                    Backup Duty Time (To)
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={form.backup_duty_to}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, backup_duty_to: e.target.value }))
                     }
                   />
                 </div>
@@ -273,30 +403,88 @@ const ApplyDialog = ({ employee, open, onClose }) => {
             </form>
 
             <div className="card-soft p-0 overflow-hidden">
-              <div className="table-shell overflow-auto max-h-[55vh] custom-thin-scroll">
-                <table className="table-enhanced">
+              <div className="table-shell overflow-auto max-h-[55vh] custom-thin-scroll min-w-[800px]">
+                <table className="table-enhanced text-xs">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Status</th>
-                      <th>Reason</th>
-                      <th></th>
+                      <th className="w-24">Date</th>
+                      <th className="w-32">Type</th>
+                      <th className="w-20">Status</th>
+                      <th className="w-40">Reason</th>
+                      <th className="w-32">Submission Time</th>
+                      <th className="w-40">Backup Resource</th>
+                      <th className="w-32">Backup Duty Time</th>
+                      <th className="w-20"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {leaves.map((l) => (
-                      <tr key={l.id}>
-                        <td>{l.date?.slice(0, 10)}</td>
-                        <td>{l.type}</td>
-                        <td>
-                          <span className="badge badge-gray">{l.status}</span>
+                      <tr key={l.id} className="hover:bg-gray-50">
+                        <td className="text-xs">{l.date?.slice(0, 10)}</td>
+                        <td className="text-xs">
+                          <div className="space-y-1">
+                            <div className="font-medium">{l.type}</div>
+                            {l.type === "Other" && l.custom_type && (
+                              <div className="text-[10px] text-gray-600 bg-gray-50 px-1 py-0.5 rounded">
+                                {l.custom_type}
+                              </div>
+                            )}
+                          </div>
                         </td>
-                        <td>{l.remarks || "-"}</td>
+                        <td>
+                          <span
+                            className={`badge text-[10px] ${
+                              l.status === "APPROVED"
+                                ? "badge-success"
+                                : l.status === "REJECTED"
+                                ? "badge-error"
+                                : "badge-gray"
+                            }`}
+                          >
+                            {l.status}
+                          </span>
+                        </td>
+                        <td
+                          className="text-xs max-w-[200px] truncate"
+                          title={l.remarks || ""}
+                        >
+                          {l.remarks || "-"}
+                        </td>
+                        <td className="text-xs">
+                          {l.submission_time
+                            ? new Date(l.submission_time).toLocaleString(
+                                "en-PK",
+                                {
+                                  timeZone: "Asia/Karachi",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )
+                            : "-"}
+                        </td>
+                        <td
+                          className="text-xs max-w-[200px] truncate"
+                          title={
+                            l.backup_employee
+                              ? `${l.backup_employee.full_name} (${l.backup_employee.employee_id})`
+                              : ""
+                          }
+                        >
+                          {l.backup_employee
+                            ? `${l.backup_employee.full_name}`
+                            : "-"}
+                        </td>
+                        <td className="text-xs">
+                          {l.backup_duty_from && l.backup_duty_to
+                            ? `${l.backup_duty_from}-${l.backup_duty_to}`
+                            : "-"}
+                        </td>
                         <td className="text-right">
                           {l.status === "PENDING" && (
                             <button
-                              className="btn btn-error-soft text-[11px]"
+                              className="btn btn-error-soft text-[10px] px-2 py-1"
                               onClick={() => onDelete(l.id)}
                             >
                               Delete
@@ -308,7 +496,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                     {!leaves.length && (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={8}
                           className="text-center py-6 text-xs text-gray-500"
                         >
                           No leaves

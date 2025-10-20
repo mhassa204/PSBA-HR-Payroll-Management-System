@@ -9,13 +9,38 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   const [leaves, setLeaves] = useState([]);
   const [types, setTypes] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [backupEmployees, setBackupEmployees] = useState([]);
   const [form, setForm] = useState({
     date: "",
     type: "",
     remarks: "",
     duty_from: "",
     duty_to: "",
+    // New fields
+    submission_time: "",
+    custom_type: "",
+    backup_employee_id: "",
+    backup_duty_from: "",
+    backup_duty_to: "",
   });
+
+  // Helper function to convert UTC+5 time to local datetime-local format
+  const toLocalDateTime = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    // Adjust for UTC+5 (5 hours ahead of UTC)
+    const localDate = new Date(date.getTime() - 5 * 60 * 60 * 1000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  // Helper function to convert local datetime-local to UTC+5
+  const fromLocalDateTime = (localDateTime) => {
+    if (!localDateTime) return null;
+    const localDate = new Date(localDateTime);
+    // Adjust for UTC+5 (5 hours ahead of UTC)
+    const utc5Date = new Date(localDate.getTime() + 5 * 60 * 60 * 1000);
+    return utc5Date.toISOString();
+  };
   const [canStatus, setCanStatus] = useState(false);
   const [mode, setMode] = useState("single"); // 'single' | 'range' | 'multi'
   const [range, setRange] = useState({ start: "", end: "" });
@@ -31,14 +56,17 @@ const LeaveDialog = ({ employee, open, onClose }) => {
         const me = await axios.get("/me");
         const perms = me?.data?.user?.permissions || [];
         setCanStatus(perms.includes("*") || perms.includes("leaves.status"));
-        const [{ data: leavesRes }, { data: typesRes }] = await Promise.all([
-          axios.get(`/leaves/${employee.id}`),
-          axios.get("/leave-banks/types"),
-        ]);
+        const [{ data: leavesRes }, { data: typesRes }, { data: backupRes }] =
+          await Promise.all([
+            axios.get(`/leaves/${employee.id}`),
+            axios.get("/leave-banks/types"),
+            axios.get("/leaves/backup-employees"),
+          ]);
         if (ignore) return;
         setLeaves(leavesRes.leaves || []);
         setSummary(leavesRes.summary || null);
         setTypes(typesRes.types || []);
+        setBackupEmployees(backupRes.employees || []);
       } catch {
       } finally {
         setLoading(false);
@@ -58,6 +86,14 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       remarks: form.remarks,
       duty_from: form.duty_from || null,
       duty_to: form.duty_to || null,
+      // New fields
+      submission_time: form.submission_time
+        ? fromLocalDateTime(form.submission_time)
+        : null,
+      custom_type: form.custom_type || null,
+      backup_employee_id: form.backup_employee_id || null,
+      backup_duty_from: form.backup_duty_from || null,
+      backup_duty_to: form.backup_duty_to || null,
     };
     if (mode === "single") {
       if (!form.date) return;
@@ -74,7 +110,18 @@ const LeaveDialog = ({ employee, open, onClose }) => {
 
     try {
       await axios.post(`/leaves/${employee.id}`, body);
-      setForm({ date: "", type: "", remarks: "", duty_from: "", duty_to: "" });
+      setForm({
+        date: "",
+        type: "",
+        remarks: "",
+        duty_from: "",
+        duty_to: "",
+        submission_time: "",
+        custom_type: "",
+        backup_employee_id: "",
+        backup_duty_from: "",
+        backup_duty_to: "",
+      });
       setRange({ start: "", end: "" });
       setMultiDates([""]);
       const { data } = await axios.get(`/leaves/${employee.id}`);
@@ -375,8 +422,24 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                         {t.name}
                       </option>
                     ))}
+                    <option value="Other">Other</option>
                   </select>
                 </div>
+                {form.type === "Other" && (
+                  <div className="col-span-2">
+                    <label className="form-label text-[11px] mb-1">
+                      Custom Leave Type
+                    </label>
+                    <input
+                      className="form-input"
+                      placeholder="Enter custom leave type"
+                      value={form.custom_type}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, custom_type: e.target.value }))
+                      }
+                    />
+                  </div>
+                )}
                 <div className="col-span-2">
                   <label className="form-label text-[11px] mb-1">
                     Reason for availing leave
@@ -413,6 +476,73 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                     value={form.duty_to}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, duty_to: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">
+                    Submission Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className="form-input"
+                    value={form.submission_time}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        submission_time: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="form-label text-[11px] mb-1">
+                    Backup Resource
+                  </label>
+                  <select
+                    className="form-input"
+                    value={form.backup_employee_id}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        backup_employee_id: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select backup employee</option>
+                    {backupEmployees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.full_name} ({emp.employee_id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">
+                    Backup Duty Time (From)
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={form.backup_duty_from}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        backup_duty_from: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="form-label text-[11px] mb-1">
+                    Backup Duty Time (To)
+                  </label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={form.backup_duty_to}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, backup_duty_to: e.target.value }))
                     }
                   />
                 </div>
@@ -519,25 +649,28 @@ const LeaveDialog = ({ employee, open, onClose }) => {
             </form>
 
             <div className="card-soft p-0 overflow-hidden">
-              <div className="table-shell overflow-auto max-h-[55vh] custom-thin-scroll">
-                <table className="table-enhanced">
+              <div className="table-shell overflow-auto max-h-[55vh] custom-thin-scroll min-w-[900px]">
+                <table className="table-enhanced text-xs">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Type</th>
-                      <th>Status</th>
-                      <th>Reason</th>
-                      <th>Duty Time</th>
-                      <th>Actions</th>
+                      <th className="w-24">Date</th>
+                      <th className="w-32">Type</th>
+                      <th className="w-20">Status</th>
+                      <th className="w-40">Reason</th>
+                      <th className="w-24">Duty Time</th>
+                      <th className="w-32">Submission Time</th>
+                      <th className="w-40">Backup Resource</th>
+                      <th className="w-32">Backup Duty Time</th>
+                      <th className="w-20">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {leaves.map((l) => (
-                      <tr key={l.id}>
+                      <tr key={l.id} className="hover:bg-gray-50">
                         <td>
                           <input
                             type="date"
-                            className="form-input !py-1 !px-2"
+                            className="form-input !py-1 !px-2 text-xs w-full"
                             value={l.date?.slice(0, 10)}
                             onChange={(e) =>
                               update(l.id, { date: e.target.value })
@@ -545,27 +678,41 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                           />
                         </td>
                         <td>
-                          <select
-                            className="form-input !py-1 !px-2"
-                            value={l.type}
-                            onChange={(e) =>
-                              update(l.id, { type: e.target.value })
-                            }
-                          >
-                            {types.map((t) => (
-                              <option key={t.id} value={t.name}>
-                                {t.name}
-                              </option>
-                            ))}
-                            {!types.length && (
-                              <option value={l.type}>{l.type}</option>
+                          <div className="space-y-1">
+                            <select
+                              className="form-input !py-1 !px-2 text-xs w-full"
+                              value={l.type}
+                              onChange={(e) =>
+                                update(l.id, { type: e.target.value })
+                              }
+                            >
+                              {types.map((t) => (
+                                <option key={t.id} value={t.name}>
+                                  {t.name}
+                                </option>
+                              ))}
+                              <option value="Other">Other</option>
+                              {!types.length && (
+                                <option value={l.type}>{l.type}</option>
+                              )}
+                            </select>
+                            {l.type === "Other" && (
+                              <input
+                                type="text"
+                                className="form-input !py-1 !px-2 text-xs w-full"
+                                placeholder="Custom type"
+                                value={l.custom_type || ""}
+                                onChange={(e) =>
+                                  update(l.id, { custom_type: e.target.value })
+                                }
+                              />
                             )}
-                          </select>
+                          </div>
                         </td>
                         <td>
                           {canStatus ? (
                             <select
-                              className="form-input !py-1 !px-2"
+                              className="form-input !py-1 !px-2 text-xs w-full"
                               value={l.status}
                               onChange={(e) =>
                                 updateStatus(l.id, e.target.value)
@@ -576,29 +723,104 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                               <option value="REJECTED">REJECTED</option>
                             </select>
                           ) : (
-                            <span className="badge badge-gray">{l.status}</span>
+                            <span
+                              className={`badge text-[10px] ${
+                                l.status === "APPROVED"
+                                  ? "badge-success"
+                                  : l.status === "REJECTED"
+                                  ? "badge-error"
+                                  : "badge-gray"
+                              }`}
+                            >
+                              {l.status}
+                            </span>
                           )}
                         </td>
                         <td>
                           <input
-                            className="form-input !py-1 !px-2"
+                            className="form-input !py-1 !px-2 text-xs w-full"
                             value={l.remarks || ""}
                             onChange={(e) =>
                               update(l.id, { remarks: e.target.value })
                             }
+                            placeholder="Reason"
                           />
                         </td>
-                        <td className="min-w-[140px]">
+                        <td className="text-xs">
                           {(() => {
                             const m = (l.remarks || "").match(
                               /Duty time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/i
                             );
-                            return m ? `${m[1]} - ${m[2]}` : "-";
+                            return m ? `${m[1]}-${m[2]}` : "-";
                           })()}
                         </td>
                         <td>
+                          <input
+                            type="datetime-local"
+                            className="form-input !py-1 !px-2 text-xs w-full"
+                            value={toLocalDateTime(l.submission_time)}
+                            onChange={(e) =>
+                              update(l.id, {
+                                submission_time: fromLocalDateTime(
+                                  e.target.value
+                                ),
+                              })
+                            }
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="form-input !py-1 !px-2 text-xs w-full"
+                            value={l.backup_employee_id || ""}
+                            onChange={(e) =>
+                              update(l.id, {
+                                backup_employee_id: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="">Select backup</option>
+                            {backupEmployees.map((emp) => (
+                              <option key={emp.id} value={emp.id}>
+                                {emp.full_name}
+                              </option>
+                            ))}
+                            {l.backup_employee &&
+                              !backupEmployees.find(
+                                (emp) => emp.id === l.backup_employee_id
+                              ) && (
+                                <option value={l.backup_employee_id} selected>
+                                  {l.backup_employee.full_name}
+                                </option>
+                              )}
+                          </select>
+                        </td>
+                        <td>
+                          <div className="flex gap-1">
+                            <input
+                              type="time"
+                              className="form-input !py-1 !px-2 text-xs w-16"
+                              value={l.backup_duty_from || ""}
+                              onChange={(e) =>
+                                update(l.id, {
+                                  backup_duty_from: e.target.value,
+                                })
+                              }
+                              placeholder="From"
+                            />
+                            <input
+                              type="time"
+                              className="form-input !py-1 !px-2 text-xs w-16"
+                              value={l.backup_duty_to || ""}
+                              onChange={(e) =>
+                                update(l.id, { backup_duty_to: e.target.value })
+                              }
+                              placeholder="To"
+                            />
+                          </div>
+                        </td>
+                        <td>
                           <button
-                            className="btn btn-error-soft text-[11px]"
+                            className="btn btn-error-soft text-[10px] px-2 py-1"
                             onClick={() => remove(l.id)}
                           >
                             Delete
@@ -609,7 +831,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                     {!leaves.length && (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={9}
                           className="text-center py-6 text-xs text-gray-500"
                         >
                           No leaves

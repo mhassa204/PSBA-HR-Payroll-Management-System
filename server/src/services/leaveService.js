@@ -292,6 +292,15 @@ module.exports = {
     const leaves = await prisma.leave.findMany({
       where: { employee_id: employeeId, is_deleted: false },
       orderBy: { date: "desc" },
+      include: {
+        backup_employee: {
+          select: {
+            id: true,
+            full_name: true,
+            employee_id: true,
+          },
+        },
+      },
     });
     const activeBank = await getActiveLeaveBank();
     let summary = null;
@@ -341,6 +350,12 @@ module.exports = {
     dates,
     duty_from,
     duty_to,
+    // New fields
+    submission_time,
+    custom_type,
+    backup_employee_id,
+    backup_duty_from,
+    backup_duty_to,
   }) => {
     const toInsert = new Set();
     if (Array.isArray(dates) && dates.length) {
@@ -388,6 +403,16 @@ module.exports = {
         return `${base ? base + " | " : ""}Duty time: ${df} - ${dt}`;
       return base || null;
     };
+    // Format backup duty times
+    const fmtBackup = (t) => {
+      if (!t) return null;
+      const s = String(t).trim();
+      const m = s.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+      return m ? `${m[1].padStart(2, "0")}:${m[2].padStart(2, "0")}` : null;
+    };
+    const backupDutyFrom = fmtBackup(backup_duty_from);
+    const backupDutyTo = fmtBackup(backup_duty_to);
+
     const payload = list
       .filter((d) => !existSet.has(d))
       .map((d) => ({
@@ -395,6 +420,16 @@ module.exports = {
         date: new Date(d),
         type: String(type),
         remarks: enrichRemarks(remarks || null),
+        // New fields
+        submission_time: submission_time
+          ? new Date(submission_time)
+          : new Date(new Date().getTime() + 5 * 60 * 60 * 1000), // UTC+5
+        custom_type: custom_type || null,
+        backup_employee_id: backup_employee_id
+          ? Number(backup_employee_id)
+          : null,
+        backup_duty_from: backupDutyFrom,
+        backup_duty_to: backupDutyTo,
       }));
     let created = 0;
     let skipped = list.length - payload.length;
@@ -405,6 +440,15 @@ module.exports = {
     const leaves = await prisma.leave.findMany({
       where: { employee_id: employeeId, is_deleted: false },
       orderBy: { date: "desc" },
+      include: {
+        backup_employee: {
+          select: {
+            id: true,
+            full_name: true,
+            employee_id: true,
+          },
+        },
+      },
     });
     return { created, skipped, leaves };
   },
@@ -420,4 +464,67 @@ module.exports = {
       data: { is_deleted: true },
     }),
   checkSubordinate: isSubordinateOfLoggedIn,
+  getBackupEmployees: async (user) => {
+    try {
+      const { employee_id, department_id, location_id } = user;
+
+      let employees = [];
+
+      if (employee_id) {
+        // Employee-based user: get subordinates
+        const currentEmployment = await prisma.employment.findFirst({
+          where: { employee_id, is_current: true },
+          include: { employee: true },
+        });
+
+        if (currentEmployment) {
+          // Get employees reporting to this user
+          const subordinates = await prisma.employment.findMany({
+            where: {
+              reporting_officer_id: String(employee_id),
+              is_current: true,
+              is_deleted: false,
+            },
+            include: { employee: true },
+          });
+          employees = subordinates.map((emp) => emp.employee);
+        }
+      } else if (department_id) {
+        // Department-based user: get all employees in the department
+        const deptEmployees = await prisma.employment.findMany({
+          where: {
+            department_id,
+            is_current: true,
+            is_deleted: false,
+          },
+          include: { employee: true },
+        });
+        employees = deptEmployees.map((emp) => emp.employee);
+      } else if (location_id) {
+        // Location-based user: get all employees in the location
+        const locationEmployees = await prisma.employment.findMany({
+          where: {
+            location_id,
+            is_current: true,
+            is_deleted: false,
+          },
+          include: { employee: true },
+        });
+        employees = locationEmployees.map((emp) => emp.employee);
+      }
+
+      // Filter out deleted employees and format for frontend
+      return employees
+        .filter((emp) => !emp.is_deleted)
+        .map((emp) => ({
+          id: emp.id,
+          full_name: emp.full_name,
+          employee_id: emp.employee_id,
+          email: emp.email,
+        }));
+    } catch (error) {
+      console.error("Error getting backup employees:", error);
+      return [];
+    }
+  },
 };

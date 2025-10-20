@@ -69,6 +69,8 @@ model Employee {
   travelClaimStatusEntries TravelClaimStatusEntry[]
   // New: back relation for departments headed by this employee
   headedDepartments       Department[]            @relation("DepartmentHead")
+  // Back-relation: leaves where this employee is backup
+  backupLeaves            Leave[]                 @relation("LeaveBackupEmployee")
 }
 
 model Department {
@@ -540,13 +542,21 @@ model Leave {
   type         String
   status       LeaveStatus  @default(PENDING)
   remarks      String?
+  // New fields for enhanced leave management
+  submission_time DateTime?  @default(now())
+  custom_type    String?    // For "other" leave type
+  backup_employee_id Int?   // Backup resource employee
+  backup_duty_from   String? // Backup duty time from (HH:mm format)
+  backup_duty_to     String? // Backup duty time to (HH:mm format)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @default(now())
   is_deleted   Boolean      @default(false)
 
   employee     Employee     @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  backup_employee Employee?  @relation("LeaveBackupEmployee", fields: [backup_employee_id], references: [id])
 
   @@index([employee_id, date])
+  @@index([backup_employee_id])
 }
 
 // New: enum for Leave status
