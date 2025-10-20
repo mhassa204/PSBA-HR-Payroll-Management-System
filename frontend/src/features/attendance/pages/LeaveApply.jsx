@@ -686,14 +686,14 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                               </span>
                               <span
                                 className={`badge text-xs ${
-                                  l.status === "APPROVED"
+                                  l.current_status === "APPROVED"
                                     ? "badge-success"
-                                    : l.status === "REJECTED"
+                                    : l.current_status === "REJECTED"
                                     ? "badge-error"
                                     : "badge-gray"
                                 }`}
                               >
-                                {l.status}
+                                {l.current_status}
                               </span>
                             </div>
                           </div>
@@ -734,7 +734,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
 
                         {/* Actions */}
                         <div className="flex flex-col gap-2 ml-4">
-                          {l.status === "PENDING" && (
+                          {l.current_status === "PENDING" && (
                             <button
                               className="btn btn-error-soft text-xs px-3 py-1"
                               onClick={() => onDelete(l.id)}
@@ -782,6 +782,16 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                 </h3>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
+                    <span className="font-medium text-gray-600">
+                      Applicant:
+                    </span>
+                    <span className="ml-2">{employee?.full_name || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">CNIC:</span>
+                    <span className="ml-2">{employee?.cnic || "-"}</span>
+                  </div>
+                  <div>
                     <span className="font-medium text-gray-600">Date:</span>
                     <span className="ml-2">
                       {selectedLeave.date?.slice(0, 10)}
@@ -801,14 +811,14 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                     <span className="font-medium text-gray-600">Status:</span>
                     <span
                       className={`ml-2 badge ${
-                        selectedLeave.status === "APPROVED"
+                        selectedLeave.current_status === "APPROVED"
                           ? "badge-success"
-                          : selectedLeave.status === "REJECTED"
+                          : selectedLeave.current_status === "REJECTED"
                           ? "badge-error"
                           : "badge-gray"
                       }`}
                     >
-                      {selectedLeave.status}
+                      {selectedLeave.current_status}
                     </span>
                   </div>
                   <div>
@@ -827,6 +837,21 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                             minute: "2-digit",
                           })
                         : "Not specified"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">
+                      Designation:
+                    </span>
+                    <span className="ml-2">
+                      {employee?.employmentRecords?.[0]?.designation?.title ||
+                        "-"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Location:</span>
+                    <span className="ml-2">
+                      {employee?.employmentRecords?.[0]?.location?.name || "-"}
                     </span>
                   </div>
                 </div>

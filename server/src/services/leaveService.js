@@ -151,7 +151,7 @@ module.exports = {
         include: {
           employmentRecords: {
             where: { is_current: true, is_deleted: false },
-            include: { designation: true, role_tag: true },
+            include: { designation: true, role_tag: true, location: true },
           },
         },
         orderBy: { full_name: "asc" },
@@ -190,7 +190,7 @@ module.exports = {
         include: {
           employmentRecords: {
             where: { is_current: true, is_deleted: false },
-            include: { designation: true, role_tag: true },
+            include: { designation: true, role_tag: true, location: true },
           },
         },
         orderBy: { full_name: "asc" },
@@ -220,7 +220,12 @@ module.exports = {
               : {}),
           },
         },
-        include: { employee: true, designation: true, role_tag: true },
+        include: {
+          employee: true,
+          designation: true,
+          role_tag: true,
+          location: true,
+        },
         orderBy: { employee_id: "asc" },
       });
 
@@ -235,7 +240,11 @@ module.exports = {
           full_name: r.employee.full_name,
           cnic: r.employee.cnic,
           employmentRecords: [
-            { designation: r.designation, role_tag: r.role_tag },
+            {
+              designation: r.designation,
+              role_tag: r.role_tag,
+              location: r.location,
+            },
           ],
         });
       }
@@ -260,7 +269,7 @@ module.exports = {
         include: {
           employmentRecords: {
             where: { is_current: true, is_deleted: false },
-            include: { designation: true, role_tag: true },
+            include: { designation: true, role_tag: true, location: true },
           },
         },
       });
@@ -274,6 +283,7 @@ module.exports = {
             {
               designation: selfEmp.employmentRecords?.[0]?.designation || null,
               role_tag: selfEmp.employmentRecords?.[0]?.role_tag || null,
+              location: selfEmp.employmentRecords?.[0]?.location || null,
             },
           ],
         });
@@ -330,7 +340,7 @@ module.exports = {
         cnic: true,
         employmentRecords: {
           where: { is_current: true, is_deleted: false },
-          include: { designation: true, role_tag: true },
+          include: { designation: true, role_tag: true, location: true },
         },
         leaves: { where: { is_deleted: false }, orderBy: { date: "desc" } },
       },
@@ -593,9 +603,11 @@ module.exports = {
                   Number.isFinite(r.approver_user_id)
               )
           : [];
+
+        let routeRows = [];
+
         if (validRoutes.length) {
-          const routeRows = [];
-          // Assign sequence in the exact order provided (1-based)
+          // Manual routing provided - use it
           for (const leaveId of createdLeaveIds) {
             validRoutes.forEach((r, idx) => {
               routeRows.push({
@@ -606,9 +618,32 @@ module.exports = {
               });
             });
           }
-          if (routeRows.length) {
-            await tx.leaveApprovalRoute.createMany({ data: routeRows });
+        } else {
+          // No manual routing - automatically route to Establishment role users
+          const establishmentUsers = await tx.user.findMany({
+            where: {
+              is_deleted: false,
+              role: { name: "Establishment" },
+            },
+            select: { id: true },
+          });
+
+          if (establishmentUsers.length > 0) {
+            for (const leaveId of createdLeaveIds) {
+              establishmentUsers.forEach((user, idx) => {
+                routeRows.push({
+                  leave_id: leaveId,
+                  type: "ALLOW", // Establishment users can directly approve
+                  approver_user_id: user.id,
+                  sequence: idx + 1,
+                });
+              });
+            }
           }
+        }
+
+        if (routeRows.length) {
+          await tx.leaveApprovalRoute.createMany({ data: routeRows });
         }
         // Create SUBMITTED status history for each created leave
         const submittedBy = req?.session?.user?.id || null;
@@ -768,7 +803,12 @@ module.exports = {
       where: { id: { in: leaveIds } },
       include: {
         employee: {
-          select: { id: true, full_name: true, employee_id: true, cnic: true },
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: { designation: true, location: true },
+            },
+          },
         },
         backup_employee: {
           select: {
@@ -822,7 +862,12 @@ module.exports = {
       },
       include: {
         employee: {
-          select: { id: true, full_name: true, employee_id: true, cnic: true },
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: { designation: true, location: true },
+            },
+          },
         },
         backup_employee: {
           select: {
@@ -1002,8 +1047,39 @@ module.exports = {
     });
   },
   updateLeave: (id, data) => prisma.leave.update({ where: { id }, data }),
-  updateStatus: (id, status) =>
-    prisma.leave.update({ where: { id }, data: { status } }),
+  updateStatus: async (id, status, userId) => {
+    const allowed = ["PENDING", "APPROVED", "REJECTED"];
+    if (!allowed.includes(String(status))) {
+      throw new Error("Invalid status");
+    }
+
+    return await prisma.$transaction(async (tx) => {
+      // Create status history entry
+      await tx.leaveStatusHistory.create({
+        data: {
+          leave_id: id,
+          user_id: userId || 0,
+          action_type: status,
+          comments: null,
+        },
+      });
+
+      // Update both legacy and new workflow fields
+      const updateData = { status };
+      if (status === "APPROVED") {
+        updateData.current_status = "APPROVED";
+        updateData.current_stage = 999; // High number to indicate final approval
+      } else if (status === "REJECTED") {
+        updateData.current_status = "REJECTED";
+        updateData.current_stage = 0;
+      } else if (status === "PENDING") {
+        updateData.current_status = "PENDING";
+        updateData.current_stage = 0;
+      }
+
+      return await tx.leave.update({ where: { id }, data: updateData });
+    });
+  },
   softDeleteFull: (id) =>
     prisma.leave.update({ where: { id }, data: { is_deleted: true } }),
   getLeaveById: (id) => prisma.leave.findUnique({ where: { id } }),

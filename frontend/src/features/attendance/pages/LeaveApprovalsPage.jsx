@@ -165,6 +165,8 @@ const LeaveApprovalsPage = () => {
                 <tr>
                   <th>Date</th>
                   <th>Employee</th>
+                  <th>Designation</th>
+                  <th>Location</th>
                   <th>Type</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -176,6 +178,14 @@ const LeaveApprovalsPage = () => {
                     <td>{String(l.date).slice(0, 10)}</td>
                     <td className="text-left">
                       {l.employee?.full_name} ({l.employee?.cnic || "-"})
+                    </td>
+                    <td className="text-left">
+                      {l.employee?.employmentRecords?.[0]?.designation?.title ||
+                        "-"}
+                    </td>
+                    <td className="text-left">
+                      {l.employee?.employmentRecords?.[0]?.location?.name ||
+                        "-"}
                     </td>
                     <td>{l.type}</td>
                     <td>
@@ -197,7 +207,7 @@ const LeaveApprovalsPage = () => {
                 {!items.length && (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={7}
                       className="text-center text-xs text-gray-500 py-6"
                     >
                       No pending approvals
@@ -218,6 +228,8 @@ const LeaveApprovalsPage = () => {
                 <tr>
                   <th>Date</th>
                   <th>Employee</th>
+                  <th>Designation</th>
+                  <th>Location</th>
                   <th>Type</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -229,6 +241,14 @@ const LeaveApprovalsPage = () => {
                     <td>{String(l.date).slice(0, 10)}</td>
                     <td className="text-left">
                       {l.employee?.full_name} ({l.employee?.cnic || "-"})
+                    </td>
+                    <td className="text-left">
+                      {l.employee?.employmentRecords?.[0]?.designation?.title ||
+                        "-"}
+                    </td>
+                    <td className="text-left">
+                      {l.employee?.employmentRecords?.[0]?.location?.name ||
+                        "-"}
                     </td>
                     <td>{l.type}</td>
                     <td>
@@ -267,7 +287,7 @@ const LeaveApprovalsPage = () => {
                 {!allItems.length && (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={7}
                       className="text-center text-xs text-gray-500 py-6"
                     >
                       No approvals yet
@@ -305,6 +325,20 @@ const LeaveApprovalsPage = () => {
                       selected.employee?.employee_id ||
                       "-"}
                     )
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Designation:</span>{" "}
+                  <span className="ml-1 font-medium">
+                    {selected.employee?.employmentRecords?.[0]?.designation
+                      ?.title || "-"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Location:</span>{" "}
+                  <span className="ml-1 font-medium">
+                    {selected.employee?.employmentRecords?.[0]?.location
+                      ?.name || "-"}
                   </span>
                 </div>
                 <div>

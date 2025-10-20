@@ -237,12 +237,13 @@ module.exports = {
     try {
       const id = Number(req.params.id);
       const { status } = req.body || {};
+      const userId = req.session?.user?.id;
       const allowed = ["PENDING", "APPROVED", "REJECTED"];
       if (!allowed.includes(String(status)))
         return res
           .status(400)
           .json({ success: false, error: "Invalid status" });
-      const updated = await leaveService.updateStatus(id, status);
+      const updated = await leaveService.updateStatus(id, status, userId);
       res.json({ success: true, leave: updated });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });

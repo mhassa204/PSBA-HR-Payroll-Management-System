@@ -277,7 +277,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
           leaves: [lv],
           start: lv.date,
           end: lv.date,
-          statuses: new Set([lv.status]),
+          statuses: new Set([lv.current_status]),
           remarksSet: new Set([lv.remarks || ""]),
         };
         continue;
@@ -296,7 +296,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
           leaves: [lv],
           start: lv.date,
           end: lv.date,
-          statuses: new Set([lv.status]),
+          statuses: new Set([lv.current_status]),
           remarksSet: new Set([lv.remarks || ""]),
         };
       }
@@ -812,14 +812,14 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                             </span>
                             <span
                               className={`ml-1 badge text-xs ${
-                                l.status === "APPROVED"
+                                l.current_status === "APPROVED"
                                   ? "badge-success"
-                                  : l.status === "REJECTED"
+                                  : l.current_status === "REJECTED"
                                   ? "badge-error"
                                   : "badge-gray"
                               }`}
                             >
-                              {l.status}
+                              {l.current_status}
                             </span>
                           </div>
                           <div className="max-w-[320px] truncate">
@@ -868,6 +868,18 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                   <div className="p-4 space-y-4 text-sm">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
+                        <span className="text-gray-600 text-xs">Applicant</span>
+                        <div className="mt-1 text-sm font-medium">
+                          {employee?.full_name || "-"}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-600 text-xs">CNIC</span>
+                        <div className="mt-1 text-sm font-medium">
+                          {employee?.cnic || "-"}
+                        </div>
+                      </div>
+                      <div>
                         <span className="text-gray-600 text-xs">Date</span>
                         <input
                           type="date"
@@ -887,12 +899,12 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                         {canStatus ? (
                           <select
                             className="form-input mt-1"
-                            value={selectedDetail.status}
+                            value={selectedDetail.current_status}
                             onChange={(e) => {
                               updateStatus(selectedDetail.id, e.target.value);
                               setSelectedDetail({
                                 ...selectedDetail,
-                                status: e.target.value,
+                                current_status: e.target.value,
                               });
                             }}
                           >
@@ -903,16 +915,32 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                         ) : (
                           <div
                             className={`mt-1 badge text-xs ${
-                              selectedDetail.status === "APPROVED"
+                              selectedDetail.current_status === "APPROVED"
                                 ? "badge-success"
-                                : selectedDetail.status === "REJECTED"
+                                : selectedDetail.current_status === "REJECTED"
                                 ? "badge-error"
                                 : "badge-gray"
                             }`}
                           >
-                            {selectedDetail.status}
+                            {selectedDetail.current_status}
                           </div>
                         )}
+                      </div>
+                      <div>
+                        <span className="text-gray-600 text-xs">
+                          Designation
+                        </span>
+                        <div className="mt-1 text-sm font-medium">
+                          {employee?.employmentRecords?.[0]?.designation
+                            ?.title || "-"}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-600 text-xs">Location</span>
+                        <div className="mt-1 text-sm font-medium">
+                          {employee?.employmentRecords?.[0]?.location?.name ||
+                            "-"}
+                        </div>
                       </div>
                       <div className="md:col-span-2">
                         <span className="text-gray-600 text-xs">Type</span>
