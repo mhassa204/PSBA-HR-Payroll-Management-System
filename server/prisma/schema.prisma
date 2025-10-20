@@ -375,6 +375,8 @@ model User {
   createdLeaveBanks LeaveBank[]
   // Back-relation: accounts tranches created by this user
   createdTranches TravelClaimTranche[]
+  // Back-relation: leaves where this user is set as approver (manual routing)
+  approvalRoutes LeaveApprovalRoute[] @relation(name: "LeaveApprovalApprover")
 
   @@index([department_id])
   @@index([location_id])
@@ -548,12 +550,17 @@ model Leave {
   backup_employee_id Int?   // Backup resource employee
   backup_duty_from   String? // Backup duty time from (HH:mm format)
   backup_duty_to     String? // Backup duty time to (HH:mm format)
+  duty_from          String? // Duty time from (HH:mm format)
+  duty_to            String? // Duty time to (HH:mm format)
+  documents          String? // JSON array of document file paths
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @default(now())
   is_deleted   Boolean      @default(false)
 
   employee     Employee     @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   backup_employee Employee?  @relation("LeaveBackupEmployee", fields: [backup_employee_id], references: [id])
+  // Manual approval routing entries for this leave
+  routes       LeaveApprovalRoute[]
 
   @@index([employee_id, date])
   @@index([backup_employee_id])
@@ -564,6 +571,27 @@ enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// Manual routing type for leave approvals
+enum LeaveApprovalType {
+  RECOMMEND
+  ALLOW
+}
+
+// Per-leave manual approval routing entries
+model LeaveApprovalRoute {
+  id                Int                @id @default(autoincrement())
+  leave_id          Int
+  type              LeaveApprovalType
+  approver_user_id  Int
+  createdAt         DateTime           @default(now())
+
+  leave             Leave              @relation(fields: [leave_id], references: [id], onDelete: Cascade)
+  approver_user     User               @relation(name: "LeaveApprovalApprover", fields: [approver_user_id], references: [id])
+
+  @@index([leave_id])
+  @@index([approver_user_id])
 }
 
 // New: Leave Types for configuring bankable leave categories

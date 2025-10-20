@@ -1,4 +1,4 @@
-require('dotenv').config();
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -43,7 +43,7 @@ const corsOptions = {
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5175",
-    "http://113.197.55.94:5175"
+    "http://113.197.55.94:5175",
   ],
   credentials: true,
   optionsSuccessStatus: 200, // ✅ fixed spelling
@@ -62,25 +62,28 @@ if (!fs.existsSync(uploadDir)) {
 }
 app.use("/uploads", express.static(uploadDir));
 app.use("/api/uploads", express.static(uploadDir));
+app.use("/uploads/leaves", express.static(path.join(uploadDir, "leaves")));
 
 // ✅ Sessions
 const pgPool = new Pool({ connectionString: process.env.DATABASE_URL });
-app.use(session({
-  store: new PgSession({
-    pool: pgPool,
-    tableName: "session",
-    createTableIfMissing: true,
-  }),
-  secret: process.env.SESSION_SECRET || "supersecret",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false,          // use HTTPS + true in production
-    httpOnly: true,
-    sameSite: "lax",        // ✅ use lax instead of none for dev (browser safe)
-    maxAge: 3600000,
-  },
-}));
+app.use(
+  session({
+    store: new PgSession({
+      pool: pgPool,
+      tableName: "session",
+      createTableIfMissing: true,
+    }),
+    secret: process.env.SESSION_SECRET || "supersecret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false, // use HTTPS + true in production
+      httpOnly: true,
+      sameSite: "lax", // ✅ use lax instead of none for dev (browser safe)
+      maxAge: 3600000,
+    },
+  })
+);
 
 // ✅ Routes
 app.use("/api", authRoutes);
@@ -123,6 +126,6 @@ const server = app.listen(PORT, () => {
   console.log(`   http://172.16.21.178:${PORT}`);
 });
 
-server.on('error', (err) => {
-  console.error('Server error:', err);
+server.on("error", (err) => {
+  console.error("Server error:", err);
 });

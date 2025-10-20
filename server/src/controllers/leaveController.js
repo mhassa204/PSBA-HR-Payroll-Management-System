@@ -64,6 +64,8 @@ module.exports = {
         backup_employee_id,
         backup_duty_from,
         backup_duty_to,
+        documents,
+        routes,
       } = req.body || {};
       const perms = req.session?.user?.permissions || [];
       const userEmpId = req.session?.user?.employee_id || null;
@@ -97,6 +99,8 @@ module.exports = {
         backup_employee_id,
         backup_duty_from,
         backup_duty_to,
+        documents,
+        routes,
       });
       res.status(201).json({ success: true, ...result });
     } catch (e) {
@@ -109,6 +113,16 @@ module.exports = {
       if (clientErrors.includes(e.message))
         return res.status(400).json({ success: false, error: e.message });
       console.error("Create leaves error:", e);
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  // Search approver users excluding Establishment and Super Admin
+  searchApproverUsers: async (req, res) => {
+    try {
+      const search = String(req.query.search || "").trim();
+      const users = await leaveService.searchApproverUsers(search);
+      res.json({ success: true, users });
+    } catch (e) {
       res.status(500).json({ success: false, error: e.message });
     }
   },
@@ -127,6 +141,7 @@ module.exports = {
         backup_employee_id,
         backup_duty_from,
         backup_duty_to,
+        documents,
       } = req.body || {};
       const data = {};
       if (date) data.date = new Date(date);
@@ -140,6 +155,8 @@ module.exports = {
       if (backup_duty_from !== undefined)
         data.backup_duty_from = backup_duty_from;
       if (backup_duty_to !== undefined) data.backup_duty_to = backup_duty_to;
+      if (documents !== undefined)
+        data.documents = documents ? JSON.stringify(documents) : null;
       const updated = await leaveService.updateLeave(id, data);
       res.json({ success: true, leave: updated });
     } catch (e) {
@@ -203,10 +220,71 @@ module.exports = {
         return res.status(401).json({ success: false, error: "Unauthorized" });
       }
 
-      const employees = await leaveService.getBackupEmployees(user);
+      const { applicantId } = req.query;
+      const employees = await leaveService.getBackupEmployees(
+        user,
+        applicantId
+      );
       res.json({ success: true, employees });
     } catch (e) {
       console.error("Get backup employees error:", e);
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  uploadDocuments: async (req, res) => {
+    try {
+      const user = req.session?.user;
+      if (!user) {
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      }
+
+      if (!req.files || req.files.length === 0) {
+        return res
+          .status(400)
+          .json({ success: false, error: "No files uploaded" });
+      }
+
+      const uploadedFiles = [];
+      const allowedTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+      ];
+      const maxSize = 10 * 1024 * 1024; // 10MB
+
+      for (const file of req.files) {
+        // Validate file type
+        if (!allowedTypes.includes(file.mimetype)) {
+          return res.status(400).json({
+            success: false,
+            error: `Invalid file type: ${file.originalname}. Allowed types: PDF, DOC, DOCX, JPG, PNG, GIF`,
+          });
+        }
+
+        // Validate file size
+        if (file.size > maxSize) {
+          return res.status(400).json({
+            success: false,
+            error: `File too large: ${file.originalname}. Maximum size: 10MB`,
+          });
+        }
+
+        uploadedFiles.push({
+          filename: file.filename,
+          originalname: file.originalname,
+          size: file.size,
+          mimetype: file.mimetype,
+          path: `/uploads/leaves/${file.filename}`,
+        });
+      }
+
+      res.json({ success: true, files: uploadedFiles });
+    } catch (e) {
+      console.error("Upload documents error:", e);
       res.status(500).json({ success: false, error: e.message });
     }
   },

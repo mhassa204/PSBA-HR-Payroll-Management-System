@@ -22,7 +22,80 @@ const LeaveDialog = ({ employee, open, onClose }) => {
     backup_employee_id: "",
     backup_duty_from: "",
     backup_duty_to: "",
+    documents: [],
   });
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+
+  // Document upload handlers
+  const handleFileUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append("documents", file);
+      });
+
+      // Add applicant CNIC to form data
+      if (employee?.cnic) {
+        formData.append("applicant_cnic", employee.cnic);
+      }
+
+      const response = await axios.post("/leaves/upload-documents", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      if (response.data.success) {
+        const uploadedFiles = response.data.files.map((file) => ({
+          id: Date.now() + Math.random(),
+          name: file.originalname,
+          size: file.size,
+          type: file.mimetype,
+          path: file.path,
+          filename: file.filename,
+        }));
+
+        setUploadedFiles((prev) => [...prev, ...uploadedFiles]);
+        setForm((prev) => ({
+          ...prev,
+          documents: [...prev.documents, ...uploadedFiles],
+        }));
+
+        toastBus.emit({
+          type: "success",
+          message: `${files.length} file(s) uploaded successfully`,
+        });
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      toastBus.emit({
+        type: "error",
+        message: error.response?.data?.error || "Failed to upload files",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeFile = (fileId) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
+    setForm((prev) => ({
+      ...prev,
+      documents: prev.documents.filter((f) => f.id !== fileId),
+    }));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
 
   // Helper function to convert UTC+5 time to local datetime-local format
   const toLocalDateTime = (dateString) => {
@@ -60,7 +133,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
           await Promise.all([
             axios.get(`/leaves/${employee.id}`),
             axios.get("/leave-banks/types"),
-            axios.get("/leaves/backup-employees"),
+            axios.get(`/leaves/backup-employees?applicantId=${employee.id}`),
           ]);
         if (ignore) return;
         setLeaves(leavesRes.leaves || []);
@@ -94,6 +167,8 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       backup_employee_id: form.backup_employee_id || null,
       backup_duty_from: form.backup_duty_from || null,
       backup_duty_to: form.backup_duty_to || null,
+      documents:
+        form.documents.length > 0 ? form.documents.map((f) => f.path) : null,
     };
     if (mode === "single") {
       if (!form.date) return;
@@ -121,9 +196,11 @@ const LeaveDialog = ({ employee, open, onClose }) => {
         backup_employee_id: "",
         backup_duty_from: "",
         backup_duty_to: "",
+        documents: [],
       });
       setRange({ start: "", end: "" });
       setMultiDates([""]);
+      setUploadedFiles([]);
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
       setSummary(data.summary || null);
@@ -641,6 +718,57 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                 </div>
               )}
 
+              {/* Document Upload Section */}
+              <div className="space-y-3">
+                <label className="form-label text-[11px] mb-1">
+                  Supporting Documents (Optional)
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    multiple
+                    className="form-input text-xs"
+                    onChange={handleFileUpload}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Supported formats: PDF, DOC, DOCX, JPG, PNG, GIF
+                  </p>
+                </div>
+
+                {/* Uploaded Files List */}
+                {uploadedFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-gray-600">
+                      Uploaded Files ({uploadedFiles.length}):
+                    </p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {uploadedFiles.map((file) => (
+                        <div
+                          key={file.id}
+                          className="flex items-center justify-between bg-gray-50 p-2 rounded text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-600">📄</span>
+                            <span className="font-medium">{file.name}</span>
+                            <span className="text-gray-500">
+                              ({formatFileSize(file.size)})
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(file.id)}
+                            className="text-red-500 hover:text-red-700 text-xs px-2 py-1"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <button type="submit" className="btn btn-success text-xs">
                   Save
@@ -648,199 +776,255 @@ const LeaveDialog = ({ employee, open, onClose }) => {
               </div>
             </form>
 
-            <div className="card-soft p-0 overflow-hidden">
-              <div className="table-shell overflow-auto max-h-[55vh] custom-thin-scroll min-w-[900px]">
-                <table className="table-enhanced text-xs">
-                  <thead>
-                    <tr>
-                      <th className="w-24">Date</th>
-                      <th className="w-32">Type</th>
-                      <th className="w-20">Status</th>
-                      <th className="w-40">Reason</th>
-                      <th className="w-24">Duty Time</th>
-                      <th className="w-32">Submission Time</th>
-                      <th className="w-40">Backup Resource</th>
-                      <th className="w-32">Backup Duty Time</th>
-                      <th className="w-20">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaves.map((l) => (
-                      <tr key={l.id} className="hover:bg-gray-50">
-                        <td>
-                          <input
-                            type="date"
-                            className="form-input !py-1 !px-2 text-xs w-full"
-                            value={l.date?.slice(0, 10)}
-                            onChange={(e) =>
-                              update(l.id, { date: e.target.value })
-                            }
-                          />
-                        </td>
-                        <td>
-                          <div className="space-y-1">
-                            <select
-                              className="form-input !py-1 !px-2 text-xs w-full"
-                              value={l.type}
-                              onChange={(e) =>
-                                update(l.id, { type: e.target.value })
-                              }
-                            >
-                              {types.map((t) => (
-                                <option key={t.id} value={t.name}>
-                                  {t.name}
-                                </option>
-                              ))}
-                              <option value="Other">Other</option>
-                              {!types.length && (
-                                <option value={l.type}>{l.type}</option>
-                              )}
-                            </select>
-                            {l.type === "Other" && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-gray-700">
+                Leave Records ({leaves.length})
+              </h3>
+              {leaves.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="text-sm">No leave records found</div>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {leaves.map((l) => (
+                    <div
+                      key={l.id}
+                      className="card-soft p-4 border border-gray-200 hover:border-gray-300 transition-colors"
+                    >
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Left Column - Basic Info */}
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="form-label text-xs mb-1">
+                                Leave Date
+                              </label>
                               <input
-                                type="text"
-                                className="form-input !py-1 !px-2 text-xs w-full"
-                                placeholder="Custom type"
-                                value={l.custom_type || ""}
+                                type="date"
+                                className="form-input text-sm"
+                                value={l.date?.slice(0, 10)}
                                 onChange={(e) =>
-                                  update(l.id, { custom_type: e.target.value })
+                                  update(l.id, { date: e.target.value })
                                 }
                               />
-                            )}
-                          </div>
-                        </td>
-                        <td>
-                          {canStatus ? (
-                            <select
-                              className="form-input !py-1 !px-2 text-xs w-full"
-                              value={l.status}
-                              onChange={(e) =>
-                                updateStatus(l.id, e.target.value)
-                              }
-                            >
-                              <option value="PENDING">PENDING</option>
-                              <option value="APPROVED">APPROVED</option>
-                              <option value="REJECTED">REJECTED</option>
-                            </select>
-                          ) : (
-                            <span
-                              className={`badge text-[10px] ${
-                                l.status === "APPROVED"
-                                  ? "badge-success"
-                                  : l.status === "REJECTED"
-                                  ? "badge-error"
-                                  : "badge-gray"
-                              }`}
-                            >
-                              {l.status}
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <input
-                            className="form-input !py-1 !px-2 text-xs w-full"
-                            value={l.remarks || ""}
-                            onChange={(e) =>
-                              update(l.id, { remarks: e.target.value })
-                            }
-                            placeholder="Reason"
-                          />
-                        </td>
-                        <td className="text-xs">
-                          {(() => {
-                            const m = (l.remarks || "").match(
-                              /Duty time:\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/i
-                            );
-                            return m ? `${m[1]}-${m[2]}` : "-";
-                          })()}
-                        </td>
-                        <td>
-                          <input
-                            type="datetime-local"
-                            className="form-input !py-1 !px-2 text-xs w-full"
-                            value={toLocalDateTime(l.submission_time)}
-                            onChange={(e) =>
-                              update(l.id, {
-                                submission_time: fromLocalDateTime(
-                                  e.target.value
-                                ),
-                              })
-                            }
-                          />
-                        </td>
-                        <td>
-                          <select
-                            className="form-input !py-1 !px-2 text-xs w-full"
-                            value={l.backup_employee_id || ""}
-                            onChange={(e) =>
-                              update(l.id, {
-                                backup_employee_id: e.target.value,
-                              })
-                            }
-                          >
-                            <option value="">Select backup</option>
-                            {backupEmployees.map((emp) => (
-                              <option key={emp.id} value={emp.id}>
-                                {emp.full_name}
-                              </option>
-                            ))}
-                            {l.backup_employee &&
-                              !backupEmployees.find(
-                                (emp) => emp.id === l.backup_employee_id
-                              ) && (
-                                <option value={l.backup_employee_id} selected>
-                                  {l.backup_employee.full_name}
-                                </option>
+                            </div>
+                            <div>
+                              <label className="form-label text-xs mb-1">
+                                Status
+                              </label>
+                              {canStatus ? (
+                                <select
+                                  className="form-input text-sm"
+                                  value={l.status}
+                                  onChange={(e) =>
+                                    updateStatus(l.id, e.target.value)
+                                  }
+                                >
+                                  <option value="PENDING">PENDING</option>
+                                  <option value="APPROVED">APPROVED</option>
+                                  <option value="REJECTED">REJECTED</option>
+                                </select>
+                              ) : (
+                                <span
+                                  className={`badge text-xs ${
+                                    l.status === "APPROVED"
+                                      ? "badge-success"
+                                      : l.status === "REJECTED"
+                                      ? "badge-error"
+                                      : "badge-gray"
+                                  }`}
+                                >
+                                  {l.status}
+                                </span>
                               )}
-                          </select>
-                        </td>
-                        <td>
-                          <div className="flex gap-1">
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="form-label text-xs mb-1">
+                              Leave Type
+                            </label>
+                            <div className="space-y-2">
+                              <select
+                                className="form-input text-sm"
+                                value={l.type}
+                                onChange={(e) =>
+                                  update(l.id, { type: e.target.value })
+                                }
+                              >
+                                {types.map((t) => (
+                                  <option key={t.id} value={t.name}>
+                                    {t.name}
+                                  </option>
+                                ))}
+                                <option value="Other">Other</option>
+                                {!types.length && (
+                                  <option value={l.type}>{l.type}</option>
+                                )}
+                              </select>
+                              {l.type === "Other" && (
+                                <input
+                                  type="text"
+                                  className="form-input text-sm"
+                                  placeholder="Enter custom leave type"
+                                  value={l.custom_type || ""}
+                                  onChange={(e) =>
+                                    update(l.id, {
+                                      custom_type: e.target.value,
+                                    })
+                                  }
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="form-label text-xs mb-1">
+                              Reason
+                            </label>
+                            <textarea
+                              className="form-input text-sm"
+                              rows={2}
+                              value={l.remarks || ""}
+                              onChange={(e) =>
+                                update(l.id, { remarks: e.target.value })
+                              }
+                              placeholder="Enter reason for leave"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Right Column - Advanced Info */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="form-label text-xs mb-1">
+                              Submission Time
+                            </label>
                             <input
-                              type="time"
-                              className="form-input !py-1 !px-2 text-xs w-16"
-                              value={l.backup_duty_from || ""}
+                              type="datetime-local"
+                              className="form-input text-sm"
+                              value={toLocalDateTime(l.submission_time)}
                               onChange={(e) =>
                                 update(l.id, {
-                                  backup_duty_from: e.target.value,
+                                  submission_time: fromLocalDateTime(
+                                    e.target.value
+                                  ),
                                 })
                               }
-                              placeholder="From"
-                            />
-                            <input
-                              type="time"
-                              className="form-input !py-1 !px-2 text-xs w-16"
-                              value={l.backup_duty_to || ""}
-                              onChange={(e) =>
-                                update(l.id, { backup_duty_to: e.target.value })
-                              }
-                              placeholder="To"
                             />
                           </div>
-                        </td>
-                        <td>
-                          <button
-                            className="btn btn-error-soft text-[10px] px-2 py-1"
-                            onClick={() => remove(l.id)}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {!leaves.length && (
-                      <tr>
-                        <td
-                          colSpan={9}
-                          className="text-center py-6 text-xs text-gray-500"
+
+                          <div>
+                            <label className="form-label text-xs mb-1">
+                              Backup Resource
+                            </label>
+                            <select
+                              className="form-input text-sm"
+                              value={l.backup_employee_id || ""}
+                              onChange={(e) =>
+                                update(l.id, {
+                                  backup_employee_id: e.target.value,
+                                })
+                              }
+                            >
+                              <option value="">Select backup employee</option>
+                              {backupEmployees.map((emp) => (
+                                <option key={emp.id} value={emp.id}>
+                                  {emp.full_name} ({emp.employee_id})
+                                </option>
+                              ))}
+                              {l.backup_employee &&
+                                !backupEmployees.find(
+                                  (emp) => emp.id === l.backup_employee_id
+                                ) && (
+                                  <option value={l.backup_employee_id} selected>
+                                    {l.backup_employee.full_name} (
+                                    {l.backup_employee.employee_id})
+                                  </option>
+                                )}
+                            </select>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="form-label text-xs mb-1">
+                                Backup Duty From
+                              </label>
+                              <input
+                                type="time"
+                                className="form-input text-sm"
+                                value={l.backup_duty_from || ""}
+                                onChange={(e) =>
+                                  update(l.id, {
+                                    backup_duty_from: e.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <label className="form-label text-xs mb-1">
+                                Backup Duty To
+                              </label>
+                              <input
+                                type="time"
+                                className="form-input text-sm"
+                                value={l.backup_duty_to || ""}
+                                onChange={(e) =>
+                                  update(l.id, {
+                                    backup_duty_to: e.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Documents */}
+                      {l.documents && JSON.parse(l.documents).length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">
+                                Documents:
+                              </span>
+                              <div className="flex flex-wrap gap-1">
+                                {JSON.parse(l.documents).map((doc, idx) => {
+                                  // Convert relative path to full backend URL
+                                  const backendUrl = doc.startsWith("/")
+                                    ? `${window.location.protocol}//${window.location.hostname}:3000${doc}`
+                                    : doc;
+                                  return (
+                                    <a
+                                      key={idx}
+                                      href={backendUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 cursor-pointer"
+                                    >
+                                      📄 {doc.split("/").pop()}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
+                        <button
+                          className="btn btn-error-soft text-xs px-3 py-1"
+                          onClick={() => remove(l.id)}
                         >
-                          No leaves
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                          Delete Leave
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
