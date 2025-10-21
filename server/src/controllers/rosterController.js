@@ -386,10 +386,10 @@ const rosterController = {
   async approve(req, res) {
     try {
       const user = req.session.user;
-      // Extra guard: only system role users allowed (e.g., Super Admin or role.type === 'system')
-      const isSystemUser = user?.role?.name === 'Super Admin' || user?.role?.type === 'system';
-      if (!isSystemUser) {
-        return res.status(403).json({ success: false, error: 'Only system users can approve rosters' });
+      const perms = user?.permissions || [];
+      const canChangeStatus = perms.includes('*') || perms.includes('roster.status.change');
+      if (!canChangeStatus) {
+        return res.status(403).json({ success: false, error: 'You do not have permission to approve rosters' });
       }
 
       const id = Number(req.params.id);
@@ -411,9 +411,10 @@ const rosterController = {
   async reject(req, res) {
     try {
       const user = req.session.user;
-      const isSystemUser = user?.role?.name === 'Super Admin' || user?.role?.type === 'system';
-      if (!isSystemUser) {
-        return res.status(403).json({ success: false, error: 'Only system users can reject rosters' });
+      const perms = user?.permissions || [];
+      const canChangeStatus = perms.includes('*') || perms.includes('roster.status.change');
+      if (!canChangeStatus) {
+        return res.status(403).json({ success: false, error: 'You do not have permission to reject rosters' });
       }
 
       const id = Number(req.params.id);
@@ -435,9 +436,10 @@ const rosterController = {
   async setStatus(req, res) {
     try {
       const user = req.session.user;
-      const isSystemUser = user?.role?.name === 'Super Admin' || user?.role?.type === 'system';
-      if (!isSystemUser) {
-        return res.status(403).json({ success: false, error: 'Only system users can change roster status' });
+      const perms = user?.permissions || [];
+      const canChangeStatus = perms.includes('*') || perms.includes('roster.status.change');
+      if (!canChangeStatus) {
+        return res.status(403).json({ success: false, error: 'You do not have permission to change roster status' });
       }
 
       const id = Number(req.params.id);

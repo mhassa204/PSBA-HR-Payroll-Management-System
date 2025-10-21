@@ -736,6 +736,22 @@ async function main() {
 
   // Permissions catalog (routes + domain actions) - Updated with TADA-specific permissions
   const ROUTE_PERMISSION_KEYS = [
+    // Attendance module
+    "attendance.read",
+    "attendance.fetch",
+    "attendance.map",
+    // Device module
+    "devices.create",
+    "devices.read",
+    "devices.update",
+    "devices.delete",
+    // Duty Roster module
+    "roster.read",
+    "roster.create",
+    "roster.update",
+    "roster.delete",
+  "roster.status",
+  "roster.status.change",
     // TADA module routes only
     "travel.read",
     "travel.create",
@@ -787,6 +803,9 @@ async function main() {
     // Profile
     "profile.read",
     "profile.update",
+    // Permissions module
+    "permissions.read",
+    "permissions.manage",
   ];
 
   console.log("🔑 Seeding permissions catalog...");
@@ -1952,6 +1971,22 @@ async function main() {
     console.log(`✅ Created Location: ${created.name} (${created.type})`);
     createdLocations.push(created);
   }
+
+    // Add attendance devices for Head Quarter Lahore
+    const headQuarterLocation = createdLocations.find(l => l.name === "Head Quarter");
+    if (headQuarterLocation) {
+      const attendanceDevices = [
+        { ip_address: "113.197.55.91", port_number: 1644, location_id: headQuarterLocation.id },
+        { ip_address: "113.197.55.91", port_number: 1640, location_id: headQuarterLocation.id }
+      ];
+      for (const device of attendanceDevices) {
+        const exists = await prisma.device.findFirst({ where: { ip_address: device.ip_address, port_number: device.port_number } });
+        if (!exists) {
+          await prisma.device.create({ data: { ...device, is_deleted: false } });
+          console.log(`✅ Created Attendance Device: ${device.ip_address}:${device.port_number} for Head Quarter Lahore`);
+        }
+      }
+    }
 
   // 📍 Ensure all requested bazaar locations exist and create location-based users
   console.log(
