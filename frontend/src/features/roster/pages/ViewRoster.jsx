@@ -29,7 +29,7 @@ const ViewRoster = () => {
 
   if (!roster) return <div className="p-6">Loading...</div>;
 
-  const canStatus = (isSystem || isSuperAdmin) && can('roster.status');
+  const canStatus = can('roster.status.change');
 
   const canModifyApproved = () => {
     const isCreator = roster.created_by_user_id === user?.id;

@@ -84,10 +84,9 @@ async function upsertAttendanceForDevice(ip, port, reduced, deviceId) {
   }
   const duids = Array.from(duidsSet);
 
+  // Fetch existing IN/OUT records for deviceUserId and attendanceDate globally (not per device)
   const existingRows = duids.length ? await prisma.attendance.findMany({
     where: {
-      device_ip: ip,
-      device_port: devicePort,
       deviceUserId: { in: duids },
       attendanceDate: { gte: minDate, lte: maxDate },
       type: { in: ['IN', 'OUT'] },
@@ -108,8 +107,16 @@ async function upsertAttendanceForDevice(ip, port, reduced, deviceId) {
     const key = `${r.deviceUserId}|${r.type}|${r.attendanceDate.toISOString()}`;
     const existing = existingMap.get(key);
     if (existing) {
-      if (r.timestamp > existing.timestamp) {
-        toUpdate.push({ id: existing.id, timestamp: r.timestamp });
+      if (r.type === 'IN') {
+        // Only update if new timestamp is earlier (want earliest IN)
+        if (r.timestamp < existing.timestamp) {
+          toUpdate.push({ id: existing.id, timestamp: r.timestamp });
+        }
+      } else if (r.type === 'OUT') {
+        // Only update if new timestamp is later (want latest OUT)
+        if (r.timestamp > existing.timestamp) {
+          toUpdate.push({ id: existing.id, timestamp: r.timestamp });
+        }
       }
     } else {
       // Only insert rows strictly newer than the device's last known timestamp
