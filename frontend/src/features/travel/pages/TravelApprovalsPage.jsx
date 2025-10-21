@@ -475,6 +475,17 @@ export default function TravelApprovalsPage() {
                       : "—"}
                   </div>
                 </div>
+                <div>
+                  <div className="text-muted-foreground">
+                    Applicant Department
+                  </div>
+                  <div className="font-medium">
+                    {(() => {
+                      const er = selected?.applicant?.employmentRecords?.[0];
+                      return er?.department?.name || "—";
+                    })()}
+                  </div>
+                </div>
               </div>
 
               <div className="pt-2">

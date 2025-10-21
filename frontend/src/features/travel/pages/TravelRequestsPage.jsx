@@ -112,6 +112,15 @@ export default function TravelRequestsPage() {
   }, [form.departure_date, form.departure_time, form.expected_return_date]);
 
   const onCreate = async () => {
+    // For employee-based users, automatically include their employee ID
+    let finalEmployeeIds = [...selectedEmployees];
+    if (authUser?.employee_id && !isDepartmentAccount && !isLocationAccount) {
+      // Add the logged-in user's employee ID if not already included
+      if (!finalEmployeeIds.includes(authUser.employee_id)) {
+        finalEmployeeIds.push(authUser.employee_id);
+      }
+    }
+
     const payload = {
       purpose: form.purpose || null,
       destination: form.destination || null,
@@ -119,7 +128,7 @@ export default function TravelRequestsPage() {
       departure_time: form.departure_time || null,
       expected_return_date: form.expected_return_date,
       total_days: previewDays ? Number(previewDays) : null,
-      employee_ids: selectedEmployees,
+      employee_ids: finalEmployeeIds,
     };
     await createTravelRequest(payload);
     setForm({
@@ -527,6 +536,17 @@ export default function TravelRequestsPage() {
                           </div>
                         ))
                       : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">
+                    Applicant Department
+                  </div>
+                  <div className="font-medium">
+                    {(() => {
+                      const er = selected?.applicant?.employmentRecords?.[0];
+                      return er?.department?.name || "—";
+                    })()}
                   </div>
                 </div>
               </div>

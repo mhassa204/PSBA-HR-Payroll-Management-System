@@ -440,6 +440,17 @@ export default function ManageTravelRequests() {
                       : "—"}
                   </div>
                 </div>
+                <div>
+                  <div className="text-muted-foreground">
+                    Applicant Department
+                  </div>
+                  <div className="font-medium">
+                    {(() => {
+                      const er = selected?.applicant?.employmentRecords?.[0];
+                      return er?.department?.name || "—";
+                    })()}
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 pt-2">
