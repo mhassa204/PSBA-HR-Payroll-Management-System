@@ -1659,7 +1659,7 @@ async function main() {
     // System Admin - generic admin account not tied to specific employee
     {
       email: "admin@psba.gop.pk",
-      password: encrypt("abc123"),
+      password: encrypt("alpha123"),
       role_id: getRoleId("Super Admin"),
       employee_id: null,
       department_id: getDeptId("IT"),
