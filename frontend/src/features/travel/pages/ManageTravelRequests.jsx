@@ -97,11 +97,26 @@ export default function ManageTravelRequests() {
     if (!r || r.status !== "CREATED") return false;
     const entries = r.statusEntries || [];
     const recs = entries.filter((e) => e.action === "RECOMMENDED").length;
-    // Department-origin flow: HoD first, then HoD's RO (if exists)
-    const dept = isDeptOrigin(r);
+
+    // Check if current user is DG and applicant is a direct report
     const er = (r?.applicant?.employmentRecords || []).find(
       (x) => x.is_current && !x.is_deleted
     );
+    const immediateRO = er?.reporting_officer_id
+      ? String(er.reporting_officer_id)
+      : null;
+    const isDirectReportToMe =
+      immediateRO && String(meEmpId || "") === String(immediateRO);
+    const isDG = !!caps?.isDG;
+    const locType = er?.location?.type || "HEAD_OFFICE";
+
+    // If current user is DG and applicant is a direct report, don't show recommend buttons
+    if (isDG && isDirectReportToMe && locType === "HEAD_OFFICE") {
+      return false;
+    }
+
+    // Department-origin flow: HoD first, then HoD's RO (if exists)
+    const dept = isDeptOrigin(r);
     const hodId = Number(er?.department?.head?.id || 0);
     const hodER = (er?.department?.head?.employmentRecords || []).find(
       (x) => x.is_current && !x.is_deleted
@@ -115,9 +130,6 @@ export default function ManageTravelRequests() {
       return false;
     }
     // Personal/HQ: walk RO chain; next expected is first RO not yet recommended
-    const immediateRO = er?.reporting_officer_id
-      ? String(er.reporting_officer_id)
-      : null;
     if (!immediateRO) return false;
     const already = new Set(
       entries
@@ -156,18 +168,34 @@ export default function ManageTravelRequests() {
       (se) =>
         se.action === "CREATED" && /\[LOC\]/i.test(String(se.remarks || ""))
     );
+
+    // Check if current user is DG and applicant is a direct report
+    const er = (r?.applicant?.employmentRecords || []).find(
+      (x) => x.is_current && !x.is_deleted
+    );
+    const immediateRO = er?.reporting_officer_id
+      ? String(er.reporting_officer_id)
+      : null;
+    const isDirectReportToMe =
+      immediateRO && String(meEmpId || "") === String(immediateRO);
+    const isDG = !!caps?.isDG;
+    const locType = er?.location?.type || "HEAD_OFFICE";
+
     if (caps.isDG) {
+      // If DG and applicant is a direct report, allow direct approval
+      if (isDirectReportToMe && locType === "HEAD_OFFICE") {
+        return true;
+      }
       // Department-origin: DG after required recommendations
       const needed = isDeptOrigin(r) ? 2 : 1; // conservative in UI; backend is source of truth
-      if (recommendedCount >= needed && locType(r) === "HEAD_OFFICE")
-        return true;
+      if (recommendedCount >= needed && locType === "HEAD_OFFICE") return true;
       return false;
     }
     if (caps.isOps) {
       // Location-origin bazaar requests can go directly to Ops without recommendations
       if (
         !isDeptOrigin(r) &&
-        locType(r) === "BAZAAR" &&
+        locType === "BAZAAR" &&
         (recommendedCount >= 1 || isLocOrigin)
       )
         return true;

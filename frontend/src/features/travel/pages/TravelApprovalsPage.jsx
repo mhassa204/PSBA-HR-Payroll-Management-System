@@ -142,6 +142,14 @@ export default function TravelApprovalsPage() {
   const canRecommendMe = (r) => {
     if (!meEmpId) return false;
     const recs = recCount(r);
+    const locType = applicantLocType(r);
+    const isDG = !!caps?.isDG;
+
+    // If current user is DG and applicant is a direct report, don't show recommend buttons
+    if (isDG && isDirectReportToMe(r) && locType === "HEAD_OFFICE") {
+      return false;
+    }
+
     if (isDeptOrigin(r)) {
       if (recs === 0) return isHoDFor(r);
       if (recs === 1) return Number(meEmpId) === Number(hodROFor(r) || 0);

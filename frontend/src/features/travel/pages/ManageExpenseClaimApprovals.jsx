@@ -392,6 +392,16 @@ export default function ManageExpenseClaimApprovals() {
 
     // Recommender stage with two-step logic; for non-approver roles, trust server inclusion and show Recommend
     if (status === "SUBMITTED") {
+      // Skip recommender logic if this is a direct report to DG
+      if (directToDG && canDG && locType === "HEAD_OFFICE") {
+        return {
+          canApprove: false,
+          canReject: false,
+          canClear: false,
+          canRecommend: false,
+        };
+      }
+
       if (!isApproverRole) {
         // Server already filtered pending approvals for me; surface Recommend for me here.
         const last = entries[entries.length - 1];
