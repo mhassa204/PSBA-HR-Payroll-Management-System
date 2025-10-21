@@ -2104,16 +2104,27 @@ module.exports = {
     // Fallback-safe status updater for enum compatibility
     const updateStatusSafe = async (target, fallbacks = []) => {
       try {
+        // When accounts start processing, set total_approved to grand_total
+        const updateData = { status: target };
+        if (target === "UNDER_PROCESS" && claim.grand_total) {
+          updateData.total_approved = claim.grand_total;
+        }
+
         await prisma.travelClaim.update({
           where: { id: claim.id },
-          data: { status: target },
+          data: updateData,
         });
       } catch (e) {
         for (const fb of fallbacks) {
           try {
+            const updateData = { status: fb };
+            if (fb === "UNDER_PROCESS" && claim.grand_total) {
+              updateData.total_approved = claim.grand_total;
+            }
+
             await prisma.travelClaim.update({
               where: { id: claim.id },
-              data: { status: fb },
+              data: updateData,
             });
             return;
           } catch (_) {}

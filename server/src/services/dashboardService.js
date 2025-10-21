@@ -140,10 +140,12 @@ async function getAttendanceStatistics() {
     lateArrivals,
     totalAttendance,
     recentAttendance,
+    lastAttendanceDate,
   ] = await Promise.all([
     prisma.attendance.count({
       where: {
         attendanceDate: { gte: today, lt: tomorrow },
+        type: "IN", // Only count IN records for present count
       },
     }),
     getWeeklyAttendanceStats(),
@@ -176,7 +178,17 @@ async function getAttendanceStatistics() {
         attendanceDate: { gte: weekAgo, lt: tomorrow },
       },
     }),
+    prisma.attendance.findFirst({
+      orderBy: { attendanceDate: "desc" },
+      select: { attendanceDate: true },
+    }),
   ]);
+
+  // Determine if attendance data is recent (within last 30 days)
+  const isRecentData =
+    lastAttendanceDate &&
+    today.getTime() - lastAttendanceDate.attendanceDate.getTime() <
+      30 * 24 * 60 * 60 * 1000;
 
   return {
     today_present: todayPresent,
@@ -185,10 +197,16 @@ async function getAttendanceStatistics() {
     late_arrivals_today: lateArrivals,
     total_attendance_records: totalAttendance,
     recent_attendance: recentAttendance,
+    last_attendance_date: lastAttendanceDate?.attendanceDate,
     // Add some mock data for demonstration when no real data exists
     attendance_rate:
       todayPresent > 0 ? Math.round((todayPresent / 26) * 100) : 0, // Assuming 26 total employees
-    status: totalAttendance > 0 ? "active" : "no_data",
+    status:
+      totalAttendance > 0
+        ? isRecentData
+          ? "active"
+          : "historical"
+        : "no_data",
   };
 }
 
@@ -311,7 +329,7 @@ async function getTravelStatistics() {
     }),
     prisma.travelClaim.aggregate({
       where: {
-        status: "APPROVED",
+        status: { in: ["APPROVED", "PROCESSED", "UNDER_PROCESS"] },
         is_deleted: false,
       },
       _sum: { total_approved: true },

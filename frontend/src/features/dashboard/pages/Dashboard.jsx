@@ -107,11 +107,11 @@ const Dashboard = () => {
     dashboardData;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 -mx-2 md:-mx-4 lg:-mx-4 -mt-20 lg:-mt-6 -mb-6">
       {/* Header Section with Gradient */}
       <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 text-white">
         <div className="absolute inset-0 bg-black/10"></div>
-        <div className="relative px-6 py-8">
+        <div className="relative px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">
@@ -148,10 +148,10 @@ const Dashboard = () => {
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
       </div>
 
-      <div className="px-6 py-8 space-y-8">
+      <div className="p-4 space-y-4">
         {/* Data Status Information */}
         <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-start space-x-4">
               <div className="flex-shrink-0">
                 <Zap className="h-6 w-6 text-blue-600" />
@@ -177,7 +177,9 @@ const Dashboard = () => {
                       className={`w-3 h-3 rounded-full ${
                         attendance?.status === "active"
                           ? "bg-green-500"
-                          : "bg-yellow-500"
+                          : attendance?.status === "historical"
+                          ? "bg-yellow-500"
+                          : "bg-gray-400"
                       }`}
                     ></div>
                     <span className="text-gray-700">
@@ -185,6 +187,11 @@ const Dashboard = () => {
                         {attendance?.total_attendance_records || 0}
                       </strong>{" "}
                       attendance records
+                      {attendance?.status === "historical" && (
+                        <span className="text-yellow-600 text-xs ml-1">
+                          (historical)
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -210,7 +217,7 @@ const Dashboard = () => {
         </Card>
 
         {/* Key Metrics Cards with Enhanced Design */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Total Employees Card */}
           <Card className="group hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -250,6 +257,8 @@ const Dashboard = () => {
                 <Clock className="h-3 w-3 mr-1" />
                 {attendance?.status === "no_data"
                   ? "No data available"
+                  : attendance?.status === "historical"
+                  ? "Historical data only"
                   : `${attendance?.late_arrivals_today || 0} late arrivals`}
               </div>
             </CardContent>
@@ -305,7 +314,7 @@ const Dashboard = () => {
         </div>
 
         {/* Enhanced Charts and Analytics Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Employee Distribution with Enhanced Design */}
           <Card className="hover:shadow-xl transition-all duration-300 bg-white/80 backdrop-blur-sm border-0 shadow-lg">
             <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
@@ -318,7 +327,7 @@ const Dashboard = () => {
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-4">
               {employees?.by_department &&
               Object.keys(employees.by_department).length > 0 ? (
                 <div className="space-y-4">
@@ -388,7 +397,7 @@ const Dashboard = () => {
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-4">
               {leaves?.by_type && Object.keys(leaves.by_type).length > 0 ? (
                 <div className="space-y-4">
                   {Object.entries(leaves.by_type).map(
@@ -569,8 +578,8 @@ const Dashboard = () => {
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <CardContent className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {departments.top_departments.map((dept, index) => {
                   const gradients = [
                     "from-blue-500 to-blue-600",
