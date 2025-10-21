@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import axios from "../../lib/axios";
+import axios, { resetAuthenticationState } from "../../lib/axios";
 
 // ensure session cookie included
 axios.defaults.withCredentials = true;
@@ -41,6 +41,7 @@ export const useAuthStore = create(
           const status = err?.response?.status;
           if (status === 401) {
             set({ user: null, isChecking: false });
+            resetAuthenticationState(); // Reset authentication state when session expires
           } else {
             // For non-401 errors, preserve the current user state but stop checking
             set({ isChecking: false });
@@ -58,6 +59,7 @@ export const useAuthStore = create(
       logout: async () => {
         await axios.post("/logout", {}, { withCredentials: true });
         set({ user: null });
+        resetAuthenticationState(); // Reset authentication state for next session
       },
     }),
     {

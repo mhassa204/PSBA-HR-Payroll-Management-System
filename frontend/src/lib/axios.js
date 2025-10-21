@@ -1,6 +1,14 @@
 import axios from "axios";
 import { toastBus } from "../utils/toastBus";
 
+// Track if user was previously authenticated to distinguish between initial access and session expiration
+let wasAuthenticated = false;
+
+// Function to reset authentication state (called on logout)
+export const resetAuthenticationState = () => {
+  wasAuthenticated = false;
+};
+
 // Prefer localhost inference when app is opened on localhost to keep cookies same-site.
 const inferredApi = (() => {
   try {
@@ -43,15 +51,23 @@ axiosInstance.interceptors.request.use((config) => {
 });
 
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Mark as authenticated when we get a successful response
+    if (response.status >= 200 && response.status < 300) {
+      wasAuthenticated = true;
+    }
+    return response;
+  },
   (error) => {
     const status = error?.response?.status;
     const currentPath = window.location.pathname;
     const suppress403Toast = !!error?.config?.suppress403Toast; // allow callers to silence expected 403s
 
     if (status === 401) {
-      // Don't show unauthorized toast if user is already on login page
-      if (currentPath !== "/login") {
+      // Don't show unauthorized toast if:
+      // 1. User is already on login page, OR
+      // 2. This is initial access (user was never authenticated before)
+      if (currentPath !== "/login" && wasAuthenticated) {
         toastBus.emit({
           type: "error",
           message: "Unauthorized. Please log in.",
