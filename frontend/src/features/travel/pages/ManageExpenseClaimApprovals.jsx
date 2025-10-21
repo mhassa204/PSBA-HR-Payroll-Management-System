@@ -424,11 +424,20 @@ export default function ManageExpenseClaimApprovals() {
       let canRecommend = false;
       if (deptOrigin && hodId) {
         if (recs === 0) canRecommend = String(meEmpId || "") === String(hodId);
-        else if (recs === 1)
-          canRecommend = hodRO
-            ? String(meEmpId || "") === String(hodRO)
-            : false;
-        else canRecommend = false;
+        else if (recs === 1) {
+          if (hodRO) {
+            // If current user is DG and is HOD's RO, don't show recommend button
+            if (canDG && String(meEmpId || "") === String(hodRO)) {
+              canRecommend = false; // DG should not see recommend button
+            } else {
+              canRecommend = String(meEmpId || "") === String(hodRO);
+            }
+          } else {
+            canRecommend = false;
+          }
+        } else {
+          canRecommend = false;
+        }
       } else {
         // legacy path: immediate in-charge of applicant (request-linked) or employee (within-city)
         canRecommend = isRecommenderFor(claim) && recs === 0;
@@ -474,7 +483,14 @@ export default function ManageExpenseClaimApprovals() {
           if (deptOrigin) {
             const hodId = hodIdForClaim(claim);
             const hodRO = hodROForClaim(claim);
-            if (hodId && hodRO) return 2;
+            if (hodId && hodRO) {
+              // If current user is DG and is HOD's RO, only 1 recommendation needed
+              if (canDG && String(meEmpId || "") === String(hodRO)) {
+                return 1; // Only HOD recommendation needed
+              } else {
+                return 2; // HOD + HOD's RO recommendations needed
+              }
+            }
           }
           return 1;
         })();
@@ -745,8 +761,14 @@ export default function ManageExpenseClaimApprovals() {
       if (deptOrigin && hodId) {
         if (recs === 0 && String(meEmpId || "") === String(hodId))
           canRecommend = true;
-        else if (recs === 1 && hodRO && String(meEmpId || "") === String(hodRO))
-          canRecommend = true;
+        else if (recs === 1 && hodRO) {
+          // If current user is DG and is HOD's RO, don't show recommend button
+          if (canDG && String(meEmpId || "") === String(hodRO)) {
+            canRecommend = false; // DG should not see recommend button
+          } else {
+            canRecommend = String(meEmpId || "") === String(hodRO);
+          }
+        }
       } else {
         canRecommend = recs === 0 && (empRepsToMe || applicantRepsToMe);
       }

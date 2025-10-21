@@ -6,6 +6,7 @@ import { useAuthStore } from "./features/auth/authStore";
 import { emergencyScrollRestore } from "./utils/scrollUtils";
 import PrivateRoute from "./features/auth/PrivateRoute";
 import Login from "./features/auth/Login";
+import Dashboard from "./features/dashboard/pages/Dashboard";
 import EmployeeTable from "./features/employees/components/EmployeeTable";
 import LeftSidebarLayout from "./components/layout/LeftSidebarLayout";
 // import EmployeeList from "./features/employees/components/EmployeeList";
@@ -121,15 +122,8 @@ function App() {
             <Route
               path="dashboard"
               element={
-                <PrivateRoute permissions={["employees.read", "reports.read"]}>
-                  <div className="text-center py-20">
-                    <h1 className="text-4xl font-bold text-slate-800 mb-4">
-                      Dashboard
-                    </h1>
-                    <p className="text-xl text-slate-600">
-                      Overview and analytics coming soon
-                    </p>
-                  </div>
+                <PrivateRoute permissions={["dashboard.read"]}>
+                  <Dashboard />
                 </PrivateRoute>
               }
             />

@@ -2167,7 +2167,24 @@ module.exports = {
     const neededRecommendations = await (async () => {
       // Direct-to-OPS for location-origin submissions
       if (claim.created_by_location_id) return 0;
-      if (isDeptOrigin && hodId) return hodRoId ? 2 : 1;
+      if (isDeptOrigin && hodId) {
+        // Check if HoD's RO is DG - if so, only 1 recommendation needed (HoD only)
+        if (hodRoId) {
+          const hodROEmp = await prisma.employment.findFirst({
+            where: {
+              employee_id: Number(hodRoId),
+              is_current: true,
+              is_deleted: false,
+            },
+            include: { designation: true },
+          });
+          const isHodRODG = /^director\s*general$/i.test(
+            hodROEmp?.designation?.title || ""
+          );
+          return isHodRODG ? 1 : 2; // If HoD's RO is DG, only HoD recommendation needed
+        }
+        return 1; // HoD only
+      }
       // For personal/HQ, compute chain length dynamically; minimal 0 (direct to DG) or more
       const applicantER = (
         claim.request?.applicant?.employmentRecords ||

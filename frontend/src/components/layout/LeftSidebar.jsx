@@ -257,7 +257,7 @@ const LeftSidebar = () => {
       icon: HomeIcon,
       description: "Overview & Analytics",
       color: "bg-blue-600",
-      show: () => can("employees.read") || can("reports.read"),
+      show: () => can("dashboard.read"),
     },
     {
       name: "Employees",

@@ -30,6 +30,7 @@ const navigation = [
     href: "/dashboard",
     icon: HomeIcon,
     description: "Overview and analytics",
+    show: () => can("dashboard.read"),
   },
   {
     name: "Employees",

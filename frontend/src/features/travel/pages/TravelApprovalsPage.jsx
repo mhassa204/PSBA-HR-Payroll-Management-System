@@ -152,7 +152,17 @@ export default function TravelApprovalsPage() {
 
     if (isDeptOrigin(r)) {
       if (recs === 0) return isHoDFor(r);
-      if (recs === 1) return Number(meEmpId) === Number(hodROFor(r) || 0);
+      if (recs === 1) {
+        const hodRO = hodROFor(r);
+        if (hodRO) {
+          // If current user is DG and is HOD's RO, don't show recommend button
+          if (isDG && Number(meEmpId) === Number(hodRO)) {
+            return false; // DG should not see recommend button
+          }
+          return Number(meEmpId) === Number(hodRO);
+        }
+        return false;
+      }
       return false;
     }
     // Non-dept-origin: immediate RO of applicant, first recommendation only
@@ -168,9 +178,18 @@ export default function TravelApprovalsPage() {
       (se) =>
         se.action === "CREATED" && /\[LOC\]/i.test(String(se.remarks || ""))
     );
-    // For department-origin, if HoD has a RO, require two recommendations before DG approval
-    const neededRecs = deptOrigin && hodROFor(r) ? 2 : 1;
     const isDG = !!caps?.isDG;
+    // For department-origin, determine needed recommendations based on HOD's RO
+    let neededRecs = 1; // Default: only HOD recommendation needed
+    if (deptOrigin && hodROFor(r)) {
+      const hodRO = hodROFor(r);
+      // If current user is DG and is HOD's RO, only 1 recommendation needed
+      if (isDG && Number(meEmpId) === Number(hodRO)) {
+        neededRecs = 1; // Only HOD recommendation needed
+      } else {
+        neededRecs = 2; // HOD + HOD's RO recommendations needed
+      }
+    }
     const isOps = !!caps?.isOps;
     const fastTrackDG =
       isDG && locType === "HEAD_OFFICE" && isDirectReportToMe(r);

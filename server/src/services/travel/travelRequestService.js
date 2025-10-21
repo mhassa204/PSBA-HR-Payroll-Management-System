@@ -1236,7 +1236,24 @@ module.exports = {
       if (recEntries.length === 0) {
         canRecommend = me === hodId; // HoD first
       } else if (recEntries.length === 1 && hodRO) {
-        canRecommend = String(me) === hodRO; // HoD's RO second (if exists)
+        // Check if HoD's RO is DG - if so, skip recommendation and go to approval
+        const hodROEmp = await prisma.employment.findFirst({
+          where: {
+            employee_id: Number(hodRO),
+            is_current: true,
+            is_deleted: false,
+          },
+          include: { designation: true },
+        });
+        const isHodRODG = /^director\s*general$/i.test(
+          hodROEmp?.designation?.title || ""
+        );
+
+        if (isHodRODG) {
+          canRecommend = false; // DG should approve, not recommend
+        } else {
+          canRecommend = String(me) === hodRO; // HoD's RO second (if exists and not DG)
+        }
       } else {
         canRecommend = false; // then DG approval stage (no more recommendations)
       }
@@ -1451,10 +1468,29 @@ module.exports = {
         const currentRecs = (req.statusEntries || []).filter(
           (se) => se.action === "RECOMMENDED"
         ).length;
-        if (hodHasRO && currentRecs < 2)
-          throw new Error(
-            "Requires HoD and HoD’s RO recommendations before DG approval"
+
+        // Check if HoD's RO is DG - if so, only 1 recommendation needed (HoD only)
+        if (hodHasRO) {
+          const hodROEmp = await prisma.employment.findFirst({
+            where: {
+              employee_id: Number(hodER.reporting_officer_id),
+              is_current: true,
+              is_deleted: false,
+            },
+            include: { designation: true },
+          });
+          const isHodRODG = /^director\s*general$/i.test(
+            hodROEmp?.designation?.title || ""
           );
+
+          if (isHodRODG && currentRecs < 1) {
+            throw new Error("Requires HoD recommendation before DG approval");
+          } else if (!isHodRODG && currentRecs < 2) {
+            throw new Error(
+              "Requires HoD and HoD's RO recommendations before DG approval"
+            );
+          }
+        }
       }
       // Update request status and record status entry with selected actor
       await prisma.travelRequest.update({
