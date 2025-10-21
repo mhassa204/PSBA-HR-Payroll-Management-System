@@ -14,9 +14,13 @@ const preferLocal = (() => {
   try {
     const h = window.location.hostname;
     return h === "localhost" || h === "127.0.0.1";
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 })();
-const API_URL = preferLocal ? inferredApi : (import.meta.env.VITE_API_URL || inferredApi);
+const API_URL = preferLocal
+  ? inferredApi
+  : import.meta.env.VITE_API_URL || inferredApi;
 
 const axiosInstance = axios.create({
   baseURL: API_URL,
@@ -44,23 +48,35 @@ axiosInstance.interceptors.response.use(
     const status = error?.response?.status;
     const currentPath = window.location.pathname;
     const suppress403Toast = !!error?.config?.suppress403Toast; // allow callers to silence expected 403s
-    
+
     if (status === 401) {
       // Don't show unauthorized toast if user is already on login page
-      if (currentPath !== '/login') {
-        toastBus.emit({ type: 'error', message: 'Unauthorized. Please log in.' });
+      if (currentPath !== "/login") {
+        toastBus.emit({
+          type: "error",
+          message: "Unauthorized. Please log in.",
+        });
       }
     } else if (status === 403) {
       if (!suppress403Toast) {
-        toastBus.emit({ type: 'error', message: 'Forbidden. You do not have permission.' });
+        toastBus.emit({
+          type: "error",
+          message: "Forbidden. You do not have permission.",
+        });
       }
     } else if (status >= 500) {
-      toastBus.emit({ type: 'error', message: 'Server error. Please try again later.' });
+      toastBus.emit({
+        type: "error",
+        message: "Server error. Please try again later.",
+      });
     } else if (status >= 400) {
-      const msg = error.response?.data?.error || 'Request failed.';
-      toastBus.emit({ type: 'error', message: msg });
+      const msg = error.response?.data?.error || "Request failed.";
+      toastBus.emit({ type: "error", message: msg });
     } else if (!error.response) {
-      toastBus.emit({ type: 'error', message: 'Network error. Check your connection.' });
+      toastBus.emit({
+        type: "error",
+        message: "Network error. Check your connection.",
+      });
     }
     return Promise.reject(error);
   }

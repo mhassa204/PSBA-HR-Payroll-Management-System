@@ -33,9 +33,15 @@ export function resolveDocUrl(p) {
       clean = clean.replace(/^Uploads\//, "uploads/");
     else clean = `uploads/${clean}`;
   }
-  const preferLocal = (typeof window !== 'undefined') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const preferLocal =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
   const baseApi = (
-    (preferLocal ? null : import.meta.env.VITE_API_URL) || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000/api` : "")
+    (preferLocal ? null : import.meta.env.VITE_API_URL) ||
+    (typeof window !== "undefined"
+      ? `${window.location.protocol}//${window.location.hostname}:3000/api`
+      : "")
   ).replace(/\/?$/, "");
   // Always proxy via API to ensure auth/cors and correct casing mapping
   return `${baseApi}/travel/expense-claims/document?path=${encodeURIComponent(
@@ -53,9 +59,15 @@ async function fetchJson(url) {
 // Load full travel request by id to include attendees and status history
 async function loadTravelRequestFull(id) {
   if (!id) return null;
-  const preferLocal2 = (typeof window !== 'undefined') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const preferLocal2 =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
   const baseApi = (
-    (preferLocal2 ? null : import.meta.env.VITE_API_URL) || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000/api` : "")
+    (preferLocal2 ? null : import.meta.env.VITE_API_URL) ||
+    (typeof window !== "undefined"
+      ? `${window.location.protocol}//${window.location.hostname}:3000/api`
+      : "")
   ).replace(/\/?$/, "");
   try {
     const data = await fetchJson(`${baseApi}/travel/requests/${id}`);
@@ -68,9 +80,15 @@ async function loadTravelRequestFull(id) {
 // Load full claim by id (includes documents, segments, status history)
 async function loadClaimFull(id) {
   if (!id) return null;
-  const preferLocal3 = (typeof window !== 'undefined') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const preferLocal3 =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
   const baseApi = (
-    (preferLocal3 ? null : import.meta.env.VITE_API_URL) || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000/api` : "")
+    (preferLocal3 ? null : import.meta.env.VITE_API_URL) ||
+    (typeof window !== "undefined"
+      ? `${window.location.protocol}//${window.location.hostname}:3000/api`
+      : "")
   ).replace(/\/?$/, "");
   try {
     const data = await fetchJson(`${baseApi}/travel/expense-claims/${id}`);

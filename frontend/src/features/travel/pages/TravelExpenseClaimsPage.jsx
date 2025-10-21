@@ -1397,7 +1397,9 @@ export default function TravelExpenseClaimsPage() {
                           const isAbsolute = /^https?:\//i.test(p);
                           const base = (
                             import.meta.env.VITE_API_URL ||
-                            (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000/api` : "")
+                            (typeof window !== "undefined"
+                              ? `${window.location.protocol}//${window.location.hostname}:3000/api`
+                              : "")
                           ).replace(/\/api\/?$/, "");
                           const url = isAbsolute
                             ? p
@@ -1473,7 +1475,9 @@ export default function TravelExpenseClaimsPage() {
                                 const isAbsolute = /^https?:\//i.test(p);
                                 const base = (
                                   import.meta.env.VITE_API_URL ||
-                                  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000/api` : "")
+                                  (typeof window !== "undefined"
+                                    ? `${window.location.protocol}//${window.location.hostname}:3000/api`
+                                    : "")
                                 ).replace(/\/api\/?$/, "");
                                 const url = isAbsolute
                                   ? p
