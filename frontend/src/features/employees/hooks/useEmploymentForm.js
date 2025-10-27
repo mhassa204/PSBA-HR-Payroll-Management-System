@@ -72,7 +72,7 @@ export const useEmploymentForm = ({
       // Probation fields
       is_on_probation: false,
       probation_end_date: "",
-    }, 
+    },
   });
 
   const salaryForm = useForm({
@@ -96,8 +96,8 @@ export const useEmploymentForm = ({
 
   const locationForm = useForm({
     defaultValues: {
-      location_id: "",      // single selection only
-      _location_type_filter: 'ALL', // virtual filter state
+      location_id: "", // single selection only
+      _location_type_filter: "ALL", // virtual filter state
     },
   });
 
@@ -131,7 +131,11 @@ export const useEmploymentForm = ({
         try {
           const locationsResp = await locationService.getAllLocations();
           // API returns { success, locations } – normalize
-            const locs = Array.isArray(locationsResp.locations) ? locationsResp.locations : (Array.isArray(locationsResp) ? locationsResp : []);
+          const locs = Array.isArray(locationsResp.locations)
+            ? locationsResp.locations
+            : Array.isArray(locationsResp)
+            ? locationsResp
+            : [];
           setAllLocations(locs);
         } catch (error) {
           console.error("❌ Error loading locations:", error);
@@ -154,51 +158,87 @@ export const useEmploymentForm = ({
       try {
         // Check if we're dealing with MBWO organization (which hides department field)
         const isMBWO = org === "MBWO";
-        
 
         console.log("🔍 useEmploymentForm: Form options available:", {
           hasFormOptions: !!formOptions,
           hasDesignations: !!formOptions?.designations,
           designationsCount: formOptions?.designations?.length || 0,
           hasDepartments: !!formOptions?.departments,
-          departmentsCount: formOptions?.departments?.length || 0
+          departmentsCount: formOptions?.departments?.length || 0,
         });
-        
+
         if (formOptions?.designations && formOptions.designations.length > 0) {
           // Use designations directly from form options instead of loading by department
-          console.log("✅ useEmploymentForm: Using designations from form options:", formOptions.designations.length);
+          console.log(
+            "✅ useEmploymentForm: Using designations from form options:",
+            formOptions.designations.length
+          );
           setAvailableDesignations(formOptions.designations);
-        } else if (isMBWO && formOptions?.departments && formOptions.departments.length > 0) {
+        } else if (
+          isMBWO &&
+          formOptions?.departments &&
+          formOptions.departments.length > 0
+        ) {
           // For MBWO, load all designations from all departments since department field is hidden
-          console.log("🔍 useEmploymentForm: MBWO detected - loading all designations from all departments");
+          console.log(
+            "🔍 useEmploymentForm: MBWO detected - loading all designations from all departments"
+          );
           const allDesignations = [];
           for (const dept of formOptions.departments) {
             try {
-              console.log("🔍 useEmploymentForm: Loading designations for department:", dept.label, "ID:", dept.value);
-              const designations = await employmentService.getDesignationsByDepartment(dept.value);
-              console.log("✅ useEmploymentForm: Loaded designations for department", dept.label, ":", designations.length);
+              console.log(
+                "🔍 useEmploymentForm: Loading designations for department:",
+                dept.label,
+                "ID:",
+                dept.value
+              );
+              const designations =
+                await employmentService.getDesignationsByDepartment(dept.value);
+              console.log(
+                "✅ useEmploymentForm: Loaded designations for department",
+                dept.label,
+                ":",
+                designations.length
+              );
               allDesignations.push(...designations);
             } catch (error) {
-              console.error(`❌ Error loading designations for department ${dept.label}:`, error);
+              console.error(
+                `❌ Error loading designations for department ${dept.label}:`,
+                error
+              );
             }
           }
-          console.log("✅ useEmploymentForm: Loaded all designations for MBWO:", allDesignations.length);
+          console.log(
+            "✅ useEmploymentForm: Loaded all designations for MBWO:",
+            allDesignations.length
+          );
           setAvailableDesignations(allDesignations);
-        } else if (formOptions?.departments && formOptions.departments.length > 0) {
+        } else if (
+          formOptions?.departments &&
+          formOptions.departments.length > 0
+        ) {
           // Fallback: load designations by department (for non-MBWO organizations)
-          console.log("🔍 useEmploymentForm: Loading designations by department for non-MBWO organization");
+          console.log(
+            "🔍 useEmploymentForm: Loading designations by department for non-MBWO organization"
+          );
           const allDesignations = [];
           for (const dept of formOptions.departments) {
             try {
-              const designations = await employmentService.getDesignationsByDepartment(dept.value);
+              const designations =
+                await employmentService.getDesignationsByDepartment(dept.value);
               allDesignations.push(...designations);
             } catch (error) {
-              console.error(`❌ Error loading designations for department ${dept.label}:`, error);
+              console.error(
+                `❌ Error loading designations for department ${dept.label}:`,
+                error
+              );
             }
           }
           setAvailableDesignations(allDesignations);
         } else {
-          console.warn("⚠️ No departments or designations available in form options");
+          console.warn(
+            "⚠️ No departments or designations available in form options"
+          );
           setAvailableDesignations([]);
         }
       } catch (error) {
@@ -216,7 +256,9 @@ export const useEmploymentForm = ({
   useEffect(() => {
     const subscription = employmentForm.watch((value, { name }) => {
       if (name === "employment_type") {
-        const isContractualType = value.employment_type === "Contract" || value.employment_type === "Daily Wager";
+        const isContractualType =
+          value.employment_type === "Contract" ||
+          value.employment_type === "Daily Wager";
         setIsContractual(isContractualType);
         // Employment type changed - logging removed to prevent infinite loops
       }
@@ -231,149 +273,188 @@ export const useEmploymentForm = ({
     if (isLoadingDataRef.current) {
       return;
     }
-    
+
     if (currentOrganization) {
       const currentIsCurrentValue = employmentForm.getValues("is_current");
       if (currentOrganization === "MBWO") {
         if (currentIsCurrentValue !== false) {
-          console.log("🔍 useEmploymentForm: Setting is_current to false for MBWO");
-          employmentForm.setValue("is_current", false, { shouldValidate: false, shouldDirty: true });
+          console.log(
+            "🔍 useEmploymentForm: Setting is_current to false for MBWO"
+          );
+          employmentForm.setValue("is_current", false, {
+            shouldValidate: false,
+            shouldDirty: true,
+          });
         }
       } else {
         if (currentIsCurrentValue !== true) {
-          console.log("🔍 useEmploymentForm: Setting is_current to true for non-MBWO");
-          employmentForm.setValue("is_current", true, { shouldValidate: false, shouldDirty: true });
+          console.log(
+            "🔍 useEmploymentForm: Setting is_current to true for non-MBWO"
+          );
+          employmentForm.setValue("is_current", true, {
+            shouldValidate: false,
+            shouldDirty: true,
+          });
         }
       }
     }
   }, [currentOrganization, employmentForm]);
 
   // Submit employment data
-  const submitEmployment = useCallback(async (data) => {
-    try {
-      setIsLoading(true);
-      // Submitting employment data
+  const submitEmployment = useCallback(
+    async (data) => {
+      try {
+        setIsLoading(true);
+        // Submitting employment data
 
-      // Prepare employment data with user ID
-      const employmentData = {
-        employee_id: userId,
-        ...data,
-        // No employment-level document uploads (moved to employee module)
-      };
+        // Prepare employment data with user ID
+        const employmentData = {
+          employee_id: userId,
+          ...data,
+          // No employment-level document uploads (moved to employee module)
+        };
 
-      let result;
-      if (isEditMode && savedEmploymentId) {
-        result = await employmentService.updateEmployment(savedEmploymentId, employmentData);
-        // Employment updated successfully
-      } else {
-        result = await employmentService.createEmployment(employmentData);
-        // Employment created successfully
-        setSavedEmploymentId(result.id);
+        let result;
+        if (isEditMode && savedEmploymentId) {
+          result = await employmentService.updateEmployment(
+            savedEmploymentId,
+            employmentData
+          );
+          // Employment updated successfully
+        } else {
+          result = await employmentService.createEmployment(employmentData);
+          // Employment created successfully
+          setSavedEmploymentId(result.id);
+        }
+
+        if (onSuccess) onSuccess(result, "employment");
+        return result;
+      } catch (error) {
+        console.error("❌ Error submitting employment:", error);
+        if (onError) onError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
       }
-
-      if (onSuccess) onSuccess(result, "employment");
-      return result;
-    } catch (error) {
-      console.error("❌ Error submitting employment:", error);
-      if (onError) onError(error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userId, isEditMode, savedEmploymentId, onSuccess, onError]);
+    },
+    [userId, isEditMode, savedEmploymentId, onSuccess, onError]
+  );
 
   // Submit salary data
-  const submitSalary = useCallback(async (data) => {
-    try {
-      setIsLoading(true);
+  const submitSalary = useCallback(
+    async (data) => {
+      try {
+        setIsLoading(true);
 
+        if (!savedEmploymentId) {
+          throw new Error("Employment record must be saved first");
+        }
 
-      if (!savedEmploymentId) {
-        throw new Error("Employment record must be saved first");
+        let result;
+        if (isEditMode) {
+          result = await employmentService.updateSalary(
+            savedEmploymentId,
+            data
+          );
+        } else {
+          result = await employmentService.createSalary(
+            savedEmploymentId,
+            data
+          );
+        }
+
+        if (onSuccess) onSuccess(result, "salary");
+        return result;
+      } catch (error) {
+        console.error("❌ Error submitting salary:", error);
+        if (onError) onError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
       }
-
-      let result;
-      if (isEditMode) {
-        result = await employmentService.updateSalary(savedEmploymentId, data);
-
-      } else {
-        result = await employmentService.createSalary(savedEmploymentId, data);
-
-      }
-
-      if (onSuccess) onSuccess(result, "salary");
-      return result;
-    } catch (error) {
-      console.error("❌ Error submitting salary:", error);
-      if (onError) onError(error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [savedEmploymentId, isEditMode, onSuccess, onError]);
+    },
+    [savedEmploymentId, isEditMode, onSuccess, onError]
+  );
 
   // Submit location data
-  const submitLocation = useCallback(async (data) => {
-    try {
-      setIsLoading(true);
-      if (!savedEmploymentId) {
-        throw new Error("Employment record must be saved first");
+  const submitLocation = useCallback(
+    async (data) => {
+      try {
+        setIsLoading(true);
+        if (!savedEmploymentId) {
+          throw new Error("Employment record must be saved first");
+        }
+        const payload = {
+          location_id: data.location_id ? Number(data.location_id) : null,
+        }; // removed full_address
+        let result;
+        if (isEditMode) {
+          result = await employmentService.updateLocation(
+            savedEmploymentId,
+            payload
+          );
+        } else {
+          result = await employmentService.createLocation(
+            savedEmploymentId,
+            payload
+          );
+        }
+        if (onSuccess) onSuccess(result, "location");
+        return result;
+      } catch (error) {
+        console.error("❌ Error submitting location:", error);
+        if (onError) onError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
       }
-      const payload = { location_id: data.location_id ? Number(data.location_id) : null }; // removed full_address
-      let result;
-      if (isEditMode) {
-        result = await employmentService.updateLocation(savedEmploymentId, payload);
-      } else {
-        result = await employmentService.createLocation(savedEmploymentId, payload);
-      }
-      if (onSuccess) onSuccess(result, "location");
-      return result;
-    } catch (error) {
-      console.error("❌ Error submitting location:", error);
-      if (onError) onError(error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [savedEmploymentId, isEditMode, onSuccess, onError]);
+    },
+    [savedEmploymentId, isEditMode, onSuccess, onError]
+  );
 
   // Submit contract data
-  const submitContract = useCallback(async (data) => {
-    try {
-      setIsLoading(true);
+  const submitContract = useCallback(
+    async (data) => {
+      try {
+        setIsLoading(true);
 
-
-      if (!savedEmploymentId) {
-        throw new Error("Employment record must be saved first");
-      }
-
-      // Prepare contract data with file uploads
-      const contractData = {
-        ...data,
-        files: {
-          renewal_report: data.renewal_report?.[0] || null,
+        if (!savedEmploymentId) {
+          throw new Error("Employment record must be saved first");
         }
-      };
 
-      let result;
-      if (isEditMode) {
-        result = await employmentService.updateContract(savedEmploymentId, contractData);
+        // Prepare contract data with file uploads
+        const contractData = {
+          ...data,
+          files: {
+            renewal_report: data.renewal_report?.[0] || null,
+          },
+        };
 
-      } else {
-        result = await employmentService.createContract(savedEmploymentId, contractData);
+        let result;
+        if (isEditMode) {
+          result = await employmentService.updateContract(
+            savedEmploymentId,
+            contractData
+          );
+        } else {
+          result = await employmentService.createContract(
+            savedEmploymentId,
+            contractData
+          );
+        }
 
+        if (onSuccess) onSuccess(result, "contract");
+        return result;
+      } catch (error) {
+        console.error("❌ Error submitting contract:", error);
+        if (onError) onError(error);
+        throw error;
+      } finally {
+        setIsLoading(false);
       }
-
-      if (onSuccess) onSuccess(result, "contract");
-      return result;
-    } catch (error) {
-      console.error("❌ Error submitting contract:", error);
-      if (onError) onError(error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [savedEmploymentId, isEditMode, onSuccess, onError]);
+    },
+    [savedEmploymentId, isEditMode, onSuccess, onError]
+  );
 
   // Validate salary
   const validateSalary = useCallback(async (designationId, salary) => {
@@ -402,104 +483,147 @@ export const useEmploymentForm = ({
   }, [employmentForm, salaryForm, locationForm, contractForm]);
 
   // Load data into forms - used for both initial data and edit mode data
-  const loadDataIntoForms = useCallback((data) => {
-    // Prevent recursive calls
-    if (isLoadingDataRef.current) {
-      console.log("🔍 useEmploymentForm: loadDataIntoForms called recursively, skipping to prevent infinite loop");
-      return;
-    }
-    
-    isLoadingDataRef.current = true;
-    console.log("🔍 useEmploymentForm: Starting to load data into forms:", {
-      hasData: !!data,
-      dataKeys: data ? Object.keys(data) : [],
-      isEditMode
-    });
-    
-    try {
-      // Reset forms first
-      employmentForm.reset();
-      salaryForm.reset();
-      locationForm.reset();
-      contractForm.reset();
-      
-      // Set values for each form using the structured data
-      if (data.employment) {
-        console.log("🔍 useEmploymentForm: Setting employment form values:", data.employment);
-        Object.entries(data.employment).forEach(([key, value]) => {
-          // Ensure that undefined values are handled correctly
-          const finalValue = value !== undefined ? value : null;
-          console.log(`🔍 useEmploymentForm: Setting ${key} = ${finalValue}`);
-          employmentForm.setValue(key, finalValue, { shouldValidate: false, shouldDirty: true });
-        });
+  const loadDataIntoForms = useCallback(
+    (data) => {
+      // Prevent recursive calls
+      if (isLoadingDataRef.current) {
+        console.log(
+          "🔍 useEmploymentForm: loadDataIntoForms called recursively, skipping to prevent infinite loop"
+        );
+        return;
       }
-      
-      if (data.salary) {
-        Object.entries(data.salary).forEach(([key, value]) => {
-          salaryForm.setValue(key, value !== undefined ? value : null, { shouldValidate: false, shouldDirty: true });
-        });
+
+      isLoadingDataRef.current = true;
+      console.log("🔍 useEmploymentForm: Starting to load data into forms:", {
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        isEditMode,
+      });
+
+      try {
+        // Reset forms first
+        employmentForm.reset();
+        salaryForm.reset();
+        locationForm.reset();
+        contractForm.reset();
+
+        // Set values for each form using the structured data
+        if (data.employment) {
+          console.log(
+            "🔍 useEmploymentForm: Setting employment form values:",
+            data.employment
+          );
+          Object.entries(data.employment).forEach(([key, value]) => {
+            // Ensure that undefined values are handled correctly
+            const finalValue = value !== undefined ? value : null;
+            console.log(`🔍 useEmploymentForm: Setting ${key} = ${finalValue}`);
+            employmentForm.setValue(key, finalValue, {
+              shouldValidate: false,
+              shouldDirty: true,
+            });
+          });
+        }
+
+        if (data.salary) {
+          Object.entries(data.salary).forEach(([key, value]) => {
+            salaryForm.setValue(key, value !== undefined ? value : null, {
+              shouldValidate: false,
+              shouldDirty: true,
+            });
+          });
+        }
+
+        if (data.location) {
+          Object.entries(data.location).forEach(([key, value]) => {
+            if (key === "full_address") return; // skip removed field
+            locationForm.setValue(key, value !== undefined ? value : null, {
+              shouldValidate: false,
+              shouldDirty: true,
+            });
+          });
+        }
+
+        if (data.contract) {
+          Object.entries(data.contract).forEach(([key, value]) => {
+            contractForm.setValue(key, value !== undefined ? value : null, {
+              shouldValidate: false,
+              shouldDirty: true,
+            });
+          });
+        }
+
+        // Set employment ID for edit mode
+        if (data.id) {
+          setSavedEmploymentId(data.id);
+        }
+
+        // Mark completed tabs based on available data
+        const newCompletedTabs = {
+          employment: !!(
+            data.employment && Object.keys(data.employment).length > 0
+          ),
+          salary: !!(data.salary && Object.keys(data.salary).length > 0),
+          location: !!(
+            data.location &&
+            Object.keys(data.location).some((k) => k !== "full_address")
+          ), // ignore removed field
+          contract: !!(data.contract && Object.keys(data.contract).length > 0),
+        };
+        setCompletedTabs(newCompletedTabs);
+
+        // Set contractual status based on employment type
+        if (data.employment?.employment_type) {
+          setIsContractual(data.employment.employment_type === "Contract");
+        }
+
+        console.log(
+          "✅ useEmploymentForm: Data loaded into forms successfully"
+        );
+      } catch (error) {
+        console.error(
+          "❌ useEmploymentForm: Error loading data into forms:",
+          error
+        );
+      } finally {
+        // Reset the flag after a short delay to allow any immediate setValue calls to complete
+        setTimeout(() => {
+          isLoadingDataRef.current = false;
+        }, 100);
       }
-      
-      if (data.location) {
-        Object.entries(data.location).forEach(([key, value]) => {
-          if (key === 'full_address') return; // skip removed field
-          locationForm.setValue(key, value !== undefined ? value : null, { shouldValidate: false, shouldDirty: true });
-        });
-      }
-      
-      if (data.contract) {
-        Object.entries(data.contract).forEach(([key, value]) => {
-          contractForm.setValue(key, value !== undefined ? value : null, { shouldValidate: false, shouldDirty: true });
-        });
-      }
-      
-      // Set employment ID for edit mode
-      if (data.id) {
-        setSavedEmploymentId(data.id);
-      }
-      
-      // Mark completed tabs based on available data
-      const newCompletedTabs = {
-        employment: !!(data.employment && Object.keys(data.employment).length > 0),
-        salary: !!(data.salary && Object.keys(data.salary).length > 0),
-        location: !!(data.location && Object.keys(data.location).some(k => k !== 'full_address')), // ignore removed field
-        contract: !!(data.contract && Object.keys(data.contract).length > 0),
-      };
-      setCompletedTabs(newCompletedTabs);
-      
-      // Set contractual status based on employment type
-      if (data.employment?.employment_type) {
-        setIsContractual(data.employment.employment_type === 'Contract');
-      }
-      
-      console.log("✅ useEmploymentForm: Data loaded into forms successfully");
-    } catch (error) {
-      console.error("❌ useEmploymentForm: Error loading data into forms:", error);
-    } finally {
-      // Reset the flag after a short delay to allow any immediate setValue calls to complete
-      setTimeout(() => {
-        isLoadingDataRef.current = false;
-      }, 100);
-    }
-  }, [employmentForm, salaryForm, locationForm, contractForm, setSavedEmploymentId, setCompletedTabs, setIsContractual, isEditMode]);
+    },
+    [
+      employmentForm,
+      salaryForm,
+      locationForm,
+      contractForm,
+      setSavedEmploymentId,
+      setCompletedTabs,
+      setIsContractual,
+      isEditMode,
+    ]
+  );
 
   // Load initial data when it changes - for both create and edit modes
   useEffect(() => {
     // Prevent infinite loops when data is loaded programmatically in edit mode
     if (isEditMode && initialData && Object.keys(initialData).length > 0) {
-      console.log("🔍 useEmploymentForm: Skipping initialData useEffect in edit mode to prevent infinite loops");
+      console.log(
+        "🔍 useEmploymentForm: Skipping initialData useEffect in edit mode to prevent infinite loops"
+      );
       return;
     }
-    
+
     console.log("🔍 useEmploymentForm: initialData changed:", {
       hasInitialData: !!initialData,
       initialDataType: typeof initialData,
       initialDataKeys: initialData ? Object.keys(initialData) : [],
       initialDataEmployment: initialData?.employment,
-      initialDataEmploymentKeys: initialData?.employment ? Object.keys(initialData.employment) : [],
-      reportingOfficerId: initialData?.employment?.reporting_officer_id
+      initialDataEmploymentKeys: initialData?.employment
+        ? Object.keys(initialData.employment)
+        : [],
+      reportingOfficerId: initialData?.employment?.reporting_officer_id,
     });
-    
+
     if (initialData) {
       loadDataIntoForms(initialData);
     }

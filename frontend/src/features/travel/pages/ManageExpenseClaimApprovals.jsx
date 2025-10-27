@@ -11,6 +11,12 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  formatDate,
+  formatDateString,
+  formatDateTime,
+  formatTime,
+} from "../../../utils/dateFormatter";
 import { Input } from "@/components/ui/input";
 import EnhancedModal from "@/components/ui/EnhancedModal";
 import { exportClaimToPdf } from "../utils/pdfExport";
@@ -881,7 +887,7 @@ export default function ManageExpenseClaimApprovals() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-  const fmtDate = (v) => (v ? new Date(v).toISOString().slice(0, 10) : "—");
+  const fmtDate = (v) => formatDateString(v);
 
   // Label: always display 'Recommend'
   const getRecommendLabel = () => "Recommend";
@@ -904,11 +910,12 @@ export default function ManageExpenseClaimApprovals() {
     const subDateStr = subEntry?.createdAt ? String(subEntry.createdAt) : null;
     if (!subDateStr) return 0;
     const toDateOnly = (d) => {
-      const ds = String(d || "").slice(0, 10);
-      if (!ds) return null;
-      const [y, m, da] = ds.split("-").map((x) => Number(x));
-      return isFinite(y) && isFinite(m) && isFinite(da)
-        ? new Date(y, m - 1, da)
+      if (!d) return null;
+      const formattedDate = formatDateString(d);
+      if (formattedDate === "—") return null;
+      const [day, month, year] = formattedDate.split("/").map((x) => Number(x));
+      return isFinite(year) && isFinite(month) && isFinite(day)
+        ? new Date(year, month - 1, day)
         : null;
     };
     const submitD = toDateOnly(subDateStr);
@@ -1044,7 +1051,7 @@ export default function ManageExpenseClaimApprovals() {
                     (e) => e.action === "SUBMITTED"
                   );
                   const subDate = submitted?.createdAt
-                    ? String(submitted.createdAt).slice(0, 10)
+                    ? formatDateString(submitted.createdAt)
                     : null;
                   if (pendingSubFrom && (!subDate || subDate < pendingSubFrom))
                     return false;
@@ -1052,7 +1059,7 @@ export default function ManageExpenseClaimApprovals() {
                     return false;
                   // Depart date: claim.from_date or request.departure_date
                   const depBase = c.from_date || c.request?.departure_date;
-                  const dep = depBase ? String(depBase).slice(0, 10) : null;
+                  const dep = depBase ? formatDateString(depBase) : null;
                   if (pendingDepartFrom && (!dep || dep < pendingDepartFrom))
                     return false;
                   if (pendingDepartTo && (!dep || dep > pendingDepartTo))
@@ -1635,7 +1642,7 @@ export default function ManageExpenseClaimApprovals() {
                     </div>
                     <div className="font-medium">{selected.status}</div>
                     <div className="text-xs text-muted-foreground">
-                      Segments: {(selected.segments || []).length}
+                      Sites: {(selected.segments || []).length}
                     </div>
                   </Card>
                 </div>
@@ -1881,7 +1888,7 @@ export default function ManageExpenseClaimApprovals() {
 
                 <div>
                   <div className="text-[11px] uppercase text-muted-foreground mb-2">
-                    Segments
+                    Sites of Visit
                   </div>
                   <div className="overflow-auto border rounded">
                     <table className="w-full text-xs">
@@ -1925,9 +1932,13 @@ export default function ManageExpenseClaimApprovals() {
                               <td className="p-2">{s.departure_from || "—"}</td>
                               <td className="p-2">{s.departure_to || "—"}</td>
                               <td className="p-2">{fmtDate(s.depart_date)}</td>
-                              <td className="p-2">{s.depart_time || "—"}</td>
+                              <td className="p-2">
+                                {formatTime(s.depart_time)}
+                              </td>
                               <td className="p-2">{fmtDate(s.arrive_date)}</td>
-                              <td className="p-2">{s.arrive_time || "—"}</td>
+                              <td className="p-2">
+                                {formatTime(s.arrive_time)}
+                              </td>
                               <td className="p-2">{s.distance_km || 0}</td>
                               <td className="p-2">{formatMoney(amount)}</td>
                             </tr>
@@ -1940,7 +1951,7 @@ export default function ManageExpenseClaimApprovals() {
                               colSpan={10}
                               className="p-2 text-center text-muted-foreground"
                             >
-                              No segments
+                              No sites
                             </td>
                           </tr>
                         )}

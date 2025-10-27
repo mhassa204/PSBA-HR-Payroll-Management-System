@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "../../auth/authStore";
 import api from "../../../lib/axios";
 import { getTravelCapabilities } from "../../../services/travelService";
+import { formatTime } from "../../../utils/dateFormatter";
 
 export default function TravelManualEntryPage() {
   const me = useAuthStore((s) => s.user);

@@ -12,6 +12,12 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  formatDate,
+  formatDateString,
+  formatDateTime,
+  formatTime,
+} from "../../../utils/dateFormatter";
 import EnhancedModal from "@/components/ui/EnhancedModal";
 import { useAuthStore } from "../../auth/authStore";
 
@@ -325,11 +331,17 @@ export default function TravelApprovalsPage() {
                 }
                 // Depart date range
                 if (departFrom) {
-                  if (String(r.departure_date).slice(0, 10) < departFrom)
+                  if (
+                    formatDateString(r.departure_date) <
+                    formatDateString(departFrom)
+                  )
                     return false;
                 }
                 if (departTo) {
-                  if (String(r.departure_date).slice(0, 10) > departTo)
+                  if (
+                    formatDateString(r.departure_date) >
+                    formatDateString(departTo)
+                  )
                     return false;
                 }
                 return true;
@@ -349,9 +361,10 @@ export default function TravelApprovalsPage() {
                       <div className="font-medium">{r.purpose || "—"}</div>
                       <div className="text-muted-foreground">
                         {r.destination ? `${r.destination} · ` : ""}
-                        {String(r.departure_date).slice(0, 10)}{" "}
-                        {r.departure_time ? `at ${r.departure_time}` : ""} →{" "}
-                        {String(r.expected_return_date).slice(0, 10)} ·{" "}
+                        {formatDateTime(
+                          r.departure_date,
+                          r.departure_time
+                        )} → {formatDateString(r.expected_return_date)} ·{" "}
                         {r.total_days ? `${r.total_days} day(s)` : "—"}
                       </div>
                       {(() => {
@@ -456,7 +469,7 @@ export default function TravelApprovalsPage() {
                 <div>
                   <div className="text-muted-foreground">Submission Date</div>
                   <div className="font-medium">
-                    {String(selected.submission_date).slice(0, 10)}
+                    {formatDateString(selected.submission_date)}
                   </div>
                 </div>
                 <div>
@@ -472,16 +485,16 @@ export default function TravelApprovalsPage() {
                 <div>
                   <div className="text-muted-foreground">Departure</div>
                   <div className="font-medium">
-                    {String(selected.departure_date).slice(0, 10)}{" "}
-                    {selected.departure_time
-                      ? `at ${selected.departure_time}`
-                      : ""}
+                    {formatDateTime(
+                      selected.departure_date,
+                      selected.departure_time
+                    )}
                   </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Expected Return</div>
                   <div className="font-medium">
-                    {String(selected.expected_return_date).slice(0, 10)}
+                    {formatDateString(selected.expected_return_date)}
                   </div>
                 </div>
                 <div>

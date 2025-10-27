@@ -29,6 +29,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  formatDate,
+  formatDateString,
+  formatDateTime,
+  formatTime,
+  formatDateForInput,
+} from "../../../utils/dateFormatter";
 
 export default function TravelExpenseClaimsPage() {
   const can = useAuthStore((s) => s.can);
@@ -172,8 +179,8 @@ export default function TravelExpenseClaimsPage() {
       setClaim(c);
       setForm((prev) => ({
         ...prev,
-        from_date: c.from_date?.slice(0, 10) || "",
-        to_date: c.to_date?.slice(0, 10) || "",
+        from_date: c.from_date ? formatDateString(c.from_date) : "",
+        to_date: c.to_date ? formatDateString(c.to_date) : "",
         rate_per_km: c.rate_per_km || 0,
         per_diem_rate: c.per_diem_rate || 0,
         per_diem_days: c.per_diem_days || "",
@@ -259,10 +266,10 @@ export default function TravelExpenseClaimsPage() {
       setForm((f) => ({
         ...f,
         from_date: updated.from_date
-          ? String(updated.from_date).slice(0, 10)
+          ? formatDateString(updated.from_date)
           : f.from_date,
         to_date: updated.to_date
-          ? String(updated.to_date).slice(0, 10)
+          ? formatDateString(updated.to_date)
           : f.to_date,
         overnight_stay: !!updated.overnight_stay,
         per_diem_days: (
@@ -307,6 +314,26 @@ export default function TravelExpenseClaimsPage() {
   const handleSubmit = async () => {
     if (!claim) return;
     const isWithinCity = !claim.travel_request_id;
+
+    // Validate that at least one travel segment exists
+    const existingSegments = (claim.segments || []).length;
+    const draftSegments = segmentsDraft.length;
+
+    if (existingSegments === 0 && draftSegments === 0) {
+      alert(
+        "Please add at least one site of visit before submitting the claim."
+      );
+      return;
+    }
+
+    // Check if there are unsaved draft segments
+    if (draftSegments > 0) {
+      alert(
+        "Please save all draft sites of visit before submitting the claim. Click 'Save' on each draft site row."
+      );
+      return;
+    }
+
     if (
       !isWithinCity &&
       !(claim.documents || []).some((d) => d.category === "REPORT")
@@ -338,8 +365,69 @@ export default function TravelExpenseClaimsPage() {
     }
   };
 
+  // Numeric input handler - only allows numbers
+  const handleNumericInput = (e, setter) => {
+    const value = e.target.value;
+    // Remove all non-numeric characters except decimal point
+    const numericValue = value.replace(/[^0-9.]/g, "");
+    // Ensure only one decimal point
+    const parts = numericValue.split(".");
+    const cleanedValue =
+      parts.length > 2
+        ? parts[0] + "." + parts.slice(1).join("")
+        : numericValue;
+
+    setter(cleanedValue);
+  };
+
+  // Validate segment fields before saving
+  const validateSegment = (seg) => {
+    const requiredFields = [
+      "departure_from",
+      "departure_to",
+      "depart_date",
+      "depart_time",
+      "arrive_date",
+      "arrive_time",
+      "mode",
+      "distance_km",
+    ];
+
+    const missingFields = requiredFields.filter((field) => {
+      const value = seg[field];
+      return !value || (typeof value === "string" && value.trim() === "");
+    });
+
+    if (missingFields.length > 0) {
+      const fieldNames = {
+        departure_from: "Departure From",
+        departure_to: "Departure To",
+        depart_date: "Date of Departure",
+        depart_time: "Time of Departure",
+        arrive_date: "Date of Arrival",
+        arrive_time: "Time of Arrival",
+        mode: "Mode",
+        distance_km: "Distance (KM)",
+      };
+
+      const missingFieldNames = missingFields
+        .map((field) => fieldNames[field])
+        .join(", ");
+      alert(`Please fill in all required fields: ${missingFieldNames}`);
+      return false;
+    }
+
+    return true;
+  };
+
   const addSegment = async (seg) => {
     if (!claim) return;
+
+    // Validate segment before saving
+    if (!validateSegment(seg)) {
+      return;
+    }
+
     const updated = await addExpenseClaimSegment(claim.id, seg);
     setClaim(updated);
     loadClaims();
@@ -459,8 +547,8 @@ export default function TravelExpenseClaimsPage() {
                         {r.status}
                       </div>
                       <div className="text-muted-foreground">
-                        Departure {String(r.departure_date).slice(0, 10)} →
-                        Return {String(r.expected_return_date).slice(0, 10)}
+                        Departure {formatDateString(r.departure_date)} → Return{" "}
+                        {formatDateString(r.expected_return_date)}
                       </div>
                     </div>
                     <Button
@@ -621,12 +709,14 @@ export default function TravelExpenseClaimsPage() {
                     const baseDate = c.from_date || c.request?.departure_date;
                     if (
                       dateFrom &&
-                      (!baseDate || String(baseDate).slice(0, 10) < dateFrom)
+                      (!baseDate ||
+                        formatDateString(baseDate) < formatDateString(dateFrom))
                     )
                       return false;
                     if (
                       dateTo &&
-                      (!baseDate || String(baseDate).slice(0, 10) > dateTo)
+                      (!baseDate ||
+                        formatDateString(baseDate) > formatDateString(dateTo))
                     )
                       return false;
                     return true;
@@ -671,8 +761,12 @@ export default function TravelExpenseClaimsPage() {
                               setClaim(full);
                               setForm((f) => ({
                                 ...f,
-                                from_date: full.from_date?.slice(0, 10) || "",
-                                to_date: full.to_date?.slice(0, 10) || "",
+                                from_date: full.from_date
+                                  ? formatDateString(full.from_date)
+                                  : "",
+                                to_date: full.to_date
+                                  ? formatDateString(full.to_date)
+                                  : "",
                                 rate_per_km: full.rate_per_km || 0,
                                 per_diem_rate: full.per_diem_rate || 0,
                                 per_diem_days: full.per_diem_days || "",
@@ -792,14 +886,23 @@ export default function TravelExpenseClaimsPage() {
                 </Button>
               )}
               {claim.status === "DRAFT" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={saving}
-                  onClick={handleSubmit}
-                >
-                  Submit
-                </Button>
+                <div className="flex flex-col items-end space-y-2">
+                  <div className="text-xs text-muted-foreground text-right">
+                    {(claim.segments || []).length + segmentsDraft.length === 0
+                      ? "⚠️ Add at least one site of visit to submit"
+                      : segmentsDraft.length > 0
+                      ? "⚠️ Save all draft sites before submitting"
+                      : "Ready to submit"}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={saving}
+                    onClick={handleSubmit}
+                  >
+                    Submit
+                  </Button>
+                </div>
               )}
               <Button
                 variant="link"
@@ -832,7 +935,7 @@ export default function TravelExpenseClaimsPage() {
                       <Input
                         type="date"
                         className="pr-10"
-                        value={form.from_date}
+                        value={formatDateForInput(form.from_date)}
                         onChange={(e) =>
                           setForm((p) => ({ ...p, from_date: e.target.value }))
                         }
@@ -891,7 +994,7 @@ export default function TravelExpenseClaimsPage() {
                       <Input
                         type="date"
                         className="pr-10"
-                        value={form.to_date}
+                        value={formatDateForInput(form.to_date)}
                         onChange={(e) =>
                           setForm((p) => ({ ...p, to_date: e.target.value }))
                         }
@@ -962,8 +1065,11 @@ export default function TravelExpenseClaimsPage() {
                 <Input
                   value={form.per_diem_days}
                   onChange={(e) =>
-                    setForm((p) => ({ ...p, per_diem_days: e.target.value }))
+                    handleNumericInput(e, (value) =>
+                      setForm((p) => ({ ...p, per_diem_days: value }))
+                    )
                   }
+                  placeholder="0"
                 />
               </div>
               {/* Transport mode toggle + conditional fields */}
@@ -1011,11 +1117,14 @@ export default function TravelExpenseClaimsPage() {
                           <Input
                             value={form.fuel_total}
                             onChange={(e) =>
-                              setForm((p) => ({
-                                ...p,
-                                fuel_total: e.target.value,
-                              }))
+                              handleNumericInput(e, (value) =>
+                                setForm((p) => ({
+                                  ...p,
+                                  fuel_total: value,
+                                }))
+                              )
                             }
+                            placeholder="0"
                           />
                         </div>
                       )}
@@ -1026,11 +1135,14 @@ export default function TravelExpenseClaimsPage() {
                         <Input
                           value={form.toll_tax_total || ""}
                           onChange={(e) =>
-                            setForm((p) => ({
-                              ...p,
-                              toll_tax_total: e.target.value,
-                            }))
+                            handleNumericInput(e, (value) =>
+                              setForm((p) => ({
+                                ...p,
+                                toll_tax_total: value,
+                              }))
+                            )
                           }
+                          placeholder="0"
                         />
                       </div>
                     </>
@@ -1043,8 +1155,11 @@ export default function TravelExpenseClaimsPage() {
                       <Input
                         value={form.fare_total}
                         onChange={(e) =>
-                          setForm((p) => ({ ...p, fare_total: e.target.value }))
+                          handleNumericInput(e, (value) =>
+                            setForm((p) => ({ ...p, fare_total: value }))
+                          )
                         }
+                        placeholder="0"
                       />
                     </div>
                   )}
@@ -1061,11 +1176,19 @@ export default function TravelExpenseClaimsPage() {
             </CardContent>
           </Card>
 
-          {/* Travel Segments */}
+          {/* Sites/s of Visit */}
           <Card>
             <CardContent className="p-4 text-sm">
               <div className="flex items-center justify-between mb-3">
-                <div className="font-medium">Travel Segments</div>
+                <div className="flex items-center space-x-2">
+                  <div className="font-medium">Sites/s of Visit</div>
+                  {(claim.segments || []).length + segmentsDraft.length ===
+                    0 && (
+                    <span className="text-xs text-red-600 font-medium">
+                      (Required - Add at least one site)
+                    </span>
+                  )}
+                </div>
                 <Button
                   size="sm"
                   onClick={() =>
@@ -1091,14 +1214,32 @@ export default function TravelExpenseClaimsPage() {
                 <table className="min-w-full text-sm">
                   <thead className="bg-accent/30">
                     <tr>
-                      <th className="p-2 text-left">Departure From</th>
-                      <th className="p-2 text-left">Departure To</th>
-                      <th className="p-2 text-left">Date of Departure</th>
-                      <th className="p-2 text-left">Time of Departure</th>
-                      <th className="p-2 text-left">Date of Arrival</th>
-                      <th className="p-2 text-left">Time of Arrival</th>
-                      <th className="p-2 text-left">Mode</th>
-                      <th className="p-2 text-left">Distance (KM)</th>
+                      <th className="p-2 text-left">
+                        Departure From <span className="text-red-500">*</span>
+                      </th>
+                      <th className="p-2 text-left">
+                        Departure To <span className="text-red-500">*</span>
+                      </th>
+                      <th className="p-2 text-left">
+                        Date of Departure{" "}
+                        <span className="text-red-500">*</span>
+                      </th>
+                      <th className="p-2 text-left">
+                        Time of Departure{" "}
+                        <span className="text-red-500">*</span>
+                      </th>
+                      <th className="p-2 text-left">
+                        Date of Arrival <span className="text-red-500">*</span>
+                      </th>
+                      <th className="p-2 text-left">
+                        Time of Arrival <span className="text-red-500">*</span>
+                      </th>
+                      <th className="p-2 text-left">
+                        Mode <span className="text-red-500">*</span>
+                      </th>
+                      <th className="p-2 text-left">
+                        Distance (KM) <span className="text-red-500">*</span>
+                      </th>
                       <th className="p-2"></th>
                     </tr>
                   </thead>
@@ -1130,7 +1271,7 @@ export default function TravelExpenseClaimsPage() {
                         <td className="p-1">
                           <Input
                             type="date"
-                            defaultValue={(seg.depart_date || "").slice(0, 10)}
+                            defaultValue={formatDateForInput(seg.depart_date)}
                             onBlur={(e) =>
                               updateSegmentRow({
                                 ...seg,
@@ -1154,7 +1295,7 @@ export default function TravelExpenseClaimsPage() {
                         <td className="p-1">
                           <Input
                             type="date"
-                            defaultValue={(seg.arrive_date || "").slice(0, 10)}
+                            defaultValue={formatDateForInput(seg.arrive_date)}
                             onBlur={(e) =>
                               updateSegmentRow({
                                 ...seg,
@@ -1186,12 +1327,25 @@ export default function TravelExpenseClaimsPage() {
                         <td className="p-1">
                           <Input
                             defaultValue={seg.distance_km || ""}
+                            onChange={(e) => {
+                              const numericValue = e.target.value.replace(
+                                /[^0-9.]/g,
+                                ""
+                              );
+                              const parts = numericValue.split(".");
+                              const cleanedValue =
+                                parts.length > 2
+                                  ? parts[0] + "." + parts.slice(1).join("")
+                                  : numericValue;
+                              e.target.value = cleanedValue;
+                            }}
                             onBlur={(e) =>
                               updateSegmentRow({
                                 ...seg,
                                 distance_km: Number(e.target.value || 0),
                               })
                             }
+                            placeholder="0"
                           />
                         </td>
                         <td className="p-1 text-right space-x-2">
@@ -1311,14 +1465,15 @@ export default function TravelExpenseClaimsPage() {
                           <Input
                             value={r.distance_km}
                             onChange={(e) =>
-                              setSegmentsDraft((d) =>
-                                d.map((x, i) =>
-                                  i === idx
-                                    ? { ...x, distance_km: e.target.value }
-                                    : x
+                              handleNumericInput(e, (value) =>
+                                setSegmentsDraft((d) =>
+                                  d.map((x, i) =>
+                                    i === idx ? { ...x, distance_km: value } : x
+                                  )
                                 )
                               )
                             }
+                            placeholder="0"
                           />
                         </td>
                         <td className="p-1 text-right space-x-2">
@@ -1326,13 +1481,18 @@ export default function TravelExpenseClaimsPage() {
                             size="sm"
                             onClick={() => {
                               const seg = segmentsDraft[idx];
-                              addSegment({
+                              const segmentToSave = {
                                 ...seg,
                                 distance_km: Number(seg.distance_km || 0),
-                              });
-                              setSegmentsDraft((d) =>
-                                d.filter((_, i) => i !== idx)
-                              );
+                              };
+
+                              // Validate before saving
+                              if (validateSegment(segmentToSave)) {
+                                addSegment(segmentToSave);
+                                setSegmentsDraft((d) =>
+                                  d.filter((_, i) => i !== idx)
+                                );
+                              }
                             }}
                           >
                             Save
@@ -1353,6 +1513,10 @@ export default function TravelExpenseClaimsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="mt-3 text-xs text-muted-foreground">
+                <span className="text-red-500">*</span> All fields are required.
+                Please fill in all details before saving each site.
               </div>
             </CardContent>
           </Card>

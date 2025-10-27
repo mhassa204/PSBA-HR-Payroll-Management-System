@@ -10,6 +10,7 @@ import {
   deleteClaimItemReceipt,
 } from "../../../services/travelService";
 import { useAuthStore } from "../../auth/authStore";
+import { formatDateString } from "../../../utils/dateFormatter";
 import {
   Card,
   CardHeader,
@@ -437,7 +438,7 @@ export default function TravelClaimsPage() {
                       <div className="col-span-3">
                         <div className="text-muted-foreground">Date</div>
                         <div className="font-medium">
-                          {String(it.date).slice(0, 10)}
+                          {formatDateString(it.date)}
                         </div>
                       </div>
                       <div className="col-span-2">

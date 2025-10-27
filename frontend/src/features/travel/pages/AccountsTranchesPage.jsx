@@ -10,6 +10,7 @@ import {
   exportExpenseTranche,
 } from "../../../services/travelService";
 import { exportTrancheToPdf } from "../utils/pdfExport";
+import { formatDateString } from "../../../utils/dateFormatter";
 
 export default function AccountsTranchesPage() {
   const [filters, setFilters] = useState({
@@ -296,9 +297,9 @@ export default function AccountsTranchesPage() {
                       </div>
                       <div className="text-muted-foreground text-xs truncate">
                         Req #{c.travel_request_id || "—"} • From{" "}
-                        {c.from_date ? String(c.from_date).slice(0, 10) : "—"} →{" "}
-                        {c.to_date ? String(c.to_date).slice(0, 10) : "—"} •
-                        Grand {(c.grand_total || 0).toLocaleString()}
+                        {c.from_date ? formatDateString(c.from_date) : "—"} →{" "}
+                        {c.to_date ? formatDateString(c.to_date) : "—"} • Grand{" "}
+                        {(c.grand_total || 0).toLocaleString()}
                       </div>
                     </div>
                   </div>

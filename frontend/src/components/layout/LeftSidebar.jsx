@@ -407,7 +407,7 @@ const LeftSidebar = () => {
       show: () => true,
       children: [
         {
-          name: "Requests",
+          name: "My Travel Requests",
           href: "/travel/requests",
           icon: ViewColumnsIcon,
           show: () =>
@@ -416,7 +416,7 @@ const LeftSidebar = () => {
             travelCaps.isAccountsApprover,
         },
         {
-          name: "Manage Requests",
+          name: "Manage TADA Requests",
           href: "/travel/manage",
           icon: ViewColumnsIcon,
           show: () => {
@@ -440,7 +440,7 @@ const LeftSidebar = () => {
           },
         },
         {
-          name: "Approvals",
+          name: "Pending TADA Requests",
           href: "/travel/approvals",
           icon: ViewColumnsIcon,
           show: () => {
@@ -459,13 +459,13 @@ const LeftSidebar = () => {
           },
         },
         {
-          name: "Expense Claims",
+          name: "My Expense Claims",
           href: "/travel/expense-claims",
           icon: ViewColumnsIcon,
           show: () => can("travel.claim.read"),
         },
         {
-          name: "Claim Approvals",
+          name: "Manage Claim Approvals",
           href: "/travel/expense-claim-approvals",
           icon: ViewColumnsIcon,
           show: () => {

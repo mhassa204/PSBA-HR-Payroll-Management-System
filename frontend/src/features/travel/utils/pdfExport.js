@@ -1,4 +1,10 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import {
+  formatDate,
+  formatDateString,
+  formatDateTime,
+  formatTime,
+} from "../../../utils/dateFormatter";
 
 // Helper: fetch a URL as ArrayBuffer (with credentials for session-authenticated servers)
 async function fetchArrayBuffer(url) {
@@ -257,28 +263,14 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }) {
     y -= 16;
     writeKV("Request ID", claim.travel_request_id || reqData.id || "—");
     writeKV("Status", reqData.status || "—");
-    writeKV(
-      "Submission Date",
-      reqData.submission_date
-        ? String(reqData.submission_date).slice(0, 10)
-        : "—"
-    );
+    writeKV("Submission Date", formatDateString(reqData.submission_date));
     writeKV("Purpose", reqData.purpose || reqData.travel_purpose || "—");
     writeKV("Destination", reqData.destination || "—");
     writeKV(
       "Departure",
-      reqData.departure_date
-        ? `${String(reqData.departure_date).slice(0, 10)}${
-            reqData.departure_time ? " at " + reqData.departure_time : ""
-          }`
-        : "—"
+      formatDateTime(reqData.departure_date, reqData.departure_time)
     );
-    writeKV(
-      "Expected Return",
-      reqData.expected_return_date
-        ? String(reqData.expected_return_date).slice(0, 10)
-        : "—"
-    );
+    writeKV("Expected Return", formatDateString(reqData.expected_return_date));
     writeKV("Total Days", reqData.total_days ?? "—");
     y -= 8;
 
@@ -325,7 +317,10 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }) {
           se?.actor?.user?.email || se?.actor?.email || se?.actor?.name || null;
         const actor = safe(emailMatch ? emailMatch[0] : actorFromServer || "—");
         const when = se.createdAt
-          ? new Date(se.createdAt).toLocaleString()
+          ? formatDateTime(
+              se.createdAt.split("T")[0],
+              se.createdAt.split("T")[1]?.split(".")[0]
+            )
           : "";
         const line = `${se.action} by ${actor}${when ? ` at ${when}` : ""}`;
         y =
@@ -345,11 +340,8 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }) {
   ensureSpace(20);
   drawHeading(page, "Claim Details", margin, y, bold, 12);
   y -= 16;
-  writeKV(
-    "From Date",
-    claim.from_date ? String(claim.from_date).slice(0, 10) : "—"
-  );
-  writeKV("To Date", claim.to_date ? String(claim.to_date).slice(0, 10) : "—");
+  writeKV("From Date", formatDateString(claim.from_date));
+  writeKV("To Date", formatDateString(claim.to_date));
   writeKV("Overnight Stay", claim.overnight_stay ? "Yes" : "No");
   writeKV("Transport Mode", claim.transport_mode || "—");
   writeKV(
@@ -411,29 +403,30 @@ async function renderClaimIntoDocument(pdfDoc, claim, { font, bold }) {
 
   // Segments
   ensureSpace(20);
-  drawHeading(page, "Segments", margin, y, bold, 12);
+  drawHeading(page, "Sites of Visit", margin, y, bold, 12);
   y -= 16;
   const segs = claim.segments || [];
   if (segs.length === 0) {
     ensureSpace(16);
-    page.drawText(safe("No segments"), { x: margin, y, size: 11, font });
+    page.drawText(safe("No sites"), { x: margin, y, size: 11, font });
     y -= 16;
   } else {
     for (const [i, s] of segs.entries()) {
       const line = `#${i + 1} * ${s.mode || "—"} * ${
         s.departure_from || "—"
-      } -> ${s.departure_to || "—"} * Depart ${
-        s.depart_date ? String(s.depart_date).slice(0, 10) : "—"
-      } ${s.depart_time || ""} * Arrive ${
-        s.arrive_date ? String(s.arrive_date).slice(0, 10) : "—"
-      } ${s.arrive_time || ""} * KM ${s.distance_km || 0}`;
+      } -> ${s.departure_to || "—"} * Depart ${formatDateTime(
+        s.depart_date,
+        s.depart_time
+      )} * Arrive ${formatDateTime(s.arrive_date, s.arrive_time)} * KM ${
+        s.distance_km || 0
+      }`;
       y =
         drawParagraph(line, {
           fnt: font,
           size: 11,
           maxWidth: 515,
           lineHeight: 14,
-          contHeading: "Segments (cont.)",
+          contHeading: "Sites of Visit (cont.)",
         }) - 2;
     }
   }
