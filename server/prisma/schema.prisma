@@ -271,6 +271,7 @@ model Employment {
   location_id          Int?
   location             Location?            @relation(fields: [location_id], references: [id])
   salary               EmploymentSalary?
+  history              EmploymentHistory[]
 
   @@index([location_id])
 }
@@ -332,6 +333,29 @@ model EmploymentDocument {
   employment    Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
 
   @@index([associated_id])
+}
+
+// Employment History - tracks changes to employment records
+model EmploymentHistory {
+  id               Int       @id @default(autoincrement())
+  employment_id    Int
+  history_type     String    // TRANSFER | REDESIGNATION | SALARY | STATUS | OTHER
+  field_name       String    // Name of the field that changed
+  old_value        String?   // Old value as JSON string
+  new_value        String?   // New value as JSON string
+  old_value_label  String?   // Human-readable old value (e.g., department name)
+  new_value_label  String?   // Human-readable new value (e.g., department name)
+  change_description String? // Human-readable description of the change
+  changed_by       Int?      // User ID who made the change
+  changed_at       DateTime  @default(now())
+  remarks          String?   // Any additional remarks
+  createdAt        DateTime  @default(now())
+  
+  employment       Employment @relation(fields: [employment_id], references: [id], onDelete: Cascade)
+
+  @@index([employment_id])
+  @@index([history_type])
+  @@index([changed_at])
 }
 
 model Role {

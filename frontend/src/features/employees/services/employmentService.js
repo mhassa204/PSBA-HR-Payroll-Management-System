@@ -1012,6 +1012,113 @@ class EmploymentService {
       );
     }
   }
+
+  /**
+   * Get employment history
+   * @param {number} employmentId - Employment ID
+   * @param {object} filters - Optional filters (historyType, limit, offset)
+   * @returns {Promise<object>} History records and total count
+   */
+  async getEmploymentHistory(employmentId, filters = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (filters.historyType)
+        params.append("historyType", filters.historyType);
+      if (filters.limit) params.append("limit", filters.limit);
+      if (filters.offset) params.append("offset", filters.offset);
+
+      const response = await this.apiClient.get(
+        `/employment/${employmentId}/history?${params.toString()}`
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching employment history:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to fetch employment history"
+      );
+    }
+  }
+
+  /**
+   * Get employment history grouped by type
+   * @param {number} employmentId - Employment ID
+   * @returns {Promise<object>} Grouped history records
+   */
+  async getEmploymentHistoryGrouped(employmentId) {
+    try {
+      const response = await this.apiClient.get(
+        `/employment/${employmentId}/history/grouped`
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching grouped employment history:", error);
+      throw new Error(
+        error.response?.data?.error ||
+          "Failed to fetch grouped employment history"
+      );
+    }
+  }
+
+  /**
+   * Get employment history statistics
+   * @param {number} employmentId - Employment ID
+   * @returns {Promise<object>} History statistics
+   */
+  async getEmploymentHistoryStats(employmentId) {
+    try {
+      const response = await this.apiClient.get(
+        `/employment/${employmentId}/history/stats`
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching employment history stats:", error);
+      throw new Error(
+        error.response?.data?.error ||
+          "Failed to fetch employment history stats"
+      );
+    }
+  }
+
+  /**
+   * Delete a single history record
+   * @param {number} historyId - History record ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteHistoryRecord(historyId) {
+    try {
+      const response = await this.apiClient.delete(
+        `/employment/history/${historyId}`
+      );
+      return response.data.success || true;
+    } catch (error) {
+      console.error("Error deleting history record:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to delete history record"
+      );
+    }
+  }
+
+  /**
+   * Delete all history for an employment
+   * @param {number} employmentId - Employment ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteAllHistory(employmentId) {
+    try {
+      const response = await this.apiClient.delete(
+        `/employment/${employmentId}/history`
+      );
+      return response.data.success || true;
+    } catch (error) {
+      console.error("Error deleting all history:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to delete all history"
+      );
+    }
+  }
 }
 
 // Export singleton instance
