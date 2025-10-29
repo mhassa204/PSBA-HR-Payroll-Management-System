@@ -125,6 +125,22 @@ const ViewColumnsIcon = () => (
   </svg>
 );
 
+const CurrencyDollarIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
 const UserIcon = () => (
   <svg
     className="w-5 h-5"
@@ -332,6 +348,20 @@ const LeftSidebar = () => {
       description: "Analytics",
       color: "bg-indigo-600",
       show: () => can("reports.read"),
+    },
+    {
+      name: "Payroll",
+      href: "/payroll",
+      icon: CurrencyDollarIcon,
+      description: "Employee Payroll",
+      color: "bg-green-600",
+      show: () => {
+        const userRole = user?.role?.name || "";
+        const isSuperAdmin = user?.role?.name === "Super Admin";
+        const isAccounts = /accounts|finance|budget|payroll/i.test(userRole);
+        const isEstablishment = /establishment/i.test(userRole);
+        return isSuperAdmin || isAccounts || isEstablishment;
+      },
     },
     {
       name: "Attendance",

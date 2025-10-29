@@ -1,5 +1,5 @@
 import EditEmployee from "./features/employees/pages/EditEmployee";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import "./styles/globals.css";
 import { useEffect } from "react";
 import { useAuthStore } from "./features/auth/authStore";
@@ -59,6 +59,42 @@ import TravelExpenseClaimsPage from "./features/travel/pages/TravelExpenseClaims
 import ManageExpenseClaimApprovals from "./features/travel/pages/ManageExpenseClaimApprovals";
 import AccountsTranchesPage from "./features/travel/pages/AccountsTranchesPage";
 import TravelManualEntryPage from "./features/travel/pages/TravelManualEntryPage";
+import PayrollList from "./features/payroll/pages/PayrollList";
+
+// Payroll Route Guard - Restrict access to Super Admin, Accounts, and Establishment roles only
+const PayrollRouteGuard = () => {
+  const user = useAuthStore((s) => s.user);
+  const isChecking = useAuthStore((s) => s.isChecking);
+  const fetchSession = useAuthStore((s) => s.fetchSession);
+
+  // Fetch session if needed
+  useEffect(() => {
+    if (user === undefined && !isChecking) {
+      fetchSession();
+    }
+  }, [user, isChecking, fetchSession]);
+
+  if (isChecking || user === undefined) {
+    return null; // Show loading state
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  // Check role permissions
+  const userRole = user?.role?.name || "";
+  const isSuperAdmin = userRole === "Super Admin";
+  const isAccounts = /accounts|finance|budget|payroll/i.test(userRole);
+  const isEstablishment = /establishment/i.test(userRole);
+
+  if (isSuperAdmin || isAccounts || isEstablishment) {
+    return <PayrollList />;
+  }
+
+  // Access denied - redirect to home
+  return <Navigate to="/" />;
+};
 
 function App() {
   const fetchSession = useAuthStore((s) => s.fetchSession);
@@ -220,6 +256,9 @@ function App() {
                 </PrivateRoute>
               }
             />
+
+            {/* Payroll */}
+            <Route path="payroll" element={<PayrollRouteGuard />} />
 
             {/* Audit Logs */}
             <Route
