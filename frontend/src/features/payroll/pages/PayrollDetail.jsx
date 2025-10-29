@@ -123,12 +123,17 @@ const PayrollDetail = () => {
     try {
       const result = await payrollService.getPayrollsByEmployee(employeeId);
       // Filter out deleted payrolls (backend should already filter, but double-check)
-      const activePayrolls = (result.payrolls || []).filter(
-        (p) => !p.is_deleted
-      );
-      setExistingPayrolls(activePayrolls);
+      // Create a new array reference to ensure React detects the state change
+      const activePayrolls = Array.isArray(result.payrolls)
+        ? result.payrolls.filter((p) => !p.is_deleted)
+        : [];
+
+      // Use functional update to ensure React detects the change
+      setExistingPayrolls(() => activePayrolls);
     } catch (err) {
       console.error("Error fetching existing payrolls:", err);
+      // Set empty array on error to clear stale data
+      setExistingPayrolls([]);
     } finally {
       setLoadingPayrolls(false);
     }
@@ -196,14 +201,21 @@ const PayrollDetail = () => {
       };
 
       await payrollService.createPayroll(employeeId, payrollPayload);
-      showToast("Payroll created successfully", "success");
 
-      // Refresh payrolls list
-      fetchExistingPayrolls();
+      // Close confirmation modal
+      setShowConfirmModal(false);
 
       // Reset input fields
       setArrears("0");
       setOtherDeductions("0");
+
+      // Show success message
+      showToast("Payroll created successfully", "success");
+
+      // Refresh payrolls list (await to ensure it completes)
+      // Add a small delay to ensure backend has fully committed
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await fetchExistingPayrolls();
     } catch (err) {
       console.error("Error creating payroll:", err);
       showToast(err.message || "Failed to create payroll", "error");
@@ -216,7 +228,11 @@ const PayrollDetail = () => {
     try {
       await payrollService.processPayroll(payrollId);
       showToast("Payroll processed successfully", "success");
-      fetchExistingPayrolls();
+
+      // Add a small delay to ensure backend has fully committed
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Refresh the list (await to ensure it completes)
+      await fetchExistingPayrolls();
     } catch (err) {
       console.error("Error processing payroll:", err);
       showToast(err.message || "Failed to process payroll", "error");
@@ -257,10 +273,19 @@ const PayrollDetail = () => {
         arrears: editingArrears,
         other_deductions: editingDeductions,
       });
-      showToast("Payroll updated successfully", "success");
+
+      // Close modal and reset state
       setShowEditModal(false);
       setEditingPayroll(null);
-      fetchExistingPayrolls();
+      setEditingArrears("0");
+      setEditingDeductions("0");
+
+      showToast("Payroll updated successfully", "success");
+
+      // Add a small delay to ensure backend has fully committed
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Refresh the list (await to ensure it completes)
+      await fetchExistingPayrolls();
     } catch (err) {
       console.error("Error updating payroll:", err);
       showToast(err.message || "Failed to update payroll", "error");
@@ -290,6 +315,8 @@ const PayrollDetail = () => {
       // Show success message
       showToast("Payroll deleted successfully", "success");
 
+      // Add a small delay to ensure backend has fully committed
+      await new Promise((resolve) => setTimeout(resolve, 100));
       // Refresh the list
       await fetchExistingPayrolls();
     } catch (err) {
