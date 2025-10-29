@@ -60,6 +60,7 @@ import ManageExpenseClaimApprovals from "./features/travel/pages/ManageExpenseCl
 import AccountsTranchesPage from "./features/travel/pages/AccountsTranchesPage";
 import TravelManualEntryPage from "./features/travel/pages/TravelManualEntryPage";
 import PayrollList from "./features/payroll/pages/PayrollList";
+import PayrollDetail from "./features/payroll/pages/PayrollDetail";
 
 // Payroll Route Guard - Restrict access to Super Admin, Accounts, and Establishment roles only
 const PayrollRouteGuard = () => {
@@ -93,6 +94,38 @@ const PayrollRouteGuard = () => {
   }
 
   // Access denied - redirect to home
+  return <Navigate to="/" />;
+};
+
+// Payroll Detail Route Guard
+const PayrollDetailRouteGuard = () => {
+  const user = useAuthStore((s) => s.user);
+  const isChecking = useAuthStore((s) => s.isChecking);
+  const fetchSession = useAuthStore((s) => s.fetchSession);
+
+  useEffect(() => {
+    if (user === undefined && !isChecking) {
+      fetchSession();
+    }
+  }, [user, isChecking, fetchSession]);
+
+  if (isChecking || user === undefined) {
+    return null;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  const userRole = user?.role?.name || "";
+  const isSuperAdmin = userRole === "Super Admin";
+  const isAccounts = /accounts|finance|budget|payroll/i.test(userRole);
+  const isEstablishment = /establishment/i.test(userRole);
+
+  if (isSuperAdmin || isAccounts || isEstablishment) {
+    return <PayrollDetail />;
+  }
+
   return <Navigate to="/" />;
 };
 
@@ -259,6 +292,10 @@ function App() {
 
             {/* Payroll */}
             <Route path="payroll" element={<PayrollRouteGuard />} />
+            <Route
+              path="payroll/employee/:employeeId"
+              element={<PayrollDetailRouteGuard />}
+            />
 
             {/* Audit Logs */}
             <Route

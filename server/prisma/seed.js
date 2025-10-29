@@ -593,6 +593,15 @@ async function main() {
         // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
+        // Payroll permissions (full control)
+        "payroll.read",
+        "payroll.write",
+        // Read permissions for payroll filters
+        "employees.read",
+        "departments.read",
+        "designations.read",
+        "locations.read",
+        "scale-grades.read",
         "leaves.apply",
       ],
       enabled: true,
@@ -621,6 +630,15 @@ async function main() {
         // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
+        // Payroll permissions (full control)
+        "payroll.read",
+        "payroll.write",
+        // Read permissions for payroll filters
+        "employees.read",
+        "departments.read",
+        "designations.read",
+        "locations.read",
+        "scale-grades.read",
         "leaves.apply",
       ],
       enabled: true,
@@ -708,6 +726,8 @@ async function main() {
         "roster.delete",
         "roster.status",
         "roster.status.change",
+        // Payroll permissions (read-only)
+        "payroll.read",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -832,6 +852,9 @@ async function main() {
     // Permissions module
     "permissions.read",
     "permissions.manage",
+    // Payroll module
+    "payroll.read",
+    "payroll.write",
   ];
 
   console.log("🔑 Seeding permissions catalog...");

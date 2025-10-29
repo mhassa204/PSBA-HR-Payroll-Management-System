@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import Loader from "../../../components/Loader";
 import ErrorPage from "../../../components/ErrorPage";
 import { displayCNIC, displayPhoneNumber } from "../../../utils/formatters";
@@ -42,6 +42,7 @@ import scaleGradeService from "../../settings/services/scaleGradeService";
 
 const PayrollList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -404,7 +405,13 @@ const PayrollList = () => {
                     {employees.map((employee) => {
                       const employment = getCurrentEmployment(employee);
                       return (
-                        <TableRow key={employee.id}>
+                        <TableRow
+                          key={employee.id}
+                          className="cursor-pointer hover:bg-gray-50 transition-colors"
+                          onClick={() =>
+                            navigate(`/payroll/employee/${employee.id}`)
+                          }
+                        >
                           <TableCell>
                             {employee.profile_picture ? (
                               <img
