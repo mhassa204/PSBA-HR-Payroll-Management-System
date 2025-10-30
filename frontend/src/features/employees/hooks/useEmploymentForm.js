@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { employmentService } from "../services/employmentService";
 import { locationService } from "../../settings/services/locationService";
+import { useWatch } from "react-hook-form";
 
 /**
  * Employment Form Hook
@@ -28,7 +29,6 @@ import { locationService } from "../../settings/services/locationService";
 export const useEmploymentForm = ({
   initialData = null,
   isEditMode = false,
-  isCreatingFromExisting = false,
   userId = null,
   onSuccess = null,
   onError = null,
@@ -37,7 +37,7 @@ export const useEmploymentForm = ({
   const [isLoading, setIsLoading] = useState(false);
   const [formOptions, setFormOptions] = useState(null);
   const [availableDesignations, setAvailableDesignations] = useState([]);
-  const [bazaarOptions, setBazaarOptions] = useState([]);
+  const [bazaarOptions] = useState([]); // Keep bazaarOptions for API, but don't assign setBazaarOptions
   const [isContractual, setIsContractual] = useState(false);
   const [completedTabs, setCompletedTabs] = useState({
     employment: false,
@@ -152,105 +152,48 @@ export const useEmploymentForm = ({
     loadFormOptions();
   }, [onError]);
 
-  // Load designations when form options change
+  // --- NEW: Designations Loader (by Department, for non-MBWO orgs) ---
+  // Watch department (and org) to update designation dropdown; also on initialData in edit mode
+  const watchedDepartment = useWatch({
+    control: employmentForm.control,
+    name: "department",
+  });
+
   useEffect(() => {
-    const loadDesignations = async (org) => {
-      try {
-        // Check if we're dealing with MBWO organization (which hides department field)
-        const isMBWO = org === "MBWO";
-
-        console.log("🔍 useEmploymentForm: Form options available:", {
-          hasFormOptions: !!formOptions,
-          hasDesignations: !!formOptions?.designations,
-          designationsCount: formOptions?.designations?.length || 0,
-          hasDepartments: !!formOptions?.departments,
-          departmentsCount: formOptions?.departments?.length || 0,
-        });
-
-        if (formOptions?.designations && formOptions.designations.length > 0) {
-          // Use designations directly from form options instead of loading by department
-          console.log(
-            "✅ useEmploymentForm: Using designations from form options:",
-            formOptions.designations.length
-          );
-          setAvailableDesignations(formOptions.designations);
-        } else if (
-          isMBWO &&
-          formOptions?.departments &&
-          formOptions.departments.length > 0
-        ) {
-          // For MBWO, load all designations from all departments since department field is hidden
-          console.log(
-            "🔍 useEmploymentForm: MBWO detected - loading all designations from all departments"
-          );
-          const allDesignations = [];
-          for (const dept of formOptions.departments) {
-            try {
-              console.log(
-                "🔍 useEmploymentForm: Loading designations for department:",
-                dept.label,
-                "ID:",
-                dept.value
-              );
-              const designations =
-                await employmentService.getDesignationsByDepartment(dept.value);
-              console.log(
-                "✅ useEmploymentForm: Loaded designations for department",
-                dept.label,
-                ":",
-                designations.length
-              );
-              allDesignations.push(...designations);
-            } catch (error) {
-              console.error(
-                `❌ Error loading designations for department ${dept.label}:`,
-                error
-              );
-            }
-          }
-          console.log(
-            "✅ useEmploymentForm: Loaded all designations for MBWO:",
-            allDesignations.length
-          );
-          setAvailableDesignations(allDesignations);
-        } else if (
-          formOptions?.departments &&
-          formOptions.departments.length > 0
-        ) {
-          // Fallback: load designations by department (for non-MBWO organizations)
-          console.log(
-            "🔍 useEmploymentForm: Loading designations by department for non-MBWO organization"
-          );
-          const allDesignations = [];
-          for (const dept of formOptions.departments) {
-            try {
-              const designations =
-                await employmentService.getDesignationsByDepartment(dept.value);
-              allDesignations.push(...designations);
-            } catch (error) {
-              console.error(
-                `❌ Error loading designations for department ${dept.label}:`,
-                error
-              );
-            }
-          }
-          setAvailableDesignations(allDesignations);
-        } else {
-          console.warn(
-            "⚠️ No departments or designations available in form options"
-          );
-          setAvailableDesignations([]);
+    async function updateDesignationsForDepartment() {
+      if (
+        !formOptions ||
+        !formOptions.departments ||
+        formOptions.departments.length === 0
+      )
+        return;
+      // detect MBWO
+      const isMBWO = currentOrganization === "MBWO";
+      if (isMBWO) {
+        // For MBWO, show all designations (handled separately)
+        setAvailableDesignations(formOptions.designations || []);
+        return;
+      }
+      // For non-MBWO: get current selected department from employmentForm
+      const departmentId = watchedDepartment || null;
+      if (departmentId) {
+        setIsLoading(true);
+        try {
+          const designations =
+            await employmentService.getDesignationsByDepartment(departmentId);
+          setAvailableDesignations(designations || []);
+        } catch {
+          /* ignore */
+        } finally {
+          setIsLoading(false);
         }
-      } catch (error) {
-        console.error("❌ Error loading designations:", error);
+      } else {
+        // No department selected; empty designation dropdown
         setAvailableDesignations([]);
       }
-    };
-
-    if (currentOrganization) {
-      loadDesignations(currentOrganization);
     }
-  }, [formOptions, currentOrganization]);
+    updateDesignationsForDepartment();
+  }, [formOptions, currentOrganization, watchedDepartment]);
 
   // Watch employment type to determine if contractual
   useEffect(() => {

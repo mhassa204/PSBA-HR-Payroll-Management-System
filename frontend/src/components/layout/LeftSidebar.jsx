@@ -362,6 +362,36 @@ const LeftSidebar = () => {
         const isEstablishment = /establishment/i.test(userRole);
         return isSuperAdmin || isAccounts || isEstablishment;
       },
+      children: [
+        {
+          name: "Payroll List",
+          href: "/payroll",
+          icon: ViewColumnsIcon,
+          show: () => {
+            const userRole = user?.role?.name || "";
+            const isSuperAdmin = user?.role?.name === "Super Admin";
+            const isAccounts = /accounts|finance|budget|payroll/i.test(
+              userRole
+            );
+            const isEstablishment = /establishment/i.test(userRole);
+            return isSuperAdmin || isAccounts || isEstablishment;
+          },
+        },
+        {
+          name: "Payroll Tranches",
+          href: "/payroll/tranches",
+          icon: ViewColumnsIcon,
+          show: () => {
+            const userRole = user?.role?.name || "";
+            const isSuperAdmin = user?.role?.name === "Super Admin";
+            const isAccounts = /accounts|finance|budget|payroll/i.test(
+              userRole
+            );
+            // Only Accounts role users (excluding Super Admin)
+            return isAccounts && !isSuperAdmin;
+          },
+        },
+      ],
     },
     {
       name: "Attendance",
@@ -398,6 +428,12 @@ const LeftSidebar = () => {
           href: "/attendance/leaves",
           icon: ViewColumnsIcon,
           show: () => can("leaves.read"),
+        },
+        {
+          name: "All Leaves",
+          href: "/attendance/leaves/all",
+          icon: ViewColumnsIcon,
+          show: () => /establishment/i.test(user?.role?.name || ""),
         },
         {
           name: "Leave Bank",
@@ -468,6 +504,12 @@ const LeftSidebar = () => {
               can("travel.claim.process.start")
             );
           },
+        },
+        {
+          name: "All Tada Requests",
+          href: "/travel/requests/all",
+          icon: ViewColumnsIcon,
+          show: () => travelCaps.isEstablishment,
         },
         {
           name: "Pending TADA Requests",

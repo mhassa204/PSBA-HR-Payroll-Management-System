@@ -441,8 +441,8 @@ const payrollService = {
     }
   },
 
-  // Process a payroll (mark as PROCESSED)
-  processPayroll: async (payrollId, userId) => {
+  // Start processing a payroll (mark as UNDER_PROCESS)
+  startProcessPayroll: async (payrollId, userId) => {
     try {
       const payroll = await prisma.payroll.findFirst({
         where: {
@@ -459,20 +459,22 @@ const payrollService = {
         throw new Error("Payroll is already processed");
       }
 
+      if (payroll.status === "UNDER_PROCESS") {
+        throw new Error("Payroll is already under process");
+      }
+
       const updated = await prisma.payroll.update({
         where: {
           id: parseInt(payrollId),
         },
         data: {
-          status: "PROCESSED",
-          processed_at: new Date(),
-          processed_by_user_id: userId ? parseInt(userId) : null,
+          status: "UNDER_PROCESS",
         },
         include: {
-          processedBy: {
+          employee: {
             select: {
               id: true,
-              email: true,
+              full_name: true,
             },
           },
         },
@@ -483,7 +485,82 @@ const payrollService = {
         payroll: updated,
       };
     } catch (error) {
-      console.error("Error in processPayroll:", error);
+      console.error("Error in startProcessPayroll:", error);
+      throw error;
+    }
+  },
+
+  // Undo start process (revert UNDER_PROCESS to CREATED)
+  undoStartProcess: async (payrollId) => {
+    try {
+      const payroll = await prisma.payroll.findFirst({
+        where: {
+          id: parseInt(payrollId),
+          is_deleted: false,
+        },
+      });
+
+      if (!payroll) {
+        throw new Error("Payroll not found");
+      }
+
+      if (payroll.status !== "UNDER_PROCESS") {
+        throw new Error("Payroll is not under process, cannot undo");
+      }
+
+      const updated = await prisma.payroll.update({
+        where: {
+          id: parseInt(payrollId),
+        },
+        data: {
+          status: "CREATED",
+        },
+        include: {
+          employee: {
+            select: {
+              id: true,
+              full_name: true,
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        payroll: updated,
+      };
+    } catch (error) {
+      console.error("Error in undoStartProcess:", error);
+      throw error;
+    }
+  },
+
+  // Mark payrolls as PROCESSED (called when tranch is created)
+  markPayrollsAsProcessed: async (payrollIds, userId) => {
+    try {
+      const payrollIdsInt = Array.isArray(payrollIds)
+        ? payrollIds.map((id) => parseInt(id))
+        : [parseInt(payrollIds)];
+
+      const updated = await prisma.payroll.updateMany({
+        where: {
+          id: { in: payrollIdsInt },
+          is_deleted: false,
+          status: "UNDER_PROCESS",
+        },
+        data: {
+          status: "PROCESSED",
+          processed_at: new Date(),
+          processed_by_user_id: userId ? parseInt(userId) : null,
+        },
+      });
+
+      return {
+        success: true,
+        count: updated.count,
+      };
+    } catch (error) {
+      console.error("Error in markPayrollsAsProcessed:", error);
       throw error;
     }
   },
@@ -546,6 +623,11 @@ const payrollService = {
         throw new Error("Cannot update a processed payroll");
       }
 
+      // Allow updates for CREATED and UNDER_PROCESS status
+      if (payroll.status !== "CREATED" && payroll.status !== "UNDER_PROCESS") {
+        throw new Error("Cannot update payroll with current status");
+      }
+
       // Only allow updating arrears and other_deductions
       const arrears = parseFloat(updateData.arrears || 0);
       const otherDeductions = parseFloat(updateData.other_deductions || 0);
@@ -602,6 +684,10 @@ const payrollService = {
         throw new Error("Cannot delete a processed payroll");
       }
 
+      if (payroll.status === "UNDER_PROCESS") {
+        throw new Error("Cannot delete a payroll that is under process");
+      }
+
       const deleted = await prisma.payroll.update({
         where: {
           id: parseInt(payrollId),
@@ -617,6 +703,136 @@ const payrollService = {
       };
     } catch (error) {
       console.error("Error in deletePayroll:", error);
+      throw error;
+    }
+  },
+
+  // Get under-process payrolls with filters
+  getUnderProcessPayrolls: async (filters = {}, page = 1, limit = 50) => {
+    try {
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const where = {
+        is_deleted: false,
+        status: "UNDER_PROCESS",
+      };
+
+      // Build employee filter object (merging multiple conditions)
+      const employeeWhere = {
+        is_deleted: false,
+      };
+
+      // Filter by employee name
+      if (filters.name) {
+        employeeWhere.full_name = {
+          contains: filters.name,
+          mode: "insensitive",
+        };
+      }
+
+      // Filter by mobile (needs join with employee)
+      if (filters.mobile) {
+        employeeWhere.mobile_number = {
+          contains: filters.mobile,
+          mode: "insensitive",
+        };
+      }
+
+      // Filter by scale grade (if provided)
+      if (filters.scaleGrade) {
+        employeeWhere.employmentRecords = {
+          some: {
+            is_current: true,
+            is_deleted: false,
+            scale_grade_id: parseInt(filters.scaleGrade),
+          },
+        };
+      }
+
+      // Add employee filter if any employee conditions exist
+      if (Object.keys(employeeWhere).length > 1) {
+        where.employee = employeeWhere;
+      }
+
+      // Filter by CNIC
+      if (filters.cnic) {
+        where.employee_cnic = {
+          contains: filters.cnic,
+          mode: "insensitive",
+        };
+      }
+
+      // Filter by designation (payroll stores designation as string)
+      if (filters.designation) {
+        where.designation = {
+          contains: filters.designation,
+          mode: "insensitive",
+        };
+      }
+
+      // Filter by department (payroll stores department as string)
+      if (filters.department) {
+        where.department = {
+          contains: filters.department,
+          mode: "insensitive",
+        };
+      }
+
+      // Filter by location (payroll stores location as string)
+      if (filters.location) {
+        where.location = {
+          contains: filters.location,
+          mode: "insensitive",
+        };
+      }
+
+      // Filter by net_payable amount
+      if (filters.amountOperator && filters.amountValue) {
+        const amountValue = parseFloat(filters.amountValue);
+        if (filters.amountOperator === "greater_than") {
+          where.net_payable = { gt: amountValue };
+        } else if (filters.amountOperator === "less_than") {
+          where.net_payable = { lt: amountValue };
+        } else if (filters.amountOperator === "equal") {
+          where.net_payable = { equals: amountValue };
+        }
+      }
+
+      const [payrolls, total] = await Promise.all([
+        prisma.payroll.findMany({
+          where,
+          skip,
+          take: parseInt(limit),
+          include: {
+            employee: {
+              select: {
+                id: true,
+                full_name: true,
+                cnic: true,
+                mobile_number: true,
+              },
+            },
+          },
+          orderBy: [
+            { year: "desc" },
+            { month: "desc" },
+            { employee_name: "asc" },
+          ],
+        }),
+        prisma.payroll.count({ where }),
+      ]);
+
+      return {
+        success: true,
+        payrolls,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(total / parseInt(limit)),
+        },
+      };
+    } catch (error) {
+      console.error("Error in getUnderProcessPayrolls:", error);
       throw error;
     }
   },

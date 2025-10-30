@@ -340,7 +340,12 @@ module.exports = {
         cnic: true,
         employmentRecords: {
           where: { is_current: true, is_deleted: false },
-          include: { designation: true, role_tag: true, location: true },
+          include: {
+            department: true,
+            designation: true,
+            role_tag: true,
+            location: true,
+          },
         },
         leaves: { where: { is_deleted: false }, orderBy: { date: "desc" } },
       },

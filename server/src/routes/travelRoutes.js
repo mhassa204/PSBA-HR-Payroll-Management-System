@@ -28,6 +28,12 @@ router.get(
 
 // Travel Requests CRUD (simplified fields)
 router.get("/requests", isAuthenticated, travelRequestController.listManage);
+// Establishment-only: list all requests
+router.get(
+  "/requests/all",
+  isAuthenticated,
+  travelRequestController.listAllEstablishment
+);
 
 // List pending approvals eligible for current user (placed before /requests/:id to avoid param capture)
 router.get(

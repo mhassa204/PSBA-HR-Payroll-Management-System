@@ -407,6 +407,7 @@ model User {
   leaveStatusEntries LeaveStatusHistory[]
   // Back-relation: payrolls processed by this user
   processedPayrolls Payroll[]
+  createdPayrollTranches PayrollTranch[]
 
   @@index([department_id])
   @@index([location_id])
@@ -941,6 +942,7 @@ model TravelClaimTrancheItem {
 
 enum PayrollStatus {
   CREATED
+  UNDER_PROCESS
   PROCESSED
 }
 
@@ -1000,6 +1002,8 @@ model Payroll {
   is_deleted              Boolean       @default(false)
   
   employee                Employee      @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  tranche_id              Int?
+  tranche                 PayrollTranch? @relation(fields: [tranche_id], references: [id], onDelete: SetNull)
 
   // Note: Unique constraint removed because soft-deleted records would conflict
   // Application-level validation checks for non-deleted payrolls only
@@ -1007,5 +1011,24 @@ model Payroll {
   @@index([year, month])
   @@index([status])
   @@index([employee_id, year, month, is_deleted])
+  @@index([tranche_id])
+}
+
+model PayrollTranch {
+  id          Int          @id @default(autoincrement())
+  name        String?
+  code        String?      @unique
+  total_amount Float        @default(0)
+  payroll_count Int        @default(0)
+  created_by_user_id Int?
+  createdBy   User?        @relation(fields: [created_by_user_id], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  is_deleted  Boolean      @default(false)
+  
+  payrolls    Payroll[]
+  
+  @@index([created_by_user_id])
+  @@index([is_deleted])
 }
 

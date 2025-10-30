@@ -155,7 +155,47 @@ class PayrollService {
   }
 
   /**
-   * Process a payroll (mark as PROCESSED)
+   * Start process a payroll (mark as UNDER_PROCESS)
+   * @param {number} payrollId - Payroll ID
+   * @returns {Promise<Object>} Updated payroll data
+   */
+  async startProcessPayroll(payrollId) {
+    try {
+      const result = await this.apiClient.put(
+        `/payroll/${payrollId}/start-process`
+      );
+
+      return result.data;
+    } catch (error) {
+      console.error("Error starting process payroll:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to start processing payroll"
+      );
+    }
+  }
+
+  /**
+   * Undo start process (revert UNDER_PROCESS to CREATED)
+   * @param {number} payrollId - Payroll ID
+   * @returns {Promise<Object>} Updated payroll data
+   */
+  async undoStartProcess(payrollId) {
+    try {
+      const result = await this.apiClient.put(
+        `/payroll/${payrollId}/undo-process`
+      );
+
+      return result.data;
+    } catch (error) {
+      console.error("Error undoing start process:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to undo start process"
+      );
+    }
+  }
+
+  /**
+   * Process a payroll (mark as PROCESSED) - kept for backward compatibility
    * @param {number} payrollId - Payroll ID
    * @returns {Promise<Object>} Updated payroll data
    */
@@ -168,6 +208,47 @@ class PayrollService {
       console.error("Error processing payroll:", error);
       throw new Error(
         error.response?.data?.error || "Failed to process payroll"
+      );
+    }
+  }
+
+  /**
+   * Get under-process payrolls with filters
+   * @param {Object} filters - Filter parameters
+   * @param {number} page - Page number
+   * @param {number} limit - Items per page
+   * @returns {Promise<Object>} Paginated under-process payrolls
+   */
+  async getUnderProcessPayrolls(filters = {}, page = 1, limit = 50) {
+    try {
+      const queryParams = new URLSearchParams();
+      queryParams.append("page", page);
+      queryParams.append("limit", limit);
+
+      if (filters.name) queryParams.append("name", filters.name);
+      if (filters.cnic) queryParams.append("cnic", filters.cnic);
+      if (filters.mobile) queryParams.append("mobile", filters.mobile);
+      if (filters.designation)
+        queryParams.append("designation", filters.designation);
+      if (filters.department)
+        queryParams.append("department", filters.department);
+      if (filters.location) queryParams.append("location", filters.location);
+      if (filters.scaleGrade)
+        queryParams.append("scaleGrade", filters.scaleGrade);
+      if (filters.amountOperator)
+        queryParams.append("amountOperator", filters.amountOperator);
+      if (filters.amountValue)
+        queryParams.append("amountValue", filters.amountValue);
+
+      const result = await this.apiClient.get(
+        `/payroll/under-process/list?${queryParams.toString()}`
+      );
+
+      return result.data;
+    } catch (error) {
+      console.error("Error fetching under-process payrolls:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to fetch under-process payrolls"
       );
     }
   }

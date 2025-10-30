@@ -282,30 +282,39 @@ const TabbedEmploymentForm = forwardRef(
         const office_location =
           eForm.office_location ?? employmentBase.office_location ?? "";
 
-        // 1) Preserve existing record: only mark it as not current (but include required fields for validation)
+        // 1) Preserve existing record using EXISTING values; only flip is_current to false
         const oldUpdatePayload = {
           employee_id:
+            existing?.employee_id ||
             userId ||
             editingRecord?.employee_id ||
             editingRecord?.employee?.id ||
             transformedInitialData?.employee_id,
-          organization,
-          // include both plain and *_id to satisfy backend
-          department: department,
-          department_id: department,
-          designation: designation,
-          designation_id: designation,
-          employment_type,
-          role_tag: role_tag,
-          role_tag_id: role_tag,
-          effective_from,
-          effective_till: effective_till === null ? null : effective_till,
-          filer_status,
-          remarks,
-          scale_grade: scale_grade,
-          scale_grade_id: scale_grade,
-          reporting_officer_id,
-          office_location,
+          organization: employmentBase.organization || "",
+          department:
+            employmentBase.department || employmentBase.department_id || "",
+          department_id:
+            employmentBase.department_id || employmentBase.department || "",
+          designation:
+            employmentBase.designation || employmentBase.designation_id || "",
+          designation_id:
+            employmentBase.designation_id || employmentBase.designation || "",
+          employment_type: employmentBase.employment_type || "Regular",
+          role_tag: employmentBase.role_tag || employmentBase.role_tag_id || "",
+          role_tag_id:
+            employmentBase.role_tag_id || employmentBase.role_tag || "",
+          effective_from: employmentBase.effective_from || "",
+          effective_till: normalizeDateField(
+            employmentBase.effective_till ?? null
+          ),
+          filer_status: employmentBase.filer_status || "non_filer",
+          remarks: employmentBase.remarks ?? "",
+          scale_grade:
+            employmentBase.scale_grade || employmentBase.scale_grade_id || "",
+          scale_grade_id:
+            employmentBase.scale_grade_id || employmentBase.scale_grade || "",
+          reporting_officer_id: employmentBase.reporting_officer_id ?? "",
+          office_location: employmentBase.office_location ?? "",
           is_current: false,
         };
         await employmentService.updateEmployment(
@@ -1800,8 +1809,10 @@ const TabbedEmploymentForm = forwardRef(
                       onClick={handleFinalSubmit}
                       className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
                     >
-                      <i className="fas fa-check mr-2"></i>Confirm & Save
-                      Employment Record
+                      <i className="fas fa-check mr-2"></i>
+                      {isEditMode
+                        ? "Update Employment Record"
+                        : "Confirm & Save Employment Record"}
                     </button>
                     {isEditMode && savedEmploymentId && (
                       <button
@@ -1810,7 +1821,7 @@ const TabbedEmploymentForm = forwardRef(
                         className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                         title="Clone this employment as a new current record"
                       >
-                        <i className="fas fa-clone mr-2"></i>Clone as New
+                        <i className="fas fa-clone mr-2"></i>Save as new
                       </button>
                     )}
                   </div>

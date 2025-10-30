@@ -51,16 +51,19 @@ import LeaveBankPage from "./features/attendance/pages/LeaveBankPage";
 import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
 import LeaveApply from "./features/attendance/pages/LeaveApply";
 import LeaveApprovalsPage from "./features/attendance/pages/LeaveApprovalsPage";
+import AllLeavesPage from "./features/attendance/pages/AllLeavesPage";
 import TravelRequestsPage from "./features/travel/pages/TravelRequestsPage";
 import TravelClaimsPage from "./features/travel/pages/TravelClaimsPage";
 import ManageTravelRequests from "./features/travel/pages/ManageTravelRequests";
 import TravelApprovalsPage from "./features/travel/pages/TravelApprovalsPage";
 import TravelExpenseClaimsPage from "./features/travel/pages/TravelExpenseClaimsPage";
 import ManageExpenseClaimApprovals from "./features/travel/pages/ManageExpenseClaimApprovals";
+import AllTadaRequestsPage from "./features/travel/pages/AllTadaRequestsPage";
 import AccountsTranchesPage from "./features/travel/pages/AccountsTranchesPage";
 import TravelManualEntryPage from "./features/travel/pages/TravelManualEntryPage";
 import PayrollList from "./features/payroll/pages/PayrollList";
 import PayrollDetail from "./features/payroll/pages/PayrollDetail";
+import PayrollTranches from "./features/payroll/pages/PayrollTranches";
 
 // Payroll Route Guard - Restrict access to Super Admin, Accounts, and Establishment roles only
 const PayrollRouteGuard = () => {
@@ -94,6 +97,34 @@ const PayrollRouteGuard = () => {
   }
 
   // Access denied - redirect to home
+  return <Navigate to="/" />;
+};
+
+// Payroll Tranches Route Guard - Restrict access to Accounts role users only
+const PayrollTranchesRouteGuard = () => {
+  const user = useAuthStore((s) => s.user);
+  const isChecking = useAuthStore((s) => s.isChecking);
+  const fetchSession = useAuthStore((s) => s.fetchSession);
+
+  useEffect(() => {
+    if (!isChecking && !user) {
+      fetchSession();
+    }
+  }, [isChecking, user, fetchSession]);
+
+  if (isChecking || !user) {
+    return <Loader />;
+  }
+
+  const userRole = user?.role?.name || "";
+  const isSuperAdmin = userRole === "Super Admin";
+  const isAccounts = /accounts|finance|budget|payroll/i.test(userRole);
+
+  // Only Accounts role can access (Super Admin excluded)
+  if (isAccounts && !isSuperAdmin) {
+    return <PayrollTranches />;
+  }
+
   return <Navigate to="/" />;
 };
 
@@ -295,6 +326,14 @@ function App() {
             <Route
               path="payroll/employee/:employeeId"
               element={<PayrollDetailRouteGuard />}
+            />
+            <Route
+              path="payroll/tranches"
+              element={
+                <PrivateRoute permissions={["payroll.read"]}>
+                  <PayrollTranchesRouteGuard />
+                </PrivateRoute>
+              }
             />
 
             {/* Audit Logs */}
@@ -506,6 +545,14 @@ function App() {
               }
             />
             <Route
+              path="/attendance/leaves/all"
+              element={
+                <PrivateRoute permissions={["leaves.read"]}>
+                  <AllLeavesPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
               path="/attendance/leave-bank"
               element={
                 <PrivateRoute permissions={["attendance.read", "leaves.read"]}>
@@ -567,6 +614,14 @@ function App() {
                   ]}
                 >
                   <ManageTravelRequests />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/travel/requests/all"
+              element={
+                <PrivateRoute permissions={["travel.read"]}>
+                  <AllTadaRequestsPage />
                 </PrivateRoute>
               }
             />

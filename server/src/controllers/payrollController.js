@@ -150,6 +150,76 @@ const payrollController = {
       });
     }
   },
+
+  // Start process payroll (mark as UNDER_PROCESS)
+  startProcessPayroll: async (req, res) => {
+    try {
+      const { payrollId } = req.params;
+      const userId = req.session?.user?.id;
+
+      const result = await payrollService.startProcessPayroll(
+        payrollId,
+        userId
+      );
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("Error in startProcessPayroll:", error);
+      return res.status(400).json({
+        success: false,
+        error: error.message || "Failed to start processing payroll",
+      });
+    }
+  },
+
+  // Undo start process (revert UNDER_PROCESS to CREATED)
+  undoStartProcess: async (req, res) => {
+    try {
+      const { payrollId } = req.params;
+
+      const result = await payrollService.undoStartProcess(payrollId);
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("Error in undoStartProcess:", error);
+      return res.status(400).json({
+        success: false,
+        error: error.message || "Failed to undo start process",
+      });
+    }
+  },
+
+  // Get under-process payrolls with filters
+  getUnderProcessPayrolls: async (req, res) => {
+    try {
+      const { page = 1, limit = 50 } = req.query;
+      const filters = {
+        name: req.query.name,
+        cnic: req.query.cnic,
+        mobile: req.query.mobile,
+        designation: req.query.designation,
+        department: req.query.department,
+        location: req.query.location,
+        scaleGrade: req.query.scaleGrade,
+        amountOperator: req.query.amountOperator,
+        amountValue: req.query.amountValue,
+      };
+
+      const result = await payrollService.getUnderProcessPayrolls(
+        filters,
+        page,
+        limit
+      );
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("Error in getUnderProcessPayrolls:", error);
+      return res.status(400).json({
+        success: false,
+        error: error.message || "Failed to fetch under-process payrolls",
+      });
+    }
+  },
 };
 
 module.exports = payrollController;

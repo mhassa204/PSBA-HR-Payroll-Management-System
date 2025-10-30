@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Loader from "../../../components/Loader";
 import ErrorPage from "../../../components/ErrorPage";
@@ -44,6 +44,7 @@ const PayrollDetail = () => {
   const [payrollData, setPayrollData] = useState(null);
   const [existingPayrolls, setExistingPayrolls] = useState([]);
   const [loadingPayrolls, setLoadingPayrolls] = useState(false);
+  const [payrollsListKey, setPayrollsListKey] = useState(0); // Key to force re-render
   const [creating, setCreating] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -61,7 +62,7 @@ const PayrollDetail = () => {
   const [arrears, setArrears] = useState("0");
   const [otherDeductions, setOtherDeductions] = useState("0");
 
-  const { showToast } = useToast();
+  const { showSuccess, showError } = useToast();
   const can = useAuthStore((s) => s.can);
   const user = useAuthStore((s) => s.user);
 
@@ -116,28 +117,45 @@ const PayrollDetail = () => {
     }
   };
 
-  const fetchExistingPayrolls = async () => {
-    if (!employeeId) return;
+  const refreshTrigger = useRef(0);
+
+  const fetchExistingPayrolls = useCallback(async () => {
+    if (!employeeId) {
+      return;
+    }
 
     setLoadingPayrolls(true);
     try {
       const result = await payrollService.getPayrollsByEmployee(employeeId);
+
       // Filter out deleted payrolls (backend should already filter, but double-check)
-      // Create a new array reference to ensure React detects the state change
+      // Create a completely new array reference with new object references
       const activePayrolls = Array.isArray(result.payrolls)
-        ? result.payrolls.filter((p) => !p.is_deleted)
+        ? result.payrolls
+            .filter((p) => !p.is_deleted)
+            .map((p) => ({
+              ...p,
+              // Ensure all nested objects are also new references
+              employee: p.employee ? { ...p.employee } : null,
+              processedBy: p.processedBy ? { ...p.processedBy } : null,
+            }))
         : [];
 
-      // Use functional update to ensure React detects the change
-      setExistingPayrolls(() => activePayrolls);
+      // Set state directly with new array reference - React should detect the change
+      setExistingPayrolls(activePayrolls);
+      // Force re-render by updating both the key and trigger
+      refreshTrigger.current = refreshTrigger.current + 1;
+      setPayrollsListKey(refreshTrigger.current);
     } catch (err) {
       console.error("Error fetching existing payrolls:", err);
       // Set empty array on error to clear stale data
       setExistingPayrolls([]);
+      refreshTrigger.current = refreshTrigger.current + 1;
+      setPayrollsListKey(refreshTrigger.current);
     } finally {
       setLoadingPayrolls(false);
     }
-  };
+  }, [employeeId]);
 
   useEffect(() => {
     if (employeeId) {
@@ -147,7 +165,7 @@ const PayrollDetail = () => {
       setArrears("0");
       setOtherDeductions("0");
     }
-  }, [employeeId, selectedYear, selectedMonth]);
+  }, [employeeId, selectedYear, selectedMonth, fetchExistingPayrolls]);
 
   const handleCreatePayrollClick = () => {
     if (!payrollData || !canWritePayroll) return;
@@ -210,32 +228,47 @@ const PayrollDetail = () => {
       setOtherDeductions("0");
 
       // Show success message
-      showToast("Payroll created successfully", "success");
+      showSuccess("Payroll created successfully");
 
       // Refresh payrolls list (await to ensure it completes)
       // Add a small delay to ensure backend has fully committed
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       await fetchExistingPayrolls();
     } catch (err) {
       console.error("Error creating payroll:", err);
-      showToast(err.message || "Failed to create payroll", "error");
+      showError(err.message || "Failed to create payroll");
     } finally {
       setCreating(false);
     }
   };
 
-  const handleProcessPayroll = async (payrollId) => {
+  const handleStartProcessPayroll = async (payrollId) => {
     try {
-      await payrollService.processPayroll(payrollId);
-      showToast("Payroll processed successfully", "success");
+      await payrollService.startProcessPayroll(payrollId);
+      showSuccess("Payroll marked as under process");
 
       // Add a small delay to ensure backend has fully committed
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       // Refresh the list (await to ensure it completes)
       await fetchExistingPayrolls();
     } catch (err) {
-      console.error("Error processing payroll:", err);
-      showToast(err.message || "Failed to process payroll", "error");
+      console.error("Error starting process payroll:", err);
+      showError(err.message || "Failed to start processing payroll");
+    }
+  };
+
+  const handleUndoStartProcess = async (payrollId) => {
+    try {
+      await payrollService.undoStartProcess(payrollId);
+      showSuccess("Payroll status reverted to created");
+
+      // Add a small delay to ensure backend has fully committed
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      // Refresh the list (await to ensure it completes)
+      await fetchExistingPayrolls();
+    } catch (err) {
+      console.error("Error undoing start process:", err);
+      showError(err.message || "Failed to undo start process");
     }
   };
 
@@ -246,7 +279,7 @@ const PayrollDetail = () => {
       setShowViewModal(true);
     } catch (err) {
       console.error("Error fetching payroll:", err);
-      showToast(err.message || "Failed to fetch payroll details", "error");
+      showError(err.message || "Failed to fetch payroll details");
     }
   };
 
@@ -260,7 +293,7 @@ const PayrollDetail = () => {
       setShowEditModal(true);
     } catch (err) {
       console.error("Error fetching payroll:", err);
-      showToast(err.message || "Failed to fetch payroll details", "error");
+      showError(err.message || "Failed to fetch payroll details");
     }
   };
 
@@ -280,15 +313,15 @@ const PayrollDetail = () => {
       setEditingArrears("0");
       setEditingDeductions("0");
 
-      showToast("Payroll updated successfully", "success");
+      showSuccess("Payroll updated successfully");
 
       // Add a small delay to ensure backend has fully committed
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       // Refresh the list (await to ensure it completes)
       await fetchExistingPayrolls();
     } catch (err) {
       console.error("Error updating payroll:", err);
-      showToast(err.message || "Failed to update payroll", "error");
+      showError(err.message || "Failed to update payroll");
     } finally {
       setUpdating(false);
     }
@@ -313,15 +346,15 @@ const PayrollDetail = () => {
       setDeleting(false);
 
       // Show success message
-      showToast("Payroll deleted successfully", "success");
+      showSuccess("Payroll deleted successfully");
 
       // Add a small delay to ensure backend has fully committed
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       // Refresh the list
       await fetchExistingPayrolls();
     } catch (err) {
       console.error("Error deleting payroll:", err);
-      showToast(err.message || "Failed to delete payroll", "error");
+      showError(err.message || "Failed to delete payroll");
       setDeleting(false);
     }
   };
@@ -954,7 +987,7 @@ const PayrollDetail = () => {
               No payroll records found
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" key={payrollsListKey}>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -969,8 +1002,8 @@ const PayrollDetail = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {existingPayrolls.map((payroll) => (
-                    <TableRow key={payroll.id}>
+                  {existingPayrolls.map((payroll, index) => (
+                    <TableRow key={`${payroll.id}-${payrollsListKey}-${index}`}>
                       <TableCell>{payroll.year}</TableCell>
                       <TableCell>{getMonthName(payroll.month)}</TableCell>
                       <TableCell className="text-xs">
@@ -985,6 +1018,8 @@ const PayrollDetail = () => {
                           className={`px-2 py-1 rounded text-xs font-medium ${
                             payroll.status === "PROCESSED"
                               ? "bg-green-100 text-green-800"
+                              : payroll.status === "UNDER_PROCESS"
+                              ? "bg-blue-100 text-blue-800"
                               : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
@@ -1033,19 +1068,43 @@ const PayrollDetail = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleProcessPayroll(payroll.id)}
-                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                title="Process Payroll"
+                                onClick={() =>
+                                  handleStartProcessPayroll(payroll.id)
+                                }
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                title="Start Process Payroll"
                               >
-                                Process
+                                Start Process
                               </Button>
                             </>
                           )}
+                          {payroll.status === "UNDER_PROCESS" &&
+                            canWritePayroll && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleUndoStartProcess(payroll.id)
+                                  }
+                                  className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                                  title="Undo Start Process"
+                                >
+                                  Undo
+                                </Button>
+                              </>
+                            )}
                           {payroll.status === "CREATED" && !canWritePayroll && (
                             <span className="text-sm text-gray-500">
                               Pending Processing
                             </span>
                           )}
+                          {payroll.status === "UNDER_PROCESS" &&
+                            !canWritePayroll && (
+                              <span className="text-sm text-gray-500">
+                                Under Process
+                              </span>
+                            )}
                           {payroll.status === "PROCESSED" && (
                             <span className="text-sm text-gray-500">
                               Processed

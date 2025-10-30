@@ -43,12 +43,36 @@ router.put(
   payrollController.updatePayroll
 );
 
-// Process a payroll (mark as PROCESSED)
+// Start process a payroll (mark as UNDER_PROCESS)
+router.put(
+  "/:payrollId/start-process",
+  isAuthenticated,
+  authorize("payroll.write"),
+  payrollController.startProcessPayroll
+);
+
+// Undo start process (revert UNDER_PROCESS to CREATED)
+router.put(
+  "/:payrollId/undo-process",
+  isAuthenticated,
+  authorize("payroll.write"),
+  payrollController.undoStartProcess
+);
+
+// Process a payroll (mark as PROCESSED) - kept for backward compatibility
 router.put(
   "/:payrollId/process",
   isAuthenticated,
   authorize("payroll.write"),
   payrollController.processPayroll
+);
+
+// Get under-process payrolls with filters
+router.get(
+  "/under-process/list",
+  isAuthenticated,
+  authorize("payroll.read"),
+  payrollController.getUnderProcessPayrolls
 );
 
 // Delete a payroll (soft delete)
