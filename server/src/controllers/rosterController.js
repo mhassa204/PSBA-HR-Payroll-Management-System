@@ -58,6 +58,31 @@ async function resolveBazaarIdForUser(user) {
   }
 }
 
+/**
+ * Determine if user is a head of department at head quarter (HOD at HQ).
+ * This requires user's employments, department with head_employee_id matching user, and location type HQ.
+ */
+async function isUserHodHQ(user, prisma) {
+  if (!user?.employee_id) return false;
+  // Find current employments at HQ as HOD
+  const empRecs = await prisma.employment.findMany({
+    where: {
+      employee_id: user.employee_id,
+      is_current: true,
+      location: { type: 'HEAD_OFFICE' },
+    },
+    include: { department: true },
+  });
+  if (!empRecs.length) return false;
+  // Must be department head
+  const deptIds = empRecs.map(e => e.department_id).filter(Boolean);
+  if (!deptIds.length) return false;
+  const match = await prisma.department.findFirst({
+    where: { id: { in: deptIds }, head_employee_id: user.employee_id }
+  });
+  return !!match;
+}
+
 // New: get the first active location managed by this user
 async function getManagedLocationId(user) {
   if (!user?.id) return null;
@@ -144,28 +169,48 @@ const rosterController = {
   async create(req, res) {
     try {
       const user = req.session.user;
-      const { title, valid_from, valid_to, entries } = req.body; // ignore any bazaar_id from client
-
+      const { title, valid_from, valid_to, entries } = req.body;
       if (!valid_from || !valid_to) {
         return res.status(400).json({ success: false, error: 'valid_from and valid_to are required' });
       }
 
-      const managedLocationId = await getManagedLocationId(user);
-      if (!managedLocationId) {
-        return res.status(403).json({ success: false, error: 'Only a manager of a location can create a roster' });
+      let assigned_location_id = null;
+      let assigned_department_id = null;
+
+      // Allow if location_id present and is a bazaar location
+      if (user.location_id) {
+        const loc = await prisma.location.findUnique({
+          where: { id: user.location_id },
+          select: { id: true, type: true, is_active: true, is_deleted: true },
+        });
+        if (loc && loc.type === 'BAZAAR' && loc.is_active && !loc.is_deleted) {
+          assigned_location_id = loc.id;
+        }
       }
 
-      // Validate entries format (weekly_off_days removed)
+      // Allow if user heads any department; use the first headed department for roster.department_id
+      if (user.employee_id && !assigned_department_id) {
+        const headedDepts = await prisma.department.findMany({ where: { head_employee_id: user.employee_id } });
+        if (headedDepts && headedDepts.length > 0) {
+          assigned_department_id = headedDepts[0].id;
+        }
+      }
+
+      if (!assigned_location_id && !assigned_department_id) {
+        return res.status(403).json({ success: false, error: 'Only a bazaar/location-based user or a head of department can create a roster.' });
+      }
+
+      // Validate entries format
       const normalizedEntries = (entries || []).map((e) => ({
         employee_id: Number(e.employee_id),
         day_schedules: e.day_schedules || {},
         remarks: e.remarks || null,
       }));
-
       const created = await prisma.dutyRoster.create({
         data: {
           title: title || null,
-          bazaar_id: managedLocationId,
+          bazaar_id: assigned_location_id,
+          department_id: assigned_department_id,
           valid_from: new Date(valid_from),
           valid_to: new Date(valid_to),
           created_by_user_id: user.id,
@@ -179,7 +224,6 @@ const rosterController = {
           entries: true,
         }
       });
-
       res.status(201).json({ success: true, roster: created });
     } catch (e) {
       console.error('Error creating roster', e);
@@ -290,69 +334,76 @@ const rosterController = {
   async employeesForLoggedInOfficer(req, res) {
     try {
       const user = req.session.user;
+      const employeesSet = new Map();
+      const prisma = require('@prisma/client').PrismaClient ? new (require('@prisma/client').PrismaClient)() : req.app?.locals?.prisma;
 
-      // Must be a manager of some location
-      const managedLocationId = await getManagedLocationId(user);
-      if (!managedLocationId) {
-        return res.status(403).json({ success: false, error: 'Only a manager of a location can create roster' });
-      }
+      let isLocationUser = false;
+      let isHod = false;
 
-      if (!user?.employee_id) {
-        return res.status(400).json({ success: false, error: 'Logged in user not linked to an employee record' });
-      }
-
-      // Subordinates: current PSBA employments reporting to this officer
-      const subordinates = await prisma.employment.findMany({
-        where: {
-          is_deleted: false,
-          is_current: true,
-          organization: 'PSBA',
-          reporting_officer_id: String(user.employee_id),
-          employee: { is_deleted: false, status: 'Active' },
-        },
-        include: {
-          employee: true,
-          designation: true,
-          role_tag: true,
-        }
-      });
-
-      // Officer self: current employment of the logged-in user (no org filter so the officer always appears)
-      const officerEmployment = await prisma.employment.findFirst({
-        where: {
-          is_deleted: false,
-          is_current: true,
-          employee_id: Number(user.employee_id),
-          employee: { is_deleted: false, status: 'Active' },
-        },
-        include: {
-          employee: true,
-          designation: true,
-          role_tag: true,
-        }
-      });
-
-      // Merge, ensuring uniqueness by employee.id
-      const all = [...subordinates, ...(officerEmployment ? [officerEmployment] : [])];
-      const seen = new Set();
-      const merged = [];
-      for (const r of all) {
-        if (!seen.has(r.employee.id)) {
-          seen.add(r.employee.id);
-          merged.push(r);
+      // If user.location_id points to an active bazaar
+      if (user.location_id) {
+        const loc = await prisma.location.findUnique({
+          where: { id: user.location_id },
+          select: { id: true, type: true, is_active: true, is_deleted: true },
+        });
+        if (loc && loc.type === 'BAZAAR' && loc.is_active && !loc.is_deleted) {
+          isLocationUser = true;
+          const employments = await prisma.employment.findMany({
+            where: { 
+              is_current: true, 
+              is_deleted: false, 
+              location_id: loc.id,
+              employee: { is_deleted: false, status: 'Active' },
+            },
+            include: { employee: true, designation: true, role_tag: true }
+          });
+          for (const r of employments) {
+            employeesSet.set(r.employee.id, {
+              id: r.employee.id,
+              full_name: r.employee.full_name,
+              designation: r.designation?.title || null,
+              cnic: r.employee.cnic || null,
+              mobile_number: r.employee.mobile_number || null,
+              role_tag_id: r.role_tag?.id || null,
+              role_tag_name: r.role_tag?.name || 'Unassigned',
+            });
+          }
         }
       }
 
-      const employees = merged.map((r) => ({
-        id: r.employee.id,
-        full_name: r.employee.full_name,
-        designation: r.designation?.title || null,
-        cnic: r.employee.cnic || null,
-        mobile_number: r.employee.mobile_number || null,
-        role_tag_id: r.role_tag?.id || null,
-        role_tag_name: r.role_tag?.name || 'Unassigned',
-      }));
+      // If user is HOD of any department, include all employees in those departments (and HOD too)
+      if (user.employee_id) {
+        const headedDepts = await prisma.department.findMany({ where: { head_employee_id: user.employee_id } });
+        if (headedDepts && headedDepts.length > 0) {
+          isHod = true;
+          const deptIds = headedDepts.map(d => d.id);
+          const employments = await prisma.employment.findMany({
+            where: { 
+              is_current: true, 
+              is_deleted: false, 
+              department_id: { in: deptIds },
+              employee: { is_deleted: false, status: 'Active' },
+            },
+            include: { employee: true, designation: true, role_tag: true }
+          });
+          for (const r of employments) {
+            employeesSet.set(r.employee.id, {
+              id: r.employee.id,
+              full_name: r.employee.full_name,
+              designation: r.designation?.title || null,
+              cnic: r.employee.cnic || null,
+              mobile_number: r.employee.mobile_number || null,
+              role_tag_id: r.role_tag?.id || null,
+              role_tag_name: r.role_tag?.name || 'Unassigned',
+            });
+          }
+        }
+      }
 
+      if (!isLocationUser && !isHod) {
+        return res.status(403).json({ success: false, error: 'Only a bazaar/location-based user or a head of department can view employees for roster.' });
+      }
+      const employees = Array.from(employeesSet.values());
       res.json({ success: true, employees });
     } catch (e) {
       console.error('Error fetching officer employees', e);

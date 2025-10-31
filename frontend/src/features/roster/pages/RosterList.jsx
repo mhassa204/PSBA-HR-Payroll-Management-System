@@ -15,6 +15,8 @@ const RosterList = () => {
   const isSuperAdmin = user?.role?.name === 'Super Admin';
   const isSystem = user?.role?.type === 'system';
 
+  const canCreateRoster = !!(can('roster.create') && (user?.location_id || user?.employee_id));
+
   const load = async () => {
     setLoading(true);
     try {
@@ -38,7 +40,9 @@ const RosterList = () => {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-semibold text-slate-800">Duty Rosters</h2>
-        <button onClick={() => navigate('/rosters/create')} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md">Create Roster</button>
+        {canCreateRoster && (
+          <button onClick={() => navigate('/rosters/create')} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md">Create Roster</button>
+        )}
       </div>
 
       {loading ? (

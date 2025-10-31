@@ -10,17 +10,15 @@ router.get(
   rosterController.list
 );
 
-// Helper endpoints for roster creation under roster permissions
+// Helper endpoints for roster creation - rely on controller eligibility (HOD or bazaar user)
 router.get(
   "/helpers/officer-employees/list",
   isAuthenticated,
-  authorize("roster.create"),
   rosterController.employeesForLoggedInOfficer
 );
 router.get(
   "/helpers/bazaars",
   isAuthenticated,
-  authorize("roster.create"),
   rosterController.bazaarsForRoster
 );
 
@@ -33,7 +31,6 @@ router.get(
 router.post(
   "/",
   isAuthenticated,
-  authorize("roster.create"),
   rosterController.create
 );
 router.put(

@@ -338,7 +338,7 @@ export default function TravelExpenseClaimsPage() {
       !isWithinCity &&
       !(claim.documents || []).some((d) => d.category === "REPORT")
     ) {
-      alert("Upload REPORT before submitting");
+      alert("Upload Visit Report before submitting");
       return;
     }
     try {
@@ -1599,11 +1599,13 @@ export default function TravelExpenseClaimsPage() {
                       (d) => d.category === cat
                     );
                     const isReport = cat === "REPORT";
+                    const isRequestLinked = !!claim.travel_request_id; // Claim is linked to a travel request
+                    const displayCategory = isReport && isRequestLinked ? "Visit Report" : cat;
                     return (
                       <div key={cat} className="border rounded p-3">
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-medium text-xs">
-                            {cat}{" "}
+                            {displayCategory}{" "}
                             {isReport && (
                               <span className="text-rose-600">
                                 (At least one required)

@@ -266,6 +266,16 @@ const LeftSidebar = () => {
     })();
   }, []);
 
+  const isLocationBasedBazaar = user?.employmentRecords?.some(
+    (rec) => rec.is_current && rec.location?.type === 'BAZAAR'
+  );
+  const isHodOfHQ = user?.employmentRecords?.some(
+    (rec) => rec.is_current && rec.is_hod && rec.location?.type === 'HEAD_QUARTER'
+  );
+
+  // Eligibility: either bazaar/location account (location_id) or HOD/employee account (employee_id), and has explicit permission
+  const canCreateRoster = !!(can("roster.create") && (user?.location_id || user?.employee_id));
+
   const navigation = [
     {
       name: "Dashboard",
@@ -315,7 +325,7 @@ const LeftSidebar = () => {
           name: "Create Roster",
           href: "/rosters/create",
           icon: PlusIcon,
-          show: () => can("roster.create"),
+          show: () => canCreateRoster,
         },
       ],
     },

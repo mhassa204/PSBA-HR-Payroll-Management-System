@@ -76,7 +76,7 @@ module.exports = {
             include: {
               employmentRecords: {
                 where: { is_current: true, is_deleted: false },
-                include: { department: true, designation: true },
+                include: { department: true, designation: true, location: true },
               },
             },
           },

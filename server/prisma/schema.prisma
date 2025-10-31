@@ -662,6 +662,7 @@ enum LeaveHistoryAction {
   ALLOWED
   APPROVED
   REJECTED
+  FORWARDED
 }
 
 // New: Leave Types for configuring bankable leave categories

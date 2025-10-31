@@ -14,6 +14,7 @@ const AllTadaRequestsPage = () => {
   const [fCnic, setFCnic] = useState("");
   const [fDesignation, setFDesignation] = useState("");
   const [fDepartment, setFDepartment] = useState("");
+  const [fLocation, setFLocation] = useState("");
   const [fStatus, setFStatus] = useState("");
   const [fDate, setFDate] = useState("");
   const [fStart, setFStart] = useState("");
@@ -45,6 +46,7 @@ const AllTadaRequestsPage = () => {
         cnic: r.applicant?.cnic || "",
         designation: er?.designation?.title || "",
         department: er?.department?.name || er?.department?.title || "",
+        location: er?.location?.name || "",
         purpose: r.purpose || "",
       };
     });
@@ -66,6 +68,8 @@ const AllTadaRequestsPage = () => {
         return false;
       if (fDepartment && !norm(r.department).includes(norm(fDepartment)))
         return false;
+      if (fLocation && !norm(r.location).includes(norm(fLocation)))
+        return false;
       if (
         fStatus &&
         String(r.status).toUpperCase() !== String(fStatus).toUpperCase()
@@ -80,6 +84,7 @@ const AllTadaRequestsPage = () => {
     fCnic,
     fDesignation,
     fDepartment,
+    fLocation,
     fStatus,
     fDate,
     fStart,
@@ -127,6 +132,12 @@ const AllTadaRequestsPage = () => {
             placeholder="Department"
             value={fDepartment}
             onChange={(e) => setFDepartment(e.target.value)}
+          />
+          <input
+            className="form-input"
+            placeholder="Location"
+            value={fLocation}
+            onChange={(e) => setFLocation(e.target.value)}
           />
           <select
             className="form-input"

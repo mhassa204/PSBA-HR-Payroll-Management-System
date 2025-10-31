@@ -518,6 +518,9 @@ async function main() {
         "travel.manage",
         // No OPS approvals here; use Operations role
         "leaves.apply",
+        // Roster permissions for HODs
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment"],
@@ -542,6 +545,9 @@ async function main() {
         // Allow opening Manage screen for ADs to participate in recommender/approval flows
         "travel.manage",
         "leaves.apply",
+        // Roster permissions for HODs
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment"],
@@ -566,6 +572,9 @@ async function main() {
         "travel.request.approve.ops",
         "travel.claim.approve.ops",
         "leaves.apply",
+        // Roster permissions for HODs
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -603,6 +612,9 @@ async function main() {
         "locations.read",
         "scale-grades.read",
         "leaves.apply",
+        // Roster permissions for HODs
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment", "employee_salary"],
@@ -640,6 +652,9 @@ async function main() {
         "locations.read",
         "scale-grades.read",
         "leaves.apply",
+        // Added to enable roster for bazaar/location accounts
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -751,6 +766,9 @@ async function main() {
         "travel.claim.update",
         "travel.claim.submit",
         "travel.claim.status",
+        // Added to enable roster for bazaar/location accounts
+        "roster.read",
+        "roster.create",
         // remove travel rates from general employees
         "leaves.apply",
       ],

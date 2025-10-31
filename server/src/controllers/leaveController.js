@@ -26,6 +26,12 @@ module.exports = {
   getEmployeeLeaves: async (req, res) => {
     try {
       const employeeId = Number(req.params.employeeId);
+      if (!employeeId || isNaN(employeeId)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "Valid employee ID is required" 
+        });
+      }
       const perms = req.session?.user?.permissions || [];
       const userEmpId = req.session?.user?.employee_id || null;
       const hasGlobalRead =
@@ -43,6 +49,14 @@ module.exports = {
       }
       const data = await leaveService.getEmployeeLeavesWithSummary(employeeId);
       res.json({ success: true, leaves: data.leaves, summary: data.summary });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  listAllLeavesForEstablishment: async (req, res) => {
+    try {
+      const items = await leaveService.listAllLeavesForEstablishment(req);
+      res.json({ success: true, leaves: items });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -69,13 +83,14 @@ module.exports = {
       const userId = req.session?.user?.id;
       if (!userId)
         return res.status(401).json({ success: false, error: "Unauthorized" });
-      const { action, comments } = req.body || {};
+      const { action, comments, forwardToUserId } = req.body || {};
       const updated = await leaveService.actOnLeave(
         {
           leaveId,
           userId,
           action,
           comments,
+          forwardToUserId,
         },
         req
       );
@@ -131,7 +146,6 @@ module.exports = {
         backup_duty_from,
         backup_duty_to,
         documents,
-        routes,
       } = req.body || {};
       const perms = req.session?.user?.permissions || [];
       const userEmpId = req.session?.user?.employee_id || null;
@@ -162,13 +176,11 @@ module.exports = {
           duty_from,
           duty_to,
           // New fields
-          submission_time,
           custom_type,
           backup_employee_id,
           backup_duty_from,
           backup_duty_to,
           documents,
-          routes,
         },
         req
       );
@@ -183,6 +195,16 @@ module.exports = {
       if (clientErrors.includes(e.message))
         return res.status(400).json({ success: false, error: e.message });
       console.error("Create leaves error:", e);
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  // Search users for forwarding
+  searchUsersForForward: async (req, res) => {
+    try {
+      const search = String(req.query.search || "").trim();
+      const users = await leaveService.searchUsersForForward(search);
+      res.json({ success: true, users });
+    } catch (e) {
       res.status(500).json({ success: false, error: e.message });
     }
   },
