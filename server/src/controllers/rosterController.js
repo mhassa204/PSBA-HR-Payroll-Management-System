@@ -178,10 +178,12 @@ const rosterController = {
       const user = req.session.user;
       const { title, valid_from, valid_to, entries, bazaar_id } = req.body;
       if (!valid_from || !valid_to) {
-        return res.status(400).json({
-          success: false,
-          error: "valid_from and valid_to are required",
-        });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            error: "valid_from and valid_to are required",
+          });
       }
 
       let assigned_location_id = null;
@@ -239,11 +241,13 @@ const rosterController = {
       }
 
       if (!assigned_location_id && !isHeadOfAnyDept) {
-        return res.status(403).json({
-          success: false,
-          error:
-            "Only a bazaar/location-based user or a head of department can create a roster.",
-        });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            error:
+              "Only a bazaar/location-based user or a head of department can create a roster.",
+          });
       }
 
       // Validate entries format
@@ -301,11 +305,13 @@ const rosterController = {
             perms.includes("*") || perms.includes("roster.status");
           const isCreator = roster.created_by_user_id === user?.id;
           if (!isSystemUser || !hasPermission || isCreator) {
-            return res.status(403).json({
-              success: false,
-              error:
-                "Approved rosters can only be modified by authorized system users (creator cannot modify).",
-            });
+            return res
+              .status(403)
+              .json({
+                success: false,
+                error:
+                  "Approved rosters can only be modified by authorized system users (creator cannot modify).",
+              });
           }
         }
       }
@@ -378,22 +384,15 @@ const rosterController = {
             perms.includes("*") || perms.includes("roster.status");
           const isCreator = roster.created_by_user_id === user?.id;
           if (!isSystemUser || !hasPermission || isCreator) {
-            return res.status(403).json({
-              success: false,
-              error:
-                "Approved rosters can only be deleted by authorized system users (creator cannot delete).",
-            });
+            return res
+              .status(403)
+              .json({
+                success: false,
+                error:
+                  "Approved rosters can only be deleted by authorized system users (creator cannot delete).",
+              });
           }
         }
-      }
-
-      // Check for active child records (duty roster entries)
-      const { validateSoftDelete } = require("../utils/softDeleteValidation");
-      const validation = await validateSoftDelete("DutyRoster", id);
-      if (!validation.canDelete) {
-        return res
-          .status(400)
-          .json({ success: false, error: validation.message });
       }
 
       await prisma.dutyRoster.update({
@@ -484,11 +483,13 @@ const rosterController = {
       }
 
       if (!isLocationUser && !isHod) {
-        return res.status(403).json({
-          success: false,
-          error:
-            "Only a bazaar/location-based user or a head of department can view employees for roster.",
-        });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            error:
+              "Only a bazaar/location-based user or a head of department can view employees for roster.",
+          });
       }
       const employees = Array.from(employeesSet.values());
       res.json({ success: true, employees });
@@ -505,10 +506,12 @@ const rosterController = {
       const user = req.session.user;
       const managedLocationId = await getManagedLocationId(user);
       if (!managedLocationId) {
-        return res.status(403).json({
-          success: false,
-          error: "Only a manager of a location can create roster",
-        });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            error: "Only a manager of a location can create roster",
+          });
       }
       const [rawBazaars, defaultBazaarId] = await Promise.all([
         prisma.location.findMany({
@@ -545,10 +548,12 @@ const rosterController = {
       const canChangeStatus =
         perms.includes("*") || perms.includes("roster.status.change");
       if (!canChangeStatus) {
-        return res.status(403).json({
-          success: false,
-          error: "You do not have permission to approve rosters",
-        });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            error: "You do not have permission to approve rosters",
+          });
       }
 
       const id = Number(req.params.id);
@@ -579,10 +584,12 @@ const rosterController = {
       const canChangeStatus =
         perms.includes("*") || perms.includes("roster.status.change");
       if (!canChangeStatus) {
-        return res.status(403).json({
-          success: false,
-          error: "You do not have permission to reject rosters",
-        });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            error: "You do not have permission to reject rosters",
+          });
       }
 
       const id = Number(req.params.id);
@@ -613,10 +620,12 @@ const rosterController = {
       const canChangeStatus =
         perms.includes("*") || perms.includes("roster.status.change");
       if (!canChangeStatus) {
-        return res.status(403).json({
-          success: false,
-          error: "You do not have permission to change roster status",
-        });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            error: "You do not have permission to change roster status",
+          });
       }
 
       const id = Number(req.params.id);

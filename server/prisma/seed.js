@@ -704,10 +704,17 @@ async function main() {
         "role-tags.read",
         "scale-grades.read",
         "locations.read",
+        // Allow Establishment to add locations in Settings
+        "locations.create",
+        // And edit/delete locations as requested
+        "locations.update",
+        "locations.delete",
         "devices.read",
         "devices.create",
         "devices.update",
         "devices.delete",
+        // Users list for assigning location manager in Settings
+        "users.read",
         "districts.read",
         "districts.create",
         "districts.update",

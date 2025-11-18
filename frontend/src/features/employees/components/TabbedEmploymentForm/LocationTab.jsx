@@ -31,18 +31,33 @@ const LocationTab = ({
   const selectedLocationId = watch("location_id");
   const activeType = watch("_location_type_filter") || "ALL"; // virtual field
 
+  // Updated: use case-insensitive name-based filters per requirement
   const typeOptions = [
     { value: 'ALL', label: 'All' },
-    { value: 'HEAD_OFFICE', label: 'Head Office' },
-    { value: 'HEAD_QUARTER', label: 'Head Quarter' },
-    { value: 'BAZAAR', label: 'Bazaar' },
-    { value: 'SAHULAT_BAZAAR', label: 'Sahulat Bazaar' },
+    { value: 'HEAD_OFFICE_NAME', label: 'Head Office' },
+    { value: 'HEAD_QUARTER_NAME', label: 'Head Quarter' },
+    { value: 'MODEL_BAZAAR_NAME', label: 'Model Bazaar' },
+    { value: 'SAHULAT_BAZAAR_NAME', label: 'Sahulat Bazaar' },
   ];
 
-  const filteredLocations = Array.isArray(allLocations) ? allLocations.filter(l => {
-    if (activeType === 'ALL') return true;
-    return (l.type || '').toUpperCase() === activeType;
-  }) : [];
+  const filteredLocations = Array.isArray(allLocations)
+    ? allLocations.filter((l) => {
+        if (activeType === 'ALL') return true;
+        const name = String(l?.name || '').toLowerCase();
+        switch (activeType) {
+          case 'HEAD_OFFICE_NAME':
+            return name.startsWith('head office');
+          case 'HEAD_QUARTER_NAME':
+            return name.startsWith('head quarter');
+          case 'MODEL_BAZAAR_NAME':
+            return name.startsWith('model bazaar');
+          case 'SAHULAT_BAZAAR_NAME':
+            return name.startsWith('sahulat bazaar');
+          default:
+            return true;
+        }
+      })
+    : [];
 
   const locationSelectOptions = filteredLocations.map(l => ({
     value: l.id,

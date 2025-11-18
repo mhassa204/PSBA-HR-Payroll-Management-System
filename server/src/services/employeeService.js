@@ -1,7 +1,10 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const { encrypt, decrypt } = require("../utils/cryptoUtil");
-const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require("../utils/softDeleteUtil");
+const {
+  maskUniqueFieldsForSoftDelete,
+  restoreUniqueFieldsForUndelete,
+} = require("../utils/softDeleteUtil");
 const { validateSoftDelete } = require("../utils/softDeleteValidation");
 
 // Define date fields that need special processing
@@ -182,23 +185,28 @@ const employeeService = {
             if (!isNaN(d.getTime())) completionDate = d;
           }
           // start_date is now a String (year), just use it directly
-          const startYear = edu.start_date && typeof edu.start_date === "string" 
-            ? edu.start_date.trim() 
-            : null;
+          const startYear =
+            edu.start_date && typeof edu.start_date === "string"
+              ? edu.start_date.trim()
+              : null;
           // Coerce level id
           const levelId = edu.education_level_id
             ? parseInt(edu.education_level_id)
             : null;
+          // Build data object conditionally: include education_level_id only if levelId is a valid number
+          const eduCreateData = {
+            employee_id: employee.id,
+            education_level: edu.education_level || "",
+            institution_name: edu.institution_name,
+            year_of_completion: completionDate,
+            marks_gpa: edu.marks_gpa || null,
+            start_date: startYear || null,
+          };
+          if (typeof levelId === "number" && !isNaN(levelId)) {
+            eduCreateData.education_level_id = levelId; // only include if column exists in generated client
+          }
           const createdEducation = await tx.educationQualification.create({
-            data: {
-              employee_id: employee.id,
-              education_level: edu.education_level || "",
-              education_level_id: levelId,
-              institution_name: edu.institution_name,
-              year_of_completion: completionDate,
-              marks_gpa: edu.marks_gpa || null,
-              start_date: startYear || null,
-            },
+            data: eduCreateData,
           });
           if (edu.id) {
             educationIdMapping[edu.id] = createdEducation.id;
@@ -556,7 +564,7 @@ const employeeService = {
       const experienceIdMapping = {};
       const educationIdMapping = {};
 
-      // Process past experiences
+      // Process past experiences (prevent duplication on update)
       if (past_experiences && Array.isArray(past_experiences)) {
         console.log(
           "Received past_experiences:",
@@ -565,68 +573,147 @@ const employeeService = {
         const existingExperiences = await tx.pastExperience.findMany({
           where: { employee_id: employee.id, is_deleted: false },
         });
+        const existingIds = new Set(existingExperiences.map((e) => e.id));
 
-        const existingExpMap = new Map(
-          existingExperiences.map((exp) => [exp.id, exp])
-        );
-        const incomingExpMap = new Map(
-          past_experiences
-            .filter(
-              (exp) =>
-                exp.id && !isNaN(parseInt(exp.id)) && parseInt(exp.id) > 0
-            )
-            .map((exp) => [parseInt(exp.id), exp])
-        );
+        // Separate incoming into existing and new
+        const incomingExisting = [];
+        const incomingNew = [];
+        for (const exp of past_experiences) {
+          const parsedId =
+            exp.id !== undefined && exp.id !== null ? parseInt(exp.id) : null;
+          if (
+            parsedId &&
+            !isNaN(parsedId) &&
+            parsedId > 0 &&
+            existingIds.has(parsedId)
+          ) {
+            incomingExisting.push({ parsedId, exp });
+          } else if (
+            parsedId === null ||
+            parsedId === undefined ||
+            isNaN(parsedId) ||
+            parsedId < 0
+          ) {
+            incomingNew.push(exp);
+          } else if (parsedId > 0 && !existingIds.has(parsedId)) {
+            // Positive id that does not exist in DB: treat as new (e.g., stale client state)
+            incomingNew.push(exp);
+          }
+        }
+
+        console.log("Experience update summary:", {
+          existingInDB: existingExperiences.length,
+          incomingExistingCount: incomingExisting.length,
+          incomingNewCount: incomingNew.length,
+        });
 
         // Update existing experiences
-        for (const [expId, incomingExp] of incomingExpMap) {
-          if (existingExpMap.has(expId)) {
+        for (const { parsedId, exp } of incomingExisting) {
+          try {
             await tx.pastExperience.update({
-              where: { id: expId },
+              where: { id: parsedId },
               data: {
-                company_name: incomingExp.company_name || "",
-                position: incomingExp.position || "",
-                start_date: incomingExp.start_date || "",
-                end_date: incomingExp.end_date || "",
-                description: incomingExp.description || "",
+                company_name: exp.company_name || "",
+                position: exp.position || "",
+                start_date: exp.start_date || "",
+                end_date: exp.end_date || "",
+                description: exp.description || "",
               },
             });
-            existingExpMap.delete(expId);
+            console.log(`Updated past experience ${parsedId}`);
+          } catch (err) {
+            console.error(
+              `Error updating past experience ${parsedId}:`,
+              err.message
+            );
           }
         }
 
         // Create new experiences
-        for (const incomingExp of past_experiences.filter(
-          (exp) => !exp.id || isNaN(parseInt(exp.id))
-        )) {
-          const createdExp = await tx.pastExperience.create({
-            data: {
-              employee_id: employee.id,
-              company_name: incomingExp.company_name || "",
-              position: incomingExp.position || "",
-              start_date: incomingExp.start_date || "",
-              end_date: incomingExp.end_date || "",
-              description: incomingExp.description || "",
-            },
-          });
-          if (incomingExp.id)
-            experienceIdMapping[incomingExp.id] = createdExp.id;
+        for (const exp of incomingNew) {
+          try {
+            const created = await tx.pastExperience.create({
+              data: {
+                employee_id: employee.id,
+                company_name: exp.company_name || "",
+                position: exp.position || "",
+                start_date: exp.start_date || "",
+                end_date: exp.end_date || "",
+                description: exp.description || "",
+              },
+            });
+            if (exp.id) experienceIdMapping[exp.id] = created.id;
+            console.log("Created past experience", created.id);
+          } catch (err) {
+            console.error(
+              "Error creating past experience:",
+              err.message,
+              "Data:",
+              exp
+            );
+          }
         }
 
-        // Delete remaining existing experiences not in request
-        for (const leftover of existingExpMap.values()) {
-          await tx.pastExperience.delete({ where: { id: leftover.id } });
+        // Determine deletions: existing DB records not present in incoming positive IDs
+        const incomingPositiveIds = past_experiences
+          .map((exp) => {
+            const parsedId =
+              exp.id !== undefined && exp.id !== null ? parseInt(exp.id) : null;
+            return parsedId && !isNaN(parsedId) && parsedId > 0
+              ? parsedId
+              : null;
+          })
+          .filter((id) => id !== null);
+
+        const toDelete = existingExperiences.filter(
+          (e) => !incomingPositiveIds.includes(e.id)
+        );
+        console.log(
+          "Past experiences to delete:",
+          toDelete.map((e) => e.id)
+        );
+        for (const exp of toDelete) {
+          try {
+            await tx.pastExperience.delete({ where: { id: exp.id } });
+            console.log("Deleted past experience", exp.id);
+          } catch (err) {
+            console.error(
+              "Error deleting past experience",
+              exp.id,
+              err.message
+            );
+          }
         }
       } else {
         console.log("No past_experiences provided or not an array");
       }
 
-      // Handle educations
-      if (educations && Array.isArray(educations)) {
+      // Handle educations ONLY if client explicitly sent the field
+      const educationsProvidedFlag = data._educationsProvided === true;
+      if (!educationsProvidedFlag) {
         console.log(
-          "Received educations:",
-          JSON.stringify(educations, null, 2)
+          "ℹ️ Skipping education processing — field not provided in request (existing records preserved)."
         );
+      }
+      const educationsArray =
+        educationsProvidedFlag && Array.isArray(educations) ? educations : [];
+      if (educationsProvidedFlag) {
+        console.log(
+          "Received educations (provided flag true):",
+          JSON.stringify(educationsArray, null, 2)
+        );
+        console.log(
+          "Educations type:",
+          typeof educations,
+          "Is array:",
+          Array.isArray(educations),
+          "Length:",
+          educationsArray.length
+        );
+      }
+
+      // Only enter processing logic if field was provided
+      if (educationsProvidedFlag) {
         const existingEducations = await tx.educationQualification.findMany({
           where: { employee_id: employee.id, is_deleted: false },
         });
@@ -639,16 +726,22 @@ const employeeService = {
           existingEducations.map((edu) => [edu.id, edu])
         );
         const incomingEduMap = new Map(
-          educations
+          educationsArray
             .filter(
               (edu) =>
                 edu.id && !isNaN(parseInt(edu.id)) && parseInt(edu.id) > 0
             )
             .map((edu) => [parseInt(edu.id), edu])
         );
-        const newEducations = educations.filter((edu) => {
+        // Filter new educations: those without id, null id, or negative id (temporary IDs)
+        const newEducations = educationsArray.filter((edu) => {
+          if (!edu.id || edu.id === null || edu.id === undefined) return true;
           const eduId = parseInt(edu.id);
-          return !edu.id || isNaN(eduId) || !existingEduMap.has(eduId);
+          if (isNaN(eduId)) return true;
+          // Negative IDs are temporary IDs for new entries
+          if (eduId < 0) return true;
+          // Positive IDs that don't exist in DB are also new
+          return !existingEduMap.has(eduId);
         });
 
         console.log(
@@ -664,33 +757,52 @@ const employeeService = {
         for (const [eduId, incomingEdu] of incomingEduMap) {
           if (existingEduMap.has(eduId)) {
             console.log(`Updating education ID ${eduId}:`, incomingEdu);
-          // Parse year_of_completion (now DateTime) from date string
-          let completionDate = null;
-          if (
-            incomingEdu.year_of_completion &&
-            typeof incomingEdu.year_of_completion === "string" &&
-            incomingEdu.year_of_completion.trim() !== ""
-          ) {
-            const d = new Date(incomingEdu.year_of_completion);
-            if (!isNaN(d.getTime())) completionDate = d;
-          }
-          // start_date is now a String (year), just use it directly
-          const startYear = incomingEdu.start_date && typeof incomingEdu.start_date === "string" 
-            ? incomingEdu.start_date.trim() 
-            : null;
-          const levelId = incomingEdu.education_level_id
-            ? parseInt(incomingEdu.education_level_id)
-            : null;
+            // Parse year_of_completion (now DateTime) from date string
+            let completionDate = null;
+            if (
+              incomingEdu.year_of_completion &&
+              typeof incomingEdu.year_of_completion === "string" &&
+              incomingEdu.year_of_completion.trim() !== ""
+            ) {
+              const d = new Date(incomingEdu.year_of_completion);
+              if (!isNaN(d.getTime())) completionDate = d;
+            }
+            // start_date is now a String (year), just use it directly
+            const startYear =
+              incomingEdu.start_date &&
+              typeof incomingEdu.start_date === "string"
+                ? incomingEdu.start_date.trim()
+                : null;
+            const levelId = incomingEdu.education_level_id
+              ? parseInt(incomingEdu.education_level_id)
+              : null;
+
+            // Ensure both required fields have valid values (preserve existing if not provided)
+            const existingEdu = existingEduMap.get(eduId);
+            const finalEducationLevel =
+              incomingEdu.education_level &&
+              incomingEdu.education_level.trim() !== ""
+                ? incomingEdu.education_level.trim()
+                : existingEdu?.education_level || "";
+            const finalInstitutionName =
+              incomingEdu.institution_name &&
+              incomingEdu.institution_name.trim() !== ""
+                ? incomingEdu.institution_name.trim()
+                : existingEdu?.institution_name || "";
+
+            const eduUpdateData = {
+              education_level: finalEducationLevel,
+              institution_name: finalInstitutionName,
+              year_of_completion: completionDate,
+              marks_gpa: incomingEdu.marks_gpa || "",
+              start_date: startYear || null,
+            };
+            if (typeof levelId === "number" && !isNaN(levelId)) {
+              eduUpdateData.education_level_id = levelId;
+            }
             await tx.educationQualification.update({
               where: { id: eduId },
-              data: {
-                education_level: incomingEdu.education_level || "",
-                education_level_id: levelId,
-                institution_name: incomingEdu.institution_name || "",
-                year_of_completion: completionDate,
-                marks_gpa: incomingEdu.marks_gpa || "",
-                start_date: startYear || null,
-              },
+              data: eduUpdateData,
             });
             existingEduMap.delete(eduId);
             console.log(`Updated education ID ${eduId}`);
@@ -699,13 +811,26 @@ const employeeService = {
 
         // Create new educations and store ID mappings
         for (const edu of newEducations) {
-          if (!edu.institution_name || edu.institution_name.trim() === "") {
-            console.warn(
-              "Skipping education with missing or empty institution_name:",
-              JSON.stringify(edu, null, 2)
-            );
-            continue;
-          }
+          // Both education_level and institution_name are REQUIRED fields in the schema
+          // Ensure we have valid values for both
+          const hasValidInstitutionName =
+            edu.institution_name && edu.institution_name.trim() !== "";
+          const hasValidEducationLevel =
+            edu.education_level && edu.education_level.trim() !== "";
+
+          // Always create education entries, even if fields are missing (use placeholders)
+          // This ensures documents can be associated even if education data is incomplete
+          const finalInstitutionName = hasValidInstitutionName
+            ? edu.institution_name.trim()
+            : "N/A";
+          const finalEducationLevel = hasValidEducationLevel
+            ? edu.education_level.trim()
+            : "N/A";
+
+          console.log(
+            `Creating education with institution: "${finalInstitutionName}", level: "${finalEducationLevel}"`,
+            JSON.stringify(edu, null, 2)
+          );
           // Parse year_of_completion (now DateTime) from date string
           let completionDate = null;
           if (
@@ -717,23 +842,27 @@ const employeeService = {
             if (!isNaN(d.getTime())) completionDate = d;
           }
           // start_date is now a String (year), just use it directly
-          const startYear = edu.start_date && typeof edu.start_date === "string" 
-            ? edu.start_date.trim() 
-            : null;
+          const startYear =
+            edu.start_date && typeof edu.start_date === "string"
+              ? edu.start_date.trim()
+              : null;
           const levelId = edu.education_level_id
             ? parseInt(edu.education_level_id)
             : null;
           try {
+            const eduCreateData2 = {
+              employee: { connect: { id: employee.id } },
+              education_level: finalEducationLevel,
+              institution_name: finalInstitutionName,
+              year_of_completion: completionDate,
+              marks_gpa: edu.marks_gpa || "",
+              start_date: startYear || null,
+            };
+            if (typeof levelId === "number" && !isNaN(levelId)) {
+              eduCreateData2.education_level_id = levelId;
+            }
             const createdEdu = await tx.educationQualification.create({
-              data: {
-                employee: { connect: { id: employee.id } },
-                education_level: edu.education_level || "",
-                education_level_id: levelId,
-                institution_name: edu.institution_name,
-                year_of_completion: completionDate,
-                marks_gpa: edu.marks_gpa || "",
-                start_date: startYear || null,
-              },
+              data: eduCreateData2,
             });
             if (edu.id) {
               educationIdMapping[edu.id] = createdEdu.id; // Map temporary ID to database ID
@@ -755,12 +884,18 @@ const employeeService = {
         }
 
         // Delete unprocessed existing educations
-        const incomingEducationIds = (educations || [])
-          .map((edu) => parseInt(edu.id))
-          .filter((id) => !isNaN(id));
+        // IMPORTANT: Only include positive IDs (existing DB records), exclude negative IDs (temporary IDs for new entries)
+        const incomingEducationIds = educationsArray
+          .map((edu) => {
+            if (!edu.id) return null;
+            const parsedId = parseInt(edu.id);
+            // Only include positive IDs (existing records), exclude negative IDs (temporary) and invalid IDs
+            return !isNaN(parsedId) && parsedId > 0 ? parsedId : null;
+          })
+          .filter((id) => id !== null);
 
         console.log(
-          "Incoming education IDs from request:",
+          "Incoming education IDs from request (existing records only):",
           incomingEducationIds
         );
         console.log(
@@ -769,6 +904,7 @@ const employeeService = {
         );
 
         // 3. Find educations that should be deleted (not in request)
+        // Only delete educations that existed in DB but are not in the incoming list
         const educationsToDelete = existingEducations.filter(
           (edu) => !incomingEducationIds.includes(edu.id)
         );
@@ -799,8 +935,6 @@ const employeeService = {
             );
           }
         }
-      } else {
-        console.log("No educations provided or not an array");
       }
       // Delete disability document if has_disability is false or not provided
       if (!employeeUpdateData.has_disability) {
@@ -838,7 +972,11 @@ const employeeService = {
         ];
 
         // Map temporary IDs to database IDs for document records
-        const documentsToCreate = documentRecords.map((doc) => {
+        // Also deduplicate documents to prevent double creation
+        const seenDocuments = new Set(); // Track (file_type, associated_id, file_path) combinations
+        // CRITICAL FIX: Use for loop instead of map to handle async operations properly
+        const documentsToCreate = [];
+        for (const doc of documentRecords) {
           let mappedAssociatedId = doc.associated_id;
           if (doc.associated_id) {
             if (
@@ -857,46 +995,318 @@ const employeeService = {
               console.log(
                 `Mapped experience associated_id ${doc.associated_id} to ${mappedAssociatedId}`
               );
-            } else if (doc.associated_id > 2147483647) {
+            } else if (doc.associated_id && doc.associated_id > 2147483647) {
               console.log(
                 `Removing large associated_id ${doc.associated_id} for document ${doc.document_name}`
               );
               mappedAssociatedId = null;
+            } else if (doc.associated_id && doc.associated_id < 0) {
+              // Temporary ID (negative number) - try to map it
+              // The mapping should have been created when the education/experience was created
+              if (
+                doc.file_type === "education" &&
+                educationIdMapping[doc.associated_id]
+              ) {
+                mappedAssociatedId = educationIdMapping[doc.associated_id];
+                console.log(
+                  `Mapped negative education associated_id ${doc.associated_id} to ${mappedAssociatedId}`
+                );
+              } else if (
+                doc.file_type === "experience" &&
+                experienceIdMapping[doc.associated_id]
+              ) {
+                mappedAssociatedId = experienceIdMapping[doc.associated_id];
+                console.log(
+                  `Mapped negative experience associated_id ${doc.associated_id} to ${mappedAssociatedId}`
+                );
+              } else {
+                // CRITICAL FIX: If no mapping found for temporary ID, try to find the education/experience
+                // by checking if it's a positive ID that was incorrectly parsed as negative, or
+                // if the education/experience was just created but mapping wasn't set
+                console.warn(
+                  `Warning: No mapping found for temporary ID ${doc.associated_id} for document ${doc.document_name}, file_type: ${doc.file_type}`
+                );
+                console.log(
+                  `Available education mappings:`,
+                  Object.keys(educationIdMapping)
+                );
+                console.log(
+                  `Available experience mappings:`,
+                  Object.keys(experienceIdMapping)
+                );
+
+                // Try to find the education/experience by checking if the ID exists in the database
+                // This handles cases where the ID might be a positive number that was incorrectly treated as negative
+                if (doc.file_type === "education") {
+                  // Check if this might actually be a positive ID (absolute value)
+                  const absId = Math.abs(doc.associated_id);
+                  const existingEdu = await tx.educationQualification.findFirst(
+                    {
+                      where: {
+                        employee_id: employee.id,
+                        id: absId,
+                        is_deleted: false,
+                      },
+                    }
+                  );
+                  if (existingEdu) {
+                    mappedAssociatedId = existingEdu.id;
+                    console.log(
+                      `Found existing education by absolute ID: ${absId}, using it for document mapping`
+                    );
+                  } else {
+                    // Last resort: try to find the most recently created education for this employee
+                    // This handles edge cases where the mapping wasn't created properly
+                    const recentEdu = await tx.educationQualification.findFirst(
+                      {
+                        where: {
+                          employee_id: employee.id,
+                          is_deleted: false,
+                        },
+                        orderBy: {
+                          id: "desc",
+                        },
+                      }
+                    );
+                    if (
+                      recentEdu &&
+                      !Object.values(educationIdMapping).includes(recentEdu.id)
+                    ) {
+                      // Only use this if it's not already mapped (to avoid wrong associations)
+                      console.warn(
+                        `⚠️ Using fallback: associating education document with most recent education ID ${recentEdu.id} (this may be incorrect)`
+                      );
+                      mappedAssociatedId = recentEdu.id;
+                    } else {
+                      console.error(
+                        `Cannot save education document ${doc.document_name}: no mapping for temporary ID ${doc.associated_id} and no fallback education found`
+                      );
+                      continue; // Skip this document instead of returning null
+                    }
+                  }
+                } else if (doc.file_type === "experience") {
+                  // Similar fallback for experience documents
+                  const absId = Math.abs(doc.associated_id);
+                  const existingExp = await tx.pastExperience.findFirst({
+                    where: {
+                      employee_id: employee.id,
+                      id: absId,
+                      is_deleted: false,
+                    },
+                  });
+                  if (existingExp) {
+                    mappedAssociatedId = existingExp.id;
+                    console.log(
+                      `Found existing experience by absolute ID: ${absId}, using it for document mapping`
+                    );
+                  } else {
+                    const recentExp = await tx.pastExperience.findFirst({
+                      where: {
+                        employee_id: employee.id,
+                        is_deleted: false,
+                      },
+                      orderBy: {
+                        id: "desc",
+                      },
+                    });
+                    if (
+                      recentExp &&
+                      !Object.values(experienceIdMapping).includes(recentExp.id)
+                    ) {
+                      console.warn(
+                        `⚠️ Using fallback: associating experience document with most recent experience ID ${recentExp.id} (this may be incorrect)`
+                      );
+                      mappedAssociatedId = recentExp.id;
+                    } else {
+                      console.error(
+                        `Cannot save experience document ${doc.document_name}: no mapping for temporary ID ${doc.associated_id} and no fallback experience found`
+                      );
+                      continue; // Skip this document instead of returning null
+                    }
+                  }
+                } else {
+                  // For other document types, set to null
+                  mappedAssociatedId = null;
+                }
+              }
             }
           }
-          return {
+
+          // Deduplicate: Check if we've already seen this (file_type, associated_id, file_path) combination
+          const associatedIdStr =
+            mappedAssociatedId !== null && mappedAssociatedId !== undefined
+              ? String(mappedAssociatedId)
+              : "null";
+          const docKey = `${doc.file_type}_${associatedIdStr}_${doc.file_path}`;
+          if (seenDocuments.has(docKey)) {
+            console.warn(
+              `Skipping duplicate document: ${docKey} for document ${doc.document_name}`
+            );
+            continue;
+          }
+          seenDocuments.add(docKey);
+
+          documentsToCreate.push({
             ...doc,
             associated_id: mappedAssociatedId,
             employee_id: employee.id,
-          };
-        });
+          });
+        }
 
+        // CRITICAL FIX: Delete existing documents BEFORE creating new ones to prevent duplicates
         // Delete existing single-type document records (without deleting physical files)
+        // Also delete existing education/experience documents if they're being replaced
+        const processedDeletions = new Set(); // Track which deletions we've already done
+
+        // First, collect all unique document types and associated_ids that need deletion
+        const documentsToDelete = new Set();
         for (const doc of documentsToCreate) {
           if (singleDocumentTypes.includes(doc.file_type)) {
+            documentsToDelete.add(`single_${doc.file_type}_null`);
+          } else if (
+            (doc.file_type === "education" || doc.file_type === "experience") &&
+            doc.associated_id !== null &&
+            doc.associated_id !== undefined
+          ) {
+            documentsToDelete.add(`${doc.file_type}_${doc.associated_id}`);
+          }
+        }
+
+        // Now delete all documents that will be replaced
+        for (const deleteKey of documentsToDelete) {
+          if (processedDeletions.has(deleteKey)) continue;
+
+          // Parse the delete key: "single_cnic_front_null" or "education_123" or "experience_-456"
+          let fileType, associatedId;
+          if (deleteKey.startsWith("single_")) {
+            // Format: "single_cnic_front_null" -> extract "cnic_front"
+            const parts = deleteKey.split("_");
+            fileType = parts.slice(1, -1).join("_"); // Everything between "single" and "null"
+            associatedId = null;
+          } else {
+            // Format: "education_123" or "experience_-456"
+            const parts = deleteKey.split("_");
+            fileType = parts[0];
+            const associatedIdStr = parts.slice(1).join("_"); // Handle negative IDs with underscore
+            associatedId =
+              associatedIdStr === "null" ? null : parseInt(associatedIdStr);
+          }
+
+          if (singleDocumentTypes.includes(fileType)) {
             const whereCondition = {
               employee_id: employee.id,
-              file_type: doc.file_type,
+              file_type: fileType,
               associated_id: null,
             };
-
-            await tx.employeeDocument.deleteMany({
+            const deleteResult = await tx.employeeDocument.deleteMany({
               where: whereCondition,
             });
             console.log(
-              `Deleted existing document records for ${doc.file_type}`
+              `Deleted ${deleteResult.count} existing document records for ${fileType}`
+            );
+          } else if (fileType === "education" || fileType === "experience") {
+            const whereCondition = {
+              employee_id: employee.id,
+              file_type: fileType,
+              associated_id: associatedId,
+            };
+            const deleteResult = await tx.employeeDocument.deleteMany({
+              where: whereCondition,
+            });
+            console.log(
+              `Deleted ${deleteResult.count} existing ${fileType} documents for associated_id ${associatedId}`
             );
           }
+          processedDeletions.add(deleteKey);
         }
 
         console.log(
           `Creating ${documentsToCreate.length} new document records:`,
           JSON.stringify(documentsToCreate, null, 2)
         );
-        const result = await tx.employeeDocument.createMany({
-          data: documentsToCreate,
-        });
-        console.log(`Successfully created ${result.count} document records`);
+
+        // Additional logging to help debug duplicate issues
+        const docSummary = documentsToCreate.reduce((acc, doc) => {
+          const key = `${doc.file_type}_${doc.associated_id || "null"}`;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+        console.log(`Document creation summary:`, docSummary);
+
+        if (documentsToCreate.length > 0) {
+          // CRITICAL FIX: Additional safety check - verify documents don't already exist
+          // (This is a backup check since we already deleted existing documents above)
+          const documentsToCreateFiltered = [];
+          for (const doc of documentsToCreate) {
+            // Check if a document with the same file_path already exists for this employee
+            const existingDoc = await tx.employeeDocument.findFirst({
+              where: {
+                employee_id: employee.id,
+                file_path: doc.file_path,
+                is_deleted: false,
+              },
+            });
+
+            if (existingDoc) {
+              console.warn(
+                `⚠️ Skipping duplicate document: ${doc.document_name} with file_path ${doc.file_path} - already exists with ID ${existingDoc.id} (this should have been deleted above)`
+              );
+              continue;
+            }
+
+            // For education/experience documents, also check by associated_id and file_type
+            if (
+              doc.associated_id !== null &&
+              doc.associated_id !== undefined &&
+              (doc.file_type === "education" || doc.file_type === "experience")
+            ) {
+              const existingByAssociation = await tx.employeeDocument.findFirst(
+                {
+                  where: {
+                    employee_id: employee.id,
+                    file_type: doc.file_type,
+                    associated_id: doc.associated_id,
+                    is_deleted: false,
+                  },
+                }
+              );
+
+              if (existingByAssociation) {
+                console.warn(
+                  `⚠️ Skipping duplicate ${doc.file_type} document for associated_id ${doc.associated_id} - already exists with ID ${existingByAssociation.id} (this should have been deleted above)`
+                );
+                continue;
+              }
+            }
+
+            documentsToCreateFiltered.push(doc);
+          }
+
+          console.log(
+            `After duplicate check: ${documentsToCreateFiltered.length} documents to create (filtered from ${documentsToCreate.length})`
+          );
+
+          if (documentsToCreateFiltered.length > 0) {
+            const result = await tx.employeeDocument.createMany({
+              data: documentsToCreateFiltered,
+              skipDuplicates: false, // We handle duplicates manually above
+            });
+            console.log(
+              `Successfully created ${result.count} document records`
+            );
+
+            // Verify creation - check for duplicates
+            if (result.count !== documentsToCreateFiltered.length) {
+              console.warn(
+                `Mismatch: Expected to create ${documentsToCreateFiltered.length} documents, but only ${result.count} were created`
+              );
+            }
+          } else {
+            console.log("No new documents to create after duplicate filtering");
+          }
+        } else {
+          console.log("No documents to create");
+        }
       }
 
       // Return employee with all related data
@@ -1171,18 +1581,18 @@ const employeeService = {
       if (!employee) return null;
 
       // Check for active child records
-      const validation = await validateSoftDelete('Employee', parseInt(id));
+      const validation = await validateSoftDelete("Employee", parseInt(id));
       if (!validation.canDelete) {
         throw new Error(validation.message);
       }
 
       // Mask unique fields to prevent unique constraint violations
-      const { masked } = maskUniqueFieldsForSoftDelete('Employee', employee);
+      const { masked } = maskUniqueFieldsForSoftDelete("Employee", employee);
 
       // Soft delete employee and related records
       await prisma.employee.update({
         where: { id: parseInt(id) },
-        data: { 
+        data: {
           is_deleted: true,
           ...masked, // Apply masked unique fields
         },
@@ -1212,27 +1622,27 @@ const employeeService = {
       const employee = await prisma.employee.findUnique({
         where: { id: parseInt(id) },
       });
-      
+
       if (!employee) {
         throw new Error("Employee not found");
       }
-      
+
       if (!employee.is_deleted) {
         throw new Error("Employee is not soft-deleted");
       }
 
       // Restore unique fields to their original values
-      const restored = restoreUniqueFieldsForUndelete('Employee', employee);
+      const restored = restoreUniqueFieldsForUndelete("Employee", employee);
 
       // Restore employee and related records
       await prisma.employee.update({
         where: { id: parseInt(id) },
-        data: { 
+        data: {
           is_deleted: false,
           ...restored, // Restore original unique field values
         },
       });
-      
+
       // Restore related records
       await prisma.pastExperience.updateMany({
         where: { employee_id: parseInt(id) },
@@ -1251,7 +1661,7 @@ const employeeService = {
         where: { id: parseInt(id) },
       });
 
-      return { 
+      return {
         success: true,
         message: `Employee ${restoredEmployee.full_name} restored successfully`,
         restoredEmployee,

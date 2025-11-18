@@ -40,6 +40,7 @@ const PDFPreview = ({
 
     // Reset states when URL changes
     setError(false);
+    setLoading(true); // Start with loading state
 
     // Clear any existing timeout
     if (loadTimeoutRef.current) {
@@ -48,19 +49,15 @@ const PDFPreview = ({
 
     const isBlobUrl = url && url.startsWith('blob:');
     
-    // For blob URLs, show immediately (no loader needed - they're instant)
-    // For regular URLs, show loader briefly
-    if (isBlobUrl) {
-      setLoading(false);
-    } else {
-      setLoading(true);
-      // For regular URLs, hide loader after a delay
-      loadTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-      }, 1000);
-    }
+    // For blob URLs, set a very short delay to prevent blinking
+    // For regular URLs, show loader for longer
+    const delay = isBlobUrl ? 100 : 1000;
+    
+    loadTimeoutRef.current = setTimeout(() => {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }, delay);
 
     return () => {
       if (loadTimeoutRef.current) {

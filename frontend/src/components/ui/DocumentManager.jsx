@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   getDocumentUrl,
   isImageFile,
@@ -8,9 +8,48 @@ import {
 } from '../../utils/imageUtils';
 import PDFPreview from './PDFPreview';
 
+// Cache for blob URLs to prevent recreation on every render
+const blobUrlCache = new Map();
+
+/**
+ * Get or create a blob URL for a file, with caching to prevent recreation
+ */
+const getBlobUrl = (file) => {
+  if (!file) return null;
+  
+  // Create a unique key for the file
+  const fileKey = `${file.name}-${file.size}-${file.lastModified}-${file.type}`;
+  
+  // Check if we already have a blob URL for this file
+  if (blobUrlCache.has(fileKey)) {
+    return blobUrlCache.get(fileKey);
+  }
+  
+  // Create new blob URL
+  try {
+    const blobUrl = URL.createObjectURL(file);
+    blobUrlCache.set(fileKey, blobUrl);
+    
+    // Clean up old entries if cache gets too large (keep last 50)
+    if (blobUrlCache.size > 50) {
+      const firstKey = blobUrlCache.keys().next().value;
+      const firstUrl = blobUrlCache.get(firstKey);
+      if (firstUrl) {
+        URL.revokeObjectURL(firstUrl);
+      }
+      blobUrlCache.delete(firstKey);
+    }
+    
+    return blobUrl;
+  } catch (error) {
+    console.error('Error creating blob URL for file preview:', error);
+    return null;
+  }
+};
+
 /**
  * Simple file preview function (copied from working CreateEmployeeForm)
- * Uses a ref to track and cleanup blob URLs
+ * Uses cached blob URLs to prevent recreation on every render
  */
 const renderFilePreview = (file, onRemove, documentType, documentId) => {
   if (!file) return null;
@@ -18,23 +57,12 @@ const renderFilePreview = (file, onRemove, documentType, documentId) => {
   const isImage = file.type && file.type.startsWith('image/');
   const isPDF = file.type === 'application/pdf' || (file.name && /\.pdf$/i.test(file.name));
   
-  // Create blob URL for preview
-  let previewUrl;
-  try {
-    previewUrl = URL.createObjectURL(file);
-    // Store the URL so it can be cleaned up later (though React will handle cleanup on unmount)
-  } catch (error) {
-    console.error('Error creating blob URL for file preview:', error);
+  // Get cached blob URL (or create if not cached)
+  const previewUrl = getBlobUrl(file);
+  
+  if (!previewUrl) {
     return null;
   }
-  
-  console.log('📄 Rendering file preview:', { 
-    fileName: file.name, 
-    fileType: file.type, 
-    isPDF, 
-    isImage,
-    previewUrl: previewUrl.substring(0, 50) + '...'
-  });
 
   return (
     <div key={documentId} className="relative group">
@@ -203,7 +231,7 @@ const DocumentManager = ({
     });
   };
 
-  const renderDocument = (document, index) => {
+  const renderDocument = React.useCallback((document, index) => {
     // For new files, use simple preview like create form
     if (document.isNewFile && document.originalFile) {
       return renderFilePreview(document.originalFile, onDocumentRemove, documentType, document.id);
@@ -222,18 +250,6 @@ const DocumentManager = ({
       documentUrl = getDocumentUrl(document);
     } else {
       documentUrl = null;
-    }
-    
-    // Debug logging for PDF documents
-    if (documentUrl && (document.file_path && /\.pdf$/i.test(document.file_path)) || 
-        document.mime_type === 'application/pdf' ||
-        (document.document_name && /\.pdf$/i.test(document.document_name))) {
-      console.log('📄 PDF Document URL:', { 
-        documentUrl, 
-        file_path: document.file_path, 
-        url: document.url,
-        document_name: document.document_name 
-      });
     }
 
     // Use enhanced metadata from backend if available
@@ -316,7 +332,7 @@ const DocumentManager = ({
         </div>
       </div>
     );
-  };
+  }, [documentType, onDocumentRemove]);
 
   return (
     <div className={`space-y-4 ${className}`}>

@@ -78,10 +78,16 @@ const processUploadedFiles = (files, req) => {
         fieldName.includes("_") &&
         (documentType === "education" || documentType === "experience")
       ) {
+        // Extract associated ID from field name like "education_documents_123" or "experience_documents_-456"
         const parts = fieldName.split("_");
         const lastPart = parts[parts.length - 1];
-        if (!isNaN(lastPart)) {
-          associatedId = parseInt(lastPart);
+        const parsedId = parseInt(lastPart, 10);
+        if (!isNaN(parsedId)) {
+          // Accept both positive (DB IDs) and negative (temporary IDs) values
+          associatedId = parsedId;
+          console.log(
+            `Extracted associated_id ${associatedId} from fieldname ${fieldName}`
+          );
         }
       }
 
@@ -312,17 +318,42 @@ const employeeController = {
         }
       }
 
-      if (
-        processedData.educations &&
-        typeof processedData.educations === "string"
-      ) {
-        try {
-          processedData.educations = JSON.parse(processedData.educations);
-        } catch (error) {
-          console.error("❌ Error parsing educations:", error.message);
-          processedData.educations = [];
+      // Parse educations ONLY if provided; do NOT force empty array when absent.
+      const educationsProvided = Object.prototype.hasOwnProperty.call(
+        processedData,
+        "educations"
+      );
+      if (educationsProvided) {
+        if (
+          processedData.educations &&
+          typeof processedData.educations === "string"
+        ) {
+          try {
+            processedData.educations = JSON.parse(processedData.educations);
+          } catch (error) {
+            console.error("❌ Error parsing educations:", error.message);
+            // Preserve undefined to signal 'do not modify educations' downstream
+            delete processedData.educations;
+          }
         }
+        if (Array.isArray(processedData.educations)) {
+          console.log(
+            "📚 Parsed educations count:",
+            processedData.educations.length
+          );
+        } else if (processedData.educations !== undefined) {
+          console.warn(
+            "⚠️ educations provided but not an array. Removing field to avoid unintended deletions."
+          );
+          delete processedData.educations;
+        }
+      } else {
+        console.log(
+          "ℹ️ No educations field in request body — existing records will be preserved."
+        );
       }
+      // Flag for service layer
+      processedData._educationsProvided = educationsProvided;
 
       console.log("📋 Calling employeeService.updateEmployee");
       const employee = await employeeService.updateEmployee(

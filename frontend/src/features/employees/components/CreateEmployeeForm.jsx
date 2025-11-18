@@ -23,7 +23,7 @@ import {
   MARITAL_STATUS_OPTIONS,
   RELATIONSHIP_TYPES,
   PAKISTAN_DISTRICTS,
-  getCitiesForDistrict
+  getCitiesForDistrict,
 } from "../../../constants/employeeOptions";
 import {
   validateCNIC,
@@ -33,7 +33,7 @@ import {
   validateMultipleFiles,
   validateEmail,
   validatePhoneNumber,
-  getTodayDateString
+  getTodayDateString,
 } from "../../../utils/employeeValidation";
 
 const CreateEmployeeForm = () => {
@@ -66,12 +66,12 @@ const CreateEmployeeForm = () => {
     police_character_certificate_file: null,
     experience_documents: {},
     education_documents: {},
-    other_documents: []
+    other_documents: [],
   });
-  
+
   // Store blob URLs for file previews to prevent recreation on every render
   const [filePreviewUrls, setFilePreviewUrls] = useState({});
-  
+
   // Add a state to force re-render of file inputs
   const [fileInputKeys, setFileInputKeys] = useState({});
 
@@ -125,7 +125,7 @@ const CreateEmployeeForm = () => {
 
   // Form persistence hook
   const { clearSavedData, isRestoring } = useFormPersistence({
-    storageKey: 'createEmployeeForm',
+    storageKey: "createEmployeeForm",
     formData: form,
     additionalState: {
       experiences,
@@ -141,14 +141,14 @@ const CreateEmployeeForm = () => {
       setProfilePicturePreview,
       setDistrictMap,
       setCityMap,
-      setLevelMap
+      setLevelMap,
     },
-    enabled: true
+    enabled: true,
   });
 
   // Create blob URLs for files that don't have them yet (e.g., after restoration)
   useEffect(() => {
-    setFilePreviewUrls(prev => {
+    setFilePreviewUrls((prev) => {
       const newUrls = { ...prev };
       let hasNewUrls = false;
 
@@ -173,7 +173,7 @@ const CreateEmployeeForm = () => {
               }
             }
           });
-        } else if (typeof value === 'object') {
+        } else if (typeof value === "object") {
           Object.entries(value).forEach(([objKey, objValue]) => {
             if (objValue instanceof File) {
               const fileId = `${objValue.name}-${objValue.size}-${objValue.lastModified}`;
@@ -195,9 +195,9 @@ const CreateEmployeeForm = () => {
   useEffect(() => {
     return () => {
       // Revoke all blob URLs when component unmounts
-      setFilePreviewUrls(prev => {
-        Object.values(prev).forEach(url => {
-          if (url && url.startsWith('blob:')) {
+      setFilePreviewUrls((prev) => {
+        Object.values(prev).forEach((url) => {
+          if (url && url.startsWith("blob:")) {
             URL.revokeObjectURL(url);
           }
         });
@@ -208,11 +208,11 @@ const CreateEmployeeForm = () => {
 
   // Log page view on component mount
   useEffect(() => {
-    logPageView('Create Employee Form', {
+    logPageView("Create Employee Form", {
       metadata: {
-        form_type: 'employee_creation',
-        access_method: 'direct_navigation'
-      }
+        form_type: "employee_creation",
+        access_method: "direct_navigation",
+      },
     });
   }, [logPageView]);
 
@@ -224,13 +224,23 @@ const CreateEmployeeForm = () => {
           districtService.getAllDistricts(),
           educationLevelService.getAllLevels(),
         ]);
-        const dList = (districts?.districts || districts || []).map(d => ({ value: d.id, label: d.name }));
+        const dList = (districts?.districts || districts || []).map((d) => ({
+          value: d.id,
+          label: d.name,
+        }));
         setDistrictOptions(dList);
-        setDistrictMap(Object.fromEntries(dList.map(o => [String(o.value), o.label])));
+        setDistrictMap(
+          Object.fromEntries(dList.map((o) => [String(o.value), o.label]))
+        );
 
-        const lList = (levels || []).map(l => ({ value: l.id, label: l.name }));
+        const lList = (levels || []).map((l) => ({
+          value: l.id,
+          label: l.name,
+        }));
         setEducationLevelOptions(lList);
-        setLevelMap(Object.fromEntries(lList.map(o => [String(o.value), o.label])));
+        setLevelMap(
+          Object.fromEntries(lList.map((o) => [String(o.value), o.label]))
+        );
       } catch (_) {
         // ignore; UI will show empty options
       }
@@ -249,45 +259,64 @@ const CreateEmployeeForm = () => {
     (async () => {
       if (watchedDistrictId) {
         try {
-          const cities = await cityService.getAllCities({ district_id: watchedDistrictId });
-          const cList = (cities?.cities || cities || []).map(c => ({ value: c.id, label: c.name }));
+          const cities = await cityService.getAllCities({
+            district_id: watchedDistrictId,
+          });
+          const cList = (cities?.cities || cities || []).map((c) => ({
+            value: c.id,
+            label: c.name,
+          }));
           setAvailableCities(cList);
-          
+
           // CRITICAL: Use functional update to access current cityMap state
           // This ensures we can check for restored labels even if they were set asynchronously
-          setCityMap(prev => {
-            const newCityMap = Object.fromEntries(cList.map(o => [String(o.value), o.label]));
+          setCityMap((prev) => {
+            const newCityMap = Object.fromEntries(
+              cList.map((o) => [String(o.value), o.label])
+            );
             const existingCityLabel = prev[String(watchedCityId)];
-            
+
             // If we have a restored label for this city, preserve it
             if (watchedCityId && existingCityLabel) {
               // Always preserve the existing label (from restoration)
               // This ensures restored labels are maintained even after cities are loaded
               // Also add the city to availableCities if it's not already there
-              const cityInList = cList.find(c => String(c.value) === String(watchedCityId));
+              const cityInList = cList.find(
+                (c) => String(c.value) === String(watchedCityId)
+              );
               if (!cityInList) {
                 // City not in API response but we have a label - add it to the list
-                setAvailableCities(prevCities => {
-                  const alreadyExists = prevCities.some(c => String(c.value) === String(watchedCityId));
+                setAvailableCities((prevCities) => {
+                  const alreadyExists = prevCities.some(
+                    (c) => String(c.value) === String(watchedCityId)
+                  );
                   if (!alreadyExists) {
-                    return [...prevCities, { value: watchedCityId, label: existingCityLabel }];
+                    return [
+                      ...prevCities,
+                      { value: watchedCityId, label: existingCityLabel },
+                    ];
                   }
                   return prevCities;
                 });
               }
-              return { ...newCityMap, [String(watchedCityId)]: existingCityLabel };
+              return {
+                ...newCityMap,
+                [String(watchedCityId)]: existingCityLabel,
+              };
             }
-            
+
             // No existing label - use the new map
             return newCityMap;
           });
-          
+
           // Only reset city_id if it's not in the list AND we don't have a label for it
           // Use functional update to check current state
-          setCityMap(prev => {
+          setCityMap((prev) => {
             const hasLabel = prev[String(watchedCityId)];
-            const isInList = cList.some(c => String(c.value) === String(watchedCityId));
-            
+            const isInList = cList.some(
+              (c) => String(c.value) === String(watchedCityId)
+            );
+
             if (watchedCityId && !isInList && !hasLabel) {
               // City not in list and no label - reset it
               form.setValue("city_id", "");
@@ -297,7 +326,7 @@ const CreateEmployeeForm = () => {
         } catch (_) {
           setAvailableCities([]);
           // Don't reset city_id if we have a label for it (form restoration case)
-          setCityMap(prev => {
+          setCityMap((prev) => {
             const hasLabel = prev[String(watchedCityId)];
             if (!hasLabel) {
               form.setValue("city_id", "");
@@ -308,7 +337,7 @@ const CreateEmployeeForm = () => {
       } else {
         setAvailableCities([]);
         // Don't reset city_id if we have a label for it (form restoration case)
-        setCityMap(prev => {
+        setCityMap((prev) => {
           const hasLabel = prev[String(watchedCityId)];
           if (!hasLabel) {
             form.setValue("city_id", "");
@@ -332,7 +361,7 @@ const CreateEmployeeForm = () => {
   const handleProfilePictureUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
-      const validation = validateFileUpload(file, 'profile_picture');
+      const validation = validateFileUpload(file, "profile_picture");
       if (validation.isValid) {
         form.setValue("profile_picture_file", file);
         const reader = new FileReader();
@@ -340,31 +369,39 @@ const CreateEmployeeForm = () => {
         reader.readAsDataURL(file);
       } else {
         alert(validation.message);
-        event.target.value = '';
+        event.target.value = "";
       }
     }
   };
 
   // Handle file uploads
   const handleFileUpload = (event, fileType, isMultiple = false) => {
-    const files = isMultiple ? Array.from(event.target.files) : [event.target.files[0]];
+    const files = isMultiple
+      ? Array.from(event.target.files)
+      : [event.target.files[0]];
 
     if (isMultiple) {
       const validation = validateMultipleFiles(files, fileType);
       if (validation.isValid) {
         // For multiple files, ADD to existing files instead of replacing
-        setUploadedFiles(prev => {
+        setUploadedFiles((prev) => {
           const updated = {
             ...prev,
-            [fileType]: [...(prev[fileType] || []), ...files]
+            [fileType]: [...(prev[fileType] || []), ...files],
           };
-          console.log('📁 Multiple files uploaded:', { fileType, files: files.map(f => f.name), updated });
-          
+          console.log("📁 Multiple files uploaded:", {
+            fileType,
+            files: files.map((f) => f.name),
+            updated,
+          });
+
           // Create blob URLs for new files
-          setFilePreviewUrls(prevUrls => {
+          setFilePreviewUrls((prevUrls) => {
             const newUrls = { ...prevUrls };
             files.forEach((file, index) => {
-              const fileKey = `${fileType}-${(prev[fileType]?.length || 0) + index}`;
+              const fileKey = `${fileType}-${
+                (prev[fileType]?.length || 0) + index
+              }`;
               const fileId = `${file.name}-${file.size}-${file.lastModified}`;
               const fullKey = `${fileKey}-${fileId}`;
               if (!newUrls[fullKey]) {
@@ -373,28 +410,33 @@ const CreateEmployeeForm = () => {
             });
             return newUrls;
           });
-          
+
           return updated;
         });
         // Don't set form value here - it will be handled in form submission
       } else {
         alert(validation.message);
-        event.target.value = '';
+        event.target.value = "";
       }
     } else {
       const file = files[0];
       if (file) {
         const validation = validateFileUpload(file, fileType);
         if (validation.isValid) {
-          setUploadedFiles(prev => {
+          setUploadedFiles((prev) => {
             const updated = {
               ...prev,
-              [fileType]: file
+              [fileType]: file,
             };
-            console.log('📁 Single file uploaded:', { fileType, fileName: file.name, fileSize: file.size, updated });
-            
+            console.log("📁 Single file uploaded:", {
+              fileType,
+              fileName: file.name,
+              fileSize: file.size,
+              updated,
+            });
+
             // Create blob URL for the file
-            setFilePreviewUrls(prevUrls => {
+            setFilePreviewUrls((prevUrls) => {
               const fileId = `${file.name}-${file.size}-${file.lastModified}`;
               const fullKey = `${fileType}-${fileId}`;
               // Revoke old URL if exists
@@ -403,16 +445,16 @@ const CreateEmployeeForm = () => {
               }
               return {
                 ...prevUrls,
-                [fullKey]: URL.createObjectURL(file)
+                [fullKey]: URL.createObjectURL(file),
               };
             });
-            
+
             return updated;
           });
           // Don't set form value here - it will be handled in form submission
         } else {
           alert(validation.message);
-          event.target.value = '';
+          event.target.value = "";
         }
       }
     }
@@ -420,34 +462,37 @@ const CreateEmployeeForm = () => {
 
   // Handle file removal
   const handleFileRemove = (fileType, fileIndex = null) => {
-    console.log('🗑️ handleFileRemove called:', { fileType, fileIndex });
-    
+    console.log("🗑️ handleFileRemove called:", { fileType, fileIndex });
+
     // Special handling for profile picture
-    if (fileType === 'profile_picture_file') {
+    if (fileType === "profile_picture_file") {
       setProfilePicturePreview(null);
       form.setValue("profile_picture_file", null);
-      
+
       // Clear the file input
       setTimeout(() => {
         const fileInputs = document.querySelectorAll('input[type="file"]');
-        fileInputs.forEach(input => {
-          if (input.getAttribute('data-file-type') === fileType) {
-            input.value = '';
-            console.log('🗑️ Cleared profile picture input:', { fileType, input });
+        fileInputs.forEach((input) => {
+          if (input.getAttribute("data-file-type") === fileType) {
+            input.value = "";
+            console.log("🗑️ Cleared profile picture input:", {
+              fileType,
+              input,
+            });
           }
         });
       }, 0);
       return;
     }
-    
-    setUploadedFiles(prev => {
-      console.log('🗑️ Previous uploadedFiles state:', prev);
-      
+
+    setUploadedFiles((prev) => {
+      console.log("🗑️ Previous uploadedFiles state:", prev);
+
       // Revoke blob URLs for removed files
-      setFilePreviewUrls(prevUrls => {
+      setFilePreviewUrls((prevUrls) => {
         const newUrls = { ...prevUrls };
         const fileToRemove = prev[fileType];
-        
+
         if (fileToRemove) {
           if (fileIndex !== null && Array.isArray(fileToRemove)) {
             // Remove from array
@@ -470,24 +515,30 @@ const CreateEmployeeForm = () => {
             }
           }
         }
-        
+
         return newUrls;
       });
-      
-      if (fileType === 'experience_documents' || fileType === 'education_documents') {
+
+      if (
+        fileType === "experience_documents" ||
+        fileType === "education_documents"
+      ) {
         // Handle education and experience documents (stored as objects with IDs)
         if (fileIndex !== null) {
           const newFiles = { ...prev[fileType] };
           delete newFiles[fileIndex];
-          console.log('🗑️ Updated files after removal:', newFiles);
-          
+          console.log("🗑️ Updated files after removal:", newFiles);
+
           // Force a re-render by updating the state
           const updatedState = { ...prev, [fileType]: newFiles };
-          console.log('🗑️ Final updated state:', updatedState);
+          console.log("🗑️ Final updated state:", updatedState);
           return updatedState;
         }
         return prev;
-      } else if (fileType === 'other_documents' && Array.isArray(prev[fileType])) {
+      } else if (
+        fileType === "other_documents" &&
+        Array.isArray(prev[fileType])
+      ) {
         // Handle other_documents (stored as array)
         if (fileIndex !== null) {
           const newFiles = [...prev[fileType]];
@@ -500,26 +551,35 @@ const CreateEmployeeForm = () => {
       } else {
         // Handle single file types (cnic_front, cnic_back, certificates, disability_document)
         // These are stored as single files, not arrays
-        console.log('🗑️ Removing single file:', fileType);
+        console.log("🗑️ Removing single file:", fileType);
         return { ...prev, [fileType]: null };
       }
     });
-    
+
     // Force re-render of file inputs by updating keys
-    if (fileType === 'experience_documents' || fileType === 'education_documents') {
-      setFileInputKeys(prev => ({
+    if (
+      fileType === "experience_documents" ||
+      fileType === "education_documents"
+    ) {
+      setFileInputKeys((prev) => ({
         ...prev,
-        [`${fileType}_${fileIndex}`]: Date.now()
+        [`${fileType}_${fileIndex}`]: Date.now(),
       }));
-      
+
       // Also clear the file input value by finding and resetting the input element
       setTimeout(() => {
         const fileInputs = document.querySelectorAll('input[type="file"]');
-        fileInputs.forEach(input => {
-          if (input.getAttribute('data-file-type') === fileType && 
-              input.getAttribute('data-file-id') === fileIndex?.toString()) {
-            input.value = '';
-            console.log('🗑️ Cleared file input:', { fileType, fileIndex, input });
+        fileInputs.forEach((input) => {
+          if (
+            input.getAttribute("data-file-type") === fileType &&
+            input.getAttribute("data-file-id") === fileIndex?.toString()
+          ) {
+            input.value = "";
+            console.log("🗑️ Cleared file input:", {
+              fileType,
+              fileIndex,
+              input,
+            });
           }
         });
       }, 0);
@@ -527,12 +587,15 @@ const CreateEmployeeForm = () => {
       // For single file types, clear the file input directly
       setTimeout(() => {
         const fileInputs = document.querySelectorAll('input[type="file"]');
-        fileInputs.forEach(input => {
+        fileInputs.forEach((input) => {
           // Check if this input matches the file type we're removing
-          if (input.name === fileType || input.id === fileType || 
-              (input.getAttribute('data-file-type') === fileType)) {
-            input.value = '';
-            console.log('🗑️ Cleared single file input:', { fileType, input });
+          if (
+            input.name === fileType ||
+            input.id === fileType ||
+            input.getAttribute("data-file-type") === fileType
+          ) {
+            input.value = "";
+            console.log("🗑️ Cleared single file input:", { fileType, input });
           }
         });
       }, 0);
@@ -547,31 +610,44 @@ const CreateEmployeeForm = () => {
     const fileObj = file instanceof File ? file : file.file || file;
     if (!fileObj || !fileObj.name) return null;
 
-    const isImage = fileObj.type && fileObj.type.startsWith('image/');
-    const isPDF = fileObj.type === 'application/pdf' || (fileObj.name && /\.pdf$/i.test(fileObj.name));
-    
+    const isImage = fileObj.type && fileObj.type.startsWith("image/");
+    const isPDF =
+      fileObj.type === "application/pdf" ||
+      (fileObj.name && /\.pdf$/i.test(fileObj.name));
+
     // Get or create blob URL for this file
     let previewUrl = null;
     if (fileObj instanceof File) {
       const fileId = `${fileObj.name}-${fileObj.size}-${fileObj.lastModified}`;
-      const fullKey = fileIndex !== null ? `${fileType}-${fileIndex}-${fileId}` : `${fileType}-${fileId}`;
-      
+      const fullKey =
+        fileIndex !== null
+          ? `${fileType}-${fileIndex}-${fileId}`
+          : `${fileType}-${fileId}`;
+
       // Check if URL already exists in state
       if (filePreviewUrls[fullKey]) {
         previewUrl = filePreviewUrls[fullKey];
       } else {
         // Create new URL and store it
         previewUrl = URL.createObjectURL(fileObj);
-        setFilePreviewUrls(prev => ({
+        setFilePreviewUrls((prev) => ({
           ...prev,
-          [fullKey]: previewUrl
+          [fullKey]: previewUrl,
         }));
       }
     }
 
     return (
-      <div key={`${fileType}-${fileIndex || 'single'}-${fileObj.name}-${fileObj.lastModified || Date.now()}`} className="relative inline-block mr-2 mb-2">
-        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm" style={{ width: '120px', height: '80px' }}>
+      <div
+        key={`${fileType}-${fileIndex || "single"}-${fileObj.name}-${
+          fileObj.lastModified || Date.now()
+        }`}
+        className="relative inline-block mr-2 mb-2"
+      >
+        <div
+          className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm"
+          style={{ width: "120px", height: "80px" }}
+        >
           {isImage && previewUrl ? (
             <img
               src={previewUrl}
@@ -588,7 +664,9 @@ const CreateEmployeeForm = () => {
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
               <i className="fas fa-file-pdf text-2xl text-red-500 mb-1"></i>
-              <span className="text-xs text-gray-600 text-center px-1 truncate">{fileObj.name}</span>
+              <span className="text-xs text-gray-600 text-center px-1 truncate">
+                {fileObj.name}
+              </span>
             </div>
           )}
         </div>
@@ -604,36 +682,37 @@ const CreateEmployeeForm = () => {
     );
   };
 
-
-
   // Handle experience document upload
   const handleExperienceDocumentUpload = (event, experienceId) => {
     const file = event.target.files[0];
     if (file) {
-      console.log('📁 Experience document upload:', { file, experienceId });
-      const validation = validateFileUpload(file, 'experience_document');
+      console.log("📁 Experience document upload:", { file, experienceId });
+      const validation = validateFileUpload(file, "experience_document");
       if (validation.isValid) {
-        setUploadedFiles(prev => {
+        setUploadedFiles((prev) => {
           const updated = {
             ...prev,
             experience_documents: {
               ...prev.experience_documents,
-              [experienceId]: file
-            }
+              [experienceId]: file,
+            },
           };
-          console.log('📁 Updated uploadedFiles after experience upload:', updated.experience_documents);
-          
+          console.log(
+            "📁 Updated uploadedFiles after experience upload:",
+            updated.experience_documents
+          );
+
           // Also update the file input key to ensure proper re-rendering
-          setFileInputKeys(prev => ({
+          setFileInputKeys((prev) => ({
             ...prev,
-            [`experience_documents_${experienceId}`]: Date.now()
+            [`experience_documents_${experienceId}`]: Date.now(),
           }));
-          
+
           return updated;
         });
       } else {
         alert(validation.message);
-        event.target.value = '';
+        event.target.value = "";
       }
     }
   };
@@ -642,30 +721,33 @@ const CreateEmployeeForm = () => {
   const handleEducationDocumentUpload = (event, educationId) => {
     const file = event.target.files[0];
     if (file) {
-      console.log('📁 Education document upload:', { file, educationId });
-      const validation = validateFileUpload(file, 'education_document');
+      console.log("📁 Education document upload:", { file, educationId });
+      const validation = validateFileUpload(file, "education_document");
       if (validation.isValid) {
-        setUploadedFiles(prev => {
+        setUploadedFiles((prev) => {
           const updated = {
             ...prev,
             education_documents: {
               ...prev.education_documents,
-              [educationId]: file
-            }
+              [educationId]: file,
+            },
           };
-          console.log('📁 Updated uploadedFiles after education upload:', updated.education_documents);
-          
+          console.log(
+            "📁 Updated uploadedFiles after education upload:",
+            updated.education_documents
+          );
+
           // Also update the file input key to ensure proper re-rendering
-          setFileInputKeys(prev => ({
+          setFileInputKeys((prev) => ({
             ...prev,
-            [`education_documents_${educationId}`]: Date.now()
+            [`education_documents_${educationId}`]: Date.now(),
           }));
-          
+
           return updated;
         });
       } else {
         alert(validation.message);
-        event.target.value = '';
+        event.target.value = "";
       }
     }
   };
@@ -677,30 +759,32 @@ const CreateEmployeeForm = () => {
       forceRestoreScroll();
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
       // Force close modal and restore scroll when component unmounts
       setShowPreviewModal(false);
       forceRestoreScroll();
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
-  
+
   // Clean up file input keys when experiences or educations change
   useEffect(() => {
     const currentKeys = {};
-    
+
     // Add keys for current experiences
-    experiences.forEach(exp => {
-      currentKeys[`experience_documents_${exp.id}`] = fileInputKeys[`experience_documents_${exp.id}`] || 'initial';
+    experiences.forEach((exp) => {
+      currentKeys[`experience_documents_${exp.id}`] =
+        fileInputKeys[`experience_documents_${exp.id}`] || "initial";
     });
-    
+
     // Add keys for current educations
-    educations.forEach(edu => {
-      currentKeys[`education_documents_${edu.id}`] = fileInputKeys[`education_documents_${edu.id}`] || 'initial';
+    educations.forEach((edu) => {
+      currentKeys[`education_documents_${edu.id}`] =
+        fileInputKeys[`education_documents_${edu.id}`] || "initial";
     });
-    
+
     setFileInputKeys(currentKeys);
   }, [experiences, educations]);
 
@@ -711,24 +795,33 @@ const CreateEmployeeForm = () => {
       company_name: "",
       start_date: "",
       end_date: "",
-      description: ""
+      description: "",
     };
     setExperiences([...experiences, newExperience]);
   };
 
   // Handle removing experience with confirmation
   const removeExperience = (id) => {
-    const experience = experiences.find(exp => exp.id === id);
-    const experienceLabel = experience?.company_name || 'this work experience';
+    const experience = experiences.find((exp) => exp.id === id);
+    const experienceLabel = experience?.company_name || "this work experience";
 
-    if (window.confirm(`Are you sure you want to remove the experience at ${experienceLabel}? This action cannot be undone.`)) {
-      setExperiences(experiences.filter(exp => exp.id !== id));
+    if (
+      window.confirm(
+        `Are you sure you want to remove the experience at ${experienceLabel}? This action cannot be undone.`
+      )
+    ) {
+      setExperiences(experiences.filter((exp) => exp.id !== id));
 
       // Also remove any associated document uploads for this experience entry
-      setUploadedFiles(prev => {
+      setUploadedFiles((prev) => {
         const updatedFiles = { ...prev };
-        if (updatedFiles.experience_documents && updatedFiles.experience_documents[id]) {
-          const newExperienceDocuments = { ...updatedFiles.experience_documents };
+        if (
+          updatedFiles.experience_documents &&
+          updatedFiles.experience_documents[id]
+        ) {
+          const newExperienceDocuments = {
+            ...updatedFiles.experience_documents,
+          };
           delete newExperienceDocuments[id];
           updatedFiles.experience_documents = newExperienceDocuments;
         }
@@ -739,9 +832,11 @@ const CreateEmployeeForm = () => {
 
   // Handle updating experience
   const updateExperience = (id, field, value) => {
-    setExperiences(experiences.map(exp =>
-      exp.id === id ? { ...exp, [field]: value } : exp
-    ));
+    setExperiences(
+      experiences.map((exp) =>
+        exp.id === id ? { ...exp, [field]: value } : exp
+      )
+    );
   };
 
   // Handle adding new education
@@ -760,16 +855,23 @@ const CreateEmployeeForm = () => {
 
   // Handle removing education with confirmation
   const removeEducation = (id) => {
-    const education = educations.find(edu => edu.id === id);
-    const educationLabel = education?.education_level || 'this education entry';
+    const education = educations.find((edu) => edu.id === id);
+    const educationLabel = education?.education_level || "this education entry";
 
-    if (window.confirm(`Are you sure you want to remove ${educationLabel}? This action cannot be undone.`)) {
-      setEducations(educations.filter(edu => edu.id !== id));
+    if (
+      window.confirm(
+        `Are you sure you want to remove ${educationLabel}? This action cannot be undone.`
+      )
+    ) {
+      setEducations(educations.filter((edu) => edu.id !== id));
 
       // Also remove any associated document uploads for this education entry
-      setUploadedFiles(prev => {
+      setUploadedFiles((prev) => {
         const updatedFiles = { ...prev };
-        if (updatedFiles.education_documents && updatedFiles.education_documents[id]) {
+        if (
+          updatedFiles.education_documents &&
+          updatedFiles.education_documents[id]
+        ) {
           const newEducationDocuments = { ...updatedFiles.education_documents };
           delete newEducationDocuments[id];
           updatedFiles.education_documents = newEducationDocuments;
@@ -781,9 +883,11 @@ const CreateEmployeeForm = () => {
 
   // Handle updating education
   const updateEducation = (id, field, value) => {
-    setEducations(educations.map(edu =>
-      edu.id === id ? { ...edu, [field]: value } : edu
-    ));
+    setEducations(
+      educations.map((edu) =>
+        edu.id === id ? { ...edu, [field]: value } : edu
+      )
+    );
   };
 
   const onSubmit = (data) => {
@@ -795,16 +899,20 @@ const CreateEmployeeForm = () => {
       past_experiences: Array.isArray(experiences) ? experiences : [],
       educations: Array.isArray(educations) ? educations : [],
       // Include ALL uploaded files
-      ...uploadedFiles
+      ...uploadedFiles,
     };
 
     // Derive labels for preview without affecting submission IDs
-    const districtLabel = districtMap[String(formDataWithExperiences.district_id)] || "";
+    const districtLabel =
+      districtMap[String(formDataWithExperiences.district_id)] || "";
     const cityLabel = cityMap[String(formDataWithExperiences.city_id)] || "";
-    const educationsWithLabels = (formDataWithExperiences.educations || []).map(e => ({
-      ...e,
-      education_level: e.education_level || levelMap[String(e.education_level_id)] || "",
-    }));
+    const educationsWithLabels = (formDataWithExperiences.educations || []).map(
+      (e) => ({
+        ...e,
+        education_level:
+          e.education_level || levelMap[String(e.education_level_id)] || "",
+      })
+    );
 
     const enhancedPreview = {
       ...formDataWithExperiences,
@@ -816,14 +924,16 @@ const CreateEmployeeForm = () => {
     };
 
     // Log form submission
-    logFormSubmission('CreateEmployeeForm', enhancedPreview, true, {
+    logFormSubmission("CreateEmployeeForm", enhancedPreview, true, {
       metadata: {
         has_experiences: experiences.length > 0,
         experience_count: experiences.length,
         has_educations: educations.length > 0,
         education_count: educations.length,
-        form_fields_filled: Object.keys(data).filter(key => data[key] && data[key] !== '').length
-      }
+        form_fields_filled: Object.keys(data).filter(
+          (key) => data[key] && data[key] !== ""
+        ).length,
+      },
     });
 
     // Show preview modal with all data
@@ -835,13 +945,10 @@ const CreateEmployeeForm = () => {
     if (!previewData) return;
 
     try {
-      await withErrorHandling(
-        () => createEmployee(previewData),
-        {
-          showAlert: true,
-          customMessage: "Employee created successfully!",
-        }
-      );
+      await withErrorHandling(() => createEmployee(previewData), {
+        showAlert: true,
+        customMessage: "Employee created successfully!",
+      });
 
       // Clear saved form data on successful submission
       clearSavedData();
@@ -852,21 +959,25 @@ const CreateEmployeeForm = () => {
     } catch (error) {
       // Log error for audit trail
       // Note: Form data is preserved automatically by the persistence hook
-      logError('CREATE', 'EMPLOYEE', error, {
+      logError("CREATE", "EMPLOYEE", error, {
         metadata: {
           form_data_keys: Object.keys(previewData || {}),
-          has_experiences: previewData?.past_experiences?.length > 0
-        }
+          has_experiences: previewData?.past_experiences?.length > 0,
+        },
       });
     }
   };
 
   // Reset form handler
   const handleResetForm = () => {
-    if (window.confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
+    if (
+      window.confirm(
+        "Are you sure you want to reset the form? All entered data will be lost."
+      )
+    ) {
       // Clear saved form data
       clearSavedData();
-      
+
       // Reset form to default values
       form.reset({
         full_name: "",
@@ -909,7 +1020,7 @@ const CreateEmployeeForm = () => {
         past_experiences: [],
         educations: [],
       });
-      
+
       // Reset all state
       setExperiences([]);
       setEducations([]);
@@ -923,55 +1034,62 @@ const CreateEmployeeForm = () => {
         police_character_certificate_file: null,
         experience_documents: {},
         education_documents: {},
-        other_documents: []
+        other_documents: [],
       });
       setAvailableCities([]);
       setCityMap({});
-      
+
       // Clear file inputs
       const fileInputs = document.querySelectorAll('input[type="file"]');
-      fileInputs.forEach(input => {
-        input.value = '';
+      fileInputs.forEach((input) => {
+        input.value = "";
       });
     }
   };
 
   // Helper function to display field values with N/A fallback
-  const displayValue = (value, type = 'text') => {
-    if (value === null || value === undefined || value === '' || (typeof value === 'number' && isNaN(value))) {
-      return 'N/A';
+  const displayValue = (value, type = "text") => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === "" ||
+      (typeof value === "number" && isNaN(value))
+    ) {
+      return "N/A";
     }
 
-    if (type === 'boolean') {
-      return value ? 'Yes' : 'No';
+    if (type === "boolean") {
+      return value ? "Yes" : "No";
     }
 
-    if (type === 'array' && Array.isArray(value)) {
-      return value.length > 0 ? value.join(', ') : 'N/A';
+    if (type === "array" && Array.isArray(value)) {
+      return value.length > 0 ? value.join(", ") : "N/A";
     }
 
-    if (type === 'experiences' && Array.isArray(value)) {
-      return value.length > 0 ? `${value.length} experience(s)` : 'No experience added';
+    if (type === "experiences" && Array.isArray(value)) {
+      return value.length > 0
+        ? `${value.length} experience(s)`
+        : "No experience added";
     }
 
     // Check if value is a date string or Date object and format it as dd/mm/yyyy
-    if (typeof value === 'string' && value.trim() !== '') {
+    if (typeof value === "string" && value.trim() !== "") {
       // Try to parse as date - check for common date patterns including ISO with time
       const datePatterns = [
-        /^\d{4}-\d{2}-\d{2}/,           // ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
-        /^\d{2}\/\d{2}\/\d{4}/,         // DD/MM/YYYY
-        /^\d{4}\/\d{2}\/\d{2}/,         // YYYY/MM/DD
-        /^\d{2}-\d{2}-\d{4}/,           // DD-MM-YYYY
+        /^\d{4}-\d{2}-\d{2}/, // ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+        /^\d{2}\/\d{2}\/\d{4}/, // DD/MM/YYYY
+        /^\d{4}\/\d{2}\/\d{2}/, // YYYY/MM/DD
+        /^\d{2}-\d{2}-\d{4}/, // DD-MM-YYYY
       ];
-      
-      const isDateString = datePatterns.some(pattern => pattern.test(value));
-      
+
+      const isDateString = datePatterns.some((pattern) => pattern.test(value));
+
       if (isDateString) {
         try {
           const date = new Date(value);
           if (!isNaN(date.getTime())) {
-            const day = date.getDate().toString().padStart(2, '0');
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, "0");
+            const month = (date.getMonth() + 1).toString().padStart(2, "0");
             const year = date.getFullYear();
             return `${day}/${month}/${year}`;
           }
@@ -979,14 +1097,18 @@ const CreateEmployeeForm = () => {
           // If date parsing fails, return as string
         }
       }
-      
+
       // Also try parsing any string that looks like it could be a date
       // This catches ISO strings with time components
       try {
         const date = new Date(value);
-        if (!isNaN(date.getTime()) && value.includes('-') && value.length >= 10) {
-          const day = date.getDate().toString().padStart(2, '0');
-          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        if (
+          !isNaN(date.getTime()) &&
+          value.includes("-") &&
+          value.length >= 10
+        ) {
+          const day = date.getDate().toString().padStart(2, "0");
+          const month = (date.getMonth() + 1).toString().padStart(2, "0");
           const year = date.getFullYear();
           return `${day}/${month}/${year}`;
         }
@@ -997,8 +1119,8 @@ const CreateEmployeeForm = () => {
 
     // Check if value is a Date object
     if (value instanceof Date && !isNaN(value.getTime())) {
-      const day = value.getDate().toString().padStart(2, '0');
-      const month = (value.getMonth() + 1).toString().padStart(2, '0');
+      const day = value.getDate().toString().padStart(2, "0");
+      const month = (value.getMonth() + 1).toString().padStart(2, "0");
       const year = value.getFullYear();
       return `${day}/${month}/${year}`;
     }
@@ -1105,7 +1227,7 @@ const CreateEmployeeForm = () => {
                       />
                       <button
                         type="button"
-                        onClick={() => handleFileRemove('profile_picture_file')}
+                        onClick={() => handleFileRemove("profile_picture_file")}
                         className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
                       >
                         ×
@@ -1146,12 +1268,16 @@ const CreateEmployeeForm = () => {
                   </label>
                   <input
                     type="text"
-                    {...form.register("full_name", { required: "Full name is required" })}
+                    {...form.register("full_name", {
+                      required: "Full name is required",
+                    })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter full name"
                   />
                   {form.formState.errors.full_name && (
-                    <p className="text-red-600 text-sm mt-1">{form.formState.errors.full_name.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {form.formState.errors.full_name.message}
+                    </p>
                   )}
                 </div>
 
@@ -1174,12 +1300,16 @@ const CreateEmployeeForm = () => {
                   </label>
                   <input
                     type="text"
-                    {...form.register("mobile_number", { required: "Mobile number is required" })}
+                    {...form.register("mobile_number", {
+                      required: "Mobile number is required",
+                    })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter mobile number"
                   />
                   {form.formState.errors.mobile_number && (
-                    <p className="text-red-600 text-sm mt-1">{form.formState.errors.mobile_number.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {form.formState.errors.mobile_number.message}
+                    </p>
                   )}
                 </div>
 
@@ -1218,18 +1348,25 @@ const CreateEmployeeForm = () => {
                     {/* Unified Name Field */}
                     <div className="md:col-span-3">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Father/Husband Name <span className="text-red-500">*</span>
+                        Father/Husband Name{" "}
+                        <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         {...form.register("father_husband_name", {
-                          required: "Father/Husband name is required"
+                          required: "Father/Husband name is required",
                         })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder={`Enter ${form.watch("relationship_type") === "father" ? "father" : "husband"} name`}
+                        placeholder={`Enter ${
+                          form.watch("relationship_type") === "father"
+                            ? "father"
+                            : "husband"
+                        } name`}
                       />
                       {form.formState.errors.father_husband_name && (
-                        <p className="text-red-600 text-sm mt-1">{form.formState.errors.father_husband_name.message}</p>
+                        <p className="text-red-600 text-sm mt-1">
+                          {form.formState.errors.father_husband_name.message}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1260,12 +1397,14 @@ const CreateEmployeeForm = () => {
                         const expiryDate = form.getValues("cnic_expire_date");
                         const validation = validateCNICDates(value, expiryDate);
                         return validation.isValid || validation.message;
-                      }
+                      },
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   {form.formState.errors.cnic_issue_date && (
-                    <p className="text-red-600 text-sm mt-1">{form.formState.errors.cnic_issue_date.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {form.formState.errors.cnic_issue_date.message}
+                    </p>
                   )}
                 </div>
 
@@ -1288,14 +1427,21 @@ const CreateEmployeeForm = () => {
 
                         // Then validate against issue date
                         const issueDate = form.getValues("cnic_issue_date");
-                        const datesValidation = validateCNICDates(issueDate, value);
-                        return datesValidation.isValid || datesValidation.message;
-                      }
+                        const datesValidation = validateCNICDates(
+                          issueDate,
+                          value
+                        );
+                        return (
+                          datesValidation.isValid || datesValidation.message
+                        );
+                      },
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   {form.formState.errors.cnic_expire_date && (
-                    <p className="text-red-600 text-sm mt-1">{form.formState.errors.cnic_expire_date.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {form.formState.errors.cnic_expire_date.message}
+                    </p>
                   )}
                   <p className="text-sm text-gray-500 mt-1">
                     Select today's date or a future date
@@ -1336,7 +1482,7 @@ const CreateEmployeeForm = () => {
                     options={[
                       { value: "Male", label: "Male" },
                       { value: "Female", label: "Female" },
-                      { value: "Other", label: "Other" }
+                      { value: "Other", label: "Other" },
                     ]}
                     value={form.watch("gender")}
                     onChange={(value) => form.setValue("gender", value)}
@@ -1351,7 +1497,8 @@ const CreateEmployeeForm = () => {
                 {/* Marital Status */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Marital Status <span className="text-gray-400">(Optional)</span>
+                    Marital Status{" "}
+                    <span className="text-gray-400">(Optional)</span>
                   </label>
                   <SearchableSelect
                     options={MARITAL_STATUS_OPTIONS}
@@ -1442,11 +1589,14 @@ const CreateEmployeeForm = () => {
                         <>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Disability Type <span className="text-red-500">*</span>
+                              Disability Type{" "}
+                              <span className="text-red-500">*</span>
                             </label>
                             <select
                               {...form.register("disability_type", {
-                                required: form.watch("has_disability") ? "Disability type is required" : false
+                                required: form.watch("has_disability")
+                                  ? "Disability type is required"
+                                  : false,
                               })}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
@@ -1458,7 +1608,9 @@ const CreateEmployeeForm = () => {
                               ))}
                             </select>
                             {form.formState.errors.disability_type && (
-                              <p className="text-red-600 text-sm mt-1">{form.formState.errors.disability_type.message}</p>
+                              <p className="text-red-600 text-sm mt-1">
+                                {form.formState.errors.disability_type.message}
+                              </p>
                             )}
                           </div>
 
@@ -1523,7 +1675,7 @@ const CreateEmployeeForm = () => {
                   <SearchableSelect
                     options={availableCities}
                     value={form.watch("city_id")}
-                    valueLabel={cityMap[String(form.watch("city_id"))] || ''}
+                    valueLabel={cityMap[String(form.watch("city_id"))] || ""}
                     onChange={(value) => form.setValue("city_id", value)}
                     placeholder="Select City"
                     register={form.register}
@@ -1533,11 +1685,11 @@ const CreateEmployeeForm = () => {
                     error={form.formState.errors.city_id?.message}
                   />
                   {!form.watch("district_id") && (
-                    <p className="text-gray-500 text-sm mt-1">Please select a district first</p>
+                    <p className="text-gray-500 text-sm mt-1">
+                      Please select a district first
+                    </p>
                   )}
                 </div>
-
-
               </div>
 
               {/* Address Fields - Enhanced with Same Address Option */}
@@ -1626,7 +1778,9 @@ const CreateEmployeeForm = () => {
                   {experiences.length === 0 ? (
                     <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                       <i className="fas fa-briefcase text-4xl text-gray-400 mb-4"></i>
-                      <p className="text-gray-600 mb-4">No past experience added yet</p>
+                      <p className="text-gray-600 mb-4">
+                        No past experience added yet
+                      </p>
                       <button
                         type="button"
                         onClick={addExperience}
@@ -1639,7 +1793,10 @@ const CreateEmployeeForm = () => {
                   ) : (
                     <div className="space-y-6">
                       {experiences.map((experience, index) => (
-                        <div key={experience.id} className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                        <div
+                          key={experience.id}
+                          className="bg-gray-50 p-6 rounded-lg border border-gray-200"
+                        >
                           <div className="flex items-center justify-between mb-4">
                             <h4 className="text-md font-semibold text-gray-800">
                               Experience #{index + 1}
@@ -1659,12 +1816,19 @@ const CreateEmployeeForm = () => {
                             {/* Company Name */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Company Name <span className="text-red-500">*</span>
+                                Company Name{" "}
+                                <span className="text-red-500">*</span>
                               </label>
                               <input
                                 type="text"
                                 value={experience.company_name}
-                                onChange={(e) => updateExperience(experience.id, 'company_name', e.target.value)}
+                                onChange={(e) =>
+                                  updateExperience(
+                                    experience.id,
+                                    "company_name",
+                                    e.target.value
+                                  )
+                                }
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Enter company name"
                               />
@@ -1673,12 +1837,19 @@ const CreateEmployeeForm = () => {
                             {/* Start Date */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Start Date <span className="text-red-500">*</span>
+                                Start Date{" "}
+                                <span className="text-red-500">*</span>
                               </label>
                               <input
                                 type="date"
                                 value={experience.start_date}
-                                onChange={(e) => updateExperience(experience.id, 'start_date', e.target.value)}
+                                onChange={(e) =>
+                                  updateExperience(
+                                    experience.id,
+                                    "start_date",
+                                    e.target.value
+                                  )
+                                }
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </div>
@@ -1691,10 +1862,18 @@ const CreateEmployeeForm = () => {
                               <input
                                 type="date"
                                 value={experience.end_date}
-                                onChange={(e) => updateExperience(experience.id, 'end_date', e.target.value)}
+                                onChange={(e) =>
+                                  updateExperience(
+                                    experience.id,
+                                    "end_date",
+                                    e.target.value
+                                  )
+                                }
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
-                              <p className="text-xs text-gray-500 mt-1">Leave empty if currently working</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Leave empty if currently working
+                              </p>
                             </div>
 
                             {/* Position/Role (optional field) */}
@@ -1704,8 +1883,14 @@ const CreateEmployeeForm = () => {
                               </label>
                               <input
                                 type="text"
-                                value={experience.position || ''}
-                                onChange={(e) => updateExperience(experience.id, 'position', e.target.value)}
+                                value={experience.position || ""}
+                                onChange={(e) =>
+                                  updateExperience(
+                                    experience.id,
+                                    "position",
+                                    e.target.value
+                                  )
+                                }
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Enter position or role"
                               />
@@ -1719,7 +1904,13 @@ const CreateEmployeeForm = () => {
                             </label>
                             <textarea
                               value={experience.description}
-                              onChange={(e) => updateExperience(experience.id, 'description', e.target.value)}
+                              onChange={(e) =>
+                                updateExperience(
+                                  experience.id,
+                                  "description",
+                                  e.target.value
+                                )
+                              }
                               rows={3}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Describe your responsibilities and achievements in this role..."
@@ -1753,7 +1944,9 @@ const CreateEmployeeForm = () => {
                   {educations.length === 0 ? (
                     <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                       <i className="fas fa-graduation-cap text-4xl text-gray-400 mb-4"></i>
-                      <p className="text-gray-600 mb-4">No education qualifications added yet</p>
+                      <p className="text-gray-600 mb-4">
+                        No education qualifications added yet
+                      </p>
                       <button
                         type="button"
                         onClick={addEducation}
@@ -1766,7 +1959,10 @@ const CreateEmployeeForm = () => {
                   ) : (
                     <div className="space-y-6">
                       {educations.map((education, index) => (
-                        <div key={education.id} className="bg-green-50 p-6 rounded-lg border border-green-200">
+                        <div
+                          key={education.id}
+                          className="bg-green-50 p-6 rounded-lg border border-green-200"
+                        >
                           <div className="flex items-center justify-between mb-4">
                             <h4 className="text-md font-semibold text-gray-800">
                               Education #{index + 1}
@@ -1786,17 +1982,36 @@ const CreateEmployeeForm = () => {
                             {/* Education Level */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Education Level <span className="text-red-500">*</span>
+                                Education Level{" "}
+                                <span className="text-red-500">*</span>
                               </label>
                               <SearchableSelect
                                 options={educationLevelOptions}
                                 value={education.education_level_id}
-                                valueLabel={education.education_level || levelMap[String(education.education_level_id)] || ''}
+                                valueLabel={
+                                  education.education_level ||
+                                  levelMap[
+                                    String(education.education_level_id)
+                                  ] ||
+                                  ""
+                                }
                                 onChange={(value, label) => {
-                                  updateEducation(education.id, 'education_level_id', value);
-                                  updateEducation(education.id, 'education_level', label || levelMap[String(value)] || ''); // keep for preview
+                                  updateEducation(
+                                    education.id,
+                                    "education_level_id",
+                                    value
+                                  );
+                                  updateEducation(
+                                    education.id,
+                                    "education_level",
+                                    label || levelMap[String(value)] || ""
+                                  ); // keep for preview
                                 }}
-                                placeholder={educationLevelOptions.length ? "Select Education Level" : "No levels available"}
+                                placeholder={
+                                  educationLevelOptions.length
+                                    ? "Select Education Level"
+                                    : "No levels available"
+                                }
                                 register={() => ({})}
                                 name={`education_level_${education.id}`}
                                 required={true}
@@ -1809,26 +2024,40 @@ const CreateEmployeeForm = () => {
                             {/* Institution Name */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Institution Name <span className="text-red-500">*</span>
+                                Institution Name{" "}
+                                <span className="text-red-500">*</span>
                               </label>
                               <input
                                 type="text"
                                 value={education.institution_name}
-                                onChange={(e) => updateEducation(education.id, 'institution_name', e.target.value)}
+                                onChange={(e) =>
+                                  updateEducation(
+                                    education.id,
+                                    "institution_name",
+                                    e.target.value
+                                  )
+                                }
                                 className="form-input w-full"
                                 placeholder="Enter institution name"
                               />
                             </div>
 
-                            {/* Year of Completion */}
+                            {/* Date of Completion */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Year of Completion <span className="text-red-500">*</span>
+                                Date of Completion{" "}
+                                <span className="text-red-500">*</span>
                               </label>
                               <input
                                 type="date"
-                                value={education.year_of_completion || ''}
-                                onChange={(e) => updateEducation(education.id, 'year_of_completion', e.target.value)}
+                                value={education.year_of_completion || ""}
+                                onChange={(e) =>
+                                  updateEducation(
+                                    education.id,
+                                    "year_of_completion",
+                                    e.target.value
+                                  )
+                                }
                                 className="form-input w-full"
                               />
                             </div>
@@ -1841,23 +2070,35 @@ const CreateEmployeeForm = () => {
                               <input
                                 type="text"
                                 value={education.marks_gpa}
-                                onChange={(e) => updateEducation(education.id, 'marks_gpa', e.target.value)}
+                                onChange={(e) =>
+                                  updateEducation(
+                                    education.id,
+                                    "marks_gpa",
+                                    e.target.value
+                                  )
+                                }
                                 className="form-input w-full"
                                 placeholder="e.g., 3.5 GPA or 85%"
                               />
                             </div>
 
-                            {/* Start Date */}
+                            {/* Start Year */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Start Date
+                                Start Year
                               </label>
                               <input
                                 type="number"
                                 min="1950"
                                 max={new Date().getFullYear()}
-                                value={education.start_date || ''}
-                                onChange={(e) => updateEducation(education.id, 'start_date', e.target.value)}
+                                value={education.start_date || ""}
+                                onChange={(e) =>
+                                  updateEducation(
+                                    education.id,
+                                    "start_date",
+                                    e.target.value
+                                  )
+                                }
                                 className="form-input w-full"
                                 placeholder="e.g., 2016"
                               />
@@ -1888,12 +2129,15 @@ const CreateEmployeeForm = () => {
                         type="file"
                         accept="image/jpeg,image/png"
                         data-file-type="cnic_front"
-                        onChange={(e) => handleFileUpload(e, 'cnic_front')}
+                        onChange={(e) => handleFileUpload(e, "cnic_front")}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       {uploadedFiles.cnic_front && (
                         <div className="mt-2">
-                          {renderFilePreview(uploadedFiles.cnic_front, 'cnic_front')}
+                          {renderFilePreview(
+                            uploadedFiles.cnic_front,
+                            "cnic_front"
+                          )}
                         </div>
                       )}
                     </div>
@@ -1902,15 +2146,22 @@ const CreateEmployeeForm = () => {
                         <div className="flex items-center">
                           <i className="fas fa-file-image mr-2 text-green-600"></i>
                           <div>
-                            <p className="text-sm font-medium text-green-800">{uploadedFiles.cnic_front.name}</p>
+                            <p className="text-sm font-medium text-green-800">
+                              {uploadedFiles.cnic_front.name}
+                            </p>
                             <p className="text-xs text-green-600">
-                              {(uploadedFiles.cnic_front.size / 1024 / 1024).toFixed(2)} MB
+                              {(
+                                uploadedFiles.cnic_front.size /
+                                1024 /
+                                1024
+                              ).toFixed(2)}{" "}
+                              MB
                             </p>
                           </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleFileRemove('cnic_front')}
+                          onClick={() => handleFileRemove("cnic_front")}
                           className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
                           title="Remove CNIC front copy"
                         >
@@ -1937,12 +2188,15 @@ const CreateEmployeeForm = () => {
                         type="file"
                         accept="image/jpeg,image/png"
                         data-file-type="cnic_back"
-                        onChange={(e) => handleFileUpload(e, 'cnic_back')}
+                        onChange={(e) => handleFileUpload(e, "cnic_back")}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       {uploadedFiles.cnic_back && (
                         <div className="mt-2">
-                          {renderFilePreview(uploadedFiles.cnic_back, 'cnic_back')}
+                          {renderFilePreview(
+                            uploadedFiles.cnic_back,
+                            "cnic_back"
+                          )}
                         </div>
                       )}
                     </div>
@@ -1951,15 +2205,22 @@ const CreateEmployeeForm = () => {
                         <div className="flex items-center">
                           <i className="fas fa-file-image mr-2 text-green-600"></i>
                           <div>
-                            <p className="text-sm font-medium text-green-800">{uploadedFiles.cnic_back.name}</p>
+                            <p className="text-sm font-medium text-green-800">
+                              {uploadedFiles.cnic_back.name}
+                            </p>
                             <p className="text-xs text-green-600">
-                              {(uploadedFiles.cnic_back.size / 1024 / 1024).toFixed(2)} MB
+                              {(
+                                uploadedFiles.cnic_back.size /
+                                1024 /
+                                1024
+                              ).toFixed(2)}{" "}
+                              MB
                             </p>
                           </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleFileRemove('cnic_back')}
+                          onClick={() => handleFileRemove("cnic_back")}
                           className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
                           title="Remove CNIC back copy"
                         >
@@ -1986,12 +2247,15 @@ const CreateEmployeeForm = () => {
                         type="file"
                         accept="application/pdf"
                         data-file-type="certificates"
-                        onChange={(e) => handleFileUpload(e, 'certificates')}
+                        onChange={(e) => handleFileUpload(e, "certificates")}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       {uploadedFiles.certificates && (
                         <div className="mt-2">
-                          {renderFilePreview(uploadedFiles.certificates, 'certificates')}
+                          {renderFilePreview(
+                            uploadedFiles.certificates,
+                            "certificates"
+                          )}
                         </div>
                       )}
                     </div>
@@ -2000,15 +2264,22 @@ const CreateEmployeeForm = () => {
                         <div className="flex items-center">
                           <i className="fas fa-file-pdf mr-2 text-green-600"></i>
                           <div>
-                            <p className="text-sm font-medium text-green-800">{uploadedFiles.certificates.name}</p>
+                            <p className="text-sm font-medium text-green-800">
+                              {uploadedFiles.certificates.name}
+                            </p>
                             <p className="text-xs text-green-600">
-                              {(uploadedFiles.certificates.size / 1024 / 1024).toFixed(2)} MB
+                              {(
+                                uploadedFiles.certificates.size /
+                                1024 /
+                                1024
+                              ).toFixed(2)}{" "}
+                              MB
                             </p>
                           </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleFileRemove('certificates')}
+                          onClick={() => handleFileRemove("certificates")}
                           className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
                           title="Remove domicile certificate"
                         >
@@ -2035,12 +2306,17 @@ const CreateEmployeeForm = () => {
                         type="file"
                         accept="application/pdf"
                         data-file-type="medical_fitness_file"
-                        onChange={(e) => handleFileUpload(e, 'medical_fitness_file')}
+                        onChange={(e) =>
+                          handleFileUpload(e, "medical_fitness_file")
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       {uploadedFiles.medical_fitness_file && (
                         <div className="mt-2">
-                          {renderFilePreview(uploadedFiles.medical_fitness_file, 'medical_fitness_file')}
+                          {renderFilePreview(
+                            uploadedFiles.medical_fitness_file,
+                            "medical_fitness_file"
+                          )}
                         </div>
                       )}
                     </div>
@@ -2049,13 +2325,24 @@ const CreateEmployeeForm = () => {
                         <div className="flex items-center">
                           <i className="fas fa-file-pdf mr-2 text-green-600"></i>
                           <div>
-                            <p className="text-sm font-medium text-green-800">{uploadedFiles.medical_fitness_file.name}</p>
-                            <p className="text-xs text-green-600">{(uploadedFiles.medical_fitness_file.size / 1024 / 1024).toFixed(2)} MB</p>
+                            <p className="text-sm font-medium text-green-800">
+                              {uploadedFiles.medical_fitness_file.name}
+                            </p>
+                            <p className="text-xs text-green-600">
+                              {(
+                                uploadedFiles.medical_fitness_file.size /
+                                1024 /
+                                1024
+                              ).toFixed(2)}{" "}
+                              MB
+                            </p>
                           </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleFileRemove('medical_fitness_file')}
+                          onClick={() =>
+                            handleFileRemove("medical_fitness_file")
+                          }
                           className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
                           title="Remove medical fitness report"
                         >
@@ -2063,7 +2350,9 @@ const CreateEmployeeForm = () => {
                         </button>
                       </div>
                     )}
-                    <p className="text-sm text-gray-500 mt-1">Upload medical fitness report (PDF only)</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Upload medical fitness report (PDF only)
+                    </p>
                   </div>
 
                   {/* Police Character Certificate (Optional) */}
@@ -2076,12 +2365,20 @@ const CreateEmployeeForm = () => {
                         type="file"
                         accept="application/pdf"
                         data-file-type="police_character_certificate_file"
-                        onChange={(e) => handleFileUpload(e, 'police_character_certificate_file')}
+                        onChange={(e) =>
+                          handleFileUpload(
+                            e,
+                            "police_character_certificate_file"
+                          )
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       {uploadedFiles.police_character_certificate_file && (
                         <div className="mt-2">
-                          {renderFilePreview(uploadedFiles.police_character_certificate_file, 'police_character_certificate_file')}
+                          {renderFilePreview(
+                            uploadedFiles.police_character_certificate_file,
+                            "police_character_certificate_file"
+                          )}
                         </div>
                       )}
                     </div>
@@ -2090,13 +2387,30 @@ const CreateEmployeeForm = () => {
                         <div className="flex items-center">
                           <i className="fas fa-file-pdf mr-2 text-green-600"></i>
                           <div>
-                            <p className="text-sm font-medium text-green-800">{uploadedFiles.police_character_certificate_file.name}</p>
-                            <p className="text-xs text-green-600">{(uploadedFiles.police_character_certificate_file.size / 1024 / 1024).toFixed(2)} MB</p>
+                            <p className="text-sm font-medium text-green-800">
+                              {
+                                uploadedFiles.police_character_certificate_file
+                                  .name
+                              }
+                            </p>
+                            <p className="text-xs text-green-600">
+                              {(
+                                uploadedFiles.police_character_certificate_file
+                                  .size /
+                                1024 /
+                                1024
+                              ).toFixed(2)}{" "}
+                              MB
+                            </p>
                           </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleFileRemove('police_character_certificate_file')}
+                          onClick={() =>
+                            handleFileRemove(
+                              "police_character_certificate_file"
+                            )
+                          }
                           className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
                           title="Remove police character certificate"
                         >
@@ -2104,7 +2418,9 @@ const CreateEmployeeForm = () => {
                         </button>
                       </div>
                     )}
-                    <p className="text-sm text-gray-500 mt-1">Upload police character certificate (PDF only)</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Upload police character certificate (PDF only)
+                    </p>
                   </div>
 
                   {/* Conditional Disability Document */}
@@ -2118,12 +2434,17 @@ const CreateEmployeeForm = () => {
                           type="file"
                           accept="application/pdf"
                           data-file-type="disability_document"
-                          onChange={(e) => handleFileUpload(e, 'disability_document')}
+                          onChange={(e) =>
+                            handleFileUpload(e, "disability_document")
+                          }
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         {uploadedFiles.disability_document && (
                           <div className="mt-2">
-                            {renderFilePreview(uploadedFiles.disability_document, 'disability_document')}
+                            {renderFilePreview(
+                              uploadedFiles.disability_document,
+                              "disability_document"
+                            )}
                           </div>
                         )}
                       </div>
@@ -2132,15 +2453,24 @@ const CreateEmployeeForm = () => {
                           <div className="flex items-center">
                             <i className="fas fa-file-pdf mr-2 text-green-600"></i>
                             <div>
-                              <p className="text-sm font-medium text-green-800">{uploadedFiles.disability_document.name}</p>
+                              <p className="text-sm font-medium text-green-800">
+                                {uploadedFiles.disability_document.name}
+                              </p>
                               <p className="text-xs text-green-600">
-                                {(uploadedFiles.disability_document.size / 1024 / 1024).toFixed(2)} MB
+                                {(
+                                  uploadedFiles.disability_document.size /
+                                  1024 /
+                                  1024
+                                ).toFixed(2)}{" "}
+                                MB
                               </p>
                             </div>
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleFileRemove('disability_document')}
+                            onClick={() =>
+                              handleFileRemove("disability_document")
+                            }
                             className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
                             title="Remove disability document"
                           >
@@ -2149,7 +2479,8 @@ const CreateEmployeeForm = () => {
                         </div>
                       )}
                       <p className="text-sm text-gray-500 mt-1">
-                        Upload medical certificate or other supporting document for disability (PDF only)
+                        Upload medical certificate or other supporting document
+                        for disability (PDF only)
                       </p>
                       <p className="text-xs text-blue-600 mt-1">
                         <i className="fas fa-info-circle mr-1"></i>
@@ -2157,8 +2488,6 @@ const CreateEmployeeForm = () => {
                       </p>
                     </div>
                   )}
-
-
 
                   {/* Experience Documents */}
                   {experiences.length > 0 && (
@@ -2169,26 +2498,46 @@ const CreateEmployeeForm = () => {
                       </label>
                       <div className="space-y-4">
                         {experiences.map((experience, index) => (
-                          <div key={experience.id} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <div
+                            key={experience.id}
+                            className="bg-blue-50 p-4 rounded-lg border border-blue-200"
+                          >
                             <div className="flex items-center justify-between mb-2">
                               <h5 className="font-medium text-gray-800">
-                                Experience #{index + 1}: {experience.company_name || 'Unnamed Company'}
+                                Experience #{index + 1}:{" "}
+                                {experience.company_name || "Unnamed Company"}
                               </h5>
                             </div>
                             <div className="space-y-2">
                               <input
-                                key={`experience-${experience.id}-${fileInputKeys[`experience_documents_${experience.id}`] || 'initial'}`}
+                                key={`experience-${experience.id}-${
+                                  fileInputKeys[
+                                    `experience_documents_${experience.id}`
+                                  ] || "initial"
+                                }`}
                                 type="file"
                                 accept="application/pdf"
                                 data-file-type="experience_documents"
                                 data-file-id={experience.id}
-                                onChange={(e) => handleExperienceDocumentUpload(e, experience.id)}
+                                onChange={(e) =>
+                                  handleExperienceDocumentUpload(
+                                    e,
+                                    experience.id
+                                  )
+                                }
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
-                              {uploadedFiles.experience_documents[experience.id] && (
+                              {uploadedFiles.experience_documents[
+                                experience.id
+                              ] && (
                                 <button
                                   type="button"
-                                  onClick={() => handleFileRemove('experience_documents', experience.id)}
+                                  onClick={() =>
+                                    handleFileRemove(
+                                      "experience_documents",
+                                      experience.id
+                                    )
+                                  }
                                   className="px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-sm"
                                 >
                                   <i className="fas fa-times mr-1"></i>
@@ -2196,13 +2545,22 @@ const CreateEmployeeForm = () => {
                                 </button>
                               )}
                             </div>
-                            {uploadedFiles.experience_documents[experience.id] && (
+                            {uploadedFiles.experience_documents[
+                              experience.id
+                            ] && (
                               <div className="mt-2">
-                                {renderFilePreview(uploadedFiles.experience_documents[experience.id], 'experience_documents', experience.id)}
+                                {renderFilePreview(
+                                  uploadedFiles.experience_documents[
+                                    experience.id
+                                  ],
+                                  "experience_documents",
+                                  experience.id
+                                )}
                               </div>
                             )}
                             <p className="text-sm text-gray-500 mt-1">
-                              Upload experience letter, certificate, or other supporting document (PDF only)
+                              Upload experience letter, certificate, or other
+                              supporting document (PDF only)
                             </p>
                             <p className="text-xs text-blue-600 mt-1">
                               <i className="fas fa-info-circle mr-1"></i>
@@ -2223,26 +2581,45 @@ const CreateEmployeeForm = () => {
                       </label>
                       <div className="space-y-4">
                         {educations.map((education, index) => (
-                          <div key={education.id} className="bg-green-50 p-4 rounded-lg border border-green-200">
+                          <div
+                            key={education.id}
+                            className="bg-green-50 p-4 rounded-lg border border-green-200"
+                          >
                             <div className="flex items-center justify-between mb-2">
                               <h5 className="font-medium text-gray-800">
-                                Education #{index + 1}: {education.education_level || 'Unnamed Level'} - {education.institution_name || 'Unnamed Institution'}
+                                Education #{index + 1}:{" "}
+                                {education.education_level || "Unnamed Level"} -{" "}
+                                {education.institution_name ||
+                                  "Unnamed Institution"}
                               </h5>
                             </div>
                             <div className="space-y-2">
                               <input
-                                key={`education-${education.id}-${fileInputKeys[`education_documents_${education.id}`] || 'initial'}`}
+                                key={`education-${education.id}-${
+                                  fileInputKeys[
+                                    `education_documents_${education.id}`
+                                  ] || "initial"
+                                }`}
                                 type="file"
                                 accept="application/pdf"
                                 data-file-type="education_documents"
                                 data-file-id={education.id}
-                                onChange={(e) => handleEducationDocumentUpload(e, education.id)}
+                                onChange={(e) =>
+                                  handleEducationDocumentUpload(e, education.id)
+                                }
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                               />
-                              {uploadedFiles.education_documents[education.id] && (
+                              {uploadedFiles.education_documents[
+                                education.id
+                              ] && (
                                 <button
                                   type="button"
-                                  onClick={() => handleFileRemove('education_documents', education.id)}
+                                  onClick={() =>
+                                    handleFileRemove(
+                                      "education_documents",
+                                      education.id
+                                    )
+                                  }
                                   className="px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-sm"
                                 >
                                   <i className="fas fa-times mr-1"></i>
@@ -2250,13 +2627,22 @@ const CreateEmployeeForm = () => {
                                 </button>
                               )}
                             </div>
-                            {uploadedFiles.education_documents[education.id] && (
+                            {uploadedFiles.education_documents[
+                              education.id
+                            ] && (
                               <div className="mt-2">
-                                {renderFilePreview(uploadedFiles.education_documents[education.id], 'education_documents', education.id)}
+                                {renderFilePreview(
+                                  uploadedFiles.education_documents[
+                                    education.id
+                                  ],
+                                  "education_documents",
+                                  education.id
+                                )}
                               </div>
                             )}
                             <p className="text-sm text-gray-500 mt-1">
-                              Upload transcript, certificate, or other supporting document (PDF only)
+                              Upload transcript, certificate, or other
+                              supporting document (PDF only)
                             </p>
                             <p className="text-xs text-blue-600 mt-1">
                               <i className="fas fa-info-circle mr-1"></i>
@@ -2282,9 +2668,9 @@ const CreateEmployeeForm = () => {
                         accept="application/pdf"
                         multiple
                         onChange={(e) => {
-                          handleFileUpload(e, 'other_documents', true);
+                          handleFileUpload(e, "other_documents", true);
                           // Clear the input so the same files can be selected again if needed
-                          e.target.value = '';
+                          e.target.value = "";
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -2294,7 +2680,11 @@ const CreateEmployeeForm = () => {
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => document.getElementById('other-documents-input').click()}
+                            onClick={() =>
+                              document
+                                .getElementById("other-documents-input")
+                                .click()
+                            }
                             className="px-4 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                           >
                             <i className="fas fa-plus mr-2"></i>
@@ -2303,9 +2693,9 @@ const CreateEmployeeForm = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              setUploadedFiles(prev => ({
+                              setUploadedFiles((prev) => ({
                                 ...prev,
-                                other_documents: []
+                                other_documents: [],
                               }));
                             }}
                             className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
@@ -2321,16 +2711,16 @@ const CreateEmployeeForm = () => {
                     {uploadedFiles.other_documents?.length > 0 && (
                       <div className="mt-3">
                         <p className="text-sm font-medium text-gray-700 mb-2">
-                          Uploaded Files ({uploadedFiles.other_documents.length}):
+                          Uploaded Files ({uploadedFiles.other_documents.length}
+                          ):
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {uploadedFiles.other_documents.map((file, index) =>
-                            renderFilePreview(file, 'other_documents', index)
+                            renderFilePreview(file, "other_documents", index)
                           )}
                         </div>
                       </div>
                     )}
-
 
                     <p className="text-sm text-gray-500 mt-2">
                       <i className="fas fa-info-circle mr-1"></i>
@@ -2370,7 +2760,8 @@ const CreateEmployeeForm = () => {
                   Please review all employee information before creating
                 </h3>
                 <p className="text-gray-600">
-                  Fields showing "N/A" indicate no value was entered. You can go back to edit or proceed to create the employee.
+                  Fields showing "N/A" indicate no value was entered. You can go
+                  back to edit or proceed to create the employee.
                 </p>
               </div>
 
@@ -2382,50 +2773,90 @@ const CreateEmployeeForm = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Full Name:</span>
-                    <span className="text-gray-900">{displayValue(previewData.full_name)}</span>
+                    <span className="font-medium text-gray-600">
+                      Full Name:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.full_name)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">
-                      {previewData.relationship_type === "father" ? "Father Name:" : "Husband Name:"}
+                      {previewData.relationship_type === "father"
+                        ? "Father Name:"
+                        : "Husband Name:"}
                     </span>
-                    <span className="text-gray-900">{displayValue(previewData.father_husband_name)}</span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.father_husband_name)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Relationship Type:</span>
-                    <span className="text-gray-900 capitalize">{displayValue(previewData.relationship_type)}</span>
+                    <span className="font-medium text-gray-600">
+                      Relationship Type:
+                    </span>
+                    <span className="text-gray-900 capitalize">
+                      {displayValue(previewData.relationship_type)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Mother Name:</span>
-                    <span className="text-gray-900">{displayValue(previewData.mother_name)}</span>
+                    <span className="font-medium text-gray-600">
+                      Mother Name:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.mother_name)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Date of Birth:</span>
-                    <span className="text-gray-900">{displayValue(previewData.date_of_birth)}</span>
+                    <span className="font-medium text-gray-600">
+                      Date of Birth:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.date_of_birth)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Gender:</span>
-                    <span className="text-gray-900">{displayValue(previewData.gender)}</span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.gender)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Marital Status:</span>
-                    <span className="text-gray-900">{displayValue(previewData.marital_status)}</span>
+                    <span className="font-medium text-gray-600">
+                      Marital Status:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.marital_status)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Nationality:</span>
-                    <span className="text-gray-900">{displayValue(previewData.nationality)}</span>
+                    <span className="font-medium text-gray-600">
+                      Nationality:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.nationality)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Religion:</span>
-                    <span className="text-gray-900">{displayValue(previewData.religion)}</span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.religion)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Blood Group:</span>
-                    <span className="text-gray-900">{displayValue(previewData.blood_group)}</span>
+                    <span className="font-medium text-gray-600">
+                      Blood Group:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.blood_group)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Domicile District:</span>
-                    <span className="text-gray-900">{displayValue(previewData.domicile_district)}</span>
+                    <span className="font-medium text-gray-600">
+                      Domicile District:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.domicile_district)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2439,22 +2870,34 @@ const CreateEmployeeForm = () => {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Has Disability:</span>
+                      <span className="font-medium text-gray-600">
+                        Has Disability:
+                      </span>
                       <span className="text-gray-900">Yes</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Disability Type:</span>
-                      <span className="text-gray-900">{displayValue(previewData.disability_type)}</span>
+                      <span className="font-medium text-gray-600">
+                        Disability Type:
+                      </span>
+                      <span className="text-gray-900">
+                        {displayValue(previewData.disability_type)}
+                      </span>
                     </div>
                     {previewData.disability_description && (
                       <div className="md:col-span-2">
-                        <span className="font-medium text-gray-600">Description:</span>
-                        <p className="text-gray-900 mt-1 bg-gray-50 p-2 rounded">{displayValue(previewData.disability_description)}</p>
+                        <span className="font-medium text-gray-600">
+                          Description:
+                        </span>
+                        <p className="text-gray-900 mt-1 bg-gray-50 p-2 rounded">
+                          {displayValue(previewData.disability_description)}
+                        </p>
                       </div>
                     )}
                     {uploadedFiles.disability_document && (
                       <div className="md:col-span-2">
-                        <span className="font-medium text-gray-600">Supporting Document:</span>
+                        <span className="font-medium text-gray-600">
+                          Supporting Document:
+                        </span>
                         <p className="text-gray-900 mt-1">
                           <i className="fas fa-file mr-2 text-blue-600"></i>
                           {uploadedFiles.disability_document.name}
@@ -2473,16 +2916,28 @@ const CreateEmployeeForm = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">CNIC Number:</span>
-                    <span className="text-gray-900">{displayValue(previewData.cnic)}</span>
+                    <span className="font-medium text-gray-600">
+                      CNIC Number:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.cnic)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">CNIC Issue Date:</span>
-                    <span className="text-gray-900">{displayValue(previewData.cnic_issue_date)}</span>
+                    <span className="font-medium text-gray-600">
+                      CNIC Issue Date:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.cnic_issue_date)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">CNIC Expiry Date:</span>
-                    <span className="text-gray-900">{displayValue(previewData.cnic_expire_date)}</span>
+                    <span className="font-medium text-gray-600">
+                      CNIC Expiry Date:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.cnic_expire_date)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2495,16 +2950,26 @@ const CreateEmployeeForm = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Mobile Number:</span>
-                    <span className="text-gray-900">{displayValue(previewData.mobile_number)}</span>
+                    <span className="font-medium text-gray-600">
+                      Mobile Number:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.mobile_number)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">WhatsApp Number:</span>
-                    <span className="text-gray-900">{displayValue(previewData.whatsapp_number)}</span>
+                    <span className="font-medium text-gray-600">
+                      WhatsApp Number:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.whatsapp_number)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Email:</span>
-                    <span className="text-gray-900">{displayValue(previewData.email)}</span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.email)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2518,21 +2983,35 @@ const CreateEmployeeForm = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">District:</span>
-                    <span className="text-gray-900">{displayValue(previewData.district?.name || previewData.district)}</span>
+                    <span className="text-gray-900">
+                      {displayValue(
+                        previewData.district?.name || previewData.district
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">City:</span>
-                    <span className="text-gray-900">{displayValue(previewData.city?.name || previewData.city)}</span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.city?.name || previewData.city)}
+                    </span>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <span className="font-medium text-gray-600">Present Address:</span>
-                    <p className="text-gray-900 mt-1 bg-gray-50 p-2 rounded">{displayValue(previewData.present_address)}</p>
+                    <span className="font-medium text-gray-600">
+                      Present Address:
+                    </span>
+                    <p className="text-gray-900 mt-1 bg-gray-50 p-2 rounded">
+                      {displayValue(previewData.present_address)}
+                    </p>
                   </div>
                   <div>
-                    <span className="font-medium text-gray-600">Permanent Address:</span>
-                    <p className="text-gray-900 mt-1 bg-gray-50 p-2 rounded">{displayValue(previewData.permanent_address)}</p>
+                    <span className="font-medium text-gray-600">
+                      Permanent Address:
+                    </span>
+                    <p className="text-gray-900 mt-1 bg-gray-50 p-2 rounded">
+                      {displayValue(previewData.permanent_address)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -2545,113 +3024,189 @@ const CreateEmployeeForm = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Total Education Entries:</span>
-                    <span className="text-gray-900">{previewData.educations?.length || 0}</span>
+                    <span className="font-medium text-gray-600">
+                      Total Education Entries:
+                    </span>
+                    <span className="text-gray-900">
+                      {previewData.educations?.length || 0}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Total Experiences:</span>
-                    <span className="text-gray-900">{displayValue(previewData.past_experiences, 'experiences')}</span>
+                    <span className="font-medium text-gray-600">
+                      Total Experiences:
+                    </span>
+                    <span className="text-gray-900">
+                      {displayValue(
+                        previewData.past_experiences,
+                        "experiences"
+                      )}
+                    </span>
                   </div>
                 </div>
 
                 {/* Education Details */}
-                {previewData.educations && previewData.educations.length > 0 && (
-                  <div className="space-y-4">
-                    <h5 className="font-semibold text-gray-800 border-b border-gray-100 pb-1">
-                      <i className="fas fa-graduation-cap mr-2 text-green-600"></i>
-                      Education Details
-                    </h5>
+                {previewData.educations &&
+                  previewData.educations.length > 0 && (
                     <div className="space-y-4">
-                      {previewData.educations.map((edu, index) => (
-                        <div key={index} className="bg-green-50 p-4 rounded-lg border border-green-200">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">Education Level:</span>
-                              <span className="text-gray-900 font-semibold">{displayValue(edu.education_level)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">Institution:</span>
-                              <span className="text-gray-900">{displayValue(edu.institution_name)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">Year of Completion:</span>
-                              <span className="text-gray-900">{displayValue(edu.year_of_completion)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">Marks/GPA:</span>
-                              <span className="text-gray-900">{displayValue(edu.marks_gpa) || 'Not specified'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">Start Date:</span>
-                              <span className="text-gray-900">{displayValue(edu.start_date)}</span>
-                            </div>
-                          </div>
-                          {uploadedFiles.education_documents[edu.id] && (
-                            <div className="mt-3 pt-3 border-top border-green-300">
-                              <span className="font-medium text-gray-600">Supporting Document:</span>
-                              <div className="mt-2">
-                                {renderFilePreview(uploadedFiles.education_documents[edu.id], 'education_documents', edu.id)}
+                      <h5 className="font-semibold text-gray-800 border-b border-gray-100 pb-1">
+                        <i className="fas fa-graduation-cap mr-2 text-green-600"></i>
+                        Education Details
+                      </h5>
+                      <div className="space-y-4">
+                        {previewData.educations.map((edu, index) => (
+                          <div
+                            key={index}
+                            className="bg-green-50 p-4 rounded-lg border border-green-200"
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  Education Level:
+                                </span>
+                                <span className="text-gray-900 font-semibold">
+                                  {displayValue(edu.education_level)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  Institution:
+                                </span>
+                                <span className="text-gray-900">
+                                  {displayValue(edu.institution_name)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  Year of Completion:
+                                </span>
+                                <span className="text-gray-900">
+                                  {displayValue(edu.year_of_completion)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  Marks/GPA:
+                                </span>
+                                <span className="text-gray-900">
+                                  {displayValue(edu.marks_gpa) ||
+                                    "Not specified"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  Start Date:
+                                </span>
+                                <span className="text-gray-900">
+                                  {displayValue(edu.start_date)}
+                                </span>
                               </div>
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            {uploadedFiles.education_documents[edu.id] && (
+                              <div className="mt-3 pt-3 border-top border-green-300">
+                                <span className="font-medium text-gray-600">
+                                  Supporting Document:
+                                </span>
+                                <div className="mt-2">
+                                  {renderFilePreview(
+                                    uploadedFiles.education_documents[edu.id],
+                                    "education_documents",
+                                    edu.id
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Past Experiences Details */}
-                {previewData.past_experiences && previewData.past_experiences.length > 0 && (
-                  <div className="space-y-4">
-                    <h5 className="font-semibold text-gray-800 border-b border-gray-100 pb-1">
-                      <i className="fas fa-briefcase mr-2 text-blue-600"></i>
-                      Work Experience Details
-                    </h5>
+                {previewData.past_experiences &&
+                  previewData.past_experiences.length > 0 && (
                     <div className="space-y-4">
-                      {previewData.past_experiences.map((exp, index) => (
-                        <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">Company:</span>
-                              <span className="text-gray-900 font-semibold">{displayValue(exp.company_name)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">Position:</span>
-                              <span className="text-gray-900">{displayValue(exp.position)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">Start Date:</span>
-                              <span className="text-gray-900">{displayValue(exp.start_date)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="font-medium text-gray-600">End Date:</span>
-                              <span className="text-gray-900">{displayValue(exp.end_date) || 'Present'}</span>
-                            </div>
-                          </div>
-                          {exp.description && (
-                            <div>
-                              <span className="font-medium text-gray-600">Description:</span>
-                              <p className="text-gray-900 mt-1 text-sm leading-relaxed">{displayValue(exp.description)}</p>
-                            </div>
-                          )}
-                          {uploadedFiles.experience_documents[exp.id] && (
-                            <div className="mt-3 pt-3 border-t border-gray-300">
-                              <span className="font-medium text-gray-600">Supporting Document:</span>
-                              <div className="mt-2">
-                                {renderFilePreview(uploadedFiles.experience_documents[exp.id], 'experience_documents', exp.id)}
+                      <h5 className="font-semibold text-gray-800 border-b border-gray-100 pb-1">
+                        <i className="fas fa-briefcase mr-2 text-blue-600"></i>
+                        Work Experience Details
+                      </h5>
+                      <div className="space-y-4">
+                        {previewData.past_experiences.map((exp, index) => (
+                          <div
+                            key={index}
+                            className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  Company:
+                                </span>
+                                <span className="text-gray-900 font-semibold">
+                                  {displayValue(exp.company_name)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  Position:
+                                </span>
+                                <span className="text-gray-900">
+                                  {displayValue(exp.position)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  Start Date:
+                                </span>
+                                <span className="text-gray-900">
+                                  {displayValue(exp.start_date)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-600">
+                                  End Date:
+                                </span>
+                                <span className="text-gray-900">
+                                  {displayValue(exp.end_date) || "Present"}
+                                </span>
                               </div>
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            {exp.description && (
+                              <div>
+                                <span className="font-medium text-gray-600">
+                                  Description:
+                                </span>
+                                <p className="text-gray-900 mt-1 text-sm leading-relaxed">
+                                  {displayValue(exp.description)}
+                                </p>
+                              </div>
+                            )}
+                            {uploadedFiles.experience_documents[exp.id] && (
+                              <div className="mt-3 pt-3 border-t border-gray-300">
+                                <span className="font-medium text-gray-600">
+                                  Supporting Document:
+                                </span>
+                                <div className="mt-2">
+                                  {renderFilePreview(
+                                    uploadedFiles.experience_documents[exp.id],
+                                    "experience_documents",
+                                    exp.id
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {previewData.mission_note && (
                   <div>
-                    <span className="font-medium text-gray-600">Missing Note:</span>
-                    <p className="text-gray-900 mt-1 bg-gray-50 p-2 rounded">{displayValue(previewData.mission_note)}</p>
+                    <span className="font-medium text-gray-600">
+                      Missing Note:
+                    </span>
+                    <p className="text-gray-900 mt-1 bg-gray-50 p-2 rounded">
+                      {displayValue(previewData.mission_note)}
+                    </p>
                   </div>
                 )}
               </div>
