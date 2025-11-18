@@ -14,7 +14,8 @@ const SalaryTab = ({
   employmentErrors,
 }) => {
   const { register, handleSubmit, watch } = salaryForm;
-  const { watch: watchEmployment, register: registerEmployment } = employmentForm;
+  const { watch: watchEmployment, register: registerEmployment } =
+    employmentForm;
 
   return (
     <motion.div
@@ -38,7 +39,8 @@ const SalaryTab = ({
                 Daily Wager Salary Information
               </h4>
               <p className="text-sm text-gray-600 mb-4">
-                For Daily Wager employment, please provide either a gross salary or daily wage rate (at least one is required).
+                For Daily Wager employment, please provide either a gross salary
+                or daily wage rate (at least one is required).
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -51,8 +53,10 @@ const SalaryTab = ({
                     {...register("basic_salary", {
                       validate: (value) => {
                         const dailyWageRate = watch("daily_wage_rate");
-                        if (!value && !dailyWageRate) return "Either gross salary or daily wage rate is required";
-                        if (value && value <= 0) return "Salary must be greater than 0";
+                        if (!value && !dailyWageRate)
+                          return "Either gross salary or daily wage rate is required";
+                        if (value && value <= 0)
+                          return "Salary must be greater than 0";
                         return true;
                       },
                     })}
@@ -60,7 +64,9 @@ const SalaryTab = ({
                     placeholder="Enter gross salary (optional)"
                   />
                   {salaryErrors?.basic_salary && (
-                    <p className="text-red-600 text-sm mt-1">{salaryErrors.basic_salary.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {salaryErrors.basic_salary.message}
+                    </p>
                   )}
                 </div>
 
@@ -73,8 +79,10 @@ const SalaryTab = ({
                     {...register("daily_wage_rate", {
                       validate: (value) => {
                         const basicSalary = watch("basic_salary");
-                        if (!value && !basicSalary) return "Either gross salary or daily wage rate is required";
-                        if (value && value <= 0) return "Daily wage rate must be greater than 0";
+                        if (!value && !basicSalary)
+                          return "Either gross salary or daily wage rate is required";
+                        if (value && value <= 0)
+                          return "Daily wage rate must be greater than 0";
                         return true;
                       },
                     })}
@@ -82,7 +90,9 @@ const SalaryTab = ({
                     placeholder="Enter daily wage rate (optional)"
                   />
                   {salaryErrors?.daily_wage_rate && (
-                    <p className="text-red-600 text-sm mt-1">{salaryErrors.daily_wage_rate.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {salaryErrors.daily_wage_rate.message}
+                    </p>
                   )}
                 </div>
               </div>
@@ -92,47 +102,115 @@ const SalaryTab = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {currentOrganization === 'MBWO' ? 'Gross Salary (PKR)' : 'Basic Salary (PKR)'} <span className="text-red-500">*</span>
+                  {currentOrganization === "MBWO"
+                    ? "Gross Salary (PKR)"
+                    : "Basic Salary (PKR)"}{" "}
+                  <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
-                  {...register(currentOrganization === 'MBWO' ? "gross_salary" : "basic_salary", {
-                    required: currentOrganization === 'MBWO' ? "Gross salary is required" : "Basic salary is required",
-                    min: { value: 1, message: currentOrganization === 'MBWO' ? "Gross salary must be greater than 0" : "Basic salary must be greater than 0" },
-                  })}
+                  {...register(
+                    currentOrganization === "MBWO"
+                      ? "gross_salary"
+                      : "basic_salary",
+                    {
+                      required:
+                        currentOrganization === "MBWO"
+                          ? "Gross salary is required"
+                          : "Basic salary is required",
+                      min: {
+                        value: 1,
+                        message:
+                          currentOrganization === "MBWO"
+                            ? "Gross salary must be greater than 0"
+                            : "Basic salary must be greater than 0",
+                      },
+                    }
+                  )}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
-                  placeholder={currentOrganization === 'MBWO' ? "Enter gross salary" : "Enter basic salary"}
+                  placeholder={
+                    currentOrganization === "MBWO"
+                      ? "Enter gross salary"
+                      : "Enter basic salary"
+                  }
                 />
-                {salaryErrors?.[currentOrganization === 'MBWO' ? "gross_salary" : "basic_salary"] && (
+                {salaryErrors?.[
+                  currentOrganization === "MBWO"
+                    ? "gross_salary"
+                    : "basic_salary"
+                ] && (
                   <p className="text-red-600 text-sm mt-1">
-                    {salaryErrors[currentOrganization === 'MBWO' ? "gross_salary" : "basic_salary"].message}
+                    {
+                      salaryErrors[
+                        currentOrganization === "MBWO"
+                          ? "gross_salary"
+                          : "basic_salary"
+                      ].message
+                    }
                   </p>
                 )}
               </div>
 
-              <div className={getFieldClasses('salary', 'medical_allowance')}>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Medical Allowance (PKR)</label>
-                <input type="number" {...register("medical_allowance")} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900" placeholder="Enter medical allowance" />
+              <div className={getFieldClasses("salary", "medical_allowance")}>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Medical Allowance (PKR)
+                </label>
+                <input
+                  type="number"
+                  {...register("medical_allowance")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
+                  placeholder="Enter medical allowance"
+                />
               </div>
 
-              <div className={getFieldClasses('salary', 'house_rent')}>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">House Rent (PKR)</label>
-                <input type="number" {...register("house_rent")} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900" placeholder="Enter house rent allowance" />
+              <div className={getFieldClasses("salary", "house_rent")}>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  House Rent (PKR)
+                </label>
+                <input
+                  type="number"
+                  {...register("house_rent")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
+                  placeholder="Enter house rent allowance"
+                />
               </div>
 
-              <div className={getFieldClasses('salary', 'conveyance_allowance')}>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Conveyance Allowance (PKR)</label>
-                <input type="number" {...register("conveyance_allowance")} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900" placeholder="Enter conveyance allowance" />
+              <div
+                className={getFieldClasses("salary", "conveyance_allowance")}
+              >
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Conveyance Allowance (PKR)
+                </label>
+                <input
+                  type="number"
+                  {...register("conveyance_allowance")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
+                  placeholder="Enter conveyance allowance"
+                />
               </div>
 
-              <div className={getFieldClasses('salary', 'other_allowances')}>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Other Allowances (PKR)</label>
-                <input type="number" {...register("other_allowances")} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900" placeholder="Enter other allowances" />
+              <div className={getFieldClasses("salary", "other_allowances")}>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Other Allowances (PKR)
+                </label>
+                <input
+                  type="number"
+                  {...register("other_allowances")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
+                  placeholder="Enter other allowances"
+                />
               </div>
 
-              <div className={getFieldClasses('salary', 'daily_wage_rate')}>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Daily Wage Rate (PKR)</label>
-                <input type="number" {...register("daily_wage_rate")} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900" placeholder="Enter daily wage rate (if applicable)" />
+              <div className={getFieldClasses("salary", "daily_wage_rate")}>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Daily Wage Rate (PKR)
+                </label>
+                <input
+                  type="number"
+                  {...register("daily_wage_rate")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
+                  placeholder="Enter daily wage rate (if applicable)"
+                />
               </div>
             </div>
           )}
@@ -141,10 +219,17 @@ const SalaryTab = ({
 
           {/* Payment and Bank Information - Common for all employment types */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-            <div className={getFieldClasses('salary', 'payment_mode')}>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Mode</label>
+            <div className={getFieldClasses("salary", "payment_mode")}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Payment Mode
+              </label>
               <SearchableSelect
-                options={[{ value: "Bank Transfer", label: "Bank Transfer" }, { value: "Cheque", label: "Cheque" }, { value: "Online Transfer", label: "Online Transfer" }, { value: "Mobile Banking", label: "Mobile Banking" }]}
+                options={[
+                  { value: "Bank Transfer", label: "Bank Transfer" },
+                  { value: "Cheque", label: "Cheque" },
+                  { value: "Online Transfer", label: "Online Transfer" },
+                  { value: "Mobile Banking", label: "Mobile Banking" },
+                ]}
                 value={watch("payment_mode")}
                 onChange={(value) => salaryForm.setValue("payment_mode", value)}
                 placeholder="Select Payment Mode"
@@ -155,15 +240,23 @@ const SalaryTab = ({
               />
             </div>
 
-            <div className={getFieldClasses('salary', 'bank_account_primary')}>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Bank Account Number</label>
+            <div className={getFieldClasses("salary", "bank_account_primary")}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Bank Account Number
+              </label>
               <input
                 type="text"
                 {...register("bank_account_primary", {
                   validate: (value) => {
                     const paymentMode = watch("payment_mode");
                     const bankName = watch("bank_name_primary");
-                    if ((paymentMode === "Bank Transfer" || paymentMode === "Online Transfer" || paymentMode === "Mobile Banking") && bankName && !value) {
+                    if (
+                      (paymentMode === "Bank Transfer" ||
+                        paymentMode === "Online Transfer" ||
+                        paymentMode === "Mobile Banking") &&
+                      bankName &&
+                      !value
+                    ) {
                       return "Bank account number is required when bank details are provided";
                     }
                     return true;
@@ -173,19 +266,31 @@ const SalaryTab = ({
                 placeholder="Enter bank account number"
               />
               {salaryErrors?.bank_account_primary && (
-                <p className="text-red-600 text-sm mt-1">{salaryErrors.bank_account_primary.message}</p>
+                <p className="text-red-600 text-sm mt-1">
+                  {salaryErrors.bank_account_primary.message}
+                </p>
               )}
             </div>
 
-            <div className={getFieldClasses('salary', 'bank_name_primary')}>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Bank Name</label>
-              <input type="text" {...register("bank_name_primary")} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900" placeholder="Enter bank name" />
+            <div className={getFieldClasses("salary", "bank_name_primary")}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Bank Name
+              </label>
+              <input
+                type="text"
+                {...register("bank_name_primary")}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
+                placeholder="Enter bank name"
+              />
             </div>
 
-            <div className={getFieldClasses('salary', 'bank_branch_code')}>
+            <div className={getFieldClasses("salary", "bank_branch_code")}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Bank Branch Code
-                {(watch("bank_name_primary") || watch("bank_account_primary")) && <span className="text-red-500"> *</span>}
+                {(watch("bank_name_primary") ||
+                  watch("bank_account_primary")) && (
+                  <span className="text-red-500"> *</span>
+                )}
               </label>
               <input
                 type="text"
@@ -203,16 +308,26 @@ const SalaryTab = ({
                 placeholder="Enter bank branch code"
               />
               {salaryErrors?.bank_branch_code && (
-                <p className="text-red-600 text-sm mt-1">{salaryErrors.bank_branch_code.message}</p>
+                <p className="text-red-600 text-sm mt-1">
+                  {salaryErrors.bank_branch_code.message}
+                </p>
               )}
             </div>
 
-            <div className={getFieldClasses('salary', 'payroll_status')}>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Payroll Status</label>
+            <div className={getFieldClasses("salary", "payroll_status")}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Payroll Status
+              </label>
               <SearchableSelect
-                options={[{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }, { value: "Suspended", label: "Suspended" }]}
+                options={[
+                  { value: "Active", label: "Active" },
+                  { value: "Inactive", label: "Inactive" },
+                  { value: "Suspended", label: "Suspended" },
+                ]}
                 value={watch("payroll_status")}
-                onChange={(value) => salaryForm.setValue("payroll_status", value)}
+                onChange={(value) =>
+                  salaryForm.setValue("payroll_status", value)
+                }
                 placeholder="Select Payroll Status"
                 register={register}
                 name="payroll_status"
@@ -234,19 +349,29 @@ const SalaryTab = ({
                   { value: "filer", label: "Filer" },
                 ]}
                 value={watchEmployment("filer_status")}
-                onChange={(value) => employmentForm.setValue("filer_status", value)}
+                onChange={(value) =>
+                  employmentForm.setValue("filer_status", value)
+                }
                 placeholder="Select Tax Filer Status"
                 register={registerEmployment}
                 name="filer_status"
-                required={getValidationRules("employment", "filer_status", { required: "Filer status is required" }).required}
+                required={
+                  getValidationRules("employment", "filer_status", {
+                    required: "Filer status is required",
+                  }).required
+                }
                 error={employmentErrors?.filer_status?.message}
               />
               {employmentErrors?.filer_status && (
-                <p className="text-red-600 text-sm mt-1">{employmentErrors.filer_status.message}</p>
+                <p className="text-red-600 text-sm mt-1">
+                  {employmentErrors.filer_status.message}
+                </p>
               )}
             </div>
             {watchedFilerStatus === "filer" && (
-              <div className={getFieldClasses("employment", "filer_active_status")}>
+              <div
+                className={getFieldClasses("employment", "filer_active_status")}
+              >
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Filer Active Status <span className="text-red-500">*</span>
                 </label>
@@ -256,22 +381,36 @@ const SalaryTab = ({
                     { value: "not_active", label: "Not Active" },
                   ]}
                   value={watchEmployment("filer_active_status")}
-                  onChange={(value) => employmentForm.setValue("filer_active_status", value)}
+                  onChange={(value) =>
+                    employmentForm.setValue("filer_active_status", value)
+                  }
                   placeholder="Select Status"
                   register={registerEmployment}
                   name="filer_active_status"
-                  required={getValidationRules("employment", "filer_active_status", { required: watchedFilerStatus === "filer" ? "Filer active status is required" : false }).required}
+                  required={
+                    getValidationRules("employment", "filer_active_status", {
+                      required:
+                        watchedFilerStatus === "filer"
+                          ? "Filer active status is required"
+                          : false,
+                    }).required
+                  }
                   error={employmentErrors?.filer_active_status?.message}
                 />
                 {employmentErrors?.filer_active_status && (
-                  <p className="text-red-600 text-sm mt-1">{employmentErrors.filer_active_status.message}</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    {employmentErrors.filer_active_status.message}
+                  </p>
                 )}
               </div>
             )}
           </div>
 
           <div className="mt-6 flex justify-end">
-            <button type="submit" className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
+            <button
+              type="submit"
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+            >
               <i className="fas fa-arrow-right mr-2"></i>
               Continue to Location
             </button>
