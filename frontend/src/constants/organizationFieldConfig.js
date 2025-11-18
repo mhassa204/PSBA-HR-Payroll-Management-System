@@ -59,7 +59,7 @@ export const ORGANIZATION_FIELD_CONFIG = {
   PMBMC: {
     name: "PMBMC", 
     hiddenFields: {
-      employment: [],
+      employment: ["scale_grade"],
       salary: [], // No salary fields hidden for PMBMC
       location: [], // No location fields hidden for PMBMC
       contract: [] // No contract fields hidden for PMBMC
@@ -77,7 +77,6 @@ export const ORGANIZATION_FIELD_CONFIG = {
         "filer_status",
         "filer_active_status",
         "is_current",
-        "scale_grade",
         "reporting_officer_id",
         "office_location",
         "employment_status",
