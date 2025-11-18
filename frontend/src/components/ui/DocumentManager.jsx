@@ -6,15 +6,35 @@ import {
   formatFileSize,
   getServerBaseUrl
 } from '../../utils/imageUtils';
+import PDFPreview from './PDFPreview';
 
 /**
  * Simple file preview function (copied from working CreateEmployeeForm)
+ * Uses a ref to track and cleanup blob URLs
  */
 const renderFilePreview = (file, onRemove, documentType, documentId) => {
   if (!file) return null;
 
-  const isImage = file.type.startsWith('image/');
-  const previewUrl = URL.createObjectURL(file);
+  const isImage = file.type && file.type.startsWith('image/');
+  const isPDF = file.type === 'application/pdf' || (file.name && /\.pdf$/i.test(file.name));
+  
+  // Create blob URL for preview
+  let previewUrl;
+  try {
+    previewUrl = URL.createObjectURL(file);
+    // Store the URL so it can be cleaned up later (though React will handle cleanup on unmount)
+  } catch (error) {
+    console.error('Error creating blob URL for file preview:', error);
+    return null;
+  }
+  
+  console.log('📄 Rendering file preview:', { 
+    fileName: file.name, 
+    fileType: file.type, 
+    isPDF, 
+    isImage,
+    previewUrl: previewUrl.substring(0, 50) + '...'
+  });
 
   return (
     <div key={documentId} className="relative group">
@@ -33,16 +53,23 @@ const renderFilePreview = (file, onRemove, documentType, documentId) => {
         </button>
 
         {/* Document preview - same size as existing documents */}
-        <div className="relative">
+        <div className="relative" style={{ height: '128px' }}>
           {isImage ? (
             <img
               src={previewUrl}
               alt={file.name}
-              className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+              className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => window.open(previewUrl, '_blank')}
             />
+          ) : isPDF ? (
+            <PDFPreview
+              url={previewUrl}
+              fileName={file.name}
+              height="128px"
+              showControls={false}
+            />
           ) : (
-            <div className="h-32 flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+            <div className="h-full flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
               <i className="fas fa-file-pdf text-3xl text-red-500 mb-2"></i>
               <span className="text-xs text-gray-600 text-center px-2 truncate">{file.name}</span>
             </div>
@@ -188,15 +215,32 @@ const DocumentManager = ({
       const serverBaseUrl = getServerBaseUrl();
       documentUrl = document.url.startsWith('http')
         ? document.url
-        : `${serverBaseUrl}${document.url}`;
+        : document.url.startsWith('/')
+          ? `${serverBaseUrl}${document.url}`
+          : `${serverBaseUrl}/${document.url}`;
     } else if (document.file_path) {
       documentUrl = getDocumentUrl(document);
     } else {
       documentUrl = null;
     }
+    
+    // Debug logging for PDF documents
+    if (documentUrl && (document.file_path && /\.pdf$/i.test(document.file_path)) || 
+        document.mime_type === 'application/pdf' ||
+        (document.document_name && /\.pdf$/i.test(document.document_name))) {
+      console.log('📄 PDF Document URL:', { 
+        documentUrl, 
+        file_path: document.file_path, 
+        url: document.url,
+        document_name: document.document_name 
+      });
+    }
 
     // Use enhanced metadata from backend if available
     const isImage = document.isImage !== undefined ? document.isImage : isImageFile(document.file_path || document.document_name);
+    const isPDF = (document.file_path && /\.pdf$/i.test(document.file_path)) ||
+                  document.mime_type === 'application/pdf' ||
+                  (document.document_name && /\.pdf$/i.test(document.document_name));
     const fileIcon = getFileTypeIcon(document.file_path || document.document_name);
 
     // Don't render if no valid URL
@@ -230,17 +274,24 @@ const DocumentManager = ({
           </button>
 
           {/* Document preview */}
-          <div className="relative">
+          <div className="relative" style={{ height: '128px' }}>
             {isImage ? (
               <img
                 src={documentUrl}
                 alt={document.document_name || 'Document'}
-                className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
                 onClick={() => documentUrl && window.open(documentUrl, '_blank')}
+              />
+            ) : isPDF ? (
+              <PDFPreview
+                url={documentUrl}
+                fileName={document.document_name || 'Document'}
+                height="128px"
+                showControls={false}
               />
             ) : (
               <div
-                className="h-32 flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                className="h-full flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => documentUrl && window.open(documentUrl, '_blank')}
               >
                 <i className={`${fileIcon} text-3xl text-gray-400 mb-2`}></i>

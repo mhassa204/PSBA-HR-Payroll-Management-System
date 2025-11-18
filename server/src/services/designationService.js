@@ -1,4 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require("../utils/softDeleteUtil");
+const { validateSoftDelete } = require("../utils/softDeleteValidation");
 const prisma = new PrismaClient();
 
 const designationService = {
@@ -183,6 +185,24 @@ const designationService = {
   // Delete designation
   deleteDesignation: async (id) => {
     return await prisma.$transaction(async (tx) => {
+      // Get designation data first
+      const designation = await tx.designation.findUnique({
+        where: { id: parseInt(id) },
+      });
+
+      if (!designation) {
+        throw new Error("Designation not found");
+      }
+
+      // Check for active child records (using regular prisma client for validation)
+      const validation = await validateSoftDelete('Designation', parseInt(id));
+      if (!validation.canDelete) {
+        throw new Error(validation.message);
+      }
+
+      // Mask unique fields (title is part of composite unique constraint)
+      const { masked } = maskUniqueFieldsForSoftDelete('Designation', designation);
+      
       // Soft delete the designation and all related records
       
       // 1. Soft delete employment records with this designation
@@ -194,7 +214,10 @@ const designationService = {
       // 2. Finally soft delete the designation
       const deletedDesignation = await tx.designation.update({
         where: { id: parseInt(id) },
-        data: { is_deleted: true }
+        data: { 
+          is_deleted: true,
+          ...masked, // Apply masked unique fields
+        }
       });
 
       return {
@@ -208,12 +231,31 @@ const designationService = {
   // Restore a soft-deleted designation
   restoreDesignation: async (id) => {
     return await prisma.$transaction(async (tx) => {
+      // Get designation data first
+      const designation = await tx.designation.findUnique({
+        where: { id: parseInt(id) },
+      });
+
+      if (!designation) {
+        throw new Error("Designation not found");
+      }
+
+      if (!designation.is_deleted) {
+        throw new Error("Designation is not soft-deleted");
+      }
+
+      // Restore unique fields (title is part of composite unique constraint)
+      const restored = restoreUniqueFieldsForUndelete('Designation', designation);
+      
       // Restore the designation and all related records
       
       // 1. Restore the designation
       const restoredDesignation = await tx.designation.update({
         where: { id: parseInt(id) },
-        data: { is_deleted: false }
+        data: { 
+          is_deleted: false,
+          ...restored, // Restore original unique field values
+        }
       });
 
       // 2. Restore employment records with this designation

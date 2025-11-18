@@ -11,9 +11,11 @@ import { useAuditLog } from "../../../hooks/useAuditLog";
 import { forceRestoreScroll } from "../../../utils/scrollUtils";
 import ProfilePicture from "../../../components/ui/ProfilePicture";
 import CNICInput from "../../../components/ui/CNICInput";
+import PDFPreview from "../../../components/ui/PDFPreview";
 import { districtService } from "../../settings/services/districtService";
 import { cityService } from "../../settings/services/cityService";
 import { educationLevelService } from "../../settings/services/educationLevelService";
+import { useFormPersistence } from "../../../hooks/useFormPersistence";
 import {
   RELIGION_OPTIONS,
   DISABILITY_TYPES,
@@ -67,6 +69,9 @@ const CreateEmployeeForm = () => {
     other_documents: []
   });
   
+  // Store blob URLs for file previews to prevent recreation on every render
+  const [filePreviewUrls, setFilePreviewUrls] = useState({});
+  
   // Add a state to force re-render of file inputs
   const [fileInputKeys, setFileInputKeys] = useState({});
 
@@ -118,6 +123,89 @@ const CreateEmployeeForm = () => {
     },
   });
 
+  // Form persistence hook
+  const { clearSavedData, isRestoring } = useFormPersistence({
+    storageKey: 'createEmployeeForm',
+    formData: form,
+    additionalState: {
+      experiences,
+      educations,
+      uploadedFiles,
+      profilePicturePreview,
+      districtMap,
+      cityMap,
+      levelMap,
+      setExperiences,
+      setEducations,
+      setUploadedFiles,
+      setProfilePicturePreview,
+      setDistrictMap,
+      setCityMap,
+      setLevelMap
+    },
+    enabled: true
+  });
+
+  // Create blob URLs for files that don't have them yet (e.g., after restoration)
+  useEffect(() => {
+    setFilePreviewUrls(prev => {
+      const newUrls = { ...prev };
+      let hasNewUrls = false;
+
+      Object.entries(uploadedFiles).forEach(([key, value]) => {
+        if (value === null || value === undefined) return;
+
+        if (value instanceof File) {
+          const fileId = `${value.name}-${value.size}-${value.lastModified}`;
+          const fullKey = `${key}-${fileId}`;
+          if (!newUrls[fullKey]) {
+            newUrls[fullKey] = URL.createObjectURL(value);
+            hasNewUrls = true;
+          }
+        } else if (Array.isArray(value)) {
+          value.forEach((file, index) => {
+            if (file instanceof File) {
+              const fileId = `${file.name}-${file.size}-${file.lastModified}`;
+              const fullKey = `${key}-${index}-${fileId}`;
+              if (!newUrls[fullKey]) {
+                newUrls[fullKey] = URL.createObjectURL(file);
+                hasNewUrls = true;
+              }
+            }
+          });
+        } else if (typeof value === 'object') {
+          Object.entries(value).forEach(([objKey, objValue]) => {
+            if (objValue instanceof File) {
+              const fileId = `${objValue.name}-${objValue.size}-${objValue.lastModified}`;
+              const fullKey = `${key}-${objKey}-${fileId}`;
+              if (!newUrls[fullKey]) {
+                newUrls[fullKey] = URL.createObjectURL(objValue);
+                hasNewUrls = true;
+              }
+            }
+          });
+        }
+      });
+
+      return hasNewUrls ? newUrls : prev;
+    });
+  }, [uploadedFiles]);
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      // Revoke all blob URLs when component unmounts
+      setFilePreviewUrls(prev => {
+        Object.values(prev).forEach(url => {
+          if (url && url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+          }
+        });
+        return {};
+      });
+    };
+  }, []);
+
   // Log page view on component mount
   useEffect(() => {
     logPageView('Create Employee Form', {
@@ -151,26 +239,85 @@ const CreateEmployeeForm = () => {
 
   // Watch for district changes to update cities
   const watchedDistrictId = form.watch("district_id");
+  const watchedCityId = form.watch("city_id");
   useEffect(() => {
+    // Skip city loading during form restoration to prevent clearing restored city
+    if (isRestoring && isRestoring()) {
+      return;
+    }
+
     (async () => {
       if (watchedDistrictId) {
         try {
           const cities = await cityService.getAllCities({ district_id: watchedDistrictId });
           const cList = (cities?.cities || cities || []).map(c => ({ value: c.id, label: c.name }));
           setAvailableCities(cList);
-          setCityMap(Object.fromEntries(cList.map(o => [String(o.value), o.label])));
-          // Reset city when district changes
-          form.setValue("city_id", "");
+          
+          // CRITICAL: Use functional update to access current cityMap state
+          // This ensures we can check for restored labels even if they were set asynchronously
+          setCityMap(prev => {
+            const newCityMap = Object.fromEntries(cList.map(o => [String(o.value), o.label]));
+            const existingCityLabel = prev[String(watchedCityId)];
+            
+            // If we have a restored label for this city, preserve it
+            if (watchedCityId && existingCityLabel) {
+              // Always preserve the existing label (from restoration)
+              // This ensures restored labels are maintained even after cities are loaded
+              // Also add the city to availableCities if it's not already there
+              const cityInList = cList.find(c => String(c.value) === String(watchedCityId));
+              if (!cityInList) {
+                // City not in API response but we have a label - add it to the list
+                setAvailableCities(prevCities => {
+                  const alreadyExists = prevCities.some(c => String(c.value) === String(watchedCityId));
+                  if (!alreadyExists) {
+                    return [...prevCities, { value: watchedCityId, label: existingCityLabel }];
+                  }
+                  return prevCities;
+                });
+              }
+              return { ...newCityMap, [String(watchedCityId)]: existingCityLabel };
+            }
+            
+            // No existing label - use the new map
+            return newCityMap;
+          });
+          
+          // Only reset city_id if it's not in the list AND we don't have a label for it
+          // Use functional update to check current state
+          setCityMap(prev => {
+            const hasLabel = prev[String(watchedCityId)];
+            const isInList = cList.some(c => String(c.value) === String(watchedCityId));
+            
+            if (watchedCityId && !isInList && !hasLabel) {
+              // City not in list and no label - reset it
+              form.setValue("city_id", "");
+            }
+            return prev; // Return unchanged
+          });
         } catch (_) {
           setAvailableCities([]);
-          form.setValue("city_id", "");
+          // Don't reset city_id if we have a label for it (form restoration case)
+          setCityMap(prev => {
+            const hasLabel = prev[String(watchedCityId)];
+            if (!hasLabel) {
+              form.setValue("city_id", "");
+            }
+            return prev; // Keep existing map
+          });
         }
       } else {
         setAvailableCities([]);
-        form.setValue("city_id", "");
+        // Don't reset city_id if we have a label for it (form restoration case)
+        setCityMap(prev => {
+          const hasLabel = prev[String(watchedCityId)];
+          if (!hasLabel) {
+            form.setValue("city_id", "");
+          }
+          return prev; // Keep existing map
+        });
       }
     })();
-  }, [watchedDistrictId, form]);
+  }, [watchedDistrictId, watchedCityId, form, isRestoring]);
 
   // Watch for same address checkbox
   const watchedSameAddress = form.watch("same_address");
@@ -206,10 +353,29 @@ const CreateEmployeeForm = () => {
       const validation = validateMultipleFiles(files, fileType);
       if (validation.isValid) {
         // For multiple files, ADD to existing files instead of replacing
-        setUploadedFiles(prev => ({
-          ...prev,
-          [fileType]: [...(prev[fileType] || []), ...files]
-        }));
+        setUploadedFiles(prev => {
+          const updated = {
+            ...prev,
+            [fileType]: [...(prev[fileType] || []), ...files]
+          };
+          console.log('📁 Multiple files uploaded:', { fileType, files: files.map(f => f.name), updated });
+          
+          // Create blob URLs for new files
+          setFilePreviewUrls(prevUrls => {
+            const newUrls = { ...prevUrls };
+            files.forEach((file, index) => {
+              const fileKey = `${fileType}-${(prev[fileType]?.length || 0) + index}`;
+              const fileId = `${file.name}-${file.size}-${file.lastModified}`;
+              const fullKey = `${fileKey}-${fileId}`;
+              if (!newUrls[fullKey]) {
+                newUrls[fullKey] = URL.createObjectURL(file);
+              }
+            });
+            return newUrls;
+          });
+          
+          return updated;
+        });
         // Don't set form value here - it will be handled in form submission
       } else {
         alert(validation.message);
@@ -220,10 +386,29 @@ const CreateEmployeeForm = () => {
       if (file) {
         const validation = validateFileUpload(file, fileType);
         if (validation.isValid) {
-          setUploadedFiles(prev => ({
-            ...prev,
-            [fileType]: file
-          }));
+          setUploadedFiles(prev => {
+            const updated = {
+              ...prev,
+              [fileType]: file
+            };
+            console.log('📁 Single file uploaded:', { fileType, fileName: file.name, fileSize: file.size, updated });
+            
+            // Create blob URL for the file
+            setFilePreviewUrls(prevUrls => {
+              const fileId = `${file.name}-${file.size}-${file.lastModified}`;
+              const fullKey = `${fileType}-${fileId}`;
+              // Revoke old URL if exists
+              if (prevUrls[fullKey]) {
+                URL.revokeObjectURL(prevUrls[fullKey]);
+              }
+              return {
+                ...prevUrls,
+                [fullKey]: URL.createObjectURL(file)
+              };
+            });
+            
+            return updated;
+          });
           // Don't set form value here - it will be handled in form submission
         } else {
           alert(validation.message);
@@ -257,6 +442,37 @@ const CreateEmployeeForm = () => {
     
     setUploadedFiles(prev => {
       console.log('🗑️ Previous uploadedFiles state:', prev);
+      
+      // Revoke blob URLs for removed files
+      setFilePreviewUrls(prevUrls => {
+        const newUrls = { ...prevUrls };
+        const fileToRemove = prev[fileType];
+        
+        if (fileToRemove) {
+          if (fileIndex !== null && Array.isArray(fileToRemove)) {
+            // Remove from array
+            const file = fileToRemove[fileIndex];
+            if (file instanceof File) {
+              const fileId = `${file.name}-${file.size}-${file.lastModified}`;
+              const fullKey = `${fileType}-${fileIndex}-${fileId}`;
+              if (newUrls[fullKey]) {
+                URL.revokeObjectURL(newUrls[fullKey]);
+                delete newUrls[fullKey];
+              }
+            }
+          } else if (fileToRemove instanceof File) {
+            // Single file
+            const fileId = `${fileToRemove.name}-${fileToRemove.size}-${fileToRemove.lastModified}`;
+            const fullKey = `${fileType}-${fileId}`;
+            if (newUrls[fullKey]) {
+              URL.revokeObjectURL(newUrls[fullKey]);
+              delete newUrls[fullKey];
+            }
+          }
+        }
+        
+        return newUrls;
+      });
       
       if (fileType === 'experience_documents' || fileType === 'education_documents') {
         // Handle education and experience documents (stored as objects with IDs)
@@ -332,16 +548,42 @@ const CreateEmployeeForm = () => {
     if (!fileObj || !fileObj.name) return null;
 
     const isImage = fileObj.type && fileObj.type.startsWith('image/');
-    const previewUrl = fileObj instanceof File ? URL.createObjectURL(fileObj) : null;
+    const isPDF = fileObj.type === 'application/pdf' || (fileObj.name && /\.pdf$/i.test(fileObj.name));
+    
+    // Get or create blob URL for this file
+    let previewUrl = null;
+    if (fileObj instanceof File) {
+      const fileId = `${fileObj.name}-${fileObj.size}-${fileObj.lastModified}`;
+      const fullKey = fileIndex !== null ? `${fileType}-${fileIndex}-${fileId}` : `${fileType}-${fileId}`;
+      
+      // Check if URL already exists in state
+      if (filePreviewUrls[fullKey]) {
+        previewUrl = filePreviewUrls[fullKey];
+      } else {
+        // Create new URL and store it
+        previewUrl = URL.createObjectURL(fileObj);
+        setFilePreviewUrls(prev => ({
+          ...prev,
+          [fullKey]: previewUrl
+        }));
+      }
+    }
 
     return (
-      <div key={fileIndex || 'single'} className="relative inline-block mr-2 mb-2">
+      <div key={`${fileType}-${fileIndex || 'single'}-${fileObj.name}-${fileObj.lastModified || Date.now()}`} className="relative inline-block mr-2 mb-2">
         <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm" style={{ width: '120px', height: '80px' }}>
           {isImage && previewUrl ? (
             <img
               src={previewUrl}
               alt={fileObj.name}
               className="w-full h-full object-cover"
+            />
+          ) : isPDF && previewUrl ? (
+            <PDFPreview
+              url={previewUrl}
+              fileName={fileObj.name}
+              height="80px"
+              showControls={false}
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
@@ -353,7 +595,7 @@ const CreateEmployeeForm = () => {
         <button
           type="button"
           onClick={() => handleFileRemove(fileType, fileIndex)}
-          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 z-10"
           title="Remove file"
         >
           ×
@@ -547,10 +789,11 @@ const CreateEmployeeForm = () => {
   const onSubmit = (data) => {
     clearError();
     // Include experiences, educations, and ALL uploaded files in the data
+    // Ensure arrays are always included, even if empty
     const formDataWithExperiences = {
       ...data,
-      past_experiences: experiences,
-      educations: educations,
+      past_experiences: Array.isArray(experiences) ? experiences : [],
+      educations: Array.isArray(educations) ? educations : [],
       // Include ALL uploaded files
       ...uploadedFiles
     };
@@ -568,6 +811,8 @@ const CreateEmployeeForm = () => {
       district: districtLabel,
       city: cityLabel,
       educations: educationsWithLabels,
+      // Ensure past_experiences is preserved
+      past_experiences: formDataWithExperiences.past_experiences,
     };
 
     // Log form submission
@@ -598,16 +843,95 @@ const CreateEmployeeForm = () => {
         }
       );
 
+      // Clear saved form data on successful submission
+      clearSavedData();
+
       // Close modal and navigate to employees list
       setShowPreviewModal(false);
       navigate("/employees");
     } catch (error) {
       // Log error for audit trail
+      // Note: Form data is preserved automatically by the persistence hook
       logError('CREATE', 'EMPLOYEE', error, {
         metadata: {
           form_data_keys: Object.keys(previewData || {}),
           has_experiences: previewData?.past_experiences?.length > 0
         }
+      });
+    }
+  };
+
+  // Reset form handler
+  const handleResetForm = () => {
+    if (window.confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
+      // Clear saved form data
+      clearSavedData();
+      
+      // Reset form to default values
+      form.reset({
+        full_name: "",
+        father_husband_name: "",
+        relationship_type: "father",
+        mother_name: "",
+        cnic: "",
+        cnic_issue_date: "",
+        cnic_expire_date: "",
+        date_of_birth: "",
+        gender: "",
+        marital_status: "",
+        nationality: "Pakistani",
+        religion: "",
+        blood_group: "",
+        domicile_district: "",
+        mobile_number: "",
+        whatsapp_number: "",
+        email: "",
+        present_address: "",
+        permanent_address: "",
+        same_address: false,
+        district_id: "",
+        city_id: "",
+        has_disability: false,
+        disability_type: "",
+        disability_description: "",
+        profile_picture_file: null,
+        cnic_front_file: null,
+        cnic_back_file: null,
+        domicile_certificate_file: null,
+        disability_document_file: null,
+        medical_fitness_file: null,
+        police_character_certificate_file: null,
+        experience_documents_files: {},
+        education_documents_files: {},
+        other_documents_files: [],
+        missing_note: "",
+        has_past_experience: false,
+        past_experiences: [],
+        educations: [],
+      });
+      
+      // Reset all state
+      setExperiences([]);
+      setEducations([]);
+      setProfilePicturePreview(null);
+      setUploadedFiles({
+        cnic_front: null,
+        cnic_back: null,
+        certificates: null,
+        disability_document: null,
+        medical_fitness_file: null,
+        police_character_certificate_file: null,
+        experience_documents: {},
+        education_documents: {},
+        other_documents: []
+      });
+      setAvailableCities([]);
+      setCityMap({});
+      
+      // Clear file inputs
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      fileInputs.forEach(input => {
+        input.value = '';
       });
     }
   };
@@ -630,6 +954,55 @@ const CreateEmployeeForm = () => {
       return value.length > 0 ? `${value.length} experience(s)` : 'No experience added';
     }
 
+    // Check if value is a date string or Date object and format it as dd/mm/yyyy
+    if (typeof value === 'string' && value.trim() !== '') {
+      // Try to parse as date - check for common date patterns including ISO with time
+      const datePatterns = [
+        /^\d{4}-\d{2}-\d{2}/,           // ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+        /^\d{2}\/\d{2}\/\d{4}/,         // DD/MM/YYYY
+        /^\d{4}\/\d{2}\/\d{2}/,         // YYYY/MM/DD
+        /^\d{2}-\d{2}-\d{4}/,           // DD-MM-YYYY
+      ];
+      
+      const isDateString = datePatterns.some(pattern => pattern.test(value));
+      
+      if (isDateString) {
+        try {
+          const date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+          }
+        } catch (e) {
+          // If date parsing fails, return as string
+        }
+      }
+      
+      // Also try parsing any string that looks like it could be a date
+      // This catches ISO strings with time components
+      try {
+        const date = new Date(value);
+        if (!isNaN(date.getTime()) && value.includes('-') && value.length >= 10) {
+          const day = date.getDate().toString().padStart(2, '0');
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const year = date.getFullYear();
+          return `${day}/${month}/${year}`;
+        }
+      } catch (e) {
+        // If date parsing fails, continue to return as string
+      }
+    }
+
+    // Check if value is a Date object
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      const day = value.getDate().toString().padStart(2, '0');
+      const month = (value.getMonth() + 1).toString().padStart(2, '0');
+      const year = value.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
     return String(value);
   };
 
@@ -645,32 +1018,46 @@ const CreateEmployeeForm = () => {
       <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate("/employees")}
+                className="p-2 rounded-lg transition-colors"
+                style={{
+                  color: "var(--color-text-secondary)",
+                  backgroundColor: "var(--color-background-primary)",
+                }}
+              >
+                <i className="fas fa-arrow-left"></i>
+              </button>
+              <div>
+                <h1
+                  className="text-3xl font-bold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  Create New Employee
+                </h1>
+                <p
+                  className="text-lg"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Add basic employee information first, then add employment
+                  records
+                </p>
+              </div>
+            </div>
             <button
-              onClick={() => navigate("/employees")}
-              className="p-2 rounded-lg transition-colors"
+              onClick={handleResetForm}
+              className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               style={{
                 color: "var(--color-text-secondary)",
                 backgroundColor: "var(--color-background-primary)",
               }}
+              title="Reset Form"
             >
-              <i className="fas fa-arrow-left"></i>
+              <i className="fas fa-redo"></i>
+              <span className="hidden sm:inline">Reset Form</span>
             </button>
-            <div>
-              <h1
-                className="text-3xl font-bold"
-                style={{ color: "var(--color-text-primary)" }}
-              >
-                Create New Employee
-              </h1>
-              <p
-                className="text-lg"
-                style={{ color: "var(--color-text-secondary)" }}
-              >
-                Add basic employee information first, then add employment
-                records
-              </p>
-            </div>
           </div>
         </div>
 
@@ -1136,6 +1523,7 @@ const CreateEmployeeForm = () => {
                   <SearchableSelect
                     options={availableCities}
                     value={form.watch("city_id")}
+                    valueLabel={cityMap[String(form.watch("city_id"))] || ''}
                     onChange={(value) => form.setValue("city_id", value)}
                     placeholder="Select City"
                     register={form.register}
@@ -1403,16 +1791,18 @@ const CreateEmployeeForm = () => {
                               <SearchableSelect
                                 options={educationLevelOptions}
                                 value={education.education_level_id}
-                                onChange={(value) => {
-                                  const label = levelMap[String(value)] || '';
+                                valueLabel={education.education_level || levelMap[String(education.education_level_id)] || ''}
+                                onChange={(value, label) => {
                                   updateEducation(education.id, 'education_level_id', value);
-                                  updateEducation(education.id, 'education_level', label); // keep for preview
+                                  updateEducation(education.id, 'education_level', label || levelMap[String(value)] || ''); // keep for preview
                                 }}
                                 placeholder={educationLevelOptions.length ? "Select Education Level" : "No levels available"}
                                 register={() => ({})}
                                 name={`education_level_${education.id}`}
                                 required={true}
                                 error={null}
+                                allowClear={true}
+                                dropdownPriority="high"
                               />
                             </div>
 
@@ -1436,13 +1826,10 @@ const CreateEmployeeForm = () => {
                                 Year of Completion <span className="text-red-500">*</span>
                               </label>
                               <input
-                                type="number"
-                                min="1950"
-                                max={new Date().getFullYear()}
-                                value={education.year_of_completion}
+                                type="date"
+                                value={education.year_of_completion || ''}
                                 onChange={(e) => updateEducation(education.id, 'year_of_completion', e.target.value)}
                                 className="form-input w-full"
-                                placeholder="e.g., 2020"
                               />
                             </div>
 
@@ -1466,10 +1853,13 @@ const CreateEmployeeForm = () => {
                                 Start Date
                               </label>
                               <input
-                                type="date"
+                                type="number"
+                                min="1950"
+                                max={new Date().getFullYear()}
                                 value={education.start_date || ''}
                                 onChange={(e) => updateEducation(education.id, 'start_date', e.target.value)}
                                 className="form-input w-full"
+                                placeholder="e.g., 2016"
                               />
                             </div>
                           </div>

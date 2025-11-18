@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require("../utils/softDeleteUtil");
 const prisma = new PrismaClient();
 
 const deviceService = {
@@ -88,7 +89,51 @@ const deviceService = {
 
   // Soft delete
   deleteDevice: async (id) => {
-    return prisma.device.update({ where: { id: Number(id) }, data: { is_deleted: true } });
+    const device = await prisma.device.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!device) {
+      throw new Error("Device not found");
+    }
+
+    // Mask unique fields to prevent unique constraint violations
+    // Device has composite unique on ip_address and port_number
+    const { masked } = maskUniqueFieldsForSoftDelete('Device', device);
+
+    return prisma.device.update({ 
+      where: { id: Number(id) }, 
+      data: { 
+        is_deleted: true,
+        ...masked, // Apply masked unique fields
+      } 
+    });
+  },
+
+  // Restore device
+  restoreDevice: async (id) => {
+    const device = await prisma.device.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!device) {
+      throw new Error("Device not found");
+    }
+
+    if (!device.is_deleted) {
+      throw new Error("Device is not soft-deleted");
+    }
+
+    // Restore unique fields to their original values
+    const restored = restoreUniqueFieldsForUndelete('Device', device);
+
+    return prisma.device.update({
+      where: { id: Number(id) },
+      data: { 
+        is_deleted: false,
+        ...restored, // Restore original unique field values
+      }
+    });
   }
 };
 

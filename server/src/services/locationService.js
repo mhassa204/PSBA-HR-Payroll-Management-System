@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const { validateSoftDelete } = require("../utils/softDeleteValidation");
 const prisma = new PrismaClient();
 
 // Normalize time to HH:mm; accept H:mm, HH:mm, HH:mm:ss
@@ -121,7 +122,24 @@ const locationService = {
 
   // Soft delete
   deleteLocation: async (id) => {
-    return prisma.location.update({ where: { id: Number(id) }, data: { is_deleted: true, is_active: false } });
+    const location = await prisma.location.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!location) {
+      throw new Error("Location not found");
+    }
+
+    // Check for active child records
+    const validation = await validateSoftDelete('Location', Number(id));
+    if (!validation.canDelete) {
+      throw new Error(validation.message);
+    }
+
+    return prisma.location.update({ 
+      where: { id: Number(id) }, 
+      data: { is_deleted: true, is_active: false } 
+    });
   },
 
   // Statistics

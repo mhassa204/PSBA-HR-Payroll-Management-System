@@ -69,8 +69,18 @@ class EmployeeService {
       }
     });
 
-    // Handle experience_documents
-    if (employeeData.experience_documents && typeof employeeData.experience_documents === 'object') {
+    // Handle experience_documents - support both object format { [id]: file } and prefixed key format { "experience_documents_123": file }
+    Object.keys(employeeData).forEach(key => {
+      if (key.startsWith('experience_documents_')) {
+        const file = employeeData[key];
+        if (file instanceof File) {
+          formData.append(key, file);
+        }
+      }
+    });
+    
+    // Also handle object format for experience_documents
+    if (employeeData.experience_documents && typeof employeeData.experience_documents === 'object' && !Array.isArray(employeeData.experience_documents)) {
       Object.entries(employeeData.experience_documents).forEach(([experienceId, file]) => {
         if (file instanceof File) {
           formData.append(`experience_documents_${experienceId}`, file);
@@ -78,8 +88,18 @@ class EmployeeService {
       });
     }
 
-    // Handle education_documents
-    if (employeeData.education_documents && typeof employeeData.education_documents === 'object') {
+    // Handle education_documents - support both object format { [id]: file } and prefixed key format { "education_documents_123": file }
+    Object.keys(employeeData).forEach(key => {
+      if (key.startsWith('education_documents_')) {
+        const file = employeeData[key];
+        if (file instanceof File) {
+          formData.append(key, file);
+        }
+      }
+    });
+    
+    // Also handle object format for education_documents
+    if (employeeData.education_documents && typeof employeeData.education_documents === 'object' && !Array.isArray(employeeData.education_documents)) {
       Object.entries(employeeData.education_documents).forEach(([educationId, file]) => {
         if (file instanceof File) {
           formData.append(`education_documents_${educationId}`, file);

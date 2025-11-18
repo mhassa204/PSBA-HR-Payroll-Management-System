@@ -6,6 +6,7 @@ import { useErrorHandler } from "../../../hooks/useErrorHandler";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import ErrorMessage from "../../../components/ui/ErrorMessage";
 import SearchableSelect from "../../../components/ui/SearchableSelect";
+import { useFormPersistence } from "../../../hooks/useFormPersistence";
 import {
   RELATIONSHIP_TYPES,
   RELIGION_OPTIONS,
@@ -50,9 +51,9 @@ const EditUserForm = ({ user }) => {
       education_level_id: eq.education_level_id || eq.level?.id || "",
       education_level: eq.level?.name || eq.education_level || "",
       institution_name: eq.institution_name || "",
-      year_of_completion: eq.year_of_completion || "",
+      year_of_completion: formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
       marks_gpa: eq.marks_gpa || "",
-      start_date: formatDatabaseDateForInput(eq.start_date) || "",
+      start_date: eq.start_date || "", // Now String (year), use directly
     }))
   );
   const [experiences, setExperiences] = useState(user?.pastExperiences || []);
@@ -127,14 +128,41 @@ const EditUserForm = ({ user }) => {
         education_level_id: eq.education_level_id || eq.level?.id || "",
         education_level: eq.level?.name || eq.education_level || "",
         institution_name: eq.institution_name || "",
-        year_of_completion: eq.year_of_completion || "",
+        year_of_completion: formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
         marks_gpa: eq.marks_gpa || "",
-        start_date: formatDatabaseDateForInput(eq.start_date) || "",
+        start_date: eq.start_date || "", // Now String (year), use directly
       })),
     },
   });
 
   const { register, handleSubmit, formState: { errors }, watch, setValue } = form;
+
+  // Form persistence hook
+  // Note: DocumentManager state is not persisted yet - it requires additional work
+  // Main form fields, experiences, educations, and profile picture are preserved
+  const { clearSavedData, isRestoring } = useFormPersistence({
+    storageKey: `editEmployeeForm_${user?.id || 'new'}`,
+    formData: form,
+    additionalState: {
+      experiences,
+      educations,
+      uploadedFiles,
+      profilePicturePreview,
+      removeProfilePicture,
+      districtMap,
+      cityMap,
+      levelMap,
+      setExperiences,
+      setEducations,
+      setUploadedFiles,
+      setProfilePicturePreview,
+      setRemoveProfilePicture,
+      setDistrictMap,
+      setCityMap,
+      setLevelMap
+    },
+    enabled: true
+  });
 
   // Load master data
   useEffect(() => {
@@ -158,7 +186,13 @@ const EditUserForm = ({ user }) => {
 
   // Initialize and react to district_id to fetch cities
   const watchedDistrictId = watch("district_id");
+  const watchedCityId = watch("city_id");
   useEffect(() => {
+    // Skip city loading during form restoration to prevent clearing restored city
+    if (isRestoring && isRestoring()) {
+      return;
+    }
+
     (async () => {
       const dId = watchedDistrictId || user?.district_id;
       if (dId) {
@@ -166,22 +200,64 @@ const EditUserForm = ({ user }) => {
           const cities = await cityService.getAllCities({ district_id: dId });
           const cList = (cities?.cities || cities || []).map(c => ({ value: c.id, label: c.name }));
           setAvailableCities(cList);
-          setCityMap(Object.fromEntries(cList.map(o => [String(o.value), o.label])));
-          // If user's city_id is set initially, keep it; else ensure valid
-          const currentCityId = form.getValues("city_id");
-          if (currentCityId && !cList.some(c => String(c.value) === String(currentCityId))) {
-            setValue("city_id", "");
-          }
+          
+          // CRITICAL: Use functional update to access current cityMap state
+          setCityMap(prev => {
+            const newCityMap = Object.fromEntries(cList.map(o => [String(o.value), o.label]));
+            const existingCityLabel = prev[String(watchedCityId)];
+            
+            // If we have a restored label for this city, preserve it
+            if (watchedCityId && existingCityLabel) {
+              // Also add the city to availableCities if it's not already there
+              const cityInList = cList.find(c => String(c.value) === String(watchedCityId));
+              if (!cityInList) {
+                // City not in API response but we have a label - add it to the list
+                setAvailableCities(prevCities => {
+                  const alreadyExists = prevCities.some(c => String(c.value) === String(watchedCityId));
+                  if (!alreadyExists) {
+                    return [...prevCities, { value: watchedCityId, label: existingCityLabel }];
+                  }
+                  return prevCities;
+                });
+              }
+              return { ...newCityMap, [String(watchedCityId)]: existingCityLabel };
+            }
+            
+            return newCityMap;
+          });
+          
+          // Only reset city_id if it's not in the list AND we don't have a label for it
+          setCityMap(prev => {
+            const hasLabel = prev[String(watchedCityId)];
+            const isInList = cList.some(c => String(c.value) === String(watchedCityId));
+            
+            if (watchedCityId && !isInList && !hasLabel) {
+              setValue("city_id", "");
+            }
+            return prev;
+          });
         } catch (_) {
           setAvailableCities([]);
-          setValue("city_id", "");
+          setCityMap(prev => {
+            const hasLabel = prev[String(watchedCityId)];
+            if (!hasLabel) {
+              setValue("city_id", "");
+            }
+            return prev;
+          });
         }
       } else {
         setAvailableCities([]);
-        setValue("city_id", "");
+        setCityMap(prev => {
+          const hasLabel = prev[String(watchedCityId)];
+          if (!hasLabel) {
+            setValue("city_id", "");
+          }
+          return prev;
+        });
       }
     })();
-  }, [watchedDistrictId, user?.district_id, form, setValue]);
+  }, [watchedDistrictId, watchedCityId, user?.district_id, form, setValue, isRestoring]);
 
   // Watch for disability checkbox to show/hide related fields
   const hasDisability = watch("has_disability");
@@ -340,23 +416,157 @@ const EditUserForm = ({ user }) => {
     }
   };
 
+  // Reset form handler
+  const handleResetForm = () => {
+    if (window.confirm('Are you sure you want to reset the form? All unsaved changes will be lost and the form will be restored to the original employee data.')) {
+      // Clear saved form data
+      clearSavedData();
+      
+      // Reset form to original user data
+      form.reset({
+        full_name: user?.full_name || "",
+        father_husband_name: user?.father_husband_name || "",
+        relationship_type: user?.relationship_type || "father",
+        mother_name: user?.mother_name || "",
+        cnic: user?.cnic || "",
+        cnic_issue_date: formatDatabaseDateForInput(user?.cnic_issue_date) || "",
+        cnic_expire_date: formatDatabaseDateForInput(user?.cnic_expire_date) || "",
+        date_of_birth: formatDatabaseDateForInput(user?.date_of_birth) || "",
+        gender: user?.gender || "",
+        marital_status: user?.marital_status || "",
+        nationality: user?.nationality || "Pakistani",
+        religion: user?.religion || "",
+        blood_group: user?.blood_group || "",
+        domicile_district: user?.domicile_district || "",
+        mobile_number: user?.mobile_number || "",
+        whatsapp_number: user?.whatsapp_number || "",
+        email: user?.email || "",
+        present_address: user?.present_address || "",
+        permanent_address: user?.permanent_address || "",
+        same_address: user?.same_address || false,
+        district_id: user?.district_id || "",
+        city_id: user?.city_id || "",
+        has_disability: user?.has_disability || false,
+        disability_type: user?.disability_type || "",
+        disability_description: user?.disability_description || "",
+        missing_note: user?.missing_note || "",
+        has_past_experience: user?.has_past_experience || false,
+        past_experiences: user?.pastExperiences || [],
+        educations: (user?.educationQualifications || []).map(eq => ({
+          id: eq.id,
+          education_level_id: eq.education_level_id || eq.level?.id || "",
+          education_level: eq.level?.name || eq.education_level || "",
+          institution_name: eq.institution_name || "",
+          year_of_completion: formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
+          marks_gpa: eq.marks_gpa || "",
+          start_date: eq.start_date || "", // Now String (year), use directly
+        })),
+      });
+      
+      // Reset all state to original values
+      setExperiences(user?.pastExperiences || []);
+      setEducations((user?.educationQualifications || []).map(eq => ({
+        id: eq.id,
+        education_level_id: eq.education_level_id || eq.level?.id || "",
+        education_level: eq.level?.name || eq.education_level || "",
+        institution_name: eq.institution_name || "",
+        year_of_completion: formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
+        marks_gpa: eq.marks_gpa || "",
+        start_date: eq.start_date || "", // Now String (year), use directly
+      })));
+      
+      // Reset profile picture
+      if (user?.profile_picture_url) {
+        setProfilePicturePreview(`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${user.profile_picture_url}`);
+      } else if (user?.profile_picture) {
+        setProfilePicturePreview(getImageUrl(user.profile_picture));
+      } else {
+        setProfilePicturePreview(null);
+      }
+      setRemoveProfilePicture(!user?.profile_picture);
+      
+      // Reset uploaded files
+      setUploadedFiles({
+        profile_picture: user?.profile_picture || null,
+        cnic_front: user?.cnic_front || null,
+        cnic_back: user?.cnic_back || null,
+        domicile_certificate: user?.domicile_certificate || null,
+        disability_document: user?.disability_document || null,
+        medical_fitness_file: user?.medical_fitness_file || null,
+        police_character_certificate_file: user?.police_character_certificate_file || null,
+        education_documents: user?.education_documents || {},
+        experience_documents: user?.experience_documents || {},
+        other_documents: user?.other_documents || []
+      });
+      
+      // Reset document manager
+      documentManager.reset(user?.documents || []);
+      
+      // Reload cities if district is set
+      if (user?.district_id) {
+        // Trigger city loading by setting district_id
+        setTimeout(() => {
+          setValue("district_id", user.district_id);
+        }, 100);
+      }
+      
+      // Clear file inputs
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      fileInputs.forEach(input => {
+        input.value = '';
+      });
+    }
+  };
+
   const handleUpdate = async (data) => {
     try {
       // Collect document changes from DocumentManager
       const filesData = documentManager.getFormData();
       const documentsToRemove = documentManager.getDocumentsToRemove();
 
+      // Ensure educations and experiences are properly formatted
+      // Remove any undefined/null values and ensure required fields are present
+      const formattedEducations = (Array.isArray(educations) ? educations : []).map(edu => ({
+        id: edu.id || null, // null for new records, existing ID for updates
+        education_level_id: edu.education_level_id || null,
+        institution_name: edu.institution_name || '',
+        year_of_completion: edu.year_of_completion || null,
+        marks_gpa: edu.marks_gpa || null,
+        start_date: edu.start_date || null,
+      })).filter(edu => edu.institution_name || edu.education_level_id); // Filter out completely empty entries
+
+      const formattedExperiences = (Array.isArray(experiences) ? experiences : []).map(exp => ({
+        id: exp.id || null, // null for new records, existing ID for updates
+        company_name: exp.company_name || '',
+        position: exp.position || null,
+        start_date: exp.start_date || null,
+        end_date: exp.end_date || null,
+        description: exp.description || null,
+      })).filter(exp => exp.company_name || exp.start_date); // Filter out completely empty entries
+
       const completeData = {
         ...data,
-        educations: educations,
-        past_experiences: experiences,
+        // Ensure arrays are always included, even if empty, and properly formatted
+        educations: formattedEducations,
+        past_experiences: formattedExperiences,
         // include files from document manager and removal list
         ...filesData,
-        documents_to_remove: documentsToRemove,
+        documents_to_remove: Array.isArray(documentsToRemove) ? documentsToRemove : [],
       };
 
       // Preserve existing profile picture logic
       completeData.profile_picture = removeProfilePicture ? null : (data.profile_picture_file || user?.profile_picture);
+
+      // Debug logging
+      console.log('📝 EditUserForm: Submitting update with data:', {
+        educationsCount: formattedEducations.length,
+        experiencesCount: formattedExperiences.length,
+        documentsToUpload: Object.keys(filesData).length,
+        documentsToRemove: documentsToRemove.length,
+        educationIds: formattedEducations.map(e => e.id),
+        experienceIds: formattedExperiences.map(e => e.id),
+        documentFields: Object.keys(filesData)
+      });
 
       await withErrorHandling(
         () => updateEmployee(user.id, completeData),
@@ -366,6 +576,9 @@ const EditUserForm = ({ user }) => {
         }
       );
 
+      // Clear saved form data on successful submission
+      clearSavedData();
+
       // Optionally refresh user data
       try {
         await employeeService.getEmployeeById(user.id);
@@ -374,6 +587,7 @@ const EditUserForm = ({ user }) => {
       navigate(`/employees/view/${user.id}`);
     } catch (error) {
       console.error("Error in handleUpdate:", error);
+      // Note: Form data is preserved automatically by the persistence hook
     }
   };
 
@@ -385,25 +599,39 @@ const EditUserForm = ({ user }) => {
     <div className="min-h-screen" style={{ backgroundColor: "var(--color-background-secondary)" }}>
       <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate(`/employees/view/${user.id}`)}
+                className="p-2 rounded-lg transition-colors"
+                style={{
+                  color: "var(--color-text-secondary)",
+                  backgroundColor: "var(--color-background-primary)",
+                }}
+              >
+                <i className="fas fa-arrow-left"></i>
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold" style={{ color: "var(--color-text-primary)" }}>
+                  Edit Employee Information
+                </h1>
+                <p className="text-lg" style={{ color: "var(--color-text-secondary)" }}>
+                  Update employee details and information
+                </p>
+              </div>
+            </div>
             <button
-              onClick={() => navigate(`/employees/view/${user.id}`)}
-              className="p-2 rounded-lg transition-colors"
+              onClick={handleResetForm}
+              className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               style={{
                 color: "var(--color-text-secondary)",
                 backgroundColor: "var(--color-background-primary)",
               }}
+              title="Reset Form"
             >
-              <i className="fas fa-arrow-left"></i>
+              <i className="fas fa-redo"></i>
+              <span className="hidden sm:inline">Reset Form</span>
             </button>
-            <div>
-              <h1 className="text-3xl font-bold" style={{ color: "var(--color-text-primary)" }}>
-                Edit Employee Information
-              </h1>
-              <p className="text-lg" style={{ color: "var(--color-text-secondary)" }}>
-                Update employee details and information
-              </p>
-            </div>
           </div>
         </div>
 
@@ -829,6 +1057,7 @@ const EditUserForm = ({ user }) => {
                       <SearchableSelect
                         options={availableCities}
                         value={watch("city_id")}
+                        valueLabel={cityMap[String(watch("city_id"))] || ''}
                         onChange={(value) => setValue("city_id", value)}
                         placeholder="Select City"
                         register={register}
@@ -1000,13 +1229,10 @@ const EditUserForm = ({ user }) => {
                                     Year of Completion <span className="text-red-500">*</span>
                                   </label>
                                   <input
-                                    type="number"
-                                    min="1950"
-                                    max={new Date().getFullYear()}
-                                    value={education.year_of_completion}
+                                    type="date"
+                                    value={education.year_of_completion || ''}
                                     onChange={(e) => updateEducation(education.id, 'year_of_completion', e.target.value)}
                                     className="form-input w-full"
-                                    placeholder="e.g., 2020"
                                   />
                                 </div>
 
@@ -1030,10 +1256,13 @@ const EditUserForm = ({ user }) => {
                                     Start Date
                                   </label>
                                   <input
-                                    type="date"
+                                    type="number"
+                                    min="1950"
+                                    max={new Date().getFullYear()}
                                     value={education.start_date || ''}
                                     onChange={(e) => updateEducation(education.id, 'start_date', e.target.value)}
                                     className="form-input w-full"
+                                    placeholder="e.g., 2016"
                                   />
                                 </div>
                               </div>

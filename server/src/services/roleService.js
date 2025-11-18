@@ -1,4 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require('../utils/softDeleteUtil');
+const { validateSoftDelete } = require('../utils/softDeleteValidation');
 const prisma = new PrismaClient();
 
 class RoleService {
@@ -114,16 +116,59 @@ class RoleService {
     try {
       const existingRole = await prisma.role.findFirst({
         where: { id: parseInt(id), is_deleted: false },
-        include: { _count: { select: { users: true } } },
       });
       if (!existingRole) throw new Error('Role not found');
-      if (existingRole._count.users > 0) {
-        throw new Error(`Cannot delete role. It is assigned to ${existingRole._count.users} users.`);
+
+      // Check for active child records
+      const validation = await validateSoftDelete('Role', parseInt(id));
+      if (!validation.canDelete) {
+        throw new Error(validation.message);
       }
-      await prisma.role.update({ where: { id: parseInt(id) }, data: { is_deleted: true } });
+
+      // Mask unique fields to prevent unique constraint violations
+      const { masked } = maskUniqueFieldsForSoftDelete('Role', existingRole);
+
+      await prisma.role.update({ 
+        where: { id: parseInt(id) }, 
+        data: { 
+          is_deleted: true,
+          ...masked, // Apply masked unique fields
+        } 
+      });
       return { message: 'Role deleted successfully' };
     } catch (error) {
-      throw new Error(`Failed to delete role: ${error.message}`);
+      throw new Error(error.message || `Failed to delete role: ${error.message}`);
+    }
+  }
+
+  async restoreRole(id) {
+    try {
+      const role = await prisma.role.findUnique({
+        where: { id: parseInt(id) },
+      });
+
+      if (!role) {
+        throw new Error('Role not found');
+      }
+
+      if (!role.is_deleted) {
+        throw new Error('Role is not soft-deleted');
+      }
+
+      // Restore unique fields to their original values
+      const restored = restoreUniqueFieldsForUndelete('Role', role);
+
+      const restoredRole = await prisma.role.update({
+        where: { id: parseInt(id) },
+        data: { 
+          is_deleted: false,
+          ...restored, // Restore original unique field values
+        }
+      });
+
+      return { message: 'Role restored successfully', role: restoredRole };
+    } catch (error) {
+      throw new Error(`Failed to restore role: ${error.message}`);
     }
   }
 }

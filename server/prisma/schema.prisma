@@ -204,21 +204,21 @@ model PastExperience {
 }
 
 model EducationQualification {
-  id                 Int      @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   employee_id        Int
   // Legacy level string (deprecated)
   education_level    String
   // New normalized level reference
   education_level_id Int?
   institution_name   String
-  year_of_completion String
+  year_of_completion DateTime? // Changed to DateTime for date selection
   marks_gpa          String?
-  // New: start date for the education record
-  start_date         DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  is_deleted         Boolean  @default(false)
-  employee           Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  // Start year for the education record (year selection)
+  start_date         String?   // Changed to String for year selection
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  is_deleted         Boolean   @default(false)
+  employee           Employee  @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   level              EducationLevel? @relation(fields: [education_level_id], references: [id])
 }
 

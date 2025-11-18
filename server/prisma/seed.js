@@ -709,7 +709,13 @@ async function main() {
         "devices.update",
         "devices.delete",
         "districts.read",
+        "districts.create",
+        "districts.update",
+        "districts.delete",
         "cities.read",
+        "cities.create",
+        "cities.update",
+        "cities.delete",
         "education-levels.read",
         // Leave management permissions
         "leaves.read",
@@ -873,6 +879,39 @@ async function main() {
     // Payroll module
     "payroll.read",
     "payroll.write",
+    // Settings module
+    "departments.read",
+    "departments.create",
+    "departments.update",
+    "departments.delete",
+    "designations.read",
+    "designations.create",
+    "designations.update",
+    "designations.delete",
+    "role-tags.read",
+    "role-tags.create",
+    "role-tags.update",
+    "role-tags.delete",
+    "scale-grades.read",
+    "scale-grades.create",
+    "scale-grades.update",
+    "scale-grades.delete",
+    "locations.read",
+    "locations.create",
+    "locations.update",
+    "locations.delete",
+    "districts.read",
+    "districts.create",
+    "districts.update",
+    "districts.delete",
+    "cities.read",
+    "cities.create",
+    "cities.update",
+    "cities.delete",
+    "education-levels.read",
+    "education-levels.create",
+    "education-levels.update",
+    "education-levels.delete",
   ];
 
   console.log("🔑 Seeding permissions catalog...");
@@ -2016,18 +2055,35 @@ async function main() {
   for (const edu of educationQualifications) {
     const mappedName = mapLevelName(edu.education_level);
     const levelId = mappedName ? levelIdByName[mappedName] : null;
-    // Attempt to generate a start_date approximately 4 years before completion year
-    let start_date = null;
-    const yr = parseInt(edu.year_of_completion);
-    if (!isNaN(yr)) {
+
+    // Convert year_of_completion from string to DateTime
+    let year_of_completion = null;
+    const completionYear = parseInt(edu.year_of_completion);
+    if (!isNaN(completionYear)) {
       try {
-        start_date = new Date(`${yr - 4}-01-01`);
+        // Create a date for the completion year (use June 1st as a reasonable default)
+        year_of_completion = new Date(`${completionYear}-06-01`);
       } catch (_) {
-        start_date = null;
+        year_of_completion = null;
       }
     }
+
+    // Generate start_date as a string (year) - approximately 4 years before completion year
+    let start_date = null;
+    if (!isNaN(completionYear)) {
+      start_date = String(completionYear - 4);
+    }
+
     const qualification = await prisma.educationQualification.create({
-      data: { ...edu, education_level_id: levelId || null, start_date },
+      data: {
+        employee_id: edu.employee_id,
+        education_level: edu.education_level,
+        institution_name: edu.institution_name,
+        marks_gpa: edu.marks_gpa || null,
+        education_level_id: levelId || null,
+        year_of_completion,
+        start_date,
+      },
     });
     console.log(
       `✅ Created Education: ${qualification.education_level} - ${qualification.institution_name}`

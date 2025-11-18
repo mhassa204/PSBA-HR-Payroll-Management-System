@@ -1,4 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require("../utils/softDeleteUtil");
+const { validateSoftDelete } = require("../utils/softDeleteValidation");
 const prisma = new PrismaClient();
 
 const roleTagService = {
@@ -109,21 +111,55 @@ const roleTagService = {
 
   // Delete role tag (soft delete)
   deleteRoleTag: async (id) => {
-    // Check if role tag is being used in employment records
-    const employmentCount = await prisma.Employment.count({
-      where: {
-        role_tag_id: parseInt(id),
-        is_deleted: false
-      }
+    const roleTag = await prisma.RoleTag.findUnique({
+      where: { id: parseInt(id) },
     });
 
-    if (employmentCount > 0) {
-      throw new Error(`Cannot delete role tag. It is being used by ${employmentCount} employment record(s).`);
+    if (!roleTag) {
+      throw new Error("Role tag not found");
     }
+
+    // Check for active child records
+    const validation = await validateSoftDelete('RoleTag', parseInt(id));
+    if (!validation.canDelete) {
+      throw new Error(validation.message);
+    }
+
+    // Mask unique fields to prevent unique constraint violations
+    const { masked } = maskUniqueFieldsForSoftDelete('RoleTag', roleTag);
 
     return prisma.RoleTag.update({
       where: { id: parseInt(id) },
-      data: { is_deleted: true }
+      data: { 
+        is_deleted: true,
+        ...masked, // Apply masked unique fields
+      }
+    });
+  },
+
+  // Restore role tag
+  restoreRoleTag: async (id) => {
+    const roleTag = await prisma.RoleTag.findUnique({
+      where: { id: parseInt(id) },
+    });
+
+    if (!roleTag) {
+      throw new Error("Role tag not found");
+    }
+
+    if (!roleTag.is_deleted) {
+      throw new Error("Role tag is not soft-deleted");
+    }
+
+    // Restore unique fields to their original values
+    const restored = restoreUniqueFieldsForUndelete('RoleTag', roleTag);
+
+    return prisma.RoleTag.update({
+      where: { id: parseInt(id) },
+      data: { 
+        is_deleted: false,
+        ...restored, // Restore original unique field values
+      }
     });
   },
 

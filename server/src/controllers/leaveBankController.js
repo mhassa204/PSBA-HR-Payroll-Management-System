@@ -1,4 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require('../utils/softDeleteUtil');
+const { validateSoftDelete } = require('../utils/softDeleteValidation');
 const prisma = new PrismaClient();
 
 module.exports = {
@@ -26,8 +28,62 @@ module.exports = {
     } catch (e) { res.status(400).json({ success: false, error: e.message }); }
   },
   deleteLeaveType: async (req, res) => {
-    try { const id = Number(req.params.id); await prisma.leaveType.update({ where: { id }, data: { is_deleted: true } }); res.json({ success: true }); }
+    try { 
+      const id = Number(req.params.id);
+      const leaveType = await prisma.leaveType.findUnique({ where: { id } });
+      if (!leaveType) {
+        return res.status(404).json({ success: false, error: 'Leave type not found' });
+      }
+      
+      // Check for active child records
+      const validation = await validateSoftDelete('LeaveType', id);
+      if (!validation.canDelete) {
+        return res.status(400).json({ success: false, error: validation.message });
+      }
+      
+      // Mask unique fields to prevent unique constraint violations
+      const { masked } = maskUniqueFieldsForSoftDelete('LeaveType', leaveType);
+      
+      await prisma.leaveType.update({ 
+        where: { id }, 
+        data: { 
+          is_deleted: true,
+          ...masked, // Apply masked unique fields
+        } 
+      }); 
+      res.json({ success: true }); 
+    }
     catch (e) { res.status(400).json({ success: false, error: e.message }); }
+  },
+  
+  restoreLeaveType: async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const leaveType = await prisma.leaveType.findUnique({ where: { id } });
+      
+      if (!leaveType) {
+        return res.status(404).json({ success: false, error: 'Leave type not found' });
+      }
+      
+      if (!leaveType.is_deleted) {
+        return res.status(400).json({ success: false, error: 'Leave type is not soft-deleted' });
+      }
+      
+      // Restore unique fields to their original values
+      const restored = restoreUniqueFieldsForUndelete('LeaveType', leaveType);
+      
+      const restoredLeaveType = await prisma.leaveType.update({
+        where: { id },
+        data: { 
+          is_deleted: false,
+          ...restored, // Restore original unique field values
+        }
+      });
+      
+      res.json({ success: true, type: restoredLeaveType });
+    } catch (e) {
+      res.status(400).json({ success: false, error: e.message });
+    }
   },
 
   // Leave Banks
@@ -71,7 +127,22 @@ module.exports = {
     } catch (e) { res.status(400).json({ success: false, error: e.message }); }
   },
   deleteLeaveBank: async (req, res) => {
-    try { const id = Number(req.params.id); await prisma.leaveBank.update({ where: { id }, data: { is_deleted: true } }); res.json({ success: true }); }
+    try { 
+      const id = Number(req.params.id);
+      const leaveBank = await prisma.leaveBank.findUnique({ where: { id } });
+      if (!leaveBank) {
+        return res.status(404).json({ success: false, error: 'Leave bank not found' });
+      }
+      
+      // Check for active child records
+      const validation = await validateSoftDelete('LeaveBank', id);
+      if (!validation.canDelete) {
+        return res.status(400).json({ success: false, error: validation.message });
+      }
+      
+      await prisma.leaveBank.update({ where: { id }, data: { is_deleted: true } }); 
+      res.json({ success: true }); 
+    }
     catch (e) { res.status(400).json({ success: false, error: e.message }); }
   },
 

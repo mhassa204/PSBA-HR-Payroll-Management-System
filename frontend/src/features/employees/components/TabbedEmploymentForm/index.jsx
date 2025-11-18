@@ -1154,6 +1154,56 @@ const TabbedEmploymentForm = forwardRef(
         return "N/A";
       if (type === "currency") return `PKR ${Number(value).toLocaleString()}`;
       if (type === "boolean") return value ? "Yes" : "No";
+      
+      // Check if value is a date string or Date object and format it as dd/mm/yyyy
+      if (typeof value === 'string' && value.trim() !== '') {
+        // Try to parse as date - check for common date patterns including ISO with time
+        const datePatterns = [
+          /^\d{4}-\d{2}-\d{2}/,           // ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+          /^\d{2}\/\d{2}\/\d{4}/,         // DD/MM/YYYY
+          /^\d{4}\/\d{2}\/\d{2}/,         // YYYY/MM/DD
+          /^\d{2}-\d{2}-\d{4}/,           // DD-MM-YYYY
+        ];
+        
+        const isDateString = datePatterns.some(pattern => pattern.test(value));
+        
+        if (isDateString) {
+          try {
+            const date = new Date(value);
+            if (!isNaN(date.getTime())) {
+              const day = date.getDate().toString().padStart(2, '0');
+              const month = (date.getMonth() + 1).toString().padStart(2, '0');
+              const year = date.getFullYear();
+              return `${day}/${month}/${year}`;
+            }
+          } catch (e) {
+            // If date parsing fails, return as string
+          }
+        }
+        
+        // Also try parsing any string that looks like it could be a date
+        // This catches ISO strings with time components
+        try {
+          const date = new Date(value);
+          if (!isNaN(date.getTime()) && value.includes('-') && value.length >= 10) {
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+          }
+        } catch (e) {
+          // If date parsing fails, continue to return as string
+        }
+      }
+
+      // Check if value is a Date object
+      if (value instanceof Date && !isNaN(value.getTime())) {
+        const day = value.getDate().toString().padStart(2, '0');
+        const month = (value.getMonth() + 1).toString().padStart(2, '0');
+        const year = value.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+      
       return String(value);
     };
 

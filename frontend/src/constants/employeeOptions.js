@@ -220,6 +220,16 @@ export const FILE_UPLOAD_CONFIG = {
     maxSize: 50 * 1024 * 1024, // 50MB
     types: ["application/pdf"],
   },
+  medical_fitness_file: {
+    accept: "application/pdf",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["application/pdf"],
+  },
+  police_character_certificate_file: {
+    accept: "application/pdf",
+    maxSize: 50 * 1024 * 1024, // 50MB
+    types: ["application/pdf"],
+  },
   other_documents: {
     accept: "application/pdf",
     maxSize: 50 * 1024 * 1024, // 50MB

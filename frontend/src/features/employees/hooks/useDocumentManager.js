@@ -131,8 +131,11 @@ export const useDocumentManager = (initialDocuments = []) => {
 
         let fieldName = documentTypeToFieldName[documentType] || documentType;
 
-        if (associatedId && (documentType === 'education' || documentType === 'experience')) {
-          fieldName = `${fieldName}_${associatedId}`;
+        if (associatedId !== null && associatedId !== undefined && (documentType === 'education' || documentType === 'experience')) {
+          // Ensure associatedId is converted to string for consistent field naming
+          const idString = String(associatedId);
+          fieldName = `${fieldName}_${idString}`;
+          console.log(`📎 Document field name: ${fieldName} for ${documentType} with associatedId: ${idString}`);
         }
 
         if (files.length === 1) {

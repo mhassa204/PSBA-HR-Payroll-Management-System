@@ -1,6 +1,8 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const { encrypt, decrypt } = require("../utils/cryptoUtil");
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require("../utils/softDeleteUtil");
+const { validateSoftDelete } = require("../utils/softDeleteValidation");
 
 // Define date fields that need special processing
 const dateFields = ["cnic_issue_date", "cnic_expire_date", "date_of_birth"];
@@ -169,16 +171,20 @@ const employeeService = {
       const educationIdMapping = {};
       if (educations && Array.isArray(educations)) {
         for (const edu of educations) {
-          // Parse start_date
-          let startDate = null;
+          // Parse year_of_completion (now DateTime) from date string
+          let completionDate = null;
           if (
-            edu.start_date &&
-            typeof edu.start_date === "string" &&
-            edu.start_date.trim() !== ""
+            edu.year_of_completion &&
+            typeof edu.year_of_completion === "string" &&
+            edu.year_of_completion.trim() !== ""
           ) {
-            const d = new Date(edu.start_date);
-            if (!isNaN(d.getTime())) startDate = d;
+            const d = new Date(edu.year_of_completion);
+            if (!isNaN(d.getTime())) completionDate = d;
           }
+          // start_date is now a String (year), just use it directly
+          const startYear = edu.start_date && typeof edu.start_date === "string" 
+            ? edu.start_date.trim() 
+            : null;
           // Coerce level id
           const levelId = edu.education_level_id
             ? parseInt(edu.education_level_id)
@@ -189,9 +195,9 @@ const employeeService = {
               education_level: edu.education_level || "",
               education_level_id: levelId,
               institution_name: edu.institution_name,
-              year_of_completion: edu.year_of_completion,
+              year_of_completion: completionDate,
               marks_gpa: edu.marks_gpa || null,
-              start_date: startDate,
+              start_date: startYear || null,
             },
           });
           if (edu.id) {
@@ -658,28 +664,32 @@ const employeeService = {
         for (const [eduId, incomingEdu] of incomingEduMap) {
           if (existingEduMap.has(eduId)) {
             console.log(`Updating education ID ${eduId}:`, incomingEdu);
-            // Parse start_date
-            let startDate = null;
-            if (
-              incomingEdu.start_date &&
-              typeof incomingEdu.start_date === "string" &&
-              incomingEdu.start_date.trim() !== ""
-            ) {
-              const d = new Date(incomingEdu.start_date);
-              if (!isNaN(d.getTime())) startDate = d;
-            }
-            const levelId = incomingEdu.education_level_id
-              ? parseInt(incomingEdu.education_level_id)
-              : null;
+          // Parse year_of_completion (now DateTime) from date string
+          let completionDate = null;
+          if (
+            incomingEdu.year_of_completion &&
+            typeof incomingEdu.year_of_completion === "string" &&
+            incomingEdu.year_of_completion.trim() !== ""
+          ) {
+            const d = new Date(incomingEdu.year_of_completion);
+            if (!isNaN(d.getTime())) completionDate = d;
+          }
+          // start_date is now a String (year), just use it directly
+          const startYear = incomingEdu.start_date && typeof incomingEdu.start_date === "string" 
+            ? incomingEdu.start_date.trim() 
+            : null;
+          const levelId = incomingEdu.education_level_id
+            ? parseInt(incomingEdu.education_level_id)
+            : null;
             await tx.educationQualification.update({
               where: { id: eduId },
               data: {
                 education_level: incomingEdu.education_level || "",
                 education_level_id: levelId,
                 institution_name: incomingEdu.institution_name || "",
-                year_of_completion: incomingEdu.year_of_completion || "",
+                year_of_completion: completionDate,
                 marks_gpa: incomingEdu.marks_gpa || "",
-                start_date: startDate,
+                start_date: startYear || null,
               },
             });
             existingEduMap.delete(eduId);
@@ -696,16 +706,20 @@ const employeeService = {
             );
             continue;
           }
-          // Parse start_date
-          let startDate = null;
+          // Parse year_of_completion (now DateTime) from date string
+          let completionDate = null;
           if (
-            edu.start_date &&
-            typeof edu.start_date === "string" &&
-            edu.start_date.trim() !== ""
+            edu.year_of_completion &&
+            typeof edu.year_of_completion === "string" &&
+            edu.year_of_completion.trim() !== ""
           ) {
-            const d = new Date(edu.start_date);
-            if (!isNaN(d.getTime())) startDate = d;
+            const d = new Date(edu.year_of_completion);
+            if (!isNaN(d.getTime())) completionDate = d;
           }
+          // start_date is now a String (year), just use it directly
+          const startYear = edu.start_date && typeof edu.start_date === "string" 
+            ? edu.start_date.trim() 
+            : null;
           const levelId = edu.education_level_id
             ? parseInt(edu.education_level_id)
             : null;
@@ -716,9 +730,9 @@ const employeeService = {
                 education_level: edu.education_level || "",
                 education_level_id: levelId,
                 institution_name: edu.institution_name,
-                year_of_completion: edu.year_of_completion || "",
+                year_of_completion: completionDate,
                 marks_gpa: edu.marks_gpa || "",
-                start_date: startDate,
+                start_date: startYear || null,
               },
             });
             if (edu.id) {
@@ -1156,10 +1170,22 @@ const employeeService = {
       });
       if (!employee) return null;
 
+      // Check for active child records
+      const validation = await validateSoftDelete('Employee', parseInt(id));
+      if (!validation.canDelete) {
+        throw new Error(validation.message);
+      }
+
+      // Mask unique fields to prevent unique constraint violations
+      const { masked } = maskUniqueFieldsForSoftDelete('Employee', employee);
+
       // Soft delete employee and related records
       await prisma.employee.update({
         where: { id: parseInt(id) },
-        data: { is_deleted: true },
+        data: { 
+          is_deleted: true,
+          ...masked, // Apply masked unique fields
+        },
       });
       await prisma.pastExperience.updateMany({
         where: { employee_id: parseInt(id) },
@@ -1177,7 +1203,62 @@ const employeeService = {
       return { success: true };
     } catch (error) {
       console.error("Error deleting employee:", error.message);
-      throw new Error("Failed to delete employee");
+      throw new Error(error.message || "Failed to delete employee");
+    }
+  },
+
+  restoreEmployee: async (id) => {
+    try {
+      const employee = await prisma.employee.findUnique({
+        where: { id: parseInt(id) },
+      });
+      
+      if (!employee) {
+        throw new Error("Employee not found");
+      }
+      
+      if (!employee.is_deleted) {
+        throw new Error("Employee is not soft-deleted");
+      }
+
+      // Restore unique fields to their original values
+      const restored = restoreUniqueFieldsForUndelete('Employee', employee);
+
+      // Restore employee and related records
+      await prisma.employee.update({
+        where: { id: parseInt(id) },
+        data: { 
+          is_deleted: false,
+          ...restored, // Restore original unique field values
+        },
+      });
+      
+      // Restore related records
+      await prisma.pastExperience.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: false },
+      });
+      await prisma.educationQualification.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: false },
+      });
+      await prisma.employment.updateMany({
+        where: { employee_id: parseInt(id) },
+        data: { is_deleted: false },
+      });
+
+      const restoredEmployee = await prisma.employee.findUnique({
+        where: { id: parseInt(id) },
+      });
+
+      return { 
+        success: true,
+        message: `Employee ${restoredEmployee.full_name} restored successfully`,
+        restoredEmployee,
+      };
+    } catch (error) {
+      console.error("Error restoring employee:", error.message);
+      throw new Error(`Failed to restore employee: ${error.message}`);
     }
   },
 };
