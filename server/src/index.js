@@ -33,6 +33,8 @@ const educationLevelRoutes = require("./routes/educationLevelRoutes");
 const travelRoutes = require("./routes/travelRoutes");
 const travelRateRoutes = require("./routes/travelRateRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const payrollRoutes = require("./routes/payrollRoutes");
+const payrollTranchRoutes = require("./routes/payrollTranchRoutes");
 const { isAuthenticated } = require("./middleware/auth");
 
 const app = express();
@@ -111,6 +113,8 @@ app.use("/api/education-levels", educationLevelRoutes);
 app.use("/api/travel", travelRoutes);
 app.use("/api", travelRateRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/payroll", payrollRoutes);
+app.use("/api/payroll-tranches", payrollTranchRoutes);
 app.use("/api/admin", isAuthenticated, adminRoutes);
 
 // ✅ Error handler

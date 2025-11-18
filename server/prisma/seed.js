@@ -518,6 +518,9 @@ async function main() {
         "travel.manage",
         // No OPS approvals here; use Operations role
         "leaves.apply",
+        // Roster permissions for HODs
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment"],
@@ -542,6 +545,9 @@ async function main() {
         // Allow opening Manage screen for ADs to participate in recommender/approval flows
         "travel.manage",
         "leaves.apply",
+        // Roster permissions for HODs
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment"],
@@ -566,6 +572,9 @@ async function main() {
         "travel.request.approve.ops",
         "travel.claim.approve.ops",
         "leaves.apply",
+        // Roster permissions for HODs
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -593,7 +602,19 @@ async function main() {
         // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
+        // Payroll permissions (full control)
+        "payroll.read",
+        "payroll.write",
+        // Read permissions for payroll filters
+        "employees.read",
+        "departments.read",
+        "designations.read",
+        "locations.read",
+        "scale-grades.read",
         "leaves.apply",
+        // Roster permissions for HODs
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_personal", "employee_employment", "employee_salary"],
@@ -621,7 +642,19 @@ async function main() {
         // Accounts screens
         "tada.managed.entry",
         "accounts.tranches.access",
+        // Payroll permissions (full control)
+        "payroll.read",
+        "payroll.write",
+        // Read permissions for payroll filters
+        "employees.read",
+        "departments.read",
+        "designations.read",
+        "locations.read",
+        "scale-grades.read",
         "leaves.apply",
+        // Added to enable roster for bazaar/location accounts
+        "roster.read",
+        "roster.create",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -671,12 +704,25 @@ async function main() {
         "role-tags.read",
         "scale-grades.read",
         "locations.read",
+        // Allow Establishment to add locations in Settings
+        "locations.create",
+        // And edit/delete locations as requested
+        "locations.update",
+        "locations.delete",
         "devices.read",
         "devices.create",
         "devices.update",
         "devices.delete",
+        // Users list for assigning location manager in Settings
+        "users.read",
         "districts.read",
+        "districts.create",
+        "districts.update",
+        "districts.delete",
         "cities.read",
+        "cities.create",
+        "cities.update",
+        "cities.delete",
         "education-levels.read",
         // Leave management permissions
         "leaves.read",
@@ -708,6 +754,8 @@ async function main() {
         "roster.delete",
         "roster.status",
         "roster.status.change",
+        // Payroll permissions (read-only)
+        "payroll.read",
       ],
       enabled: true,
       fields: ["employee_basic"],
@@ -731,6 +779,9 @@ async function main() {
         "travel.claim.update",
         "travel.claim.submit",
         "travel.claim.status",
+        // Added to enable roster for bazaar/location accounts
+        "roster.read",
+        "roster.create",
         // remove travel rates from general employees
         "leaves.apply",
       ],
@@ -832,6 +883,42 @@ async function main() {
     // Permissions module
     "permissions.read",
     "permissions.manage",
+    // Payroll module
+    "payroll.read",
+    "payroll.write",
+    // Settings module
+    "departments.read",
+    "departments.create",
+    "departments.update",
+    "departments.delete",
+    "designations.read",
+    "designations.create",
+    "designations.update",
+    "designations.delete",
+    "role-tags.read",
+    "role-tags.create",
+    "role-tags.update",
+    "role-tags.delete",
+    "scale-grades.read",
+    "scale-grades.create",
+    "scale-grades.update",
+    "scale-grades.delete",
+    "locations.read",
+    "locations.create",
+    "locations.update",
+    "locations.delete",
+    "districts.read",
+    "districts.create",
+    "districts.update",
+    "districts.delete",
+    "cities.read",
+    "cities.create",
+    "cities.update",
+    "cities.delete",
+    "education-levels.read",
+    "education-levels.create",
+    "education-levels.update",
+    "education-levels.delete",
   ];
 
   console.log("🔑 Seeding permissions catalog...");
@@ -1975,18 +2062,35 @@ async function main() {
   for (const edu of educationQualifications) {
     const mappedName = mapLevelName(edu.education_level);
     const levelId = mappedName ? levelIdByName[mappedName] : null;
-    // Attempt to generate a start_date approximately 4 years before completion year
-    let start_date = null;
-    const yr = parseInt(edu.year_of_completion);
-    if (!isNaN(yr)) {
+
+    // Convert year_of_completion from string to DateTime
+    let year_of_completion = null;
+    const completionYear = parseInt(edu.year_of_completion);
+    if (!isNaN(completionYear)) {
       try {
-        start_date = new Date(`${yr - 4}-01-01`);
+        // Create a date for the completion year (use June 1st as a reasonable default)
+        year_of_completion = new Date(`${completionYear}-06-01`);
       } catch (_) {
-        start_date = null;
+        year_of_completion = null;
       }
     }
+
+    // Generate start_date as a string (year) - approximately 4 years before completion year
+    let start_date = null;
+    if (!isNaN(completionYear)) {
+      start_date = String(completionYear - 4);
+    }
+
     const qualification = await prisma.educationQualification.create({
-      data: { ...edu, education_level_id: levelId || null, start_date },
+      data: {
+        employee_id: edu.employee_id,
+        education_level: edu.education_level,
+        institution_name: edu.institution_name,
+        marks_gpa: edu.marks_gpa || null,
+        education_level_id: levelId || null,
+        year_of_completion,
+        start_date,
+      },
     });
     console.log(
       `✅ Created Education: ${qualification.education_level} - ${qualification.institution_name}`

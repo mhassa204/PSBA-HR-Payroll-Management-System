@@ -13,7 +13,7 @@
  * Employee Service Class
  * Provides real API operations for employee management
  */
-import axiosInstance from '../../../lib/axios';
+import axiosInstance from "../../../lib/axios";
 
 class EmployeeService {
   constructor() {
@@ -28,37 +28,51 @@ class EmployeeService {
   createFormData(employeeData) {
     const formData = new FormData();
 
-    Object.keys(employeeData).forEach(key => {
+    Object.keys(employeeData).forEach((key) => {
       const value = employeeData[key];
 
-       if (key === 'profile_picture' && value === null) {
-        console.log('🔄 Frontend: Profile picture is null, appending "null" to form data');
-        formData.append(key, 'null');
+      if (key === "profile_picture" && value === null) {
+        console.log(
+          '🔄 Frontend: Profile picture is null, appending "null" to form data'
+        );
+        formData.append(key, "null");
         return; // Skip to next iteration
-      } else if (key === 'profile_picture' && (value === 'null' || value === '')) {
-        console.log('🔄 Frontend: Profile picture is string "null" or empty, appending "null" to form data');
-        formData.append(key, 'null');
+      } else if (
+        key === "profile_picture" &&
+        (value === "null" || value === "")
+      ) {
+        console.log(
+          '🔄 Frontend: Profile picture is string "null" or empty, appending "null" to form data'
+        );
+        formData.append(key, "null");
         return; // Skip to next iteration
       } else if (value !== null && value !== undefined) {
-        if (key === 'past_experiences' || key === 'educations' || key === 'documents_to_remove') {
+        if (
+          key === "past_experiences" ||
+          key === "educations" ||
+          key === "documents_to_remove"
+        ) {
           // Convert array data (including documents_to_remove) to JSON
           formData.append(key, JSON.stringify(value));
-        } else if (key === 'experience_documents' || key === 'education_documents') {
+        } else if (
+          key === "experience_documents" ||
+          key === "education_documents"
+        ) {
           // Skip these - handled below
           return;
         } else if (value instanceof File) {
           // Send profile picture using the backend-expected field name
-          if (key === 'profile_picture') {
-            formData.append('profile_picture_file', value);
+          if (key === "profile_picture") {
+            formData.append("profile_picture_file", value);
             return;
           }
           formData.append(key, value);
-        } else if (typeof value === 'object' && !Array.isArray(value)) {
+        } else if (typeof value === "object" && !Array.isArray(value)) {
           // Skip complex non-file objects
           return;
         } else if (Array.isArray(value)) {
           // Append each file in arrays like other_documents
-          value.forEach(item => {
+          value.forEach((item) => {
             if (item instanceof File) {
               formData.append(key, item);
             }
@@ -69,30 +83,42 @@ class EmployeeService {
       }
     });
 
-    // Handle experience_documents
-    if (employeeData.experience_documents && typeof employeeData.experience_documents === 'object') {
-      Object.entries(employeeData.experience_documents).forEach(([experienceId, file]) => {
-        if (file instanceof File) {
-          formData.append(`experience_documents_${experienceId}`, file);
+    // Handle object format for experience_documents
+    if (
+      employeeData.experience_documents &&
+      typeof employeeData.experience_documents === "object" &&
+      !Array.isArray(employeeData.experience_documents)
+    ) {
+      Object.entries(employeeData.experience_documents).forEach(
+        ([experienceId, file]) => {
+          if (file instanceof File) {
+            formData.append(`experience_documents_${experienceId}`, file);
+          }
         }
-      });
+      );
     }
 
-    // Handle education_documents
-    if (employeeData.education_documents && typeof employeeData.education_documents === 'object') {
-      Object.entries(employeeData.education_documents).forEach(([educationId, file]) => {
-        if (file instanceof File) {
-          formData.append(`education_documents_${educationId}`, file);
+    // Handle object format for education_documents
+    if (
+      employeeData.education_documents &&
+      typeof employeeData.education_documents === "object" &&
+      !Array.isArray(employeeData.education_documents)
+    ) {
+      Object.entries(employeeData.education_documents).forEach(
+        ([educationId, file]) => {
+          if (file instanceof File) {
+            formData.append(`education_documents_${educationId}`, file);
+          }
         }
-      });
+      );
     }
 
     // Debug logging for form data
-    console.log('🔄 Frontend: Form data contents:');
+    console.log("🔄 Frontend: Form data contents:");
     for (let [key, value] of formData.entries()) {
       console.log(`  - ${key}:`, value);
     }
-    
+
     return formData;
   }
 
@@ -103,21 +129,22 @@ class EmployeeService {
    * @param {string} searchTerm - Search term
    * @returns {Promise<Object>} Paginated employees data
    */
-  async getAllEmployees(page = 1, limit = 10, searchTerm = '') {
+  async getAllEmployees(page = 1, limit = 10, searchTerm = "") {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
-        ...(searchTerm && { search: searchTerm })
+        ...(searchTerm && { search: searchTerm }),
       });
 
-      const result = await this.apiClient.get('/employees', { params });
+      const result = await this.apiClient.get("/employees", { params });
       return {
         data: result.data.employees || result.data || [],
         total: result.data.total || 0,
         page: result.data.page || page,
         limit: result.data.limit || limit,
-        totalPages: result.data.totalPages || Math.ceil((result.data.total || 0) / limit)
+        totalPages:
+          result.data.totalPages || Math.ceil((result.data.total || 0) / limit),
       };
     } catch (error) {
       console.error("Error fetching employees:", error);
@@ -148,8 +175,8 @@ class EmployeeService {
   async createEmployee(employeeData) {
     try {
       const formData = this.createFormData(employeeData);
-      const result = await this.apiClient.post('/employees', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const result = await this.apiClient.post("/employees", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
       return result.data.employee || result.data;
     } catch (error) {
@@ -168,7 +195,7 @@ class EmployeeService {
     try {
       const formData = this.createFormData(employeeData);
       const result = await this.apiClient.put(`/employees/${id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { "Content-Type": "multipart/form-data" },
       });
       return result.data.employee || result.data;
     } catch (error) {
@@ -214,7 +241,7 @@ class EmployeeService {
    * @param {string} searchTerm - Search term
    * @returns {Promise<Object>} Paginated employees data
    */
-  async getEmployeesPaginated(page = 1, limit = 10, searchTerm = '') {
+  async getEmployeesPaginated(page = 1, limit = 10, searchTerm = "") {
     return this.getAllEmployees(page, limit, searchTerm);
   }
 
@@ -225,27 +252,39 @@ class EmployeeService {
   async getAllEmployeesForDropdown() {
     try {
       // Get all employees without pagination for dropdown
-      const result = await this.apiClient.get('/employees?limit=1000');
+      const result = await this.apiClient.get("/employees?limit=1000");
       const employees = result.data.employees || result.data || [];
-      
+
       console.log("🔍 getAllEmployeesForDropdown: Raw result:", result);
-      console.log("🔍 getAllEmployeesForDropdown: Employees count:", employees.length);
-      
+      console.log(
+        "🔍 getAllEmployeesForDropdown: Employees count:",
+        employees.length
+      );
+
       if (employees.length > 0) {
-        console.log("🔍 getAllEmployeesForDropdown: Sample employee:", employees[0]);
+        console.log(
+          "🔍 getAllEmployeesForDropdown: Sample employee:",
+          employees[0]
+        );
       }
-      
+
       // Format employees for dropdown: "Employee Name_CNIC"
-      const formattedEmployees = employees.map(employee => ({
+      const formattedEmployees = employees.map((employee) => ({
         value: employee.id.toString(),
-        label: `${employee.full_name || 'Unknown'}_${employee.cnic || 'N/A'}`
+        label: `${employee.full_name || "Unknown"}_${employee.cnic || "N/A"}`,
       }));
-      
-      console.log("🔍 getAllEmployeesForDropdown: Formatted employees count:", formattedEmployees.length);
+
+      console.log(
+        "🔍 getAllEmployeesForDropdown: Formatted employees count:",
+        formattedEmployees.length
+      );
       if (formattedEmployees.length > 0) {
-        console.log("🔍 getAllEmployeesForDropdown: Sample formatted employee:", formattedEmployees[0]);
+        console.log(
+          "🔍 getAllEmployeesForDropdown: Sample formatted employee:",
+          formattedEmployees[0]
+        );
       }
-      
+
       return formattedEmployees;
     } catch (error) {
       console.error("Error fetching employees for dropdown:", error);

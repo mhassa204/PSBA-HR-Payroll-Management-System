@@ -125,6 +125,22 @@ const ViewColumnsIcon = () => (
   </svg>
 );
 
+const CurrencyDollarIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
 const UserIcon = () => (
   <svg
     className="w-5 h-5"
@@ -250,6 +266,16 @@ const LeftSidebar = () => {
     })();
   }, []);
 
+  const isLocationBasedBazaar = user?.employmentRecords?.some(
+    (rec) => rec.is_current && rec.location?.type === 'BAZAAR'
+  );
+  const isHodOfHQ = user?.employmentRecords?.some(
+    (rec) => rec.is_current && rec.is_hod && rec.location?.type === 'HEAD_QUARTER'
+  );
+
+  // Eligibility: either bazaar/location account (location_id) or HOD/employee account (employee_id), and has explicit permission
+  const canCreateRoster = !!(can("roster.create") && (user?.location_id || user?.employee_id));
+
   const navigation = [
     {
       name: "Dashboard",
@@ -299,7 +325,7 @@ const LeftSidebar = () => {
           name: "Create Roster",
           href: "/rosters/create",
           icon: PlusIcon,
-          show: () => can("roster.create"),
+          show: () => canCreateRoster,
         },
       ],
     },
@@ -332,6 +358,50 @@ const LeftSidebar = () => {
       description: "Analytics",
       color: "bg-indigo-600",
       show: () => can("reports.read"),
+    },
+    {
+      name: "Payroll",
+      href: "/payroll",
+      icon: CurrencyDollarIcon,
+      description: "Employee Payroll",
+      color: "bg-green-600",
+      show: () => {
+        const userRole = user?.role?.name || "";
+        const isSuperAdmin = user?.role?.name === "Super Admin";
+        const isAccounts = /accounts|finance|budget|payroll/i.test(userRole);
+        const isEstablishment = /establishment/i.test(userRole);
+        return isSuperAdmin || isAccounts || isEstablishment;
+      },
+      children: [
+        {
+          name: "Payroll List",
+          href: "/payroll",
+          icon: ViewColumnsIcon,
+          show: () => {
+            const userRole = user?.role?.name || "";
+            const isSuperAdmin = user?.role?.name === "Super Admin";
+            const isAccounts = /accounts|finance|budget|payroll/i.test(
+              userRole
+            );
+            const isEstablishment = /establishment/i.test(userRole);
+            return isSuperAdmin || isAccounts || isEstablishment;
+          },
+        },
+        {
+          name: "Payroll Tranches",
+          href: "/payroll/tranches",
+          icon: ViewColumnsIcon,
+          show: () => {
+            const userRole = user?.role?.name || "";
+            const isSuperAdmin = user?.role?.name === "Super Admin";
+            const isAccounts = /accounts|finance|budget|payroll/i.test(
+              userRole
+            );
+            // Only Accounts role users (excluding Super Admin)
+            return isAccounts && !isSuperAdmin;
+          },
+        },
+      ],
     },
     {
       name: "Attendance",
@@ -368,6 +438,12 @@ const LeftSidebar = () => {
           href: "/attendance/leaves",
           icon: ViewColumnsIcon,
           show: () => can("leaves.read"),
+        },
+        {
+          name: "All Leaves",
+          href: "/attendance/leaves/all",
+          icon: ViewColumnsIcon,
+          show: () => /establishment/i.test(user?.role?.name || ""),
         },
         {
           name: "Leave Bank",
@@ -438,6 +514,12 @@ const LeftSidebar = () => {
               can("travel.claim.process.start")
             );
           },
+        },
+        {
+          name: "All Tada Requests",
+          href: "/travel/requests/all",
+          icon: ViewColumnsIcon,
+          show: () => travelCaps.isEstablishment,
         },
         {
           name: "Pending TADA Requests",

@@ -197,59 +197,8 @@ module.exports = {
       });
     }
     // Employee-based account path: has employee_id
+    // Employee-based users can ONLY see their own employment record
     else if (userEmpId) {
-      // Get subordinates
-      const subs = await prisma.employment.findMany({
-        where: {
-          is_deleted: false,
-          is_current: true,
-          organization: "PSBA",
-          reporting_officer_id: String(userEmpId),
-          employee: {
-            is_deleted: false,
-            status: "Active",
-            ...(search
-              ? {
-                  OR: [
-                    { full_name: { contains: search, mode: "insensitive" } },
-                    { employee_id: { contains: search, mode: "insensitive" } },
-                    { cnic: { contains: search, mode: "insensitive" } },
-                    { email: { contains: search, mode: "insensitive" } },
-                  ],
-                }
-              : {}),
-          },
-        },
-        include: {
-          employee: true,
-          designation: true,
-          role_tag: true,
-          location: true,
-        },
-        orderBy: { employee_id: "asc" },
-      });
-
-      const seen = new Set();
-      const list = [];
-      for (const r of subs) {
-        if (seen.has(r.employee_id)) continue;
-        seen.add(r.employee_id);
-        list.push({
-          id: r.employee.id,
-          employee_id: r.employee.employee_id,
-          full_name: r.employee.full_name,
-          cnic: r.employee.cnic,
-          employmentRecords: [
-            {
-              designation: r.designation,
-              role_tag: r.role_tag,
-              location: r.location,
-            },
-          ],
-        });
-      }
-
-      // Add self
       const selfEmp = await prisma.employee.findFirst({
         where: {
           id: Number(userEmpId),
@@ -273,24 +222,24 @@ module.exports = {
           },
         },
       });
-      if (selfEmp && !seen.has(selfEmp.employee_id)) {
-        list.unshift({
-          id: selfEmp.id,
-          employee_id: selfEmp.employee_id,
-          full_name: selfEmp.full_name,
-          cnic: selfEmp.cnic,
-          employmentRecords: [
-            {
-              designation: selfEmp.employmentRecords?.[0]?.designation || null,
-              role_tag: selfEmp.employmentRecords?.[0]?.role_tag || null,
-              location: selfEmp.employmentRecords?.[0]?.location || null,
-            },
-          ],
-        });
-        seen.add(selfEmp.employee_id);
-      }
 
-      employees = list;
+      if (selfEmp) {
+        employees = [
+          {
+            id: selfEmp.id,
+            employee_id: selfEmp.employee_id,
+            full_name: selfEmp.full_name,
+            cnic: selfEmp.cnic,
+            employmentRecords: selfEmp.employmentRecords.map((er) => ({
+              designation: er.designation,
+              role_tag: er.role_tag,
+              location: er.location,
+            })),
+          },
+        ];
+      } else {
+        employees = [];
+      }
     }
     // recent leaves
     const empIds = employees.map((e) => e.id);
@@ -340,7 +289,12 @@ module.exports = {
         cnic: true,
         employmentRecords: {
           where: { is_current: true, is_deleted: false },
-          include: { designation: true, role_tag: true, location: true },
+          include: {
+            department: true,
+            designation: true,
+            role_tag: true,
+            location: true,
+          },
         },
         leaves: { where: { is_deleted: false }, orderBy: { date: "desc" } },
       },
@@ -401,6 +355,9 @@ module.exports = {
     };
   },
   getEmployeeLeavesWithSummary: async (employeeId) => {
+    if (!employeeId || isNaN(Number(employeeId))) {
+      throw new Error("Valid employee ID is required");
+    }
     const leaves = await prisma.leave.findMany({
       where: { employee_id: employeeId, is_deleted: false },
       orderBy: { date: "desc" },
@@ -481,6 +438,93 @@ module.exports = {
     }
     return { leaves, summary };
   },
+  // Helper function to determine initial approver based on applicant type
+  determineInitialApprover: async (employeeId, tx) => {
+    // Get applicant's current employment record
+    const applicantEmp = await tx.employment.findFirst({
+      where: {
+        employee_id: Number(employeeId),
+        is_current: true,
+        is_deleted: false,
+      },
+      include: {
+        location: true,
+        department: {
+          include: {
+            head: {
+              include: {
+                user: {
+                  select: { id: true, email: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!applicantEmp) return null;
+
+    // Case 1: Bazaar (location-based) user
+    if (applicantEmp.location?.type === "BAZAAR") {
+      // Route to Operations role users
+      const operationsUsers = await tx.user.findMany({
+        where: {
+          is_deleted: false,
+          role: { name: "Operations" },
+        },
+        select: { id: true, email: true },
+      });
+      return operationsUsers.length > 0
+        ? operationsUsers.map((u) => ({
+            type: "ALLOW",
+            approver_user_id: u.id,
+            approver_email: u.email,
+          }))
+        : null;
+    }
+
+    // Case 2: Headquarter user
+    // Priority: Employee-based (reporting officer) > Department-based (HOD)
+
+    // Check if employee-based (has reporting officer)
+    if (applicantEmp.reporting_officer_id) {
+      const roEmpId = Number(applicantEmp.reporting_officer_id);
+      const roUser = await tx.user.findFirst({
+        where: {
+          employee_id: roEmpId,
+          is_deleted: false,
+        },
+        select: { id: true, email: true },
+      });
+      if (roUser) {
+        return [
+          {
+            type: "ALLOW",
+            approver_user_id: roUser.id,
+            approver_email: roUser.email,
+          },
+        ];
+      }
+    }
+
+    // Case 3: Department-based (Head of Department)
+    if (applicantEmp.department) {
+      const hod = applicantEmp.department.head;
+      if (hod && hod.user) {
+        return [
+          {
+            type: "ALLOW",
+            approver_user_id: hod.user.id,
+            approver_email: hod.user.email,
+          },
+        ];
+      }
+    }
+
+    return null;
+  },
+
   createLeaves: async (
     {
       employeeId,
@@ -493,13 +537,11 @@ module.exports = {
       duty_from,
       duty_to,
       // New fields
-      submission_time,
       custom_type,
       backup_employee_id,
       backup_duty_from,
       backup_duty_to,
       documents,
-      routes,
     },
     req
   ) => {
@@ -565,10 +607,8 @@ module.exports = {
         date: new Date(d),
         type: String(type),
         remarks: enrichRemarks(remarks || null),
-        // New fields
-        submission_time: submission_time
-          ? new Date(submission_time)
-          : new Date(new Date().getTime() + 5 * 60 * 60 * 1000), // UTC+5
+        // New fields - submission_time auto-saved on creation
+        submission_time: new Date(new Date().getTime() + 5 * 60 * 60 * 1000), // UTC+5
         custom_type: custom_type || null,
         backup_employee_id: backup_employee_id
           ? Number(backup_employee_id)
@@ -588,57 +628,26 @@ module.exports = {
           const createdLeave = await tx.leave.create({ data: record });
           createdLeaveIds.push(createdLeave.id);
         }
-        // Persist manual routing if provided: routes = [{ type: 'RECOMMEND'|'ALLOW', approver_user_id }]
-        const validRoutes = Array.isArray(routes)
-          ? routes
-              .map((r) => ({
-                type: String(r.type || "").toUpperCase(),
-                approver_user_id: Number(
-                  r.approver_user_id || r.user_id || r.id
-                ),
-              }))
-              .filter(
-                (r) =>
-                  (r.type === "RECOMMEND" || r.type === "ALLOW") &&
-                  Number.isFinite(r.approver_user_id)
-              )
-          : [];
+
+        // Determine initial approver based on applicant type
+        const initialApprovers = await module.exports.determineInitialApprover(
+          employeeId,
+          tx
+        );
 
         let routeRows = [];
 
-        if (validRoutes.length) {
-          // Manual routing provided - use it
+        if (initialApprovers && initialApprovers.length > 0) {
+          // Create routes for initial approvers
           for (const leaveId of createdLeaveIds) {
-            validRoutes.forEach((r, idx) => {
+            initialApprovers.forEach((approver, idx) => {
               routeRows.push({
                 leave_id: leaveId,
-                type: r.type,
-                approver_user_id: r.approver_user_id,
+                type: approver.type,
+                approver_user_id: approver.approver_user_id,
                 sequence: idx + 1,
               });
             });
-          }
-        } else {
-          // No manual routing - automatically route to Establishment role users
-          const establishmentUsers = await tx.user.findMany({
-            where: {
-              is_deleted: false,
-              role: { name: "Establishment" },
-            },
-            select: { id: true },
-          });
-
-          if (establishmentUsers.length > 0) {
-            for (const leaveId of createdLeaveIds) {
-              establishmentUsers.forEach((user, idx) => {
-                routeRows.push({
-                  leave_id: leaveId,
-                  type: "ALLOW", // Establishment users can directly approve
-                  approver_user_id: user.id,
-                  sequence: idx + 1,
-                });
-              });
-            }
           }
         }
 
@@ -689,6 +698,99 @@ module.exports = {
       },
     });
     return { created, skipped, leaves };
+  },
+  // Search all users for forwarding (includes all users except deleted ones)
+  searchUsersForForward: async (search) => {
+    const baseWhere = {
+      is_deleted: false,
+      // Exclude users linked to BAZAAR locations (include users with no location or non-BAZAAR locations)
+      OR: [{ location: null }, { location: { type: { not: "BAZAAR" } } }],
+    };
+
+    const where = search
+      ? {
+          ...baseWhere,
+          AND: [
+            {
+              OR: [
+                { email: { contains: search, mode: "insensitive" } },
+                {
+                  employee: {
+                    full_name: { contains: search, mode: "insensitive" },
+                  },
+                },
+                {
+                  employee: {
+                    employee_id: { contains: search, mode: "insensitive" },
+                  },
+                },
+              ],
+            },
+          ],
+        }
+      : baseWhere;
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        email: true,
+        employee: {
+          select: {
+            id: true,
+            full_name: true,
+            employee_id: true,
+          },
+        },
+      },
+      orderBy: [{ email: "asc" }],
+      take: 50, // Limit results
+    });
+
+    // Filter out users whose current employment is linked to BAZAAR locations
+    if (users.length === 0) return [];
+
+    const employeeIds = users
+      .map((u) => u.employee?.id)
+      .filter((id) => id !== null && id !== undefined);
+
+    // Fetch all current employments for these employees in one query
+    const employments =
+      employeeIds.length > 0
+        ? await prisma.employment.findMany({
+            where: {
+              employee_id: { in: employeeIds },
+              is_current: true,
+              is_deleted: false,
+            },
+            select: {
+              employee_id: true,
+              location: {
+                select: {
+                  type: true,
+                },
+              },
+            },
+          })
+        : [];
+
+    // Create a set of employee IDs that are linked to BAZAAR locations
+    const bazaarEmployeeIds = new Set(
+      employments
+        .filter((emp) => emp.location?.type === "BAZAAR")
+        .map((emp) => emp.employee_id)
+    );
+
+    // Filter out users whose employee is linked to BAZAAR location
+    const filteredUsers = users.filter(
+      (user) => !user.employee?.id || !bazaarEmployeeIds.has(user.employee.id)
+    );
+
+    return filteredUsers.map((u) => ({
+      id: u.id,
+      email: u.email,
+      employee: u.employee,
+    }));
   },
   // Search approver users excluding Establishment role users, Super Admins, specific emails, and BAZAAR location users
   searchApproverUsers: async (search) => {
@@ -749,6 +851,72 @@ module.exports = {
       employee: u.employee,
     }));
   },
+  // List all leaves for Establishment role users
+  listAllLeavesForEstablishment: async (req) => {
+    const userId = req.session?.user?.id;
+    const roleName = req.session?.user?.role?.name || "";
+    if (!userId) return [];
+
+    const isEstablishment = /^\s*establishment/i.test(roleName);
+    if (!isEstablishment) return [];
+
+    const leaves = await prisma.leave.findMany({
+      where: {
+        is_deleted: false,
+      },
+      include: {
+        employee: {
+          include: {
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              include: { designation: true, location: true },
+            },
+          },
+        },
+        backup_employee: {
+          select: {
+            id: true,
+            full_name: true,
+            cnic: true,
+            email: true,
+            employee_id: true,
+          },
+        },
+        routes: {
+          orderBy: { sequence: "asc" },
+          include: {
+            approver_user: {
+              select: {
+                id: true,
+                email: true,
+                employee: { select: { full_name: true, employee_id: true } },
+                role: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        statusHistory: {
+          orderBy: { action_time: "asc" },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                employee: { select: { full_name: true, employee_id: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+    });
+    return leaves;
+  },
   // List approvals visible to the current user based on manual routing and stage
   listApprovalsForUser: async (req) => {
     const userId = req.session?.user?.id;
@@ -785,10 +953,18 @@ module.exports = {
         const orderedRoutes = (lv.routes || [])
           .slice()
           .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
-        const maxSeq = orderedRoutes.length;
+        const maxSeq =
+          orderedRoutes.length > 0
+            ? Math.max(...orderedRoutes.map((r) => r.sequence || 0), 0)
+            : 0;
+        // Check if current user is in the routes and all previous routes are completed
+        const userRoute = orderedRoutes.find(
+          (r) => Number(r.approver_user_id) === Number(userId)
+        );
         return (
           maxSeq > 0 &&
-          (lv.current_stage || 0) >= maxSeq &&
+          userRoute &&
+          (lv.current_stage || 0) >= userRoute.sequence - 1 &&
           lv.current_status !== "APPROVED" &&
           lv.current_status !== "REJECTED"
         );
@@ -827,6 +1003,12 @@ module.exports = {
                 id: true,
                 email: true,
                 employee: { select: { full_name: true, employee_id: true } },
+                role: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },
@@ -886,6 +1068,12 @@ module.exports = {
                 id: true,
                 email: true,
                 employee: { select: { full_name: true, employee_id: true } },
+                role: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },
@@ -961,8 +1149,17 @@ module.exports = {
     });
   },
   // Perform action on a leave with history and progression
-  actOnLeave: async ({ leaveId, userId, action, comments }, req) => {
-    const allowed = new Set(["RECOMMEND", "ALLOW", "APPROVE", "REJECT"]);
+  actOnLeave: async (
+    { leaveId, userId, action, comments, forwardToUserId },
+    req
+  ) => {
+    const allowed = new Set([
+      "RECOMMEND",
+      "ALLOW",
+      "APPROVE",
+      "REJECT",
+      "FORWARD",
+    ]);
     const upper = String(action || "").toUpperCase();
     if (!allowed.has(upper)) throw new Error("Invalid action");
 
@@ -979,7 +1176,14 @@ module.exports = {
         throw new Error("Leave already finalized");
       }
 
-      // Determine next route strictly by ordered sequence. If sequence missing, use index.
+      // Get current user info for forward history
+      const currentUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true },
+      });
+      const currentUserEmail = currentUser?.email || `user${userId}`;
+
+      // Determine next route strictly by ordered sequence
       const orderedRoutes = (leave.routes || [])
         .slice()
         .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
@@ -988,6 +1192,77 @@ module.exports = {
         orderedRoutes.find((r) => (r.sequence || 0) === nextSeq) ||
         orderedRoutes[nextSeq - 1] ||
         null;
+
+      // Handle FORWARD action
+      if (upper === "FORWARD") {
+        if (!forwardToUserId) throw new Error("Forward target user required");
+        const forwardToUser = await tx.user.findUnique({
+          where: { id: Number(forwardToUserId) },
+          select: { id: true, email: true },
+        });
+        if (!forwardToUser) throw new Error("Forward target user not found");
+
+        // Validate that current user is authorized (must be next approver)
+        if (
+          !nextRoute ||
+          Number(nextRoute.approver_user_id) !== Number(userId)
+        ) {
+          throw new Error("Not authorized for this stage");
+        }
+
+        // Add new route entry for forwarded user
+        // When forwarding, we replace the current route with the forwarded user
+        await tx.leaveApprovalRoute.deleteMany({
+          where: {
+            leave_id: leaveId,
+            sequence: nextSeq,
+            approver_user_id: userId, // Remove current user's route
+          },
+        });
+
+        await tx.leaveApprovalRoute.create({
+          data: {
+            leave_id: leaveId,
+            type: "ALLOW",
+            approver_user_id: forwardToUser.id,
+            sequence: nextSeq, // Forwarded user takes over at same sequence
+          },
+        });
+
+        // Create forward history entry with proper format
+        const now = new Date();
+        // Format as dd/mm/yyyy, hh:mm:ss am/pm (Asia/Karachi timezone)
+        const utc5Time = new Date(now.getTime() + 5 * 60 * 60 * 1000); // UTC+5
+        const day = String(utc5Time.getUTCDate()).padStart(2, "0");
+        const month = String(utc5Time.getUTCMonth() + 1).padStart(2, "0");
+        const year = utc5Time.getUTCFullYear();
+        const hours = utc5Time.getUTCHours();
+        const minutes = String(utc5Time.getUTCMinutes()).padStart(2, "0");
+        const seconds = String(utc5Time.getUTCSeconds()).padStart(2, "0");
+        const ampm = hours >= 12 ? "pm" : "am";
+        const displayHours = hours % 12 || 12;
+        const timestamp = `${day}/${month}/${year}, ${String(
+          displayHours
+        ).padStart(2, "0")}:${minutes}:${seconds} ${ampm}`;
+        const forwardComment = `${currentUserEmail} recommended to ${forwardToUser.email} at ${timestamp}`;
+        await tx.leaveStatusHistory.create({
+          data: {
+            leave_id: leaveId,
+            user_id: userId,
+            action_type: "FORWARDED",
+            comments: forwardComment,
+          },
+        });
+
+        // Keep current stage - forwarded user will handle at nextSeq
+        const updated = await tx.leave.update({
+          where: { id: leaveId },
+          data: {
+            // Stage remains the same - forwarded user is at nextSeq
+          },
+        });
+        return updated;
+      }
 
       // Validate actor: either the next approver, or (no more routes) establishment approver can APPROVE
       if (upper !== "APPROVE" && upper !== "REJECT") {
@@ -1015,6 +1290,38 @@ module.exports = {
         historyAction = "ALLOWED";
         newWorkflow = "ALLOWED";
         newStage = nextSeq;
+
+        // When ALLOW is clicked, route to Establishment role users
+        const maxSeq = Math.max(
+          ...orderedRoutes.map((r) => r.sequence || 0),
+          0
+        );
+        const establishmentUsers = await tx.user.findMany({
+          where: {
+            is_deleted: false,
+            role: { name: "Establishment" },
+          },
+          select: { id: true },
+        });
+
+        if (establishmentUsers.length > 0) {
+          // Remove existing routes after current stage (nextSeq)
+          await tx.leaveApprovalRoute.deleteMany({
+            where: {
+              leave_id: leaveId,
+              sequence: { gt: nextSeq },
+            },
+          });
+
+          // Add Establishment routes starting after current stage
+          const establishmentRoutes = establishmentUsers.map((user, idx) => ({
+            leave_id: leaveId,
+            type: "ALLOW",
+            approver_user_id: user.id,
+            sequence: nextSeq + 1 + idx,
+          }));
+          await tx.leaveApprovalRoute.createMany({ data: establishmentRoutes });
+        }
       } else if (upper === "APPROVE") {
         historyAction = "APPROVED";
         newWorkflow = "APPROVED";

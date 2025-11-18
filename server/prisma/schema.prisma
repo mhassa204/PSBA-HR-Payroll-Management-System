@@ -71,6 +71,8 @@ model Employee {
   headedDepartments       Department[]            @relation("DepartmentHead")
   // Back-relation: leaves where this employee is backup
   backupLeaves            Leave[]                 @relation("LeaveBackupEmployee")
+  // Back-relation: payroll records for this employee
+  payrolls                Payroll[]
 }
 
 model Department {
@@ -202,21 +204,21 @@ model PastExperience {
 }
 
 model EducationQualification {
-  id                 Int      @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   employee_id        Int
   // Legacy level string (deprecated)
   education_level    String
   // New normalized level reference
   education_level_id Int?
   institution_name   String
-  year_of_completion String
+  year_of_completion DateTime? // Changed to DateTime for date selection
   marks_gpa          String?
-  // New: start date for the education record
-  start_date         DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  is_deleted         Boolean  @default(false)
-  employee           Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  // Start year for the education record (year selection)
+  start_date         String?   // Changed to String for year selection
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  is_deleted         Boolean   @default(false)
+  employee           Employee  @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   level              EducationLevel? @relation(fields: [education_level_id], references: [id])
 }
 
@@ -403,6 +405,9 @@ model User {
   approvalRoutes LeaveApprovalRoute[] @relation(name: "LeaveApprovalApprover")
   // Back-relation: leave status history entries authored by this user
   leaveStatusEntries LeaveStatusHistory[]
+  // Back-relation: payrolls processed by this user
+  processedPayrolls Payroll[]
+  createdPayrollTranches PayrollTranch[]
 
   @@index([department_id])
   @@index([location_id])
@@ -657,6 +662,7 @@ enum LeaveHistoryAction {
   ALLOWED
   APPROVED
   REJECTED
+  FORWARDED
 }
 
 // New: Leave Types for configuring bankable leave categories
@@ -932,3 +938,98 @@ model TravelClaimTrancheItem {
   @@unique([tranche_id, claim_id], name: "tranche_claim_unique")
   @@index([claim_id])
 }
+
+// ===== Payroll Module =====
+
+enum PayrollStatus {
+  CREATED
+  UNDER_PROCESS
+  PROCESSED
+}
+
+model Payroll {
+  id                      Int          @id @default(autoincrement())
+  employee_id             Int
+  year                    Int
+  month                   Int  // 1-based (1 = January, 12 = December)
+  period_start            DateTime
+  period_end              DateTime
+  
+  // Employee information at time of payroll creation
+  employee_name           String
+  employee_cnic           String?
+  designation             String?
+  department              String?
+  location                String?
+  
+  // Bank details
+  bank_name               String?
+  account_number          String?
+  branch_code             String?
+  
+  // Salary components
+  basic_salary            Float        @default(0)
+  medical_allowance       Float        @default(0)
+  house_rent              Float        @default(0)
+  conveyance_allowance    Float        @default(0)
+  other_allowances        Float        @default(0)
+  total_salary            Float        @default(0)
+  
+  // Attendance and calculations
+  total_month_days        Int          @default(0)
+  working_days            Int          @default(0)
+  weekly_off_count        Int          @default(0)
+  approved_leaves         Int          @default(0)
+  present_days            Int          @default(0)
+  absents                 Int          @default(0)
+  salary_days             Int          @default(0)
+  
+  // Final calculations
+  adjusted_basic_salary   Float        @default(0)
+  adjusted_total_salary   Float        @default(0)
+  arrears                 Float        @default(0)
+  other_deductions        Float        @default(0)
+  net_payable             Float        @default(0)
+  
+  // Status
+  status                  PayrollStatus @default(CREATED)
+  processed_at            DateTime?
+  processed_by_user_id    Int?
+  processedBy             User?         @relation(fields: [processed_by_user_id], references: [id])
+  
+  // Timestamps
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  is_deleted              Boolean       @default(false)
+  
+  employee                Employee      @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  tranche_id              Int?
+  tranche                 PayrollTranch? @relation(fields: [tranche_id], references: [id], onDelete: SetNull)
+
+  // Note: Unique constraint removed because soft-deleted records would conflict
+  // Application-level validation checks for non-deleted payrolls only
+  @@index([employee_id])
+  @@index([year, month])
+  @@index([status])
+  @@index([employee_id, year, month, is_deleted])
+  @@index([tranche_id])
+}
+
+model PayrollTranch {
+  id          Int          @id @default(autoincrement())
+  name        String?
+  code        String?      @unique
+  total_amount Float        @default(0)
+  payroll_count Int        @default(0)
+  created_by_user_id Int?
+  createdBy   User?        @relation(fields: [created_by_user_id], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  is_deleted  Boolean      @default(false)
+  
+  payrolls    Payroll[]
+  
+  @@index([created_by_user_id])
+  @@index([is_deleted])
+}
+

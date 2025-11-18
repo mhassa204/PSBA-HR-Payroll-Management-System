@@ -1,4 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require("../utils/softDeleteUtil");
+const { validateSoftDelete } = require("../utils/softDeleteValidation");
 const prisma = new PrismaClient();
 
 const districtService = {
@@ -79,9 +81,55 @@ const districtService = {
 
   // Soft delete district
   deleteDistrict: async (id) => {
+    const district = await prisma.district.findUnique({
+      where: { id: parseInt(id) },
+    });
+    
+    if (!district) {
+      throw new Error("District not found");
+    }
+
+    // Check for active child records
+    const validation = await validateSoftDelete('District', parseInt(id));
+    if (!validation.canDelete) {
+      throw new Error(validation.message);
+    }
+
+    // Mask unique fields to prevent unique constraint violations
+    const { masked } = maskUniqueFieldsForSoftDelete('District', district);
+
     return prisma.district.update({
       where: { id: parseInt(id) },
-      data: { is_deleted: true },
+      data: { 
+        is_deleted: true,
+        ...masked, // Apply masked unique fields
+      },
+    });
+  },
+
+  // Restore district
+  restoreDistrict: async (id) => {
+    const district = await prisma.district.findUnique({
+      where: { id: parseInt(id) },
+    });
+    
+    if (!district) {
+      throw new Error("District not found");
+    }
+
+    if (!district.is_deleted) {
+      throw new Error("District is not soft-deleted");
+    }
+
+    // Restore unique fields to their original values
+    const restored = restoreUniqueFieldsForUndelete('District', district);
+
+    return prisma.district.update({
+      where: { id: parseInt(id) },
+      data: { 
+        is_deleted: false,
+        ...restored, // Restore original unique field values
+      },
     });
   },
 };

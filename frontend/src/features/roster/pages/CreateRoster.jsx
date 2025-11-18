@@ -2,19 +2,28 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import rosterService from '../../roster/services/rosterService';
 import axios from '../../../lib/axios';
+import { useAuthStore } from '../../auth/authStore';
 
 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
 const CreateRoster = () => {
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const can = useAuthStore((s) => s.can);
   const [employees, setEmployees] = useState([]);
   const [title, setTitle] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validTo, setValidTo] = useState('');
   const [entries, setEntries] = useState([]);
 
+  // Eligibility: must have roster.create and be either a bazaar/location account or an employee/HOD account
+  const canCreateRoster = !!(can('roster.create') && (user?.location_id || user?.employee_id));
+  if (!canCreateRoster) {
+    return <div className="p-6 text-rose-600">You are not authorized to create a roster.</div>;
+  }
+
   useEffect(() => {
-    // load employees with roster permissions (controller enforces manager-only)
+    // load scoped employees from helper endpoint
     (async () => {
       try {
         const empRes = await rosterService.officerEmployees();

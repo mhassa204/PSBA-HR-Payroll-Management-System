@@ -11,6 +11,38 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   const [summary, setSummary] = useState(null);
   const [backupEmployees, setBackupEmployees] = useState([]);
   const [selectedDetail, setSelectedDetail] = useState(null);
+  // Helper function to format date consistently (dd/mm/yyyy, hh:mm:ss am/pm)
+  const formatStatusHistoryDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    // Ensure we're working with local time
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    const ampm = hours >= 12 ? "pm" : "am";
+    const displayHours = hours % 12 || 12;
+    return `${day}/${month}/${year}, ${String(displayHours).padStart(2, "0")}:${minutes}:${seconds} ${ampm}`;
+  };
+
+  // Helper function to extract timestamp from FORWARDED comments
+  const extractTimestampFromComment = (comment) => {
+    if (!comment) return null;
+    // Pattern: "... at dd/mm/yyyy, hh:mm:ss am/pm" or variations
+    // Match patterns like "at 31/10/2025, 03:18:37 pm" or "at 31/10/2025, 3:18:37 PM"
+    const match = comment.match(/at\s+(\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(?:am|pm|AM|PM))/i);
+    return match ? match[1] : null;
+  };
+
+  // Helper function to remove timestamp from comment
+  const removeTimestampFromComment = (comment) => {
+    if (!comment) return comment;
+    // Remove " at dd/mm/yyyy, hh:mm:ss am/pm" pattern (flexible for 1-2 digit day/month/hour)
+    return comment.replace(/\s+at\s+\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(?:am|pm|AM|PM)/i, "");
+  };
+
   const [form, setForm] = useState({
     date: "",
     type: "",
@@ -1147,22 +1179,35 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                             Status History
                           </div>
                           <div className="space-y-1">
-                            {selectedDetail.statusHistory.map((h, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="badge badge-gray">
-                                    {h.action_type}
-                                  </span>
-                                  <span>{h.user?.email || "User"}</span>
+                            {selectedDetail.statusHistory.map((h, idx) => {
+                              const isForwarded = h.action_type === "FORWARDED";
+                              const commentTimestamp = isForwarded ? extractTimestampFromComment(h.comments) : null;
+                              const displayComment = isForwarded && h.comments ? removeTimestampFromComment(h.comments) : h.comments;
+                              const displayTimestamp = commentTimestamp || formatStatusHistoryDate(h.action_time);
+                              
+                              return (
+                                <div
+                                  key={idx}
+                                  className="flex items-start justify-between text-xs bg-gray-50 p-2 rounded gap-2"
+                                >
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <span className="badge badge-gray whitespace-nowrap">
+                                      {isForwarded ? "Recommended" : h.action_type}
+                                    </span>
+                                    {displayComment ? (
+                                      <span className="text-gray-600 break-words">
+                                        {displayComment}
+                                      </span>
+                                    ) : (
+                                      <span className="whitespace-nowrap">{h.user?.email || "User"}</span>
+                                    )}
+                                  </div>
+                                  <div className="text-gray-600 whitespace-nowrap text-right">
+                                    {displayTimestamp}
+                                  </div>
                                 </div>
-                                <div className="text-gray-600">
-                                  {new Date(h.action_time).toLocaleString()}
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}

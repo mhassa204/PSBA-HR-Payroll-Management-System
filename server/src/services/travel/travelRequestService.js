@@ -1094,8 +1094,24 @@ module.exports = {
     });
   },
 
-  softDelete: (id) =>
-    prisma.travelRequest.update({ where: { id }, data: { is_deleted: true } }),
+  softDelete: async (id) => {
+    const travelRequest = await prisma.travelRequest.findUnique({
+      where: { id },
+    });
+
+    if (!travelRequest) {
+      throw new Error("Travel request not found");
+    }
+
+    // Check for active child records
+    const { validateSoftDelete } = require("../../utils/softDeleteValidation");
+    const validation = await validateSoftDelete('TravelRequest', id);
+    if (!validation.canDelete) {
+      throw new Error(validation.message);
+    }
+
+    return prisma.travelRequest.update({ where: { id }, data: { is_deleted: true } });
+  },
 
   legacyDecision: async (id, newStatus, actorEmpId, actorEmail) => {
     await prisma.travelRequest.update({

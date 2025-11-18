@@ -1,4 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require("../utils/softDeleteUtil");
+const { validateSoftDelete } = require("../utils/softDeleteValidation");
 const prisma = new PrismaClient();
 
 const educationLevelService = {
@@ -73,7 +75,56 @@ const educationLevelService = {
 
   // Delete (soft)
   deleteEducationLevel: async (id) => {
-    return prisma.educationLevel.update({ where: { id: parseInt(id) }, data: { is_deleted: true } });
+    const educationLevel = await prisma.educationLevel.findUnique({
+      where: { id: parseInt(id) },
+    });
+    
+    if (!educationLevel) {
+      throw new Error("Education level not found");
+    }
+
+    // Check for active child records
+    const validation = await validateSoftDelete('EducationLevel', parseInt(id));
+    if (!validation.canDelete) {
+      throw new Error(validation.message);
+    }
+
+    // Mask unique fields to prevent unique constraint violations
+    const { masked } = maskUniqueFieldsForSoftDelete('EducationLevel', educationLevel);
+
+    return prisma.educationLevel.update({ 
+      where: { id: parseInt(id) }, 
+      data: { 
+        is_deleted: true,
+        ...masked, // Apply masked unique fields
+      } 
+    });
+  },
+
+  // Restore education level
+  restoreEducationLevel: async (id) => {
+    const educationLevel = await prisma.educationLevel.findUnique({
+      where: { id: parseInt(id) },
+    });
+    
+    if (!educationLevel) {
+      throw new Error("Education level not found");
+    }
+
+    if (!educationLevel.is_deleted) {
+      throw new Error("Education level is not soft-deleted");
+    }
+
+    // Restore unique fields to their original values
+    const restored = restoreUniqueFieldsForUndelete('EducationLevel', educationLevel);
+
+    return prisma.educationLevel.update({
+      where: { id: parseInt(id) },
+      data: { 
+        is_deleted: false,
+        ...restored, // Restore original unique field values
+      },
+    });
   },
 };
 

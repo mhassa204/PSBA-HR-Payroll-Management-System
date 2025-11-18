@@ -20,7 +20,7 @@ import {
 
 // Helper functions for experience calculations
 const calculateExperienceDuration = (startDate, endDate) => {
-  if (!startDate) return 'Duration not available';
+  if (!startDate) return "Duration not available";
 
   const start = new Date(startDate);
   const end = endDate ? new Date(endDate) : new Date();
@@ -31,19 +31,23 @@ const calculateExperienceDuration = (startDate, endDate) => {
   const months = Math.floor((diffDays % 365) / 30);
 
   if (years > 0) {
-    return months > 0 ? `${years} year${years > 1 ? 's' : ''}, ${months} month${months > 1 ? 's' : ''}` : `${years} year${years > 1 ? 's' : ''}`;
+    return months > 0
+      ? `${years} year${years > 1 ? "s" : ""}, ${months} month${
+          months > 1 ? "s" : ""
+        }`
+      : `${years} year${years > 1 ? "s" : ""}`;
   } else if (months > 0) {
-    return `${months} month${months > 1 ? 's' : ''}`;
+    return `${months} month${months > 1 ? "s" : ""}`;
   } else {
-    return 'Less than a month';
+    return "Less than a month";
   }
 };
 
 const calculateTotalExperienceYears = (experiences) => {
-  if (!experiences || experiences.length === 0) return '0';
+  if (!experiences || experiences.length === 0) return "0";
 
   let totalMonths = 0;
-  experiences.forEach(exp => {
+  experiences.forEach((exp) => {
     if (exp.start_date) {
       const start = new Date(exp.start_date);
       const end = exp.end_date ? new Date(exp.end_date) : new Date();
@@ -57,17 +61,19 @@ const calculateTotalExperienceYears = (experiences) => {
   const months = totalMonths % 12;
 
   if (years > 0) {
-    return months > 0 ? `${years}.${Math.floor(months/12*10)}` : `${years}`;
+    return months > 0
+      ? `${years}.${Math.floor((months / 12) * 10)}`
+      : `${years}`;
   } else {
-    return '< 1';
+    return "< 1";
   }
 };
 
 const getUniqueCompaniesCount = (experiences) => {
-  if (!experiences || experiences.length === 0) return '0';
+  if (!experiences || experiences.length === 0) return "0";
 
   const uniqueCompanies = new Set();
-  experiences.forEach(exp => {
+  experiences.forEach((exp) => {
     if (exp.company_name && exp.company_name.trim()) {
       uniqueCompanies.add(exp.company_name.trim().toLowerCase());
     }
@@ -98,16 +104,31 @@ const EnhancedUserProfile = () => {
       );
 
       // Debug logging to check employment records
-      console.log("🔍 EnhancedUserProfile: Loaded employee data:", employeeData);
-      console.log("📋 EnhancedUserProfile: Employment records count:", employeeData?.employmentRecords?.length || 0);
-      console.log("📋 EnhancedUserProfile: Employment records:", employeeData?.employmentRecords);
-      
+      console.log(
+        "🔍 EnhancedUserProfile: Loaded employee data:",
+        employeeData
+      );
+      console.log(
+        "📋 EnhancedUserProfile: Employment records count:",
+        employeeData?.employmentRecords?.length || 0
+      );
+      console.log(
+        "📋 EnhancedUserProfile: Employment records:",
+        employeeData?.employmentRecords
+      );
+
       if (employeeData?.employmentRecords?.length > 0) {
         const currentPos = getCurrentPosition(employeeData.employmentRecords);
         console.log("🔍 EnhancedUserProfile: Current position:", currentPos);
-        console.log("💰 EnhancedUserProfile: Current salary data:", currentPos?.salary);
+        console.log(
+          "💰 EnhancedUserProfile: Current salary data:",
+          currentPos?.salary
+        );
       }
-      console.log("📋 EnhancedUserProfile: Employment records:", employeeData?.employmentRecords);
+      console.log(
+        "📋 EnhancedUserProfile: Employment records:",
+        employeeData?.employmentRecords
+      );
 
       setEmployee(employeeData);
     } catch (error) {
@@ -117,7 +138,12 @@ const EnhancedUserProfile = () => {
 
   // Use utility function for consistent date formatting
   const formatDate = (dateString) => {
-    console.log("🔍 EnhancedUserProfile: Formatting date:", dateString, "Type:", typeof dateString);
+    console.log(
+      "🔍 EnhancedUserProfile: Formatting date:",
+      dateString,
+      "Type:",
+      typeof dateString
+    );
     const result = formatDateDisplay(dateString);
     console.log("📅 EnhancedUserProfile: Formatted result:", result);
     return result;
@@ -129,7 +155,9 @@ const EnhancedUserProfile = () => {
 
     const totalMonths = employmentRecords.reduce((total, record) => {
       const startDate = new Date(record.effective_from);
-      const endDate = record.effective_till ? new Date(record.effective_till) : new Date();
+      const endDate = record.effective_till
+        ? new Date(record.effective_till)
+        : new Date();
       const months =
         (endDate.getFullYear() - startDate.getFullYear()) * 12 +
         (endDate.getMonth() - startDate.getMonth());
@@ -148,33 +176,37 @@ const EnhancedUserProfile = () => {
 
   const getCurrentPosition = (employmentRecords) => {
     if (!employmentRecords || employmentRecords.length === 0) return null;
-    
+
     // First try to find by is_current flag
-    let currentRecord = employmentRecords.find((record) => record.is_current === true);
-    
+    let currentRecord = employmentRecords.find(
+      (record) => record.is_current === true
+    );
+
     // Fallback: if no is_current flag, look for records without end date
     if (!currentRecord) {
-      currentRecord = employmentRecords.find((record) => record.effective_till === null);
+      currentRecord = employmentRecords.find(
+        (record) => record.effective_till === null
+      );
     }
-    
+
     // If still no current record, get the most recent one
     if (!currentRecord && employmentRecords.length > 0) {
-      currentRecord = employmentRecords.sort((a, b) => 
-        new Date(b.effective_from) - new Date(a.effective_from)
+      currentRecord = employmentRecords.sort(
+        (a, b) => new Date(b.effective_from) - new Date(a.effective_from)
       )[0];
     }
-    
+
     return currentRecord;
   };
 
   // Format employment location preferring actual location name (loc.name) over generic type labels
   const displayEmploymentLocation = (rec) => {
     const loc = rec?.location;
-    if (loc && typeof loc === 'object') {
+    if (loc && typeof loc === "object") {
       const clean = (val) => {
-        if (val === undefined || val === null) return '';
+        if (val === undefined || val === null) return "";
         const s = String(val).trim();
-        if (!s || s.toLowerCase() === 'null') return '';
+        if (!s || s.toLowerCase() === "null") return "";
         return s;
       };
 
@@ -188,15 +220,15 @@ const EnhancedUserProfile = () => {
 
       // As last resort, map by type
       const typeMap = {
-        HEAD_OFFICE: 'Head Office',
-        HEAD_QUARTER: 'Head Quarter',
-        BAZAAR: 'Bazaar',
-        SAHULAT_BAZAAR: 'Sahulat Bazaar'
+        HEAD_OFFICE: "Head Office",
+        HEAD_QUARTER: "Head Quarter",
+        BAZAAR: "Bazaar",
+        SAHULAT_BAZAAR: "Sahulat Bazaar",
       };
-      return typeMap[loc.type] || rec?.office_location || 'N/A';
+      return typeMap[loc.type] || rec?.office_location || "N/A";
     }
     // Fallback for older data without populated location relation
-    return rec?.office_location || 'N/A';
+    return rec?.office_location || "N/A";
   };
 
   if (isLoading) {
@@ -255,14 +287,29 @@ const EnhancedUserProfile = () => {
 
   const currentPosition = getCurrentPosition(employee.employmentRecords);
   const totalExperience = calculateExperience(employee.employmentRecords);
-  
+
   // Debug logging for current position and salary
   console.log("🔍 EnhancedUserProfile: Current position:", currentPosition);
-  console.log("💰 EnhancedUserProfile: Current salary:", currentPosition?.salary);
-  console.log("🏢 EnhancedUserProfile: Current organization:", currentPosition?.organization);
-  console.log("📍 EnhancedUserProfile: Current location:", currentPosition?.location);
-  console.log("📅 EnhancedUserProfile: Current effective_from:", currentPosition?.effective_from);
-  console.log("🏢 EnhancedUserProfile: Current office_location:", currentPosition?.office_location);
+  console.log(
+    "💰 EnhancedUserProfile: Current salary:",
+    currentPosition?.salary
+  );
+  console.log(
+    "🏢 EnhancedUserProfile: Current organization:",
+    currentPosition?.organization
+  );
+  console.log(
+    "📍 EnhancedUserProfile: Current location:",
+    currentPosition?.location
+  );
+  console.log(
+    "📅 EnhancedUserProfile: Current effective_from:",
+    currentPosition?.effective_from
+  );
+  console.log(
+    "🏢 EnhancedUserProfile: Current office_location:",
+    currentPosition?.office_location
+  );
 
   const tabs = [
     { id: "overview", label: "Overview", icon: "fas fa-user" },
@@ -307,8 +354,9 @@ const EnhancedUserProfile = () => {
                   {currentPosition && (
                     <span>
                       <i className="fas fa-briefcase mr-2"></i>
-                      {currentPosition.designation?.title || currentPosition.designation} at{" "}
-                      {currentPosition.organization}
+                      {currentPosition.designation?.title ||
+                        currentPosition.designation}{" "}
+                      at {currentPosition.organization}
                     </span>
                   )}
                 </div>
@@ -395,21 +443,24 @@ const EnhancedUserProfile = () => {
                     ? (() => {
                         const salary = currentPosition.salary;
                         let totalSalary = 0;
-                        
+
                         // Calculate total salary based on organization
-                        if (currentPosition.organization === 'MBWO') {
+                        if (currentPosition.organization === "MBWO") {
                           // MBWO uses gross_salary
                           totalSalary = salary.gross_salary || 0;
                         } else {
                           // Other organizations use sum of components
-                          totalSalary = (salary.basic_salary || 0) +
-                                      (salary.medical_allowance || 0) +
-                                      (salary.house_rent || 0) +
-                                      (salary.conveyance_allowance || 0) +
-                                      (salary.other_allowances || 0);
+                          totalSalary =
+                            (salary.basic_salary || 0) +
+                            (salary.medical_allowance || 0) +
+                            (salary.house_rent || 0) +
+                            (salary.conveyance_allowance || 0) +
+                            (salary.other_allowances || 0);
                         }
-                        
-                        return totalSalary > 0 ? `PKR ${totalSalary.toLocaleString()}` : "N/A";
+
+                        return totalSalary > 0
+                          ? `PKR ${totalSalary.toLocaleString()}`
+                          : "N/A";
                       })()
                     : "N/A"}
                 </p>
@@ -489,7 +540,8 @@ const EnhancedUserProfile = () => {
                           Designation
                         </p>
                         <p className="font-semibold text-gray-900">
-                          {currentPosition.designation?.title || currentPosition.designation}
+                          {currentPosition.designation?.title ||
+                            currentPosition.designation}
                         </p>
                       </div>
                       <div>
@@ -497,7 +549,8 @@ const EnhancedUserProfile = () => {
                           Department
                         </p>
                         <p className="font-semibold text-gray-900">
-                          {currentPosition.department?.name || currentPosition.department}
+                          {currentPosition.department?.name ||
+                            currentPosition.department}
                         </p>
                       </div>
                       <div>
@@ -592,7 +645,9 @@ const EnhancedUserProfile = () => {
                       <div className="flex justify-between">
                         <span className="text-gray-700 font-medium">City:</span>
                         <span className="font-semibold text-gray-900">
-                          {employee.cityRef?.name || formatCityName(employee.city) || "N/A"}
+                          {employee.cityRef?.name ||
+                            formatCityName(employee.city) ||
+                            "N/A"}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -600,7 +655,9 @@ const EnhancedUserProfile = () => {
                           District:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {employee.districtRef?.name || formatDistrictName(employee.district) || "N/A"}
+                          {employee.districtRef?.name ||
+                            formatDistrictName(employee.district) ||
+                            "N/A"}
                         </span>
                       </div>
                     </div>
@@ -621,7 +678,8 @@ const EnhancedUserProfile = () => {
                     {employee.employmentRecords
                       .sort(
                         (a, b) =>
-                          new Date(b.effective_from) - new Date(a.effective_from)
+                          new Date(b.effective_from) -
+                          new Date(a.effective_from)
                       )
                       .map((record) => (
                         <div
@@ -632,7 +690,8 @@ const EnhancedUserProfile = () => {
                             <div className="flex-1">
                               <div className="flex items-center space-x-3 mb-2">
                                 <h4 className="text-lg font-semibold text-gray-900">
-                                  {record.designation?.title || record.designation}
+                                  {record.designation?.title ||
+                                    record.designation}
                                 </h4>
                                 {record.effective_till === null && (
                                   <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
@@ -641,7 +700,8 @@ const EnhancedUserProfile = () => {
                                 )}
                               </div>
                               <p className="text-gray-700 mb-2 font-medium">
-                                {record.organization} • {record.department?.name || record.department}
+                                {record.organization} •{" "}
+                                {record.department?.name || record.department}
                               </p>
                               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                                 <div>
@@ -664,21 +724,26 @@ const EnhancedUserProfile = () => {
                                       ? (() => {
                                           const salary = record.salary;
                                           let totalSalary = 0;
-                                          
+
                                           // Calculate total salary based on organization
-                                          if (record.organization === 'MBWO') {
+                                          if (record.organization === "MBWO") {
                                             // MBWO uses gross_salary
-                                            totalSalary = salary.gross_salary || 0;
+                                            totalSalary =
+                                              salary.gross_salary || 0;
                                           } else {
                                             // Other organizations use sum of components
-                                            totalSalary = (salary.basic_salary || 0) +
-                                                        (salary.medical_allowance || 0) +
-                                                        (salary.house_rent || 0) +
-                                                        (salary.conveyance_allowance || 0) +
-                                                        (salary.other_allowances || 0);
+                                            totalSalary =
+                                              (salary.basic_salary || 0) +
+                                              (salary.medical_allowance || 0) +
+                                              (salary.house_rent || 0) +
+                                              (salary.conveyance_allowance ||
+                                                0) +
+                                              (salary.other_allowances || 0);
                                           }
-                                          
-                                          return totalSalary > 0 ? `PKR ${totalSalary.toLocaleString()}` : "N/A";
+
+                                          return totalSalary > 0
+                                            ? `PKR ${totalSalary.toLocaleString()}`
+                                            : "N/A";
                                         })()
                                       : "N/A"}
                                   </p>
@@ -696,7 +761,9 @@ const EnhancedUserProfile = () => {
                                     Scale/Grade:
                                   </span>
                                   <p className="font-semibold text-gray-900">
-                                    {record.scale_grade?.name || record.scale_grade_id || "N/A"}
+                                    {record.scale_grade?.name ||
+                                      record.scale_grade_id ||
+                                      "N/A"}
                                   </p>
                                 </div>
                                 <div>
@@ -704,7 +771,9 @@ const EnhancedUserProfile = () => {
                                     Role Tag:
                                   </span>
                                   <p className="font-semibold text-gray-900">
-                                    {record.role_tag?.name || record.role_tag_id || "N/A"}
+                                    {record.role_tag?.name ||
+                                      record.role_tag_id ||
+                                      "N/A"}
                                   </p>
                                 </div>
                                 <div>
@@ -776,7 +845,9 @@ const EnhancedUserProfile = () => {
                       </div>
                       <div className="flex justify-between py-2 border-b border-gray-100">
                         <span className="text-gray-700 font-medium">
-                          {employee.relationship_type === "father" ? "Father Name:" : "Husband Name:"}
+                          {employee.relationship_type === "father"
+                            ? "Father Name:"
+                            : "Husband Name:"}
                         </span>
                         <span className="font-semibold text-gray-900">
                           {employee.father_husband_name || "N/A"}
@@ -873,7 +944,13 @@ const EnhancedUserProfile = () => {
                         <span className="text-gray-700 font-medium">
                           Has Disability:
                         </span>
-                        <span className={`font-semibold ${employee.has_disability ? 'text-orange-600' : 'text-green-600'}`}>
+                        <span
+                          className={`font-semibold ${
+                            employee.has_disability
+                              ? "text-orange-600"
+                              : "text-green-600"
+                          }`}
+                        >
                           {employee.has_disability ? "Yes" : "No"}
                         </span>
                       </div>
@@ -889,7 +966,9 @@ const EnhancedUserProfile = () => {
                           </div>
                           {employee.disability_description && (
                             <div className="py-2">
-                              <span className="text-gray-700 font-medium">Description:</span>
+                              <span className="text-gray-700 font-medium">
+                                Description:
+                              </span>
                               <p className="font-medium text-gray-900 mt-1 p-3 bg-orange-50 rounded border border-orange-200">
                                 {employee.disability_description}
                               </p>
@@ -935,45 +1014,67 @@ const EnhancedUserProfile = () => {
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-semibold mb-4">Education Qualifications</h3>
-                    {employee.educationQualifications && employee.educationQualifications.length > 0 ? (
+                    <h3 className="text-lg font-semibold mb-4">
+                      Education Qualifications
+                    </h3>
+                    {employee.educationQualifications &&
+                    employee.educationQualifications.length > 0 ? (
                       <div className="space-y-4">
-                        {employee.educationQualifications.map((education, index) => (
-                          <div key={index} className="bg-green-50 p-4 rounded-lg border border-green-200">
-                            <div className="space-y-2">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600 text-sm">Education Level:</span>
-                                <span className="font-medium text-green-800">
-                                  {education.level?.name || education.education_level || "N/A"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600 text-sm">Institution:</span>
-                                <span className="font-medium">
-                                  {education.institution_name || "N/A"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600 text-sm">Start Date:</span>
-                                <span className="font-medium">
-                                  {education.start_date ? formatDate(education.start_date) : "N/A"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600 text-sm">Year:</span>
-                                <span className="font-medium">
-                                  {education.year_of_completion || "N/A"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600 text-sm">Marks/GPA:</span>
-                                <span className="font-medium">
-                                  {education.marks_gpa || "N/A"}
-                                </span>
+                        {employee.educationQualifications.map(
+                          (education, index) => (
+                            <div
+                              key={index}
+                              className="bg-green-50 p-4 rounded-lg border border-green-200"
+                            >
+                              <div className="space-y-2">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 text-sm">
+                                    Education Level:
+                                  </span>
+                                  <span className="font-medium text-green-800">
+                                    {education.level?.name ||
+                                      education.education_level ||
+                                      "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 text-sm">
+                                    Institution:
+                                  </span>
+                                  <span className="font-medium">
+                                    {education.institution_name || "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 text-sm">
+                                    Start Year:
+                                  </span>
+                                  <span className="font-medium">
+                                    {education.start_date || "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 text-sm">
+                                    Date of Completion:
+                                  </span>
+                                  <span className="font-medium">
+                                    {education.year_of_completion
+                                      ? formatDate(education.year_of_completion)
+                                      : "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 text-sm">
+                                    Marks/GPA:
+                                  </span>
+                                  <span className="font-medium">
+                                    {education.marks_gpa || "N/A"}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        )}
                       </div>
                     ) : (
                       <div className="py-4 text-center text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
@@ -983,14 +1084,20 @@ const EnhancedUserProfile = () => {
                     )}
 
                     {/* Legacy field fallback */}
-                    {(!employee.educationQualifications || employee.educationQualifications.length === 0) && employee.latest_qualification && (
-                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 text-sm">Latest Qualification (Legacy):</span>
-                          <span className="font-medium">{employee.latest_qualification}</span>
+                    {(!employee.educationQualifications ||
+                      employee.educationQualifications.length === 0) &&
+                      employee.latest_qualification && (
+                        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 text-sm">
+                              Latest Qualification (Legacy):
+                            </span>
+                            <span className="font-medium">
+                              {employee.latest_qualification}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {employee.mission_note && (
                       <div className="mt-4 py-2">
@@ -1037,13 +1144,17 @@ const EnhancedUserProfile = () => {
                     <div className="flex justify-between py-2 border-b border-gray-100">
                       <span className="text-gray-600">City:</span>
                       <span className="font-medium">
-                        {employee.cityRef?.name || formatCityName(employee.city) || "N/A"}
+                        {employee.cityRef?.name ||
+                          formatCityName(employee.city) ||
+                          "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-gray-100">
                       <span className="text-gray-600">District:</span>
                       <span className="font-medium">
-                        {employee.districtRef?.name || formatDistrictName(employee.district) || "N/A"}
+                        {employee.districtRef?.name ||
+                          formatDistrictName(employee.district) ||
+                          "N/A"}
                       </span>
                     </div>
                   </div>
@@ -1087,14 +1198,15 @@ const EnhancedUserProfile = () => {
                     Past Work Experience
                   </h3>
                   <div className="text-sm text-gray-600">
-                    {employee.pastExperiences && employee.pastExperiences.length > 0
+                    {employee.pastExperiences &&
+                    employee.pastExperiences.length > 0
                       ? `${employee.pastExperiences.length} experience(s)`
-                      : 'No experience recorded'
-                    }
+                      : "No experience recorded"}
                   </div>
                 </div>
 
-                {employee.pastExperiences && employee.pastExperiences.length > 0 ? (
+                {employee.pastExperiences &&
+                employee.pastExperiences.length > 0 ? (
                   <div className="space-y-6">
                     {employee.pastExperiences.map((experience, index) => (
                       <motion.div
@@ -1107,7 +1219,8 @@ const EnhancedUserProfile = () => {
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex-1">
                             <h4 className="text-lg font-semibold text-gray-900 mb-1">
-                              {experience.company_name || 'Company Name Not Provided'}
+                              {experience.company_name ||
+                                "Company Name Not Provided"}
                             </h4>
                             {experience.position && (
                               <p className="text-blue-700 font-medium mb-2">
@@ -1117,12 +1230,15 @@ const EnhancedUserProfile = () => {
                             <div className="flex items-center text-sm text-gray-600 space-x-4">
                               <span className="flex items-center">
                                 <i className="fas fa-calendar-alt mr-2"></i>
-                                {formatDate(experience.start_date) || 'Start date not provided'}
+                                {formatDate(experience.start_date) ||
+                                  "Start date not provided"}
                               </span>
                               <span>→</span>
                               <span className="flex items-center">
                                 <i className="fas fa-calendar-check mr-2"></i>
-                                {experience.end_date ? formatDate(experience.end_date) : 'Present'}
+                                {experience.end_date
+                                  ? formatDate(experience.end_date)
+                                  : "Present"}
                               </span>
                             </div>
                           </div>
@@ -1151,7 +1267,11 @@ const EnhancedUserProfile = () => {
                             <div className="flex items-center justify-between text-xs text-gray-600">
                               <span className="flex items-center">
                                 <i className="fas fa-clock mr-2"></i>
-                                Duration: {calculateExperienceDuration(experience.start_date, experience.end_date)}
+                                Duration:{" "}
+                                {calculateExperienceDuration(
+                                  experience.start_date,
+                                  experience.end_date
+                                )}
                               </span>
                               {!experience.end_date && (
                                 <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
@@ -1175,19 +1295,27 @@ const EnhancedUserProfile = () => {
                           <div className="text-2xl font-bold text-blue-600">
                             {employee.pastExperiences.length}
                           </div>
-                          <div className="text-sm text-gray-600">Total Positions</div>
+                          <div className="text-sm text-gray-600">
+                            Total Positions
+                          </div>
                         </div>
                         <div className="text-center">
                           <div className="text-2xl font-bold text-green-600">
-                            {calculateTotalExperienceYears(employee.pastExperiences)}
+                            {calculateTotalExperienceYears(
+                              employee.pastExperiences
+                            )}
                           </div>
-                          <div className="text-sm text-gray-600">Years of Experience</div>
+                          <div className="text-sm text-gray-600">
+                            Years of Experience
+                          </div>
                         </div>
                         <div className="text-center">
                           <div className="text-2xl font-bold text-purple-600">
                             {getUniqueCompaniesCount(employee.pastExperiences)}
                           </div>
-                          <div className="text-sm text-gray-600">Companies Worked</div>
+                          <div className="text-sm text-gray-600">
+                            Companies Worked
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1199,7 +1327,8 @@ const EnhancedUserProfile = () => {
                       No Past Experience Recorded
                     </h4>
                     <p className="text-gray-500 mb-6">
-                      This employee doesn't have any past work experience recorded yet.
+                      This employee doesn't have any past work experience
+                      recorded yet.
                     </p>
                     <button
                       onClick={() => navigate(`/employees/${employee.id}/edit`)}
@@ -1229,14 +1358,18 @@ const EnhancedUserProfile = () => {
                 {/* Organized Documents Grid */}
                 <OrganizedDocumentGrid
                   documents={employee.documents || []}
-                  profilePicture={employee.profile_picture_url ? 
-                    `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${employee.profile_picture_url}` : 
-                    employee.profile_picture ? 
-                    getImageUrl(employee.profile_picture) : null
+                  profilePicture={
+                    employee.profile_picture_url
+                      ? `${
+                          import.meta.env.VITE_API_URL?.replace("/api", "") ||
+                          "http://localhost:3000"
+                        }${employee.profile_picture_url}`
+                      : employee.profile_picture
+                      ? getImageUrl(employee.profile_picture)
+                      : null
                   }
                   className="mb-6"
                 />
-
               </motion.div>
             )}
           </div>

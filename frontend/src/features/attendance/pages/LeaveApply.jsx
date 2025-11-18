@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
-import SearchableSelect from "../../../components/ui/SearchableSelect";
 import { toastBus } from "../../../utils/toastBus";
 import { useAuthStore } from "../../auth/authStore";
 
@@ -10,11 +9,40 @@ const ApplyDialog = ({ employee, open, onClose }) => {
   const [leaves, setLeaves] = useState([]);
   const [types, setTypes] = useState([]);
   const [backupEmployees, setBackupEmployees] = useState([]);
-  const [approverOptions, setApproverOptions] = useState([]);
-  const [routeType, setRouteType] = useState("RECOMMEND");
-  const [routes, setRoutes] = useState([]); // { type: 'RECOMMEND'|'ALLOW', approver_user_id, display }
   const [selectedLeave, setSelectedLeave] = useState(null);
   const user = useAuthStore((s) => s.user);
+  // Helper function to format date consistently (dd/mm/yyyy, hh:mm:ss am/pm)
+  const formatStatusHistoryDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    // Ensure we're working with local time
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    const ampm = hours >= 12 ? "pm" : "am";
+    const displayHours = hours % 12 || 12;
+    return `${day}/${month}/${year}, ${String(displayHours).padStart(2, "0")}:${minutes}:${seconds} ${ampm}`;
+  };
+
+  // Helper function to extract timestamp from FORWARDED comments
+  const extractTimestampFromComment = (comment) => {
+    if (!comment) return null;
+    // Pattern: "... at dd/mm/yyyy, hh:mm:ss am/pm" or variations
+    // Match patterns like "at 31/10/2025, 03:18:37 pm" or "at 31/10/2025, 3:18:37 PM"
+    const match = comment.match(/at\s+(\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(?:am|pm|AM|PM))/i);
+    return match ? match[1] : null;
+  };
+
+  // Helper function to remove timestamp from comment
+  const removeTimestampFromComment = (comment) => {
+    if (!comment) return comment;
+    // Remove " at dd/mm/yyyy, hh:mm:ss am/pm" pattern (flexible for 1-2 digit day/month/hour)
+    return comment.replace(/\s+at\s+\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(?:am|pm|AM|PM)/i, "");
+  };
+
   const [form, setForm] = useState({
     date: "",
     type: "",
@@ -22,7 +50,6 @@ const ApplyDialog = ({ employee, open, onClose }) => {
     duty_from: "",
     duty_to: "",
     // New fields
-    submission_time: "",
     custom_type: "",
     backup_employee_id: "",
     backup_duty_from: "",
@@ -139,8 +166,6 @@ const ApplyDialog = ({ employee, open, onClose }) => {
         setLeaves(leavesRes.leaves || []);
         setTypes(typesRes.types || []);
         setBackupEmployees(backupRes.employees || []);
-        // Load initial approver users
-        loadApprovers();
       } catch {
       } finally {
         setLoading(false);
@@ -152,34 +177,6 @@ const ApplyDialog = ({ employee, open, onClose }) => {
     };
   }, [open, employee?.id]);
 
-  const loadApprovers = async () => {
-    try {
-      const { data } = await axios.get("/leaves/approver-users");
-      const meId = user?.id;
-      const meEmail = user?.email;
-      const options = (data.users || [])
-        .filter((u) => Number(u.id) !== Number(meId) && u.email !== meEmail)
-        .map((u) => ({ value: u.id, label: u.email, description: "" }));
-      setApproverOptions(options);
-    } catch (e) {}
-  };
-
-  const addRoute = (userId, userEmail) => {
-    const id = Number(userId);
-    if (!id) return;
-    const exists = routes.some(
-      (r) => r.approver_user_id === id && r.type === routeType
-    );
-    if (exists) return;
-    setRoutes((prev) => [
-      ...prev,
-      { type: routeType, approver_user_id: id, display: userEmail },
-    ]);
-  };
-
-  const removeRoute = (idx) => {
-    setRoutes((prev) => prev.filter((_, i) => i !== idx));
-  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -190,19 +187,12 @@ const ApplyDialog = ({ employee, open, onClose }) => {
       duty_from: form.duty_from || null,
       duty_to: form.duty_to || null,
       // New fields
-      submission_time: form.submission_time
-        ? fromLocalDateTime(form.submission_time)
-        : null,
       custom_type: form.custom_type || null,
       backup_employee_id: form.backup_employee_id || null,
       backup_duty_from: form.backup_duty_from || null,
       backup_duty_to: form.backup_duty_to || null,
       documents:
         form.documents.length > 0 ? form.documents.map((f) => f.path) : null,
-      routes: routes.map((r) => ({
-        type: r.type,
-        approver_user_id: r.approver_user_id,
-      })),
     };
     if (mode === "single") {
       if (!form.date) return;
@@ -225,7 +215,6 @@ const ApplyDialog = ({ employee, open, onClose }) => {
         remarks: "",
         duty_from: "",
         duty_to: "",
-        submission_time: "",
         custom_type: "",
         backup_employee_id: "",
         backup_duty_from: "",
@@ -235,7 +224,6 @@ const ApplyDialog = ({ employee, open, onClose }) => {
       setRange({ start: "", end: "" });
       setMultiDates([""]);
       setUploadedFiles([]);
-      setRoutes([]);
       const { data } = await axios.get(`/leaves/${employee.id}`);
       setLeaves(data.leaves || []);
       toastBus.emit({ type: "success", message: "Leave(s) applied" });
@@ -353,22 +341,6 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                     }
                   />
                 </div>
-                <div>
-                  <label className="form-label text-[11px] mb-1">
-                    Submission Time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    className="form-input"
-                    value={form.submission_time}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        submission_time: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
                 <div className="col-span-2">
                   <label className="form-label text-[11px] mb-1">
                     Backup Resource
@@ -390,71 +362,6 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {/* Manual Approval Routing */}
-                <div className="col-span-2">
-                  <div className="text-xs font-semibold text-gray-600 mb-2">
-                    Manual Routing (Recommendation / Allow)
-                  </div>
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div>
-                      <label className="form-label text-[11px] mb-1">
-                        Type
-                      </label>
-                      <select
-                        className="form-input !w-40"
-                        value={routeType}
-                        onChange={(e) => setRouteType(e.target.value)}
-                      >
-                        <option value="RECOMMEND">Recommendation by</option>
-                        <option value="ALLOW">Allow by</option>
-                      </select>
-                    </div>
-                    <div className="flex-1 min-w-[400px]">
-                      <label className="form-label text-[11px] mb-1">
-                        Select User
-                      </label>
-                      <SearchableSelect
-                        options={approverOptions}
-                        value=""
-                        onChange={(value, label) => {
-                          if (value) {
-                            addRoute(value, label);
-                          }
-                        }}
-                        placeholder="Search and select user..."
-                        allowClear={false}
-                        dropdownPriority="high"
-                      />
-                    </div>
-                  </div>
-                  {!!routes.length && (
-                    <div className="mt-3 space-y-2">
-                      {routes.map((r, idx) => (
-                        <div
-                          key={`${r.type}-${r.approver_user_id}-${idx}`}
-                          className="flex items-center justify-between bg-gray-50 p-2 rounded text-xs"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="badge badge-gray">
-                              {r.type === "RECOMMEND"
-                                ? "Recommendation"
-                                : "Allow"}
-                            </span>
-                            <span>{r.display}</span>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-error-soft text-[11px]"
-                            onClick={() => removeRoute(idx)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <div>
                   <label className="form-label text-[11px] mb-1">
@@ -924,56 +831,39 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                       Status History
                     </h3>
                     <div className="space-y-1">
-                      {selectedLeave.statusHistory.map((h, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="badge badge-gray">
-                              {h.action_type}
-                            </span>
-                            <span>{h.user?.email || "User"}</span>
+                      {selectedLeave.statusHistory.map((h, idx) => {
+                        const isForwarded = h.action_type === "FORWARDED";
+                        const commentTimestamp = isForwarded ? extractTimestampFromComment(h.comments) : null;
+                        const displayComment = isForwarded && h.comments ? removeTimestampFromComment(h.comments) : h.comments;
+                        const displayTimestamp = commentTimestamp || formatStatusHistoryDate(h.action_time);
+                        
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-start justify-between text-xs bg-gray-50 p-2 rounded gap-2"
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="badge badge-gray whitespace-nowrap">
+                                {isForwarded ? "Recommended" : h.action_type}
+                              </span>
+                              {displayComment ? (
+                                <span className="text-gray-600 break-words">
+                                  {displayComment}
+                                </span>
+                              ) : (
+                                <span className="whitespace-nowrap">{h.user?.email || "User"}</span>
+                              )}
+                            </div>
+                            <div className="text-gray-600 whitespace-nowrap text-right">
+                              {displayTimestamp}
+                            </div>
                           </div>
-                          <div className="text-gray-600">
-                            {new Date(h.action_time).toLocaleString()}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
-              {/* Approval Routing */}
-              {selectedLeave.routes && selectedLeave.routes.length > 0 && (
-                <div className="card-soft p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-gray-700">
-                    Approval Routing
-                  </h3>
-                  <div className="space-y-2">
-                    {selectedLeave.routes.map((rt, idx) => {
-                      const label =
-                        rt.type === "RECOMMEND" ? "Recommendation" : "Allow";
-                      const approver =
-                        rt.approver_user?.email ||
-                        `User #${rt.approver_user_id}`;
-                      return (
-                        <div
-                          key={`${rt.id || idx}-${rt.type}`}
-                          className="flex items-center gap-3 p-2 bg-gray-50 rounded"
-                        >
-                          <span className="badge badge-gray text-xs px-2 py-1">
-                            {label}
-                          </span>
-                          <span className="text-sm font-medium text-gray-800">
-                            {approver}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
               {/* Documents */}
               {selectedLeave.documents &&

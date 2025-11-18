@@ -6,6 +6,7 @@ import { useErrorHandler } from "../../../hooks/useErrorHandler";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import ErrorMessage from "../../../components/ui/ErrorMessage";
 import SearchableSelect from "../../../components/ui/SearchableSelect";
+import { useFormPersistence } from "../../../hooks/useFormPersistence";
 import {
   RELATIONSHIP_TYPES,
   RELIGION_OPTIONS,
@@ -14,7 +15,7 @@ import {
   PAKISTAN_DISTRICTS,
   // getCitiesForDistrict, // replaced by API
   DISABILITY_TYPES,
-  BLOOD_GROUP_OPTIONS
+  BLOOD_GROUP_OPTIONS,
 } from "../../../constants/employeeOptions";
 import {
   validateCNIC,
@@ -22,7 +23,7 @@ import {
   validateCNICExpiryDate,
   getTodayDateString,
   validateFileUpload,
-  validateMultipleFiles
+  validateMultipleFiles,
 } from "../../../utils/employeeValidation";
 import ProfilePicture from "../../../components/ui/ProfilePicture";
 import { getProfilePictureUrl, getImageUrl } from "../../../utils/imageUtils";
@@ -45,14 +46,15 @@ const EditUserForm = ({ user }) => {
 
   // State for dynamic sections and file uploads
   const [educations, setEducations] = useState(() =>
-    (user?.educationQualifications || []).map(eq => ({
+    (user?.educationQualifications || []).map((eq) => ({
       id: eq.id,
       education_level_id: eq.education_level_id || eq.level?.id || "",
       education_level: eq.level?.name || eq.education_level || "",
       institution_name: eq.institution_name || "",
-      year_of_completion: eq.year_of_completion || "",
+      year_of_completion:
+        formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
       marks_gpa: eq.marks_gpa || "",
-      start_date: formatDatabaseDateForInput(eq.start_date) || "",
+      start_date: eq.start_date || "", // Now String (year), use directly
     }))
   );
   const [experiences, setExperiences] = useState(user?.pastExperiences || []);
@@ -67,13 +69,18 @@ const EditUserForm = ({ user }) => {
 
   const [profilePicturePreview, setProfilePicturePreview] = useState(() => {
     if (user?.profile_picture_url) {
-      return `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${user.profile_picture_url}`;
+      return `${
+        import.meta.env.VITE_API_URL?.replace("/api", "") ||
+        "http://localhost:3000"
+      }${user.profile_picture_url}`;
     } else if (user?.profile_picture) {
       return getImageUrl(user.profile_picture);
     }
     return null;
   });
-  const [removeProfilePicture, setRemoveProfilePicture] = useState(!user?.profile_picture);
+  const [removeProfilePicture, setRemoveProfilePicture] = useState(
+    !user?.profile_picture
+  );
 
   // Initialize document manager with existing documents
   const documentManager = useDocumentManager(user?.documents || []);
@@ -85,10 +92,11 @@ const EditUserForm = ({ user }) => {
     domicile_certificate: user?.domicile_certificate || null,
     disability_document: user?.disability_document || null,
     medical_fitness_file: user?.medical_fitness_file || null,
-    police_character_certificate_file: user?.police_character_certificate_file || null,
+    police_character_certificate_file:
+      user?.police_character_certificate_file || null,
     education_documents: user?.education_documents || {},
     experience_documents: user?.experience_documents || {},
-    other_documents: user?.other_documents || []
+    other_documents: user?.other_documents || [],
   });
 
   const form = useForm({
@@ -99,7 +107,8 @@ const EditUserForm = ({ user }) => {
       mother_name: user?.mother_name || "",
       cnic: user?.cnic || "",
       cnic_issue_date: formatDatabaseDateForInput(user?.cnic_issue_date) || "",
-      cnic_expire_date: formatDatabaseDateForInput(user?.cnic_expire_date) || "",
+      cnic_expire_date:
+        formatDatabaseDateForInput(user?.cnic_expire_date) || "",
       date_of_birth: formatDatabaseDateForInput(user?.date_of_birth) || "",
       gender: user?.gender || "",
       marital_status: user?.marital_status || "",
@@ -122,19 +131,53 @@ const EditUserForm = ({ user }) => {
       missing_note: user?.missing_note || "",
       has_past_experience: user?.has_past_experience || false,
       past_experiences: user?.pastExperiences || [],
-      educations: (user?.educationQualifications || []).map(eq => ({
+      educations: (user?.educationQualifications || []).map((eq) => ({
         id: eq.id,
         education_level_id: eq.education_level_id || eq.level?.id || "",
         education_level: eq.level?.name || eq.education_level || "",
         institution_name: eq.institution_name || "",
-        year_of_completion: eq.year_of_completion || "",
+        year_of_completion:
+          formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
         marks_gpa: eq.marks_gpa || "",
-        start_date: formatDatabaseDateForInput(eq.start_date) || "",
+        start_date: eq.start_date || "", // Now String (year), use directly
       })),
     },
   });
 
-  const { register, handleSubmit, formState: { errors }, watch, setValue } = form;
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+  } = form;
+
+  // Form persistence hook
+  // Note: DocumentManager state is not persisted yet - it requires additional work
+  // Main form fields, experiences, educations, and profile picture are preserved
+  const { clearSavedData, isRestoring } = useFormPersistence({
+    storageKey: `editEmployeeForm_${user?.id || "new"}`,
+    formData: form,
+    additionalState: {
+      experiences,
+      educations,
+      uploadedFiles,
+      profilePicturePreview,
+      removeProfilePicture,
+      districtMap,
+      cityMap,
+      levelMap,
+      setExperiences,
+      setEducations,
+      setUploadedFiles,
+      setProfilePicturePreview,
+      setRemoveProfilePicture,
+      setDistrictMap,
+      setCityMap,
+      setLevelMap,
+    },
+    enabled: true,
+  });
 
   // Load master data
   useEffect(() => {
@@ -144,12 +187,22 @@ const EditUserForm = ({ user }) => {
           districtService.getAllDistricts(),
           educationLevelService.getAllLevels(),
         ]);
-        const dList = (districts?.districts || districts || []).map(d => ({ value: d.id, label: d.name }));
+        const dList = (districts?.districts || districts || []).map((d) => ({
+          value: d.id,
+          label: d.name,
+        }));
         setDistrictOptions(dList);
-        setDistrictMap(Object.fromEntries(dList.map(o => [String(o.value), o.label])));
-        const lList = (levels || []).map(l => ({ value: l.id, label: l.name }));
+        setDistrictMap(
+          Object.fromEntries(dList.map((o) => [String(o.value), o.label]))
+        );
+        const lList = (levels || []).map((l) => ({
+          value: l.id,
+          label: l.name,
+        }));
         setEducationLevelOptions(lList);
-        setLevelMap(Object.fromEntries(lList.map(o => [String(o.value), o.label])));
+        setLevelMap(
+          Object.fromEntries(lList.map((o) => [String(o.value), o.label]))
+        );
       } catch (e) {
         // ignore
       }
@@ -158,30 +211,102 @@ const EditUserForm = ({ user }) => {
 
   // Initialize and react to district_id to fetch cities
   const watchedDistrictId = watch("district_id");
+  const watchedCityId = watch("city_id");
   useEffect(() => {
+    // Skip city loading during form restoration to prevent clearing restored city
+    if (isRestoring && isRestoring()) {
+      return;
+    }
+
     (async () => {
       const dId = watchedDistrictId || user?.district_id;
       if (dId) {
         try {
           const cities = await cityService.getAllCities({ district_id: dId });
-          const cList = (cities?.cities || cities || []).map(c => ({ value: c.id, label: c.name }));
+          const cList = (cities?.cities || cities || []).map((c) => ({
+            value: c.id,
+            label: c.name,
+          }));
           setAvailableCities(cList);
-          setCityMap(Object.fromEntries(cList.map(o => [String(o.value), o.label])));
-          // If user's city_id is set initially, keep it; else ensure valid
-          const currentCityId = form.getValues("city_id");
-          if (currentCityId && !cList.some(c => String(c.value) === String(currentCityId))) {
-            setValue("city_id", "");
-          }
+
+          // CRITICAL: Use functional update to access current cityMap state
+          setCityMap((prev) => {
+            const newCityMap = Object.fromEntries(
+              cList.map((o) => [String(o.value), o.label])
+            );
+            const existingCityLabel = prev[String(watchedCityId)];
+
+            // If we have a restored label for this city, preserve it
+            if (watchedCityId && existingCityLabel) {
+              // Also add the city to availableCities if it's not already there
+              const cityInList = cList.find(
+                (c) => String(c.value) === String(watchedCityId)
+              );
+              if (!cityInList) {
+                // City not in API response but we have a label - add it to the list
+                setAvailableCities((prevCities) => {
+                  const alreadyExists = prevCities.some(
+                    (c) => String(c.value) === String(watchedCityId)
+                  );
+                  if (!alreadyExists) {
+                    return [
+                      ...prevCities,
+                      { value: watchedCityId, label: existingCityLabel },
+                    ];
+                  }
+                  return prevCities;
+                });
+              }
+              return {
+                ...newCityMap,
+                [String(watchedCityId)]: existingCityLabel,
+              };
+            }
+
+            return newCityMap;
+          });
+
+          // Only reset city_id if it's not in the list AND we don't have a label for it
+          setCityMap((prev) => {
+            const hasLabel = prev[String(watchedCityId)];
+            const isInList = cList.some(
+              (c) => String(c.value) === String(watchedCityId)
+            );
+
+            if (watchedCityId && !isInList && !hasLabel) {
+              setValue("city_id", "");
+            }
+            return prev;
+          });
         } catch (_) {
           setAvailableCities([]);
-          setValue("city_id", "");
+          setCityMap((prev) => {
+            const hasLabel = prev[String(watchedCityId)];
+            if (!hasLabel) {
+              setValue("city_id", "");
+            }
+            return prev;
+          });
         }
       } else {
         setAvailableCities([]);
-        setValue("city_id", "");
+        setCityMap((prev) => {
+          const hasLabel = prev[String(watchedCityId)];
+          if (!hasLabel) {
+            setValue("city_id", "");
+          }
+          return prev;
+        });
       }
     })();
-  }, [watchedDistrictId, user?.district_id, form, setValue]);
+  }, [
+    watchedDistrictId,
+    watchedCityId,
+    user?.district_id,
+    form,
+    setValue,
+    isRestoring,
+  ]);
 
   // Watch for disability checkbox to show/hide related fields
   const hasDisability = watch("has_disability");
@@ -197,8 +322,11 @@ const EditUserForm = ({ user }) => {
 
   // Helper functions for dynamic sections
   const addEducation = () => {
+    // Use a smaller temporary ID that won't exceed max integer (2147483647)
+    // Use negative numbers to distinguish from database IDs, which are positive
+    const tempId = -(Date.now() % 2147483647);
     const newEducation = {
-      id: Date.now(),
+      id: tempId,
       education_level_id: "",
       education_level: "",
       institution_name: "",
@@ -210,19 +338,28 @@ const EditUserForm = ({ user }) => {
   };
 
   const updateEducation = (id, field, value) => {
-    setEducations(educations.map(edu =>
-      edu.id === id ? { ...edu, [field]: value } : edu
-    ));
+    setEducations(
+      educations.map((edu) =>
+        edu.id === id ? { ...edu, [field]: value } : edu
+      )
+    );
   };
 
   const removeEducation = (id) => {
-    const education = educations.find(edu => edu.id === id);
-    const educationLabel = education?.education_level || 'this education entry';
-    if (window.confirm(`Are you sure you want to remove ${educationLabel}? This action cannot be undone.`)) {
-      setEducations(educations.filter(edu => edu.id !== id));
-      setUploadedFiles(prev => {
+    const education = educations.find((edu) => edu.id === id);
+    const educationLabel = education?.education_level || "this education entry";
+    if (
+      window.confirm(
+        `Are you sure you want to remove ${educationLabel}? This action cannot be undone.`
+      )
+    ) {
+      setEducations(educations.filter((edu) => edu.id !== id));
+      setUploadedFiles((prev) => {
         const updatedFiles = { ...prev };
-        if (updatedFiles.education_documents && updatedFiles.education_documents[id]) {
+        if (
+          updatedFiles.education_documents &&
+          updatedFiles.education_documents[id]
+        ) {
           const newEducationDocuments = { ...updatedFiles.education_documents };
           delete newEducationDocuments[id];
           updatedFiles.education_documents = newEducationDocuments;
@@ -233,26 +370,38 @@ const EditUserForm = ({ user }) => {
   };
 
   const addExperience = () => {
+    // Use a smaller temporary ID that won't exceed max integer (2147483647)
+    // Use negative numbers to distinguish from database IDs, which are positive
+    const tempId = -(Date.now() % 2147483647);
     const newExperience = {
-      id: Date.now().toString(),
+      id: tempId,
       company_name: "",
       position: "",
       start_date: "",
       end_date: "",
-      description: ""
+      description: "",
     };
     setExperiences([...experiences, newExperience]);
   };
 
   const removeExperience = (id) => {
-    const experience = experiences.find(exp => exp.id === id);
-    const experienceLabel = experience?.company_name || 'this work experience';
-    if (window.confirm(`Are you sure you want to remove the experience at ${experienceLabel}? This action cannot be undone.`)) {
-      setExperiences(experiences.filter(exp => exp.id !== id));
-      setUploadedFiles(prev => {
+    const experience = experiences.find((exp) => exp.id === id);
+    const experienceLabel = experience?.company_name || "this work experience";
+    if (
+      window.confirm(
+        `Are you sure you want to remove the experience at ${experienceLabel}? This action cannot be undone.`
+      )
+    ) {
+      setExperiences(experiences.filter((exp) => exp.id !== id));
+      setUploadedFiles((prev) => {
         const updatedFiles = { ...prev };
-        if (updatedFiles.experience_documents && updatedFiles.experience_documents[id]) {
-          const newExperienceDocuments = { ...updatedFiles.experience_documents };
+        if (
+          updatedFiles.experience_documents &&
+          updatedFiles.experience_documents[id]
+        ) {
+          const newExperienceDocuments = {
+            ...updatedFiles.experience_documents,
+          };
           delete newExperienceDocuments[id];
           updatedFiles.experience_documents = newExperienceDocuments;
         }
@@ -262,9 +411,11 @@ const EditUserForm = ({ user }) => {
   };
 
   const updateExperience = (id, field, value) => {
-    setExperiences(experiences.map(exp =>
-      exp.id === id ? { ...exp, [field]: value } : exp
-    ));
+    setExperiences(
+      experiences.map((exp) =>
+        exp.id === id ? { ...exp, [field]: value } : exp
+      )
+    );
   };
 
   const handleProfilePictureUpload = (event) => {
@@ -272,12 +423,12 @@ const EditUserForm = ({ user }) => {
     const file = event.target.files[0];
     console.log("Selected file:", file);
     if (file) {
-      const validation = validateFileUpload(file, 'profile_picture');
+      const validation = validateFileUpload(file, "profile_picture");
       console.log("File validation result:", validation);
       if (validation.isValid) {
         console.log("Setting profile_picture_file in form:", file);
         setValue("profile_picture_file", file);
-        setUploadedFiles(prev => ({ ...prev, profile_picture: file }));
+        setUploadedFiles((prev) => ({ ...prev, profile_picture: file }));
         setRemoveProfilePicture(false);
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -287,14 +438,14 @@ const EditUserForm = ({ user }) => {
         reader.readAsDataURL(file);
       } else {
         alert(validation.message);
-        event.target.value = '';
+        event.target.value = "";
       }
     } else {
       setProfilePicturePreview(null);
       setValue("profile_picture_file", null);
-      setUploadedFiles(prev => ({ ...prev, profile_picture: null }));
+      setUploadedFiles((prev) => ({ ...prev, profile_picture: null }));
       setRemoveProfilePicture(true);
-      event.target.value = '';
+      event.target.value = "";
     }
   };
 
@@ -302,41 +453,161 @@ const EditUserForm = ({ user }) => {
     console.log("Removing profile picture");
     setProfilePicturePreview(null);
     setValue("profile_picture_file", null);
-    setUploadedFiles(prev => ({ ...prev, profile_picture: null }));
+    setUploadedFiles((prev) => ({ ...prev, profile_picture: null }));
     setRemoveProfilePicture(true);
     const fileInput = document.getElementById("profile-picture-upload");
-    if (fileInput) fileInput.value = '';
+    if (fileInput) fileInput.value = "";
   };
 
   const handleFileUpload = (event, fileType, isMultiple = false) => {
-    const files = isMultiple ? Array.from(event.target.files) : [event.target.files[0]];
+    const files = isMultiple
+      ? Array.from(event.target.files)
+      : [event.target.files[0]];
     if (isMultiple) {
       const validation = validateMultipleFiles(files, fileType);
       if (validation.isValid) {
-        setUploadedFiles(prev => ({
+        setUploadedFiles((prev) => ({
           ...prev,
-          [fileType]: files
+          [fileType]: files,
         }));
         setValue(`${fileType}_files`, files);
       } else {
         alert(validation.message);
-        event.target.value = '';
+        event.target.value = "";
       }
     } else {
       const file = files[0];
       if (file) {
         const validation = validateFileUpload(file, fileType);
         if (validation.isValid) {
-          setUploadedFiles(prev => ({
+          setUploadedFiles((prev) => ({
             ...prev,
-            [fileType]: file
+            [fileType]: file,
           }));
           setValue(`${fileType}_file`, file);
         } else {
           alert(validation.message);
-          event.target.value = '';
+          event.target.value = "";
         }
       }
+    }
+  };
+
+  // Reset form handler
+  const handleResetForm = () => {
+    if (
+      window.confirm(
+        "Are you sure you want to reset the form? All unsaved changes will be lost and the form will be restored to the original employee data."
+      )
+    ) {
+      // Clear saved form data
+      clearSavedData();
+
+      // Reset form to original user data
+      form.reset({
+        full_name: user?.full_name || "",
+        father_husband_name: user?.father_husband_name || "",
+        relationship_type: user?.relationship_type || "father",
+        mother_name: user?.mother_name || "",
+        cnic: user?.cnic || "",
+        cnic_issue_date:
+          formatDatabaseDateForInput(user?.cnic_issue_date) || "",
+        cnic_expire_date:
+          formatDatabaseDateForInput(user?.cnic_expire_date) || "",
+        date_of_birth: formatDatabaseDateForInput(user?.date_of_birth) || "",
+        gender: user?.gender || "",
+        marital_status: user?.marital_status || "",
+        nationality: user?.nationality || "Pakistani",
+        religion: user?.religion || "",
+        blood_group: user?.blood_group || "",
+        domicile_district: user?.domicile_district || "",
+        mobile_number: user?.mobile_number || "",
+        whatsapp_number: user?.whatsapp_number || "",
+        email: user?.email || "",
+        present_address: user?.present_address || "",
+        permanent_address: user?.permanent_address || "",
+        same_address: user?.same_address || false,
+        district_id: user?.district_id || "",
+        city_id: user?.city_id || "",
+        has_disability: user?.has_disability || false,
+        disability_type: user?.disability_type || "",
+        disability_description: user?.disability_description || "",
+        missing_note: user?.missing_note || "",
+        has_past_experience: user?.has_past_experience || false,
+        past_experiences: user?.pastExperiences || [],
+        educations: (user?.educationQualifications || []).map((eq) => ({
+          id: eq.id,
+          education_level_id: eq.education_level_id || eq.level?.id || "",
+          education_level: eq.level?.name || eq.education_level || "",
+          institution_name: eq.institution_name || "",
+          year_of_completion:
+            formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
+          marks_gpa: eq.marks_gpa || "",
+          start_date: eq.start_date || "", // Now String (year), use directly
+        })),
+      });
+
+      // Reset all state to original values
+      setExperiences(user?.pastExperiences || []);
+      setEducations(
+        (user?.educationQualifications || []).map((eq) => ({
+          id: eq.id,
+          education_level_id: eq.education_level_id || eq.level?.id || "",
+          education_level: eq.level?.name || eq.education_level || "",
+          institution_name: eq.institution_name || "",
+          year_of_completion:
+            formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
+          marks_gpa: eq.marks_gpa || "",
+          start_date: eq.start_date || "", // Now String (year), use directly
+        }))
+      );
+
+      // Reset profile picture
+      if (user?.profile_picture_url) {
+        setProfilePicturePreview(
+          `${
+            import.meta.env.VITE_API_URL?.replace("/api", "") ||
+            "http://localhost:3000"
+          }${user.profile_picture_url}`
+        );
+      } else if (user?.profile_picture) {
+        setProfilePicturePreview(getImageUrl(user.profile_picture));
+      } else {
+        setProfilePicturePreview(null);
+      }
+      setRemoveProfilePicture(!user?.profile_picture);
+
+      // Reset uploaded files
+      setUploadedFiles({
+        profile_picture: user?.profile_picture || null,
+        cnic_front: user?.cnic_front || null,
+        cnic_back: user?.cnic_back || null,
+        domicile_certificate: user?.domicile_certificate || null,
+        disability_document: user?.disability_document || null,
+        medical_fitness_file: user?.medical_fitness_file || null,
+        police_character_certificate_file:
+          user?.police_character_certificate_file || null,
+        education_documents: user?.education_documents || {},
+        experience_documents: user?.experience_documents || {},
+        other_documents: user?.other_documents || [],
+      });
+
+      // Reset document manager
+      documentManager.reset(user?.documents || []);
+
+      // Reload cities if district is set
+      if (user?.district_id) {
+        // Trigger city loading by setting district_id
+        setTimeout(() => {
+          setValue("district_id", user.district_id);
+        }, 100);
+      }
+
+      // Clear file inputs
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      fileInputs.forEach((input) => {
+        input.value = "";
+      });
     }
   };
 
@@ -346,25 +617,179 @@ const EditUserForm = ({ user }) => {
       const filesData = documentManager.getFormData();
       const documentsToRemove = documentManager.getDocumentsToRemove();
 
+      // Ensure educations and experiences are properly formatted
+      // Remove any undefined/null values and ensure required fields are present
+      // IMPORTANT: Convert IDs to numbers for existing records, null for new records
+      const formattedEducations = (Array.isArray(educations) ? educations : [])
+        .map((edu) => {
+          // Preserve ID as-is for mapping (can be negative for temp IDs or positive for DB IDs)
+          let eduId = edu.id;
+          if (edu.id !== null && edu.id !== undefined) {
+            const parsedId =
+              typeof edu.id === "string" ? parseInt(edu.id, 10) : edu.id;
+            if (!isNaN(parsedId)) {
+              // Preserve negative IDs (temp IDs) and positive IDs (DB IDs)
+              eduId = parsedId;
+            } else {
+              eduId = null;
+            }
+          }
+
+          // Ensure education_level label is set if we have education_level_id but no label
+          let educationLevelLabel = edu.education_level || "";
+          if (!educationLevelLabel && edu.education_level_id) {
+            const levelIdStr = String(edu.education_level_id);
+            educationLevelLabel = levelMap[levelIdStr] || "";
+          }
+
+          return {
+            id: eduId, // Preserve temp IDs (negative) and DB IDs (positive)
+            education_level: educationLevelLabel, // REQUIRED: String field for education level
+            education_level_id: edu.education_level_id
+              ? typeof edu.education_level_id === "string"
+                ? parseInt(edu.education_level_id, 10)
+                : edu.education_level_id
+              : null,
+            institution_name: edu.institution_name || "",
+            year_of_completion: edu.year_of_completion || null,
+            marks_gpa: edu.marks_gpa || null,
+            start_date: edu.start_date || null,
+          };
+        })
+        .filter((edu) => {
+          // CRITICAL FIX: Always include existing educations (positive IDs) - they need to be updated/deleted
+          // Only filter out new educations (negative IDs or null) that are completely empty
+          const isExistingEducation =
+            edu.id !== null &&
+            edu.id !== undefined &&
+            typeof edu.id === "number" &&
+            edu.id > 0;
+
+          if (isExistingEducation) {
+            // Always include existing educations - they need to be processed (updated or deleted)
+            return true;
+          }
+
+          // For new educations, check if they have any data or associated documents
+          const hasDoc = Object.keys(filesData).some(
+            (key) =>
+              key.startsWith("education_documents_") &&
+              key.includes(String(edu.id))
+          );
+          // Only filter out completely empty new entries without documents
+          // Require at least institution_name OR education_level_id/education_level
+          return (
+            hasDoc ||
+            edu.institution_name ||
+            edu.education_level_id ||
+            edu.education_level
+          );
+        });
+
+      const formattedExperiences = (
+        Array.isArray(experiences) ? experiences : []
+      )
+        .map((exp) => {
+          // Preserve ID as-is for mapping (can be negative for temp IDs or positive for DB IDs)
+          let expId = exp.id;
+          if (exp.id !== null && exp.id !== undefined) {
+            const parsedId =
+              typeof exp.id === "string" ? parseInt(exp.id, 10) : exp.id;
+            if (!isNaN(parsedId)) {
+              // Preserve negative IDs (temp IDs) and positive IDs (DB IDs)
+              expId = parsedId;
+            } else {
+              expId = null;
+            }
+          }
+
+          return {
+            id: expId, // Preserve temp IDs (negative) and DB IDs (positive)
+            company_name: exp.company_name || "",
+            position: exp.position || null,
+            start_date: exp.start_date || null,
+            end_date: exp.end_date || null,
+            description: exp.description || null,
+          };
+        })
+        .filter((exp) => {
+          // Don't filter out entries that have associated documents, even if incomplete
+          const hasDoc = Object.keys(filesData).some(
+            (key) =>
+              key.startsWith("experience_documents_") &&
+              key.includes(String(exp.id))
+          );
+          // Only filter out completely empty entries without documents
+          return hasDoc || exp.company_name || exp.start_date;
+        });
+
       const completeData = {
         ...data,
-        educations: educations,
-        past_experiences: experiences,
+        // Ensure arrays are always included, even if empty, and properly formatted
+        educations: formattedEducations,
+        past_experiences: formattedExperiences,
         // include files from document manager and removal list
         ...filesData,
-        documents_to_remove: documentsToRemove,
+        documents_to_remove: Array.isArray(documentsToRemove)
+          ? documentsToRemove
+          : [],
       };
 
       // Preserve existing profile picture logic
-      completeData.profile_picture = removeProfilePicture ? null : (data.profile_picture_file || user?.profile_picture);
+      completeData.profile_picture = removeProfilePicture
+        ? null
+        : data.profile_picture_file || user?.profile_picture;
 
-      await withErrorHandling(
-        () => updateEmployee(user.id, completeData),
-        {
-          showAlert: true,
-          customMessage: "User information updated successfully!",
-        }
+      // Debug logging
+      console.log("📝 EditUserForm: Submitting update with data:", {
+        educationsCount: formattedEducations.length,
+        experiencesCount: formattedExperiences.length,
+        documentsToUpload: Object.keys(filesData).length,
+        documentsToRemove: documentsToRemove.length,
+        educationIds: formattedEducations.map((e) => e.id),
+        experienceIds: formattedExperiences.map((e) => e.id),
+        documentFields: Object.keys(filesData),
+        educations: formattedEducations,
+        experiences: formattedExperiences,
+      });
+
+      // Additional logging for educations
+      console.log(
+        "📚 Formatted Educations Details:",
+        formattedEducations.map((edu, idx) => ({
+          index: idx + 1,
+          id: edu.id,
+          education_level: edu.education_level,
+          education_level_id: edu.education_level_id,
+          institution_name: edu.institution_name,
+          year_of_completion: edu.year_of_completion,
+          hasRequiredFields: !!(edu.education_level && edu.institution_name),
+          rawEducation: educations[idx],
+        }))
       );
+
+      // Verify educations are included in completeData
+      console.log("✅ Complete Data Check:", {
+        hasEducations: "educations" in completeData,
+        educationsType: typeof completeData.educations,
+        isArray: Array.isArray(completeData.educations),
+        educationsLength: Array.isArray(completeData.educations)
+          ? completeData.educations.length
+          : 0,
+        educationsKeys:
+          Array.isArray(completeData.educations) &&
+          completeData.educations.length > 0
+            ? Object.keys(completeData.educations[0])
+            : [],
+      });
+
+      await withErrorHandling(() => updateEmployee(user.id, completeData), {
+        showAlert: true,
+        customMessage: "User information updated successfully!",
+      });
+
+      // Clear saved form data on successful submission
+      clearSavedData();
 
       // Optionally refresh user data
       try {
@@ -374,6 +799,7 @@ const EditUserForm = ({ user }) => {
       navigate(`/employees/view/${user.id}`);
     } catch (error) {
       console.error("Error in handleUpdate:", error);
+      // Note: Form data is preserved automatically by the persistence hook
     }
   };
 
@@ -382,41 +808,71 @@ const EditUserForm = ({ user }) => {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--color-background-secondary)" }}>
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: "var(--color-background-secondary)" }}
+    >
       <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate(`/employees/view/${user.id}`)}
+                className="p-2 rounded-lg transition-colors"
+                style={{
+                  color: "var(--color-text-secondary)",
+                  backgroundColor: "var(--color-background-primary)",
+                }}
+              >
+                <i className="fas fa-arrow-left"></i>
+              </button>
+              <div>
+                <h1
+                  className="text-3xl font-bold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  Edit Employee Information
+                </h1>
+                <p
+                  className="text-lg"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Update employee details and information
+                </p>
+              </div>
+            </div>
             <button
-              onClick={() => navigate(`/employees/view/${user.id}`)}
-              className="p-2 rounded-lg transition-colors"
+              onClick={handleResetForm}
+              className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               style={{
                 color: "var(--color-text-secondary)",
                 backgroundColor: "var(--color-background-primary)",
               }}
+              title="Reset Form"
             >
-              <i className="fas fa-arrow-left"></i>
+              <i className="fas fa-redo"></i>
+              <span className="hidden sm:inline">Reset Form</span>
             </button>
-            <div>
-              <h1 className="text-3xl font-bold" style={{ color: "var(--color-text-primary)" }}>
-                Edit Employee Information
-              </h1>
-              <p className="text-lg" style={{ color: "var(--color-text-secondary)" }}>
-                Update employee details and information
-              </p>
-            </div>
           </div>
         </div>
 
         {error && (
           <div className="mb-6">
-            <ErrorMessage error={error} onRetry={clearError} showHomeLink={false} />
+            <ErrorMessage
+              error={error}
+              onRetry={clearError}
+              showHomeLink={false}
+            />
           </div>
         )}
 
         <form onSubmit={handleSubmit(handleUpdate)}>
           <div className="card">
             <div className="card-header">
-              <h3 className="text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              <h3
+                className="text-xl font-semibold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 <i className="fas fa-user mr-2"></i>
                 Basic Employee Information
               </h3>
@@ -439,12 +895,18 @@ const EditUserForm = ({ user }) => {
                         alt="Profile Preview"
                         className="w-24 h-24 rounded-full object-cover border-2 border-gray-300"
                         onError={(e) => {
-                          console.error("Profile picture failed to load:", profilePicturePreview);
+                          console.error(
+                            "Profile picture failed to load:",
+                            profilePicturePreview
+                          );
                           setProfilePicturePreview(null);
                           setRemoveProfilePicture(true);
                         }}
                         onLoad={() => {
-                          console.log("Profile picture loaded successfully:", profilePicturePreview);
+                          console.log(
+                            "Profile picture loaded successfully:",
+                            profilePicturePreview
+                          );
                         }}
                       />
                       <button
@@ -463,7 +925,9 @@ const EditUserForm = ({ user }) => {
                         className="w-24 h-24 border-2 border-gray-300"
                         showFallback={true}
                         onError={() => {
-                          console.error("Existing profile picture failed to load");
+                          console.error(
+                            "Existing profile picture failed to load"
+                          );
                           setProfilePicturePreview(null);
                           setRemoveProfilePicture(true);
                         }}
@@ -497,7 +961,8 @@ const EditUserForm = ({ user }) => {
                         <i className="fas fa-upload mr-2"></i>
                         Choose Photo
                       </label>
-                      {(profilePicturePreview || (user?.profile_picture && !removeProfilePicture)) && (
+                      {(profilePicturePreview ||
+                        (user?.profile_picture && !removeProfilePicture)) && (
                         <button
                           type="button"
                           onClick={handleRemoveProfilePicture}
@@ -520,7 +985,9 @@ const EditUserForm = ({ user }) => {
                   <label className="form-label required">Full Name</label>
                   <input
                     type="text"
-                    {...register("full_name", { required: "Full name is required" })}
+                    {...register("full_name", {
+                      required: "Full name is required",
+                    })}
                     className="form-input w-full"
                     placeholder="Enter full name"
                   />
@@ -536,7 +1003,9 @@ const EditUserForm = ({ user }) => {
                       <SearchableSelect
                         options={RELATIONSHIP_TYPES}
                         value={watch("relationship_type")}
-                        onChange={(value) => setValue("relationship_type", value)}
+                        onChange={(value) =>
+                          setValue("relationship_type", value)
+                        }
                         placeholder="Select Relationship Type"
                         register={register}
                         name="relationship_type"
@@ -545,17 +1014,25 @@ const EditUserForm = ({ user }) => {
                       />
                     </div>
                     <div className="md:col-span-3">
-                      <label className="form-label required">Father/Husband Name</label>
+                      <label className="form-label required">
+                        Father/Husband Name
+                      </label>
                       <input
                         type="text"
                         {...register("father_husband_name", {
-                          required: "Father/Husband name is required"
+                          required: "Father/Husband name is required",
                         })}
                         className="form-input w-full"
-                        placeholder={`Enter ${form.watch("relationship_type") === "father" ? "father" : "husband"} name`}
+                        placeholder={`Enter ${
+                          form.watch("relationship_type") === "father"
+                            ? "father"
+                            : "husband"
+                        } name`}
                       />
                       {errors.father_husband_name && (
-                        <p className="error-message">{errors.father_husband_name.message}</p>
+                        <p className="error-message">
+                          {errors.father_husband_name.message}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -594,7 +1071,9 @@ const EditUserForm = ({ user }) => {
                 </div>
 
                 <div>
-                  <label className="form-label required">CNIC Expiry Date</label>
+                  <label className="form-label required">
+                    CNIC Expiry Date
+                  </label>
                   <input
                     type="date"
                     min={getTodayDateString()}
@@ -606,14 +1085,21 @@ const EditUserForm = ({ user }) => {
                           return expiryValidation.message;
                         }
                         const issueDate = form.getValues("cnic_issue_date");
-                        const datesValidation = validateCNICDates(issueDate, value);
-                        return datesValidation.isValid || datesValidation.message;
-                      }
+                        const datesValidation = validateCNICDates(
+                          issueDate,
+                          value
+                        );
+                        return (
+                          datesValidation.isValid || datesValidation.message
+                        );
+                      },
                     })}
                     className="form-input w-full"
                   />
                   {errors.cnic_expire_date && (
-                    <p className="error-message">{errors.cnic_expire_date.message}</p>
+                    <p className="error-message">
+                      {errors.cnic_expire_date.message}
+                    </p>
                   )}
                   <p className="text-sm text-gray-500 mt-1">
                     Select today's date or a future date
@@ -635,7 +1121,7 @@ const EditUserForm = ({ user }) => {
                     options={[
                       { value: "Male", label: "Male" },
                       { value: "Female", label: "Female" },
-                      { value: "Other", label: "Other" }
+                      { value: "Other", label: "Other" },
                     ]}
                     value={watch("gender")}
                     onChange={(value) => setValue("gender", value)}
@@ -730,11 +1216,15 @@ const EditUserForm = ({ user }) => {
                   {hasDisability && (
                     <div className="ml-6 space-y-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
                       <div>
-                        <label className="form-label required">Disability Type</label>
+                        <label className="form-label required">
+                          Disability Type
+                        </label>
                         <SearchableSelect
                           options={DISABILITY_TYPES}
                           value={watch("disability_type")}
-                          onChange={(value) => setValue("disability_type", value)}
+                          onChange={(value) =>
+                            setValue("disability_type", value)
+                          }
                           placeholder="Select disability type"
                           register={register}
                           name="disability_type"
@@ -742,11 +1232,15 @@ const EditUserForm = ({ user }) => {
                           error={errors.disability_type?.message}
                         />
                         {errors.disability_type && (
-                          <p className="error-message">{errors.disability_type.message}</p>
+                          <p className="error-message">
+                            {errors.disability_type.message}
+                          </p>
                         )}
                       </div>
                       <div>
-                        <label className="form-label">Disability Description</label>
+                        <label className="form-label">
+                          Disability Description
+                        </label>
                         <textarea
                           {...register("disability_description")}
                           className="form-input w-full"
@@ -761,7 +1255,10 @@ const EditUserForm = ({ user }) => {
 
               <div className="card">
                 <div className="card-header">
-                  <h3 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                  <h3
+                    className="text-xl font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
                     <i className="fas fa-phone mr-2"></i>
                     Contact Information
                   </h3>
@@ -775,14 +1272,16 @@ const EditUserForm = ({ user }) => {
                         {...register("mobile_number", {
                           pattern: {
                             value: /^(\+92|0)?[0-9]{10}$/,
-                            message: "Invalid mobile number format"
-                          }
+                            message: "Invalid mobile number format",
+                          },
                         })}
                         className="form-input w-full"
                         placeholder="+92-300-1234567"
                       />
                       {errors.mobile_number && (
-                        <p className="error-message">{errors.mobile_number.message}</p>
+                        <p className="error-message">
+                          {errors.mobile_number.message}
+                        </p>
                       )}
                     </div>
                     <div>
@@ -801,8 +1300,8 @@ const EditUserForm = ({ user }) => {
                         {...register("email", {
                           pattern: {
                             value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                            message: "Invalid email format"
-                          }
+                            message: "Invalid email format",
+                          },
                         })}
                         className="form-input w-full"
                         placeholder="user@example.com"
@@ -829,6 +1328,7 @@ const EditUserForm = ({ user }) => {
                       <SearchableSelect
                         options={availableCities}
                         value={watch("city_id")}
+                        valueLabel={cityMap[String(watch("city_id"))] || ""}
                         onChange={(value) => setValue("city_id", value)}
                         placeholder="Select City"
                         register={register}
@@ -838,7 +1338,9 @@ const EditUserForm = ({ user }) => {
                         disabled={!watch("district_id")}
                       />
                       {!watch("district_id") && (
-                        <p className="text-gray-500 text-sm mt-1">Please select a district first</p>
+                        <p className="text-gray-500 text-sm mt-1">
+                          Please select a district first
+                        </p>
                       )}
                     </div>
                     <div>
@@ -893,7 +1395,8 @@ const EditUserForm = ({ user }) => {
                       />
                       {sameAddress && (
                         <p className="text-sm text-gray-500 mt-1">
-                          This field is automatically filled from present address
+                          This field is automatically filled from present
+                          address
                         </p>
                       )}
                     </div>
@@ -903,7 +1406,10 @@ const EditUserForm = ({ user }) => {
 
               <div className="card">
                 <div className="card-header">
-                  <h3 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                  <h3
+                    className="text-xl font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
                     <i className="fas fa-graduation-cap mr-2"></i>
                     Education & Experience
                   </h3>
@@ -928,7 +1434,9 @@ const EditUserForm = ({ user }) => {
                       {educations.length === 0 ? (
                         <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                           <i className="fas fa-graduation-cap text-4xl text-gray-400 mb-4"></i>
-                          <p className="text-gray-600 mb-4">No education qualifications added yet</p>
+                          <p className="text-gray-600 mb-4">
+                            No education qualifications added yet
+                          </p>
                           <button
                             type="button"
                             onClick={addEducation}
@@ -941,7 +1449,10 @@ const EditUserForm = ({ user }) => {
                       ) : (
                         <div className="space-y-6">
                           {educations.map((education, index) => (
-                            <div key={education.id} className="bg-green-50 p-6 rounded-lg border border-green-200">
+                            <div
+                              key={education.id}
+                              className="bg-green-50 p-6 rounded-lg border border-green-200"
+                            >
                               <div className="flex items-center justify-between mb-4">
                                 <h4 className="text-md font-semibold text-gray-800">
                                   Education #{index + 1}
@@ -960,17 +1471,30 @@ const EditUserForm = ({ user }) => {
                                 {/* Education Level */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Education Level <span className="text-red-500">*</span>
+                                    Education Level{" "}
+                                    <span className="text-red-500">*</span>
                                   </label>
                                   <SearchableSelect
                                     options={educationLevelOptions}
                                     value={education.education_level_id}
                                     valueLabel={education.education_level}
                                     onChange={(value, label) => {
-                                      updateEducation(education.id, 'education_level_id', value);
-                                      updateEducation(education.id, 'education_level', label || levelMap[String(value)] || '');
+                                      updateEducation(
+                                        education.id,
+                                        "education_level_id",
+                                        value
+                                      );
+                                      updateEducation(
+                                        education.id,
+                                        "education_level",
+                                        label || levelMap[String(value)] || ""
+                                      );
                                     }}
-                                    placeholder={educationLevelOptions.length ? "Select Education Level" : "No levels available"}
+                                    placeholder={
+                                      educationLevelOptions.length
+                                        ? "Select Education Level"
+                                        : "No levels available"
+                                    }
                                     register={() => ({})}
                                     name={`education_level_${education.id}`}
                                     required={true}
@@ -983,30 +1507,41 @@ const EditUserForm = ({ user }) => {
                                 {/* Institution Name */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Institution Name <span className="text-red-500">*</span>
+                                    Institution Name{" "}
+                                    <span className="text-red-500">*</span>
                                   </label>
                                   <input
                                     type="text"
                                     value={education.institution_name}
-                                    onChange={(e) => updateEducation(education.id, 'institution_name', e.target.value)}
+                                    onChange={(e) =>
+                                      updateEducation(
+                                        education.id,
+                                        "institution_name",
+                                        e.target.value
+                                      )
+                                    }
                                     className="form-input w-full"
                                     placeholder="Enter institution name"
                                   />
                                 </div>
 
-                                {/* Year of Completion */}
+                                {/* Date of Completion */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Year of Completion <span className="text-red-500">*</span>
+                                    Date of Completion{" "}
+                                    <span className="text-red-500">*</span>
                                   </label>
                                   <input
-                                    type="number"
-                                    min="1950"
-                                    max={new Date().getFullYear()}
-                                    value={education.year_of_completion}
-                                    onChange={(e) => updateEducation(education.id, 'year_of_completion', e.target.value)}
+                                    type="date"
+                                    value={education.year_of_completion || ""}
+                                    onChange={(e) =>
+                                      updateEducation(
+                                        education.id,
+                                        "year_of_completion",
+                                        e.target.value
+                                      )
+                                    }
                                     className="form-input w-full"
-                                    placeholder="e.g., 2020"
                                   />
                                 </div>
 
@@ -1018,22 +1553,37 @@ const EditUserForm = ({ user }) => {
                                   <input
                                     type="text"
                                     value={education.marks_gpa}
-                                    onChange={(e) => updateEducation(education.id, 'marks_gpa', e.target.value)}
+                                    onChange={(e) =>
+                                      updateEducation(
+                                        education.id,
+                                        "marks_gpa",
+                                        e.target.value
+                                      )
+                                    }
                                     className="form-input w-full"
                                     placeholder="e.g., 3.5 GPA or 85%"
                                   />
                                 </div>
 
-                                {/* Start Date */}
+                                {/* Start Year */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Start Date
+                                    Start Year
                                   </label>
                                   <input
-                                    type="date"
-                                    value={education.start_date || ''}
-                                    onChange={(e) => updateEducation(education.id, 'start_date', e.target.value)}
+                                    type="number"
+                                    min="1950"
+                                    max={new Date().getFullYear()}
+                                    value={education.start_date || ""}
+                                    onChange={(e) =>
+                                      updateEducation(
+                                        education.id,
+                                        "start_date",
+                                        e.target.value
+                                      )
+                                    }
                                     className="form-input w-full"
+                                    placeholder="e.g., 2016"
                                   />
                                 </div>
                               </div>
@@ -1057,7 +1607,10 @@ const EditUserForm = ({ user }) => {
 
               <div className="card">
                 <div className="card-header">
-                  <h3 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                  <h3
+                    className="text-xl font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
                     <i className="fas fa-briefcase mr-2"></i>
                     Work Experience
                   </h3>
@@ -1082,7 +1635,9 @@ const EditUserForm = ({ user }) => {
                       {experiences.length === 0 ? (
                         <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                           <i className="fas fa-briefcase text-4xl text-gray-400 mb-4"></i>
-                          <p className="text-gray-600 mb-4">No past experience added yet</p>
+                          <p className="text-gray-600 mb-4">
+                            No past experience added yet
+                          </p>
                           <button
                             type="button"
                             onClick={addExperience}
@@ -1095,14 +1650,19 @@ const EditUserForm = ({ user }) => {
                       ) : (
                         <div className="space-y-6">
                           {experiences.map((experience, index) => (
-                            <div key={experience.id} className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                            <div
+                              key={experience.id}
+                              className="bg-gray-50 p-6 rounded-lg border border-gray-200"
+                            >
                               <div className="flex items-center justify-between mb-4">
                                 <h4 className="text-md font-semibold text-gray-800">
                                   Experience #{index + 1}
                                 </h4>
                                 <button
                                   type="button"
-                                  onClick={() => removeExperience(experience.id)}
+                                  onClick={() =>
+                                    removeExperience(experience.id)
+                                  }
                                   className="px-3 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors border border-red-200 text-sm"
                                   title="Remove Experience"
                                 >
@@ -1113,24 +1673,38 @@ const EditUserForm = ({ user }) => {
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Company Name <span className="text-red-500">*</span>
+                                    Company Name{" "}
+                                    <span className="text-red-500">*</span>
                                   </label>
                                   <input
                                     type="text"
                                     value={experience.company_name}
-                                    onChange={(e) => updateExperience(experience.id, 'company_name', e.target.value)}
+                                    onChange={(e) =>
+                                      updateExperience(
+                                        experience.id,
+                                        "company_name",
+                                        e.target.value
+                                      )
+                                    }
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="Enter company name"
                                   />
                                 </div>
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Start Date <span className="text-red-500">*</span>
+                                    Start Date{" "}
+                                    <span className="text-red-500">*</span>
                                   </label>
                                   <input
                                     type="date"
                                     value={experience.start_date}
-                                    onChange={(e) => updateExperience(experience.id, 'start_date', e.target.value)}
+                                    onChange={(e) =>
+                                      updateExperience(
+                                        experience.id,
+                                        "start_date",
+                                        e.target.value
+                                      )
+                                    }
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   />
                                 </div>
@@ -1141,10 +1715,18 @@ const EditUserForm = ({ user }) => {
                                   <input
                                     type="date"
                                     value={experience.end_date}
-                                    onChange={(e) => updateExperience(experience.id, 'end_date', e.target.value)}
+                                    onChange={(e) =>
+                                      updateExperience(
+                                        experience.id,
+                                        "end_date",
+                                        e.target.value
+                                      )
+                                    }
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   />
-                                  <p className="text-xs text-gray-500 mt-1">Leave empty if currently working</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Leave empty if currently working
+                                  </p>
                                 </div>
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1152,8 +1734,14 @@ const EditUserForm = ({ user }) => {
                                   </label>
                                   <input
                                     type="text"
-                                    value={experience.position || ''}
-                                    onChange={(e) => updateExperience(experience.id, 'position', e.target.value)}
+                                    value={experience.position || ""}
+                                    onChange={(e) =>
+                                      updateExperience(
+                                        experience.id,
+                                        "position",
+                                        e.target.value
+                                      )
+                                    }
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="Enter position or role"
                                   />
@@ -1165,7 +1753,13 @@ const EditUserForm = ({ user }) => {
                                 </label>
                                 <textarea
                                   value={experience.description}
-                                  onChange={(e) => updateExperience(experience.id, 'description', e.target.value)}
+                                  onChange={(e) =>
+                                    updateExperience(
+                                      experience.id,
+                                      "description",
+                                      e.target.value
+                                    )
+                                  }
                                   rows={3}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   placeholder="Describe your responsibilities and achievements in this role..."
@@ -1182,7 +1776,10 @@ const EditUserForm = ({ user }) => {
 
               <div className="card">
                 <div className="card-header">
-                  <h3 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                  <h3
+                    className="text-xl font-semibold"
+                    style={{ color: "var(--color-text-primary)" }}
+                  >
                     <i className="fas fa-file-upload mr-2"></i>
                     Document Uploads
                   </h3>
@@ -1250,7 +1847,9 @@ const EditUserForm = ({ user }) => {
                           documentType="experience"
                           title="Experience Document"
                           associatedId={experience.id}
-                          associatedLabel={`${experience.company_name || 'Experience'} ${index + 1}`}
+                          associatedLabel={`${
+                            experience.company_name || "Experience"
+                          } ${index + 1}`}
                           accept="application/pdf"
                           maxSize={50 * 1024 * 1024}
                           multiple={false}
@@ -1273,7 +1872,11 @@ const EditUserForm = ({ user }) => {
                           documentType="education"
                           title="Education Document"
                           associatedId={education.id}
-                          associatedLabel={`${education.education_level || 'Education'} ${index + 1} - ${education.institution_name || 'Institution'}`}
+                          associatedLabel={`${
+                            education.education_level || "Education"
+                          } ${index + 1} - ${
+                            education.institution_name || "Institution"
+                          }`}
                           accept="application/pdf"
                           maxSize={50 * 1024 * 1024}
                           multiple={false}
@@ -1307,7 +1910,10 @@ const EditUserForm = ({ user }) => {
                 </div>
               </div>
 
-              <div className="flex justify-between pt-6 border-t" style={{ borderColor: 'var(--color-border-light)' }}>
+              <div
+                className="flex justify-between pt-6 border-t"
+                style={{ borderColor: "var(--color-border-light)" }}
+              >
                 <button
                   type="button"
                   onClick={() => navigate(`/employees/view/${user.id}`)}
@@ -1333,11 +1939,4 @@ const EditUserForm = ({ user }) => {
   );
 };
 
-
-
 export default EditUserForm;
-
-
-
-
-

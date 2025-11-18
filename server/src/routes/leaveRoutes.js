@@ -36,6 +36,11 @@ router.get(
   authorizeAny(["*", "leaves.apply", "leaves.read"]),
   leaveController.getBackupEmployees
 );
+router.get(
+  "/users-for-forward",
+  authorizeAny(["*", "leaves.read", "leaves.status", "leaves.apply"]),
+  leaveController.searchUsersForForward
+);
 // Search approver users for manual routing (exclude Establishment/Admin)
 router.get(
   "/approver-users",
@@ -48,12 +53,16 @@ router.post(
   leaveUpload.array("documents", 10),
   leaveController.uploadDocuments
 );
+router.get(
+  "/all-leaves",
+  authorizeAny(["*", "leaves.read"]),
+  leaveController.listAllLeavesForEstablishment
+);
 router.get("/:employeeId", canAnyRead, leaveController.getEmployeeLeaves);
 router.post("/:employeeId", canCreate, leaveController.createLeaves);
 router.put("/:id", canUpdate, leaveController.updateLeave);
 router.patch("/:id/status", canStatus, leaveController.updateStatus);
 router.delete("/:id", leaveController.deleteLeave);
-
 // Approvals listing and action routes
 router.get(
   "/approvals/mine",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   getDocumentUrl,
   isImageFile,
@@ -6,15 +6,63 @@ import {
   formatFileSize,
   getServerBaseUrl
 } from '../../utils/imageUtils';
+import PDFPreview from './PDFPreview';
+
+// Cache for blob URLs to prevent recreation on every render
+const blobUrlCache = new Map();
+
+/**
+ * Get or create a blob URL for a file, with caching to prevent recreation
+ */
+const getBlobUrl = (file) => {
+  if (!file) return null;
+  
+  // Create a unique key for the file
+  const fileKey = `${file.name}-${file.size}-${file.lastModified}-${file.type}`;
+  
+  // Check if we already have a blob URL for this file
+  if (blobUrlCache.has(fileKey)) {
+    return blobUrlCache.get(fileKey);
+  }
+  
+  // Create new blob URL
+  try {
+    const blobUrl = URL.createObjectURL(file);
+    blobUrlCache.set(fileKey, blobUrl);
+    
+    // Clean up old entries if cache gets too large (keep last 50)
+    if (blobUrlCache.size > 50) {
+      const firstKey = blobUrlCache.keys().next().value;
+      const firstUrl = blobUrlCache.get(firstKey);
+      if (firstUrl) {
+        URL.revokeObjectURL(firstUrl);
+      }
+      blobUrlCache.delete(firstKey);
+    }
+    
+    return blobUrl;
+  } catch (error) {
+    console.error('Error creating blob URL for file preview:', error);
+    return null;
+  }
+};
 
 /**
  * Simple file preview function (copied from working CreateEmployeeForm)
+ * Uses cached blob URLs to prevent recreation on every render
  */
 const renderFilePreview = (file, onRemove, documentType, documentId) => {
   if (!file) return null;
 
-  const isImage = file.type.startsWith('image/');
-  const previewUrl = URL.createObjectURL(file);
+  const isImage = file.type && file.type.startsWith('image/');
+  const isPDF = file.type === 'application/pdf' || (file.name && /\.pdf$/i.test(file.name));
+  
+  // Get cached blob URL (or create if not cached)
+  const previewUrl = getBlobUrl(file);
+  
+  if (!previewUrl) {
+    return null;
+  }
 
   return (
     <div key={documentId} className="relative group">
@@ -33,16 +81,23 @@ const renderFilePreview = (file, onRemove, documentType, documentId) => {
         </button>
 
         {/* Document preview - same size as existing documents */}
-        <div className="relative">
+        <div className="relative" style={{ height: '128px' }}>
           {isImage ? (
             <img
               src={previewUrl}
               alt={file.name}
-              className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+              className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => window.open(previewUrl, '_blank')}
             />
+          ) : isPDF ? (
+            <PDFPreview
+              url={previewUrl}
+              fileName={file.name}
+              height="128px"
+              showControls={false}
+            />
           ) : (
-            <div className="h-32 flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+            <div className="h-full flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
               <i className="fas fa-file-pdf text-3xl text-red-500 mb-2"></i>
               <span className="text-xs text-gray-600 text-center px-2 truncate">{file.name}</span>
             </div>
@@ -176,7 +231,7 @@ const DocumentManager = ({
     });
   };
 
-  const renderDocument = (document, index) => {
+  const renderDocument = React.useCallback((document, index) => {
     // For new files, use simple preview like create form
     if (document.isNewFile && document.originalFile) {
       return renderFilePreview(document.originalFile, onDocumentRemove, documentType, document.id);
@@ -188,7 +243,9 @@ const DocumentManager = ({
       const serverBaseUrl = getServerBaseUrl();
       documentUrl = document.url.startsWith('http')
         ? document.url
-        : `${serverBaseUrl}${document.url}`;
+        : document.url.startsWith('/')
+          ? `${serverBaseUrl}${document.url}`
+          : `${serverBaseUrl}/${document.url}`;
     } else if (document.file_path) {
       documentUrl = getDocumentUrl(document);
     } else {
@@ -197,6 +254,9 @@ const DocumentManager = ({
 
     // Use enhanced metadata from backend if available
     const isImage = document.isImage !== undefined ? document.isImage : isImageFile(document.file_path || document.document_name);
+    const isPDF = (document.file_path && /\.pdf$/i.test(document.file_path)) ||
+                  document.mime_type === 'application/pdf' ||
+                  (document.document_name && /\.pdf$/i.test(document.document_name));
     const fileIcon = getFileTypeIcon(document.file_path || document.document_name);
 
     // Don't render if no valid URL
@@ -230,17 +290,24 @@ const DocumentManager = ({
           </button>
 
           {/* Document preview */}
-          <div className="relative">
+          <div className="relative" style={{ height: '128px' }}>
             {isImage ? (
               <img
                 src={documentUrl}
                 alt={document.document_name || 'Document'}
-                className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
                 onClick={() => documentUrl && window.open(documentUrl, '_blank')}
+              />
+            ) : isPDF ? (
+              <PDFPreview
+                url={documentUrl}
+                fileName={document.document_name || 'Document'}
+                height="128px"
+                showControls={false}
               />
             ) : (
               <div
-                className="h-32 flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                className="h-full flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => documentUrl && window.open(documentUrl, '_blank')}
               >
                 <i className={`${fileIcon} text-3xl text-gray-400 mb-2`}></i>
@@ -265,7 +332,7 @@ const DocumentManager = ({
         </div>
       </div>
     );
-  };
+  }, [documentType, onDocumentRemove]);
 
   return (
     <div className={`space-y-4 ${className}`}>

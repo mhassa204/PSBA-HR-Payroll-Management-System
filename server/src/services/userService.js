@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const { encrypt } = require("../utils/cryptoUtil");
+const { maskUniqueFieldsForSoftDelete, restoreUniqueFieldsForUndelete } = require("../utils/softDeleteUtil");
 const prisma = new PrismaClient();
 
 class UserService {
@@ -354,14 +355,54 @@ class UserService {
         throw new Error("User not found");
       }
 
+      // Mask unique fields to prevent unique constraint violations
+      const { masked } = maskUniqueFieldsForSoftDelete('User', existingUser);
+
       await prisma.user.update({
         where: { id: parseInt(id) },
-        data: { is_deleted: true },
+        data: { 
+          is_deleted: true,
+          ...masked, // Apply masked unique fields
+        },
       });
 
       return { message: "User deleted successfully" };
     } catch (error) {
       throw new Error(`Failed to delete user: ${error.message}`);
+    }
+  }
+
+  async restoreUser(id) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: parseInt(id) },
+      });
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      if (!user.is_deleted) {
+        throw new Error("User is not soft-deleted");
+      }
+
+      // Restore unique fields to their original values
+      const restored = restoreUniqueFieldsForUndelete('User', user);
+
+      const restoredUser = await prisma.user.update({
+        where: { id: parseInt(id) },
+        data: { 
+          is_deleted: false,
+          ...restored, // Restore original unique field values
+        },
+      });
+
+      return { 
+        message: "User restored successfully",
+        user: restoredUser,
+      };
+    } catch (error) {
+      throw new Error(`Failed to restore user: ${error.message}`);
     }
   }
 

@@ -4,6 +4,7 @@ import { Pencil, Trash, Eye } from "lucide-react";
 import EnhancedModal from "../../../components/ui/EnhancedModal";
 import TabbedEmploymentForm from "./TabbedEmploymentForm";
 import HistoryTab from "./TabbedEmploymentForm/HistoryTab";
+import PDFPreview from "../../../components/ui/PDFPreview";
 
 const EmploymentRecordActions = ({
   employmentRecords = [],
@@ -664,6 +665,9 @@ const EmploymentRecordActions = ({
                         /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(
                           doc.file_path || doc.document_name || ""
                         );
+                      const isPDF = 
+                        /\.pdf$/i.test(doc.file_path || doc.document_name || "") ||
+                        doc.mime_type === 'application/pdf';
                       const fileIcon = isImage
                         ? "fas fa-image"
                         : "fas fa-file-pdf";
@@ -715,6 +719,16 @@ const EmploymentRecordActions = ({
                                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all rounded flex items-center justify-center">
                                     <i className="fas fa-search-plus text-white opacity-0 group-hover:opacity-100 transition-opacity"></i>
                                   </div>
+                                </div>
+                              )}
+                              {documentUrl && isPDF && (
+                                <div className="w-12 h-12 rounded border overflow-hidden">
+                                  <PDFPreview
+                                    url={documentUrl}
+                                    fileName={doc.document_name || "Document"}
+                                    height="48px"
+                                    showControls={false}
+                                  />
                                 </div>
                               )}
                               <button

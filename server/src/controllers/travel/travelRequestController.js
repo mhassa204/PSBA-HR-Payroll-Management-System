@@ -63,6 +63,31 @@ module.exports = {
     const list = await travelService.listRelated(ctx);
     res.json({ success: true, requests: list });
   },
+  listAllEstablishment: async (req, res) => {
+    try {
+      const ctx = await travelService.getAuthContext(req);
+      if (!ctx.isEstablishment && !ctx.isSuperAdmin)
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      const items = await prisma.travelRequest.findMany({
+        where: { is_deleted: false },
+        orderBy: { createdAt: "desc" },
+        include: {
+          applicant: {
+            include: {
+              employmentRecords: {
+                where: { is_current: true, is_deleted: false },
+                include: { department: true, designation: true, location: true },
+              },
+            },
+          },
+          statusEntries: { orderBy: { createdAt: "asc" } },
+        },
+      });
+      res.json({ success: true, requests: items });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
   listPendingApprovals: async (req, res) => {
     try {
       const ctx = await travelService.getAuthContext(req);

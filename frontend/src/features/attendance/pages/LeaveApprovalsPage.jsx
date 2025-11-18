@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
+import SearchableSelect from "../../../components/ui/SearchableSelect";
 import { toastBus } from "../../../utils/toastBus";
 import { useAuthStore } from "../../auth/authStore";
 
@@ -11,8 +12,11 @@ const LeaveApprovalsPage = () => {
   const [allItems, setAllItems] = useState([]);
   const user = useAuthStore((s) => s.user);
   const currentUserId = user?.id;
-  // removed acting state as details modal actions are removed
+  const userRole = user?.role?.name || "";
   const [comments, setComments] = useState("");
+  const [forwardingLeave, setForwardingLeave] = useState(null);
+  const [forwardUserOptions, setForwardUserOptions] = useState([]);
+  const [forwardSearch, setForwardSearch] = useState("");
 
   const load = async () => {
     try {
@@ -34,14 +38,17 @@ const LeaveApprovalsPage = () => {
     load();
   }, []);
 
-  const act = async (leaveId, action) => {
+  const act = async (leaveId, action, forwardToUserId = null) => {
     try {
       await axios.post(`/leaves/${leaveId}/act`, {
         action,
         comments: comments || null,
+        forwardToUserId: forwardToUserId || null,
       });
       setComments("");
       setSelected(null);
+      setForwardingLeave(null);
+      setForwardSearch("");
       await load();
       toastBus.emit({ type: "success", message: `Action ${action} applied` });
     } catch {
@@ -49,10 +56,74 @@ const LeaveApprovalsPage = () => {
     }
   };
 
+  const loadForwardUsers = async (search = "") => {
+    try {
+      const { data } = await axios.get("/leaves/users-for-forward", {
+        params: { search },
+      });
+      const options = (data.users || [])
+        .filter((u) => Number(u.id) !== Number(currentUserId))
+        .map((u) => ({
+          value: u.id,
+          label: u.email,
+          description: u.employee?.full_name || "",
+        }));
+      setForwardUserOptions(options);
+    } catch (e) {
+      console.error("Failed to load forward users:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (forwardingLeave) {
+      loadForwardUsers("");
+    }
+  }, [forwardingLeave]);
+
+  useEffect(() => {
+    if (forwardingLeave && forwardSearch) {
+      const timeoutId = setTimeout(() => {
+        loadForwardUsers(forwardSearch);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [forwardSearch, forwardingLeave]);
+
   // Routing UI intentionally removed on approvals page as requested
 
+  // Helper function to format date consistently (dd/mm/yyyy, hh:mm:ss am/pm)
+  const formatStatusHistoryDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    // Ensure we're working with local time
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    const ampm = hours >= 12 ? "pm" : "am";
+    const displayHours = hours % 12 || 12;
+    return `${day}/${month}/${year}, ${String(displayHours).padStart(2, "0")}:${minutes}:${seconds} ${ampm}`;
+  };
+
+  // Helper function to extract timestamp from FORWARDED comments
+  const extractTimestampFromComment = (comment) => {
+    if (!comment) return null;
+    // Pattern: "... at dd/mm/yyyy, hh:mm:ss am/pm" or variations
+    // Match patterns like "at 31/10/2025, 03:18:37 pm" or "at 31/10/2025, 3:18:37 PM"
+    const match = comment.match(/at\s+(\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(?:am|pm|AM|PM))/i);
+    return match ? match[1] : null;
+  };
+
+  // Helper function to remove timestamp from comment
+  const removeTimestampFromComment = (comment) => {
+    if (!comment) return comment;
+    // Remove " at dd/mm/yyyy, hh:mm:ss am/pm" pattern (flexible for 1-2 digit day/month/hour)
+    return comment.replace(/\s+at\s+\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(?:am|pm|AM|PM)/i, "");
+  };
+
   const actionButtonsFor = (l) => {
-    // Show only relevant actions for pending items: based on next route type
     const routes = (l.routes || [])
       .slice()
       .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
@@ -62,10 +133,27 @@ const LeaveApprovalsPage = () => {
       routes.find((r) => (r.sequence || 0) === nextSeq) ||
       routes[nextSeq - 1] ||
       null;
-    // const prevSeq = curStage; // last completed stage == current_stage
     const btns = [];
-    // Guard: if previous stage exists but wasn't completed (i.e., current_stage < prevRoute.sequence), show no action
-    // Our model increments current_stage when a stage is completed, so if prevRoute exists it means completed.
+    
+    // Check if current user is Operations role or is in the forwarding chain
+    const isOperations = userRole === "Operations";
+    const isEstablishment = /^\s*establishment/i.test(userRole);
+    const isNextApprover = nextRoute && Number(nextRoute.approver_user_id) === Number(currentUserId);
+    
+    // Check if next approver has Director General role
+    const nextApproverRole = nextRoute?.approver_user?.role?.name || "";
+    const isNextApproverDirectorGeneral = /^\s*director\s+general/i.test(nextApproverRole);
+    
+    // Check if all routes are completed and user is Establishment
+    const maxSeq = routes.length > 0 ? Math.max(...routes.map((r) => r.sequence || 0), 0) : 0;
+    
+    // Check if Establishment user is the final approver
+    // Establishment users see Approve when they're the next approver and all previous routes are done
+    // This means current_stage should be >= (their sequence - 1)
+    const isEstablishmentFinalApprover = isEstablishment && isNextApprover && nextRoute && (
+      curStage >= (nextRoute.sequence - 1)
+    );
+    
     if (nextRoute) {
       if (nextRoute.type === "RECOMMEND")
         btns.push({
@@ -73,12 +161,32 @@ const LeaveApprovalsPage = () => {
           label: "Recommend",
           cls: "btn btn-secondary text-[11px]",
         });
-      if (nextRoute.type === "ALLOW")
-        btns.push({
-          key: "ALLOW",
-          label: "Allow",
-          cls: "btn btn-secondary text-[11px]",
-        });
+      if (nextRoute.type === "ALLOW") {
+        // If Establishment role and final approver, show Approve instead of Allow
+        if (isEstablishmentFinalApprover) {
+          btns.push({
+            key: "APPROVE",
+            label: "Approve",
+            cls: "btn btn-success text-[11px]",
+          });
+        } else {
+          btns.push({
+            key: "ALLOW",
+            label: "Allow",
+            cls: "btn btn-secondary text-[11px]",
+          });
+          // Any next approver can recommend (Operations role users and others), but not Establishment
+          // Don't show recommend option if next approver is Director General
+          if (isNextApprover && !isEstablishment && !isNextApproverDirectorGeneral) {
+            btns.push({
+              key: "FORWARD",
+              label: "Recommend",
+              cls: "btn btn-outline text-[11px]",
+              action: () => setForwardingLeave(l),
+            });
+          }
+        }
+      }
       // Always allow reject at pending stage
       btns.push({
         key: "REJECT",
@@ -86,7 +194,7 @@ const LeaveApprovalsPage = () => {
         cls: "btn btn-error-soft text-[11px]",
       });
     } else {
-      // Establishment final approval stage: show actions but item should not remain in pending list after acting
+      // No more routes - final approval stage
       btns.push({
         key: "APPROVE",
         label: "Approve",
@@ -110,7 +218,13 @@ const LeaveApprovalsPage = () => {
           <button
             key={b.key}
             className={b.cls}
-            onClick={() => act(l.id, b.key)}
+            onClick={() => {
+              if (b.action) {
+                b.action();
+              } else {
+                act(l.id, b.key);
+              }
+            }}
           >
             {b.label}
           </button>
@@ -424,26 +538,39 @@ const LeaveApprovalsPage = () => {
                       Status History
                     </div>
                     <div className="space-y-1">
-                      {hist.map((h, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="badge badge-gray">
-                              {h.action_type}
-                            </span>
-                            <span>
-                              {h.user?.email ||
-                                h.user?.employee?.full_name ||
-                                "User"}
-                            </span>
+                      {hist.map((h, idx) => {
+                        const isForwarded = h.action_type === "FORWARDED";
+                        const commentTimestamp = isForwarded ? extractTimestampFromComment(h.comments) : null;
+                        const displayComment = isForwarded && h.comments ? removeTimestampFromComment(h.comments) : h.comments;
+                        const displayTimestamp = commentTimestamp || formatStatusHistoryDate(h.action_time);
+                        
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-start justify-between text-xs bg-gray-50 p-2 rounded gap-2"
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="badge badge-gray whitespace-nowrap">
+                                {isForwarded ? "Recommended" : h.action_type}
+                              </span>
+                              {displayComment ? (
+                                <span className="text-gray-600 break-words">
+                                  {displayComment}
+                                </span>
+                              ) : (
+                                <span className="whitespace-nowrap">
+                                  {h.user?.email ||
+                                    h.user?.employee?.full_name ||
+                                    "User"}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-gray-600 whitespace-nowrap text-right">
+                              {displayTimestamp}
+                            </div>
                           </div>
-                          <div className="text-gray-600">
-                            {new Date(h.action_time).toLocaleString()}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null;
@@ -485,6 +612,50 @@ const LeaveApprovalsPage = () => {
                     return null;
                   }
                 })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forward Modal */}
+      {forwardingLeave && (
+        <div className="fixed inset-0 backdrop-fade bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="modal-surface w-full max-w-md">
+            <div className="modal-header">
+              <h2 className="text-sm font-semibold tracking-wide">
+                Recommend Leave Request
+              </h2>
+              <button
+                onClick={() => {
+                  setForwardingLeave(null);
+                  setForwardSearch("");
+                }}
+                className="btn btn-outline btn-sm text-xs"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="text-sm text-gray-700">
+                Select a user to recommend this leave request to:
+              </div>
+              <div>
+                <label className="form-label text-[11px] mb-1">
+                  Search User (by name or email)
+                </label>
+                <SearchableSelect
+                  options={forwardUserOptions}
+                  value=""
+                  onChange={(value, label) => {
+                    if (value) {
+                      act(forwardingLeave.id, "FORWARD", value);
+                    }
+                  }}
+                  placeholder="Search and select user..."
+                  allowClear={false}
+                  dropdownPriority="high"
+                />
+              </div>
             </div>
           </div>
         </div>
