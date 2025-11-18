@@ -30,7 +30,12 @@ function authorize(permission) {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
     if (!hasPermission(req.session.user, permission)) {
-      return res.status(403).json({ success: false, error: `Forbidden. Missing permission: ${permission}` });
+      return res
+        .status(403)
+        .json({
+          success: false,
+          error: `Forbidden. Missing permission: ${permission}`,
+        });
     }
     next();
   };
@@ -43,7 +48,12 @@ function authorizeAny(permissions = []) {
     }
     const ok = permissions.some((p) => hasPermission(req.session.user, p));
     if (!ok) {
-      return res.status(403).json({ success: false, error: `Forbidden. Missing one of: ${permissions.join(", ")}` });
+      return res
+        .status(403)
+        .json({
+          success: false,
+          error: `Forbidden. Missing one of: ${permissions.join(", ")}`,
+        });
     }
     next();
   };
