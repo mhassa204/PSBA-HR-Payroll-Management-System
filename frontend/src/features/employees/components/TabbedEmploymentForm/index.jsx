@@ -1491,11 +1491,15 @@ const TabbedEmploymentForm = forwardRef(
               {activeTab === "salary" && (
                 <SalaryTab
                   salaryForm={salaryForm}
+                  employmentForm={employmentForm}
                   onSalarySubmit={onSalarySubmit}
                   currentOrganization={currentOrganization}
                   watchedEmploymentType={watchedEmploymentType}
+                  watchedFilerStatus={watchedFilerStatus}
                   getFieldClasses={getFieldClasses}
+                  getValidationRules={getValidationRules}
                   salaryErrors={salaryErrors}
+                  employmentErrors={employmentErrors}
                 />
               )}
 

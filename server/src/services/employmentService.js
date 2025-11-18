@@ -364,6 +364,19 @@ const employmentService = {
         },
       });
 
+      // Ensure only one current employment per employee: if this new record is current, unset all others
+      if (employment.is_current) {
+        await tx.employment.updateMany({
+          where: {
+            employee_id: employment.employee_id,
+            is_current: true,
+            is_deleted: false,
+            id: { not: employment.id },
+          },
+          data: { is_current: false },
+        });
+      }
+
       if (salary) {
         await tx.employmentSalary.create({
           data: {
@@ -920,6 +933,19 @@ const employmentService = {
         where: { id: parseInt(id) },
         data: employmentUpdateData,
       });
+
+      // If after update this record is marked current, unset any other current employments for the same employee
+      if (employmentUpdateData.is_current === true) {
+        await tx.employment.updateMany({
+          where: {
+            employee_id: employment.employee_id,
+            is_current: true,
+            is_deleted: false,
+            id: { not: employment.id },
+          },
+          data: { is_current: false },
+        });
+      }
 
       if (salary) {
         const salaryData = {

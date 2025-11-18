@@ -3,13 +3,18 @@ import SearchableSelect from "../../../../components/ui/SearchableSelect";
 
 const SalaryTab = ({
   salaryForm,
+  employmentForm, // access employment fields (filer statuses)
   onSalarySubmit,
   currentOrganization,
   watchedEmploymentType,
+  watchedFilerStatus,
   getFieldClasses,
+  getValidationRules,
   salaryErrors,
+  employmentErrors,
 }) => {
   const { register, handleSubmit, watch } = salaryForm;
+  const { watch: watchEmployment, register: registerEmployment } = employmentForm;
 
   return (
     <motion.div
@@ -132,6 +137,8 @@ const SalaryTab = ({
             </div>
           )}
 
+          {/* Filer Status (moved from Employment tab) - repositioned to bottom */}
+
           {/* Payment and Bank Information - Common for all employment types */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
             <div className={getFieldClasses('salary', 'payment_mode')}>
@@ -213,6 +220,54 @@ const SalaryTab = ({
                 error={salaryErrors?.payroll_status?.message}
               />
             </div>
+          </div>
+
+          {/* Filer Status block now at bottom */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
+            <div className={getFieldClasses("employment", "filer_status")}>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Tax Filer Status <span className="text-red-500">*</span>
+              </label>
+              <SearchableSelect
+                options={[
+                  { value: "non_filer", label: "Non-Filer" },
+                  { value: "filer", label: "Filer" },
+                ]}
+                value={watchEmployment("filer_status")}
+                onChange={(value) => employmentForm.setValue("filer_status", value)}
+                placeholder="Select Tax Filer Status"
+                register={registerEmployment}
+                name="filer_status"
+                required={getValidationRules("employment", "filer_status", { required: "Filer status is required" }).required}
+                error={employmentErrors?.filer_status?.message}
+              />
+              {employmentErrors?.filer_status && (
+                <p className="text-red-600 text-sm mt-1">{employmentErrors.filer_status.message}</p>
+              )}
+            </div>
+            {watchedFilerStatus === "filer" && (
+              <div className={getFieldClasses("employment", "filer_active_status")}>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Filer Active Status <span className="text-red-500">*</span>
+                </label>
+                <SearchableSelect
+                  options={[
+                    { value: "active", label: "Active" },
+                    { value: "not_active", label: "Not Active" },
+                  ]}
+                  value={watchEmployment("filer_active_status")}
+                  onChange={(value) => employmentForm.setValue("filer_active_status", value)}
+                  placeholder="Select Status"
+                  register={registerEmployment}
+                  name="filer_active_status"
+                  required={getValidationRules("employment", "filer_active_status", { required: watchedFilerStatus === "filer" ? "Filer active status is required" : false }).required}
+                  error={employmentErrors?.filer_active_status?.message}
+                />
+                {employmentErrors?.filer_active_status && (
+                  <p className="text-red-600 text-sm mt-1">{employmentErrors.filer_active_status.message}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="mt-6 flex justify-end">

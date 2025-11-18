@@ -413,65 +413,7 @@ const EmploymentTab = ({
               />
             </div>
 
-            {/* Filer Status */}
-            <div className={getFieldClasses("employment", "filer_status")}>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tax Filer Status
-              </label>
-              <SearchableSelect
-                options={[
-                  { value: "non_filer", label: "Non-Filer" },
-                  { value: "filer", label: "Filer" },
-                ]}
-                value={watch("filer_status")}
-                onChange={(value) =>
-                  employmentForm.setValue("filer_status", value)
-                }
-                placeholder="Select Tax Filer Status"
-                register={register}
-                name="filer_status"
-                required={false}
-                error={employmentErrors?.filer_status?.message}
-              />
-            </div>
-
-            {/* Filer Active Status (conditional) */}
-            {watchedFilerStatus === "filer" && (
-              <div
-                className={getFieldClasses("employment", "filer_active_status")}
-              >
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Filer Active Status <span className="text-red-500">*</span>
-                </label>
-                <SearchableSelect
-                  options={[
-                    { value: "active", label: "Active" },
-                    { value: "not_active", label: "Not Active" },
-                  ]}
-                  value={watch("filer_active_status")}
-                  onChange={(value) =>
-                    employmentForm.setValue("filer_active_status", value)
-                  }
-                  placeholder="Select Status"
-                  register={register}
-                  name="filer_active_status"
-                  required={
-                    getValidationRules("employment", "filer_active_status", {
-                      required:
-                        watchedFilerStatus === "filer"
-                          ? "Filer active status is required"
-                          : false,
-                    }).required
-                  }
-                  error={employmentErrors?.filer_active_status?.message}
-                />
-                {employmentErrors?.filer_active_status && (
-                  <p className="text-red-600 text-sm mt-1">
-                    {employmentErrors.filer_active_status.message}
-                  </p>
-                )}
-              </div>
-            )}
+            {/* Filer status fields moved to Salary tab */}
 
             {/* Employment Status */}
             <div className={getFieldClasses("employment", "employment_status")}>
