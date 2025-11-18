@@ -44,7 +44,8 @@ const corsOptions = {
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5175",
-    "http://113.197.55.94:5175",
+    "http://175.107.30.178:5175",
+    "http://192.168.1.115:5175",
   ],
   credentials: true,
   optionsSuccessStatus: 200, // ✅ fixed spelling
@@ -122,12 +123,13 @@ app.use((err, req, res, next) => {
 });
 
 // ✅ Start server
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0',  () => {
   console.log(`✅ Server running on:`);
   console.log(`   http://localhost:${PORT}`);
-  console.log(`   http://172.16.21.178:${PORT}`);
+  console.log(`   http://192.168.1.115:${PORT}`);
 });
 
-server.on("error", (err) => {
+server.on("error", (err) =>
+   {
   console.error("Server error:", err);
 });
