@@ -56,9 +56,12 @@ const EmployeeTable = () => {
 
   const statusColor = (status) => {
     const s = (status || "").toString().toLowerCase();
-    if (/(active|current)/.test(s)) return "bg-green-100 text-green-700 ring-green-200";
-    if (/(probation|pending)/.test(s)) return "bg-amber-100 text-amber-700 ring-amber-200";
-    if (/(inactive|terminated|left|resigned)/.test(s)) return "bg-red-100 text-red-700 ring-red-200";
+    if (/(active|current)/.test(s))
+      return "bg-green-100 text-green-700 ring-green-200";
+    if (/(probation|pending)/.test(s))
+      return "bg-amber-100 text-amber-700 ring-amber-200";
+    if (/(inactive|terminated|left|resigned)/.test(s))
+      return "bg-red-100 text-red-700 ring-red-200";
     return "bg-slate-100 text-slate-700 ring-slate-200";
   };
 
@@ -85,75 +88,120 @@ const EmployeeTable = () => {
     loadEmployees();
   }, [fetchEmployees, saveCurrentLocation, searchParams, clearCache]);
 
-  const columns = useMemo(() => [
-    {
-      header: "Employee",
-      accessor: "full_name",
-      render: (row) => (
-        <div className="flex items-center gap-2 text-left overflow-visible">
-          <div className="h-8 w-8 flex-shrink-0 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-semibold ring-1 ring-slate-300">
-            {/* If photo available later, swap this for <img /> */}
-            <span className="text-sm leading-none">{getInitials(row.full_name)}</span>
+  const columns = useMemo(
+    () => [
+      {
+        header: "Employee",
+        accessor: "full_name",
+        render: (row) => (
+          <div className="flex items-center gap-2 text-left overflow-visible">
+            <div className="h-8 w-8 flex-shrink-0 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-semibold ring-1 ring-slate-300">
+              {/* If photo available later, swap this for <img /> */}
+              <span className="text-sm leading-none">
+                {getInitials(row.full_name)}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <div
+                className="font-medium text-slate-900 truncate max-w-[180px] md:max-w-[240px]"
+                title={row.full_name}
+              >
+                {row.full_name}
+              </div>
+              <div
+                className="text-xs text-slate-500 truncate max-w-[180px] md:max-w-[240px]"
+                title={row.email}
+              >
+                {row.email || "—"}
+              </div>
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="font-medium text-slate-900 truncate max-w-[180px] md:max-w-[240px]" title={row.full_name}>{row.full_name}</div>
-            <div className="text-xs text-slate-500 truncate max-w-[180px] md:max-w-[240px]" title={row.email}>{row.email || "—"}</div>
-          </div>
-        </div>
-      )
-    },
-    {
-      header: "CNIC",
-      accessor: "cnic",
-      render: (row) => (
-        <span className="font-mono text-[13px] text-slate-700">{displayCNIC(row.cnic)}</span>
-      )
-    },
-    {
-      header: "Phone",
-      accessor: "mobile_number",
-      render: (row) => (
-        <span className="font-mono text-[13px] text-slate-700">{displayPhoneNumber(row.mobile_number)}</span>
-      )
-    },
-    {
-      header: "Role",
-      accessor: "designation",
-      render: (row) => {
-        const ce = getCurrentEmployment(row);
-        const dept = ce?.department?.name || ce?.department || "N/A";
-        const desig = ce?.designation?.title || ce?.designation || "N/A";
-        return (
-          <div className="text-left">
-            <div className="text-slate-900 text-sm font-medium truncate max-w-[220px]" title={desig}>{desig}</div>
-            <div className="text-xs text-slate-500 truncate max-w-[220px]" title={dept}>{dept}</div>
-          </div>
-        );
-      }
-    },
-    {
-      header: "Scale",
-      accessor: "scale_grade",
-      render: (row) => {
-        const ce = getCurrentEmployment(row);
-        const scale = ce?.scale_grade?.name || ce?.scale_grade_id || "N/A";
-        return (
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ring-1 ring-inset bg-slate-50 text-slate-700 ring-slate-200">{scale}</span>
-        );
-      }
-    },
-    {
-      header: "Status",
-      accessor: "employment_status",
-      render: (row) => {
-        const ce = getCurrentEmployment(row);
-        const status = ce?.employment_status || "N/A";
-        return (
-          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ring-1 ring-inset ${statusColor(status)}`}>{status}</span>
-        );
-      }
-    },
-  ], [employees]);
+        ),
+      },
+      {
+        header: "CNIC",
+        accessor: "cnic",
+        render: (row) => (
+          <span className="font-mono text-[13px] text-slate-700">
+            {displayCNIC(row.cnic)}
+          </span>
+        ),
+      },
+      {
+        header: "Phone",
+        accessor: "mobile_number",
+        render: (row) => (
+          <span className="font-mono text-[13px] text-slate-700">
+            {displayPhoneNumber(row.mobile_number)}
+          </span>
+        ),
+      },
+      {
+        header: "Role",
+        accessor: "designation",
+        render: (row) => {
+          const ce = getCurrentEmployment(row);
+          const dept =
+            ce?.department?.name ||
+            ce?.department_text ||
+            ce?.department ||
+            "N/A";
+          const desig =
+            ce?.designation?.title ||
+            ce?.designation_text ||
+            ce?.designation ||
+            "N/A";
+          return (
+            <div className="text-left">
+              <div
+                className="text-slate-900 text-sm font-medium truncate max-w-[220px]"
+                title={desig}
+              >
+                {desig}
+              </div>
+              <div
+                className="text-xs text-slate-500 truncate max-w-[220px]"
+                title={dept}
+              >
+                {dept}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        header: "Scale",
+        accessor: "scale_grade",
+        render: (row) => {
+          const ce = getCurrentEmployment(row);
+          const scale = ce?.scale_grade?.name || ce?.scale_grade_id || "N/A";
+          return (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ring-1 ring-inset bg-slate-50 text-slate-700 ring-slate-200">
+              {scale}
+            </span>
+          );
+        },
+      },
+      {
+        header: "Status",
+        accessor: "employment_status",
+        render: (row) => {
+          const ce = getCurrentEmployment(row);
+          const status = ce?.employment_status || "N/A";
+          return (
+            <span
+              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ring-1 ring-inset ${statusColor(
+                status
+              )}`}
+            >
+              {status}
+            </span>
+          );
+        },
+      },
+    ],
+    [employees]
+  );
 
   const actions = [
     {
@@ -207,7 +255,9 @@ const EmployeeTable = () => {
                   );
                 })()}
               </p>
-              <p className="text-red-600 font-medium">This action cannot be undone.</p>
+              <p className="text-red-600 font-medium">
+                This action cannot be undone.
+              </p>
             </div>
           ),
           onConfirm: async () => {

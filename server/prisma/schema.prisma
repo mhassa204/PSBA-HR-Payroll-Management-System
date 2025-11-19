@@ -245,6 +245,9 @@ model Employment {
   organization         String
   department_id        Int?
   designation_id       Int?
+  // New: free-text overrides for legacy organizations
+  department_text      String?
+  designation_text     String?
   employment_type      String               @default("Regular")
   effective_from       DateTime?
   effective_till       DateTime?

@@ -1140,9 +1140,14 @@ const TabbedEmploymentForm = forwardRef(
       }
     };
     const getLabelFromId = (id, options, field = "label") => {
-      if (!id || !options || !Array.isArray(options)) return "N/A";
+      if (id === null || id === undefined || id === "") return "N/A";
+      // If a plain string (non-numeric), treat as free text
+      if (typeof id === "string" && isNaN(Number(id))) {
+        return id;
+      }
+      if (!options || !Array.isArray(options)) return String(id);
       const option = options.find((opt) => opt.value == id);
-      return option ? option[field] : "N/A";
+      return option ? option[field] : String(id);
     };
     const displayValue = (value, type = "text") => {
       if (

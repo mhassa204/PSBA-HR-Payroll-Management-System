@@ -91,6 +91,19 @@ const EmploymentTab = ({
                     Loading departments...
                   </span>
                 </div>
+              ) : currentOrganization === "PMBMC" ? (
+                <input
+                  type="text"
+                  {...register("department", {
+                    required: getValidationRules("employment", "department", {
+                      required: "Department is required",
+                    }).required
+                      ? "Department is required"
+                      : false,
+                  })}
+                  placeholder="Enter Department"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                />
               ) : (
                 <SearchableSelect
                   options={formOptions?.departments || []}
@@ -145,6 +158,20 @@ const EmploymentTab = ({
                     Loading designations...
                   </span>
                 </div>
+              ) : currentOrganization === "MBWO" ||
+                currentOrganization === "PMBMC" ? (
+                <input
+                  type="text"
+                  {...register("designation", {
+                    required: getValidationRules("employment", "designation", {
+                      required: "Designation is required",
+                    }).required
+                      ? "Designation is required"
+                      : false,
+                  })}
+                  placeholder="Enter Designation"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                />
               ) : (
                 <>
                   <SearchableSelect
@@ -448,22 +475,24 @@ const EmploymentTab = ({
               )}
             </div>
 
-            {/* Is Current Employee */}
-            <div className={getFieldClasses("employment", "is_current")}>
-              <label className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  {...register("is_current")}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="text-sm font-semibold text-gray-700">
-                  Current Employee
-                </span>
-              </label>
-              <p className="text-xs text-gray-500 mt-1">
-                Check if this is the employee's current position
-              </p>
-            </div>
+            {/* Is Current Employee: show only for PSBA; hidden for MBWO/PMBMC */}
+            {currentOrganization === "PSBA" && (
+              <div className={getFieldClasses("employment", "is_current")}>
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    {...register("is_current")}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-semibold text-gray-700">
+                    Current Employee
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Check if this is the employee's current position
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="mt-6">

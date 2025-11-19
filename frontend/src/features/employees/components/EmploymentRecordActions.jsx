@@ -190,8 +190,22 @@ const EmploymentRecordActions = ({
           key={record.id}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow"
+          className="relative bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow"
         >
+          {/* Big Org Tab */}
+          <div
+            className={`absolute -top-3 left-0 px-4 py-1 rounded-br-lg text-white text-sm font-semibold shadow ${
+              record.organization === "MBWO"
+                ? "bg-blue-600"
+                : record.organization === "PMBMC"
+                ? "bg-amber-600"
+                : record.organization === "PSBA"
+                ? "bg-green-600"
+                : "bg-slate-600"
+            }`}
+          >
+            {record.organization || ""}
+          </div>
           <div className="flex justify-between items-start">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-3">
@@ -202,7 +216,10 @@ const EmploymentRecordActions = ({
                   }}
                 ></div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {record.designation?.title || record.designation || "N/A"}
+                  {record.designation?.title ||
+                    record.designation_text ||
+                    record.designation ||
+                    "N/A"}
                 </h3>
                 {record.is_current && (
                   <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
@@ -227,7 +244,10 @@ const EmploymentRecordActions = ({
                 <div>
                   <span className="font-medium text-gray-600">Department:</span>
                   <span className="ml-2 text-gray-900">
-                    {record.department?.name || record.department || "N/A"}
+                    {record.department?.name ||
+                      record.department_text ||
+                      record.department ||
+                      "N/A"}
                   </span>
                 </div>
                 <div>
@@ -349,7 +369,21 @@ const EmploymentRecordActions = ({
         size="xl"
       >
         {selectedRecord && (
-          <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+          <div className="relative p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            {/* Big Org Tab in Modal */}
+            <div
+              className={`absolute -top-3 left-0 px-4 py-1 rounded-br-lg text-white text-sm font-semibold shadow ${
+                selectedRecord.organization === "MBWO"
+                  ? "bg-blue-600"
+                  : selectedRecord.organization === "PMBMC"
+                  ? "bg-amber-600"
+                  : selectedRecord.organization === "PSBA"
+                  ? "bg-green-600"
+                  : "bg-slate-600"
+              }`}
+            >
+              {selectedRecord.organization || ""}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
@@ -374,6 +408,7 @@ const EmploymentRecordActions = ({
                     </span>
                     <span className="text-gray-900">
                       {selectedRecord.department?.name ||
+                        selectedRecord.department_text ||
                         selectedRecord.department ||
                         "N/A"}
                     </span>
@@ -384,6 +419,7 @@ const EmploymentRecordActions = ({
                     </span>
                     <span className="text-gray-900">
                       {selectedRecord.designation?.title ||
+                        selectedRecord.designation_text ||
                         selectedRecord.designation ||
                         "N/A"}
                     </span>
@@ -665,9 +701,10 @@ const EmploymentRecordActions = ({
                         /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(
                           doc.file_path || doc.document_name || ""
                         );
-                      const isPDF = 
-                        /\.pdf$/i.test(doc.file_path || doc.document_name || "") ||
-                        doc.mime_type === 'application/pdf';
+                      const isPDF =
+                        /\.pdf$/i.test(
+                          doc.file_path || doc.document_name || ""
+                        ) || doc.mime_type === "application/pdf";
                       const fileIcon = isImage
                         ? "fas fa-image"
                         : "fas fa-file-pdf";
@@ -678,7 +715,7 @@ const EmploymentRecordActions = ({
                           className="border border-gray-200 rounded-lg p-3 bg-gray-50"
                         >
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-center gap-3 mb-3">
                               <i
                                 className={`${fileIcon} text-red-500 text-lg`}
                               ></i>
@@ -694,6 +731,20 @@ const EmploymentRecordActions = ({
                                     : doc.file_type === "renewal_report"
                                     ? "Contract Renewal Report"
                                     : "Document"}
+                                  <span
+                                    className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 ring-inset ${
+                                      selectedRecord.organization === "MBWO"
+                                        ? "bg-blue-100 text-blue-800 ring-blue-200"
+                                        : selectedRecord.organization ===
+                                          "PMBMC"
+                                        ? "bg-amber-100 text-amber-800 ring-amber-200"
+                                        : selectedRecord.organization === "PSBA"
+                                        ? "bg-green-100 text-green-800 ring-green-200"
+                                        : "bg-slate-100 text-slate-700 ring-slate-200"
+                                    }`}
+                                  >
+                                    {selectedRecord.organization || ""}
+                                  </span>
                                 </p>
                               </div>
                             </div>

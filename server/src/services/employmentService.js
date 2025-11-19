@@ -273,6 +273,8 @@ const employmentService = {
       organization,
       department_id,
       designation_id,
+      department_text,
+      designation_text,
       employment_type = "Regular",
       effective_from,
       effective_till,
@@ -344,6 +346,8 @@ const employmentService = {
           organization,
           department_id: department_id ? parseInt(department_id) : null,
           designation_id: designation_id ? parseInt(designation_id) : null,
+          department_text: department_text || null,
+          designation_text: designation_text || null,
           employment_type,
           effective_from: effective_from ? new Date(effective_from) : null,
           effective_till: effective_till ? new Date(effective_till) : null,
@@ -809,6 +813,8 @@ const employmentService = {
       organization,
       department_id,
       designation_id,
+      department_text,
+      designation_text,
       employment_type,
       effective_from,
       effective_till,
@@ -889,6 +895,12 @@ const employmentService = {
         employmentUpdateData.designation_id = designation_id
           ? parseInt(designation_id)
           : null;
+      if (department_text !== undefined)
+        employmentUpdateData.department_text =
+          department_text === null ? null : String(department_text);
+      if (designation_text !== undefined)
+        employmentUpdateData.designation_text =
+          designation_text === null ? null : String(designation_text);
       if (employment_type !== undefined)
         employmentUpdateData.employment_type = employment_type;
       if (effective_from !== undefined)

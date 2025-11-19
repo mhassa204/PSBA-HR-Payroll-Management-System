@@ -66,7 +66,7 @@ export const useEmploymentForm = ({
       remarks: "",
       scale_grade: "",
       employment_status: "active",
-      is_current: true,
+      is_current: false,
       filer_status: "non_filer",
       filer_active_status: "",
       // Probation fields
@@ -210,7 +210,7 @@ export const useEmploymentForm = ({
     return () => subscription.unsubscribe();
   }, [employmentForm]);
 
-  // Handle is_current based on organization (moved from watch listener to useEffect)
+  // Handle is_current based on organization (default false; force false for MBWO/PMBMC)
   useEffect(() => {
     // Prevent running during data loading to avoid conflicts
     if (isLoadingDataRef.current) {
@@ -219,26 +219,15 @@ export const useEmploymentForm = ({
 
     if (currentOrganization) {
       const currentIsCurrentValue = employmentForm.getValues("is_current");
-      if (currentOrganization === "MBWO") {
+      if (currentOrganization === "MBWO" || currentOrganization === "PMBMC") {
         if (currentIsCurrentValue !== false) {
-          console.log(
-            "🔍 useEmploymentForm: Setting is_current to false for MBWO"
-          );
           employmentForm.setValue("is_current", false, {
             shouldValidate: false,
             shouldDirty: true,
           });
         }
       } else {
-        if (currentIsCurrentValue !== true) {
-          console.log(
-            "🔍 useEmploymentForm: Setting is_current to true for non-MBWO"
-          );
-          employmentForm.setValue("is_current", true, {
-            shouldValidate: false,
-            shouldDirty: true,
-          });
-        }
+        // PSBA or others: keep whatever the user sets; default is false
       }
     }
   }, [currentOrganization, employmentForm]);

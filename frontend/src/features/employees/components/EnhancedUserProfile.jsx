@@ -355,7 +355,10 @@ const EnhancedUserProfile = () => {
                     <span>
                       <i className="fas fa-briefcase mr-2"></i>
                       {currentPosition.designation?.title ||
-                        currentPosition.designation}{" "}
+                        currentPosition.designation_text ||
+                        (typeof currentPosition.designation === "string"
+                          ? currentPosition.designation
+                          : "N/A")}{" "}
                       at {currentPosition.organization}
                     </span>
                   )}
@@ -541,7 +544,10 @@ const EnhancedUserProfile = () => {
                         </p>
                         <p className="font-semibold text-gray-900">
                           {currentPosition.designation?.title ||
-                            currentPosition.designation}
+                            currentPosition.designation_text ||
+                            (typeof currentPosition.designation === "string"
+                              ? currentPosition.designation
+                              : "N/A")}
                         </p>
                       </div>
                       <div>
@@ -550,7 +556,10 @@ const EnhancedUserProfile = () => {
                         </p>
                         <p className="font-semibold text-gray-900">
                           {currentPosition.department?.name ||
-                            currentPosition.department}
+                            currentPosition.department_text ||
+                            (typeof currentPosition.department === "string"
+                              ? currentPosition.department
+                              : "N/A")}
                         </p>
                       </div>
                       <div>
@@ -684,16 +693,64 @@ const EnhancedUserProfile = () => {
                       .map((record) => (
                         <div
                           key={record.id}
-                          className="bg-white border rounded-lg p-6 hover:shadow-md transition-shadow"
+                          className="relative bg-white border rounded-lg p-6 hover:shadow-md transition-shadow"
                         >
+                          {/* Big Org Tab */}
+                          <div
+                            className={`absolute -top-3 left-0 px-4 py-1 rounded-br-lg text-white text-sm font-semibold shadow ${
+                              record.organization === "MBWO"
+                                ? "bg-blue-600"
+                                : record.organization === "PMBMC"
+                                ? "bg-amber-600"
+                                : record.organization === "PSBA"
+                                ? "bg-green-600"
+                                : "bg-slate-600"
+                            }`}
+                          >
+                            {record.organization || ""}
+                          </div>
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
                               <div className="flex items-center space-x-3 mb-2">
                                 <h4 className="text-lg font-semibold text-gray-900">
                                   {record.designation?.title ||
-                                    record.designation}
+                                    record.designation_text ||
+                                    (typeof record.designation === "string"
+                                      ? record.designation
+                                      : "N/A")}
                                 </h4>
-                                {record.effective_till === null && (
+                                {/* Org Tag */}
+                                {(() => {
+                                  const org = record.organization;
+                                  const cfg =
+                                    org === "MBWO"
+                                      ? {
+                                          label: "MBWO",
+                                          cls: "bg-blue-100 text-blue-800 ring-blue-200",
+                                        }
+                                      : org === "PMBMC"
+                                      ? {
+                                          label: "PMBMC",
+                                          cls: "bg-amber-100 text-amber-800 ring-amber-200",
+                                        }
+                                      : org === "PSBA"
+                                      ? {
+                                          label: "PSBA",
+                                          cls: "bg-green-100 text-green-800 ring-green-200",
+                                        }
+                                      : {
+                                          label: org || "",
+                                          cls: "bg-slate-100 text-slate-700 ring-slate-200",
+                                        };
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ring-1 ring-inset ${cfg.cls}`}
+                                    >
+                                      {cfg.label}
+                                    </span>
+                                  );
+                                })()}
+                                {record.id === currentPosition?.id && (
                                   <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
                                     Current
                                   </span>
@@ -701,7 +758,11 @@ const EnhancedUserProfile = () => {
                               </div>
                               <p className="text-gray-700 mb-2 font-medium">
                                 {record.organization} •{" "}
-                                {record.department?.name || record.department}
+                                {record.department?.name ||
+                                  record.department_text ||
+                                  (typeof record.department === "string"
+                                    ? record.department
+                                    : "N/A")}
                               </p>
                               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                                 <div>

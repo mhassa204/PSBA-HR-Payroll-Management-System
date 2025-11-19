@@ -403,12 +403,14 @@ export const validateEmploymentData = (data) => {
       fieldValue =
         employmentData.designation ||
         employmentData.designation_id ||
-        employmentData.designation_name;
+        employmentData.designation_name ||
+        employmentData.designation_text;
     } else if (field === "department") {
       fieldValue =
         employmentData.department ||
         employmentData.department_id ||
-        employmentData.department_name;
+        employmentData.department_name ||
+        employmentData.department_text;
     } else if (field === "role_tag") {
       fieldValue =
         employmentData.role_tag ||

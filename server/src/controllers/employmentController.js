@@ -582,25 +582,31 @@ const employmentController = {
     requiredFields.forEach((field) => {
       let fieldValue;
       if (field === "designation") {
+        // Accept either id/name or free text
         fieldValue =
           employmentData.designation ||
           employmentData.designation_id ||
-          employmentData.designation_name;
+          employmentData.designation_name ||
+          employmentData.designation_text;
         console.log("🔍 Backend validating designation field:", {
           designation: employmentData.designation,
           designation_id: employmentData.designation_id,
           designation_name: employmentData.designation_name,
+          designation_text: employmentData.designation_text,
           finalValue: fieldValue,
         });
       } else if (field === "department") {
+        // Accept either id/name or free text
         fieldValue =
           employmentData.department ||
           employmentData.department_id ||
-          employmentData.department_name;
+          employmentData.department_name ||
+          employmentData.department_text;
         console.log("🔍 Backend validating department field:", {
           department: employmentData.department,
           department_id: employmentData.department_id,
           department_name: employmentData.department_name,
+          department_text: employmentData.department_text,
           finalValue: fieldValue,
         });
       } else if (field === "role_tag") {
@@ -903,19 +909,67 @@ const employmentController = {
       } else {
       }
 
+      // Helpers to parse numeric id and trim text
+      const parseId = (v) => {
+        if (v === undefined || v === null || v === "") return null;
+        const n = Number(v);
+        return Number.isInteger(n) && n > 0 ? n : null;
+      };
+      const cleanText = (v) => {
+        if (v === undefined || v === null) return null;
+        const s = String(v).trim();
+        return s ? s : null;
+      };
+
+      // Derive department/designation id vs text based on organization
+      const org = organization;
+      const rawDept = req.body.department_name || req.body.department;
+      const rawDesig = req.body.designation_name || req.body.designation;
+      const deptId = parseId(req.body.department_id || rawDept);
+      const desigId = parseId(req.body.designation_id || rawDesig);
+
+      let department_id_final = null;
+      let designation_id_final = null;
+      let department_text_final = null;
+      let designation_text_final = null;
+
+      if (org === "PSBA") {
+        department_id_final = deptId;
+        designation_id_final = desigId;
+        department_text_final = null;
+        designation_text_final = null;
+      } else if (org === "MBWO") {
+        // MBWO: designation as text, department hidden
+        designation_id_final = desigId;
+        designation_text_final = desigId
+          ? null
+          : cleanText(rawDesig || req.body.designation_text);
+        department_id_final = null;
+        department_text_final = null; // department not used
+      } else if (org === "PMBMC") {
+        // PMBMC: both department and designation can be text
+        department_id_final = deptId;
+        department_text_final = deptId
+          ? null
+          : cleanText(rawDept || req.body.department_text);
+        designation_id_final = desigId;
+        designation_text_final = desigId
+          ? null
+          : cleanText(rawDesig || req.body.designation_text);
+      } else {
+        // Fallback: prefer ids
+        department_id_final = deptId;
+        designation_id_final = desigId;
+      }
+
       // Combine form data with processed files and nested objects
       const employmentData = {
         ...req.body,
         employee_id: actualEmployeeId, // Ensure employee_id is set
-        // Map field names for consistency - handle both ID and text fields
-        department_id:
-          req.body.department ||
-          req.body.department_id ||
-          req.body.department_name,
-        designation_id:
-          req.body.designation ||
-          req.body.designation_id ||
-          req.body.designation_name,
+        department_id: department_id_final,
+        designation_id: designation_id_final,
+        department_text: department_text_final,
+        designation_text: designation_text_final,
         role_tag_id:
           req.body.role_tag || req.body.role_tag_id || req.body.role_tag_name,
         scale_grade_id:
@@ -1160,10 +1214,69 @@ const employmentController = {
       } else {
       }
 
+      // Helpers to parse numeric id and trim text
+      const parseId = (v) => {
+        if (v === undefined || v === null || v === "") return null;
+        const n = Number(v);
+        return Number.isInteger(n) && n > 0 ? n : null;
+      };
+      const cleanText = (v) => {
+        if (v === undefined || v === null) return null;
+        const s = String(v).trim();
+        return s ? s : null;
+      };
+      const org = req.body.organization;
+      const rawDept = req.body.department_name || req.body.department;
+      const rawDesig = req.body.designation_name || req.body.designation;
+      const deptId = parseId(req.body.department_id || rawDept);
+      const desigId = parseId(req.body.designation_id || rawDesig);
+
+      let department_id_final = undefined;
+      let designation_id_final = undefined;
+      let department_text_final = undefined;
+      let designation_text_final = undefined;
+      if (org) {
+        if (org === "PSBA") {
+          department_id_final = deptId;
+          designation_id_final = desigId;
+          department_text_final = null;
+          designation_text_final = null;
+        } else if (org === "MBWO") {
+          designation_id_final = desigId;
+          designation_text_final = desigId
+            ? null
+            : cleanText(rawDesig || req.body.designation_text);
+          department_id_final = null;
+          department_text_final = null;
+        } else if (org === "PMBMC") {
+          department_id_final = deptId;
+          department_text_final = deptId
+            ? null
+            : cleanText(rawDept || req.body.department_text);
+          designation_id_final = desigId;
+          designation_text_final = desigId
+            ? null
+            : cleanText(rawDesig || req.body.designation_text);
+        }
+      }
+
       // Combine form data with processed files and nested objects
       const employmentData = {
         ...req.body,
         ...processedFiles,
+        // Inject normalized id/text fields
+        ...(department_id_final !== undefined && {
+          department_id: department_id_final,
+        }),
+        ...(designation_id_final !== undefined && {
+          designation_id: designation_id_final,
+        }),
+        ...(department_text_final !== undefined && {
+          department_text: department_text_final,
+        }),
+        ...(designation_text_final !== undefined && {
+          designation_text: designation_text_final,
+        }),
         documentRecords,
         documents_to_remove: documentsToRemove, // parsed value
         salary: Object.keys(salary).length > 0 ? salary : null,
