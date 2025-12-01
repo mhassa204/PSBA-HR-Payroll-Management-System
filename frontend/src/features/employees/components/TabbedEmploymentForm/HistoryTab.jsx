@@ -22,6 +22,7 @@ const HistoryTab = ({ employmentId, userId }) => {
   const [showManualModal, setShowManualModal] = useState(false);
   const [editingHistory, setEditingHistory] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [formOptions, setFormOptions] = useState(null);
   const employmentFieldOptions = useMemo(
     () => [
       // Core employment fields
@@ -175,6 +176,7 @@ const HistoryTab = ({ employmentId, userId }) => {
     if (saving) return;
     setShowManualModal(false);
     setEditingHistory(null);
+    setActiveField("");
   };
 
   const handleFormChange = (e) => {
@@ -201,7 +203,7 @@ const HistoryTab = ({ employmentId, userId }) => {
       const payload = {
         field_name: formData.field_name,
         new_value: formData.new_value,
-        new_value_label: formData.new_value, // store label same as value
+        new_value_label: formData.new_value_label || formData.new_value,
         change_description: formData.change_description || undefined,
         remarks: formData.remarks || undefined,
         changed_by: userId || undefined,
@@ -442,6 +444,80 @@ const HistoryTab = ({ employmentId, userId }) => {
     ? allHistoryTypes.some((type) => groupedHistory[type]?.length > 0)
     : false;
 
+  // Load dropdown options when modal opens to assist user selection
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const options = await employmentService.getFormOptions();
+        setFormOptions(options);
+      } catch (err) {
+        console.error("Failed to fetch form options", err);
+      }
+    };
+    if (showManualModal && !formOptions) {
+      fetchOptions();
+    }
+  }, [showManualModal, formOptions]);
+
+  const enumOptions = {
+    employment_type: [
+      { value: "Regular", label: "Regular" },
+      { value: "Contract", label: "Contract" },
+      { value: "Daily Wager", label: "Daily Wager" },
+      { value: "Probation", label: "Probation" },
+      { value: "Internship", label: "Internship" },
+    ],
+    employment_status: [
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+      { value: "terminated", label: "Terminated" },
+      { value: "resigned", label: "Resigned" },
+      { value: "retired", label: "Retired" },
+    ],
+    filer_status: [
+      { value: "filer", label: "Filer" },
+      { value: "non_filer", label: "Non Filer" },
+    ],
+    filer_active_status: [
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+    ],
+    payment_mode: [
+      { value: "cash", label: "Cash" },
+      { value: "bank_transfer", label: "Bank Transfer" },
+      { value: "cheque", label: "Cheque" },
+    ],
+  };
+
+  const fieldOptionSource = useMemo(() => {
+    return {
+      department_id: formOptions?.departments || [],
+      designation_id: formOptions?.designations || [],
+      role_tag_id: formOptions?.roleTags || [],
+      scale_grade_id: formOptions?.scaleGrades || [],
+      location_id: formOptions?.locations || [],
+      reporting_officer_id: formOptions?.users || [],
+      employment_type: enumOptions.employment_type,
+      employment_status: enumOptions.employment_status,
+      filer_status: enumOptions.filer_status,
+      filer_active_status: enumOptions.filer_active_status,
+      payment_mode: enumOptions.payment_mode,
+    };
+  }, [formOptions]);
+
+  const handleOptionSelect = (e) => {
+    const selectedId = e.target.value;
+    const options = fieldOptionSource[formData.field_name] || [];
+    const selected = options.find(
+      (o) => String(o.value) === String(selectedId)
+    );
+    setFormData((prev) => ({
+      ...prev,
+      new_value: selectedId,
+      new_value_label: selected?.label || selectedId,
+    }));
+  };
+
   return (
     <>
       <div className="space-y-6">
@@ -515,15 +591,33 @@ const HistoryTab = ({ employmentId, userId }) => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 New Value
               </label>
-              <input
-                name="new_value"
-                value={formData.new_value}
-                onChange={handleFormChange}
-                onFocus={() => setActiveField("new_value")}
-                className="w-full border rounded px-2 py-2 text-sm"
-                placeholder="Enter new value"
-                ref={newValueRef}
-              />
+              {fieldOptionSource[formData.field_name]?.length ? (
+                <select
+                  name="new_value"
+                  value={formData.new_value}
+                  onChange={handleOptionSelect}
+                  onFocus={() => setActiveField("new_value")}
+                  className="w-full border rounded px-2 py-2 text-sm"
+                  ref={newValueRef}
+                >
+                  <option value="">Select new value</option>
+                  {fieldOptionSource[formData.field_name].map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  name="new_value"
+                  value={formData.new_value}
+                  onChange={handleFormChange}
+                  onFocus={() => setActiveField("new_value")}
+                  className="w-full border rounded px-2 py-2 text-sm"
+                  placeholder="Enter new value"
+                  ref={newValueRef}
+                />
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
