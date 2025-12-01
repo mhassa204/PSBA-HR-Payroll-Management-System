@@ -1,5 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../utils/prisma");
 const employmentHistoryService = require("./employmentHistoryService");
 
 const employmentService = {
@@ -307,17 +306,45 @@ const employmentService = {
       where: { id: parseInt(actualEmployeeId), is_deleted: false },
     });
     if (!employee) throw new Error("Invalid employee_id");
+    // Validate or gracefully fallback based on organization
+    let finalDepartmentId = null;
+    let finalDepartmentText = department_text || null;
+    let finalDesignationId = null;
+    let finalDesignationText = designation_text || null;
+
     if (department_id) {
-      const department = await prisma.department.findFirst({
+      const dept = await prisma.department.findFirst({
         where: { id: parseInt(department_id), is_deleted: false },
       });
-      if (!department) throw new Error("Invalid department_id");
+      if (dept) {
+        finalDepartmentId = dept.id;
+      } else {
+        if (organization === "PSBA") {
+          throw new Error("Invalid department_id");
+        } else {
+          // Treat provided value as free text for non-PSBA orgs (e.g., PMBMC)
+          finalDepartmentId = null;
+          if (!finalDepartmentText) finalDepartmentText = String(department_id);
+        }
+      }
     }
+
     if (designation_id) {
-      const designation = await prisma.designation.findFirst({
+      const des = await prisma.designation.findFirst({
         where: { id: parseInt(designation_id), is_deleted: false },
       });
-      if (!designation) throw new Error("Invalid designation_id");
+      if (des) {
+        finalDesignationId = des.id;
+      } else {
+        if (organization === "PSBA") {
+          throw new Error("Invalid designation_id");
+        } else {
+          // Treat provided value as free text for non-PSBA orgs (e.g., PMBMC, MBWO)
+          finalDesignationId = null;
+          if (!finalDesignationText)
+            finalDesignationText = String(designation_id);
+        }
+      }
     }
     const toBoolean = (value) => {
       if (typeof value === "boolean") return value;
@@ -344,10 +371,10 @@ const employmentService = {
         data: {
           employee_id: parseInt(actualEmployeeId),
           organization,
-          department_id: department_id ? parseInt(department_id) : null,
-          designation_id: designation_id ? parseInt(designation_id) : null,
-          department_text: department_text || null,
-          designation_text: designation_text || null,
+          department_id: finalDepartmentId,
+          designation_id: finalDesignationId,
+          department_text: finalDepartmentText,
+          designation_text: finalDesignationText,
           employment_type,
           effective_from: effective_from ? new Date(effective_from) : null,
           effective_till: effective_till ? new Date(effective_till) : null,
@@ -843,17 +870,44 @@ const employmentService = {
       is_current = organization === "MBWO" ? false : true;
     }
 
+    // Validate or gracefully fallback based on organization for updates
+    const orgForUpdate = organization || currentEmployment.organization;
+    let updFinalDepartmentId = null;
+    let updFinalDepartmentText = department_text ?? null;
+    let updFinalDesignationId = null;
+    let updFinalDesignationText = designation_text ?? null;
+
     if (department_id) {
-      const department = await prisma.department.findFirst({
+      const dept = await prisma.department.findFirst({
         where: { id: parseInt(department_id), is_deleted: false },
       });
-      if (!department) throw new Error("Invalid department_id");
+      if (dept) {
+        updFinalDepartmentId = dept.id;
+      } else {
+        if (orgForUpdate === "PSBA") {
+          throw new Error("Invalid department_id");
+        } else {
+          updFinalDepartmentId = null;
+          if (!updFinalDepartmentText)
+            updFinalDepartmentText = String(department_id);
+        }
+      }
     }
     if (designation_id) {
-      const designation = await prisma.designation.findFirst({
+      const des = await prisma.designation.findFirst({
         where: { id: parseInt(designation_id), is_deleted: false },
       });
-      if (!designation) throw new Error("Invalid designation_id");
+      if (des) {
+        updFinalDesignationId = des.id;
+      } else {
+        if (orgForUpdate === "PSBA") {
+          throw new Error("Invalid designation_id");
+        } else {
+          updFinalDesignationId = null;
+          if (!updFinalDesignationText)
+            updFinalDesignationText = String(designation_id);
+        }
+      }
     }
 
     const currentEmployment = await prisma.employment.findFirst({
@@ -940,6 +994,33 @@ const employmentService = {
           probation_end_date !== "null" ? new Date(probation_end_date) : null;
       if (resolvedLocId !== null)
         employmentUpdateData.location_id = resolvedLocId;
+
+      // Build final update data with org-aware id/text resolution
+      // Only set department/designation if user attempted to change them (presence in filteredData)
+      const deptChanged =
+        Object.prototype.hasOwnProperty.call(filteredData, "department_id") ||
+        Object.prototype.hasOwnProperty.call(filteredData, "department_text") ||
+        Object.prototype.hasOwnProperty.call(filteredData, "department");
+      const desigChanged =
+        Object.prototype.hasOwnProperty.call(filteredData, "designation_id") ||
+        Object.prototype.hasOwnProperty.call(
+          filteredData,
+          "designation_text"
+        ) ||
+        Object.prototype.hasOwnProperty.call(filteredData, "designation");
+
+      if (deptChanged) {
+        employmentUpdateData.department_id = updFinalDepartmentId;
+        employmentUpdateData.department_text =
+          updFinalDepartmentText === undefined ? null : updFinalDepartmentText;
+      }
+      if (desigChanged) {
+        employmentUpdateData.designation_id = updFinalDesignationId;
+        employmentUpdateData.designation_text =
+          updFinalDesignationText === undefined
+            ? null
+            : updFinalDesignationText;
+      }
 
       const employment = await tx.employment.update({
         where: { id: parseInt(id) },

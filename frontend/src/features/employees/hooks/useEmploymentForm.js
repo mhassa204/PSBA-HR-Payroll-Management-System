@@ -152,7 +152,7 @@ export const useEmploymentForm = ({
     loadFormOptions();
   }, [onError]);
 
-  // --- NEW: Designations Loader (by Department, for non-MBWO orgs) ---
+  // --- Designations Loader (by Department, for orgs that use structured designations) ---
   // Watch department (and org) to update designation dropdown; also on initialData in edit mode
   const watchedDepartment = useWatch({
     control: employmentForm.control,
@@ -167,16 +167,30 @@ export const useEmploymentForm = ({
         formOptions.departments.length === 0
       )
         return;
-      // detect MBWO
+      // Detect org-specific behavior
       const isMBWO = currentOrganization === "MBWO";
+      const isPMBMC = currentOrganization === "PMBMC";
+
       if (isMBWO) {
         // For MBWO, show all designations (handled separately)
         setAvailableDesignations(formOptions.designations || []);
         return;
       }
+
+      if (isPMBMC) {
+        // For PMBMC, department and designation are free-text; skip fetching
+        // Ensure availableDesignations is cleared to avoid dropdown logic
+        if (availableDesignations.length !== 0) setAvailableDesignations([]);
+        return;
+      }
       // For non-MBWO: get current selected department from employmentForm
       const departmentId = watchedDepartment || null;
-      if (departmentId) {
+      // Only fetch when departmentId is a valid numeric id (avoid on each keystroke of text)
+      const isNumericId =
+        typeof departmentId === "number" ||
+        (!!departmentId && /^\d+$/.test(String(departmentId)));
+
+      if (isNumericId) {
         setIsLoading(true);
         try {
           const designations =
@@ -193,7 +207,12 @@ export const useEmploymentForm = ({
       }
     }
     updateDesignationsForDepartment();
-  }, [formOptions, currentOrganization, watchedDepartment]);
+  }, [
+    formOptions,
+    currentOrganization,
+    watchedDepartment,
+    availableDesignations.length,
+  ]);
 
   // Watch employment type to determine if contractual
   useEffect(() => {

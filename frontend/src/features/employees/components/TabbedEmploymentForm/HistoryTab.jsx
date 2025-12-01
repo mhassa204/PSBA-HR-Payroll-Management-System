@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   ArrowRight,
   Calendar,
@@ -13,10 +13,87 @@ import {
 import LoadingSpinner from "../../../../components/ui/LoadingSpinner";
 import { employmentService } from "../../services/employmentService";
 
-const HistoryTab = ({ employmentId }) => {
+import EnhancedModal from "../../../../components/ui/EnhancedModal";
+
+const HistoryTab = ({ employmentId, userId }) => {
   const [groupedHistory, setGroupedHistory] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [editingHistory, setEditingHistory] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const employmentFieldOptions = useMemo(
+    () => [
+      // Core employment fields
+      "department_id",
+      "designation_id",
+      "role_tag_id",
+      "scale_grade_id",
+      "location_id",
+      "employment_type",
+      "employment_status",
+      "is_current",
+      "filer_status",
+      "filer_active_status",
+      "is_on_probation",
+      "probation_end_date",
+      "reporting_officer_id",
+      "office_location",
+      "remarks",
+      "effective_from",
+      "effective_till",
+      // Salary fields
+      "basic_salary",
+      "gross_salary",
+      "medical_allowance",
+      "house_rent",
+      "conveyance_allowance",
+      "other_allowances",
+      "daily_wage_rate",
+      "bank_account_primary",
+      "bank_name_primary",
+      "payment_mode",
+      "salary_effective_from",
+      "salary_effective_till",
+      "payroll_status",
+      // Contract fields
+      "contract_type",
+      "contract_number",
+      "start_date",
+      "end_date",
+      "renewal_count",
+      "confirmation_status",
+      "confirmation_date",
+      "is_renewed",
+    ],
+    []
+  );
+
+  const [formData, setFormData] = useState({
+    field_name: "",
+    new_value: "",
+    changed_at: "",
+    change_description: "",
+    remarks: "",
+  });
+  const newValueRef = useRef(null);
+  const changeDescriptionRef = useRef(null);
+  const remarksRef = useRef(null);
+  const [activeField, setActiveField] = useState("");
+
+  // Generalized focus retention for active input (prevents blur after keystroke)
+  useEffect(() => {
+    if (!showManualModal || !activeField) return;
+    const refMap = {
+      new_value: newValueRef,
+      change_description: changeDescriptionRef,
+      remarks: remarksRef,
+    };
+    const targetRef = refMap[activeField];
+    if (targetRef?.current && document.activeElement !== targetRef.current) {
+      targetRef.current.focus();
+    }
+  }, [showManualModal, activeField, formData.new_value, formData.change_description, formData.remarks]);
 
   const loadHistory = useCallback(async () => {
     if (!employmentId) return;
@@ -59,6 +136,90 @@ const HistoryTab = ({ employmentId }) => {
       alert("Failed to delete history record");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const openAddManual = () => {
+    setEditingHistory(null);
+    setFormData({
+      field_name: "",
+      new_value: "",
+      changed_at: "",
+      change_description: "",
+      remarks: "",
+    });
+    setShowManualModal(true);
+  };
+
+  const openEditHistory = (item) => {
+    setEditingHistory(item);
+    setFormData({
+      field_name: item.field_name === "manual" ? "" : item.field_name,
+      new_value: item.new_value_label || item.new_value || "",
+      changed_at: item.changed_at
+        ? new Date(item.changed_at).toISOString().slice(0, 16)
+        : "",
+      change_description: item.change_description || "",
+      remarks: item.remarks || "",
+    });
+    setShowManualModal(true);
+  };
+
+  const handleModalClose = () => {
+    if (saving) return;
+    setShowManualModal(false);
+    setEditingHistory(null);
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleManualSubmit = async (e) => {
+    e.preventDefault();
+    if (!employmentId) return;
+    try {
+      setSaving(true);
+      // Basic validation
+      if (!formData.field_name) {
+        alert("Please select a field");
+        setSaving(false);
+        return;
+      }
+      if (!formData.new_value) {
+        alert("Please enter a new value");
+        setSaving(false);
+        return;
+      }
+      const payload = {
+        field_name: formData.field_name,
+        new_value: formData.new_value,
+        new_value_label: formData.new_value, // store label same as value
+        change_description: formData.change_description || undefined,
+        remarks: formData.remarks || undefined,
+        changed_by: userId || undefined,
+        changed_at: formData.changed_at || undefined,
+      };
+      if (editingHistory) {
+        await employmentService.updateEmploymentHistoryEntry(
+          editingHistory.id,
+          payload
+        );
+      } else {
+        await employmentService.createEmploymentHistoryEntry(
+          employmentId,
+          payload
+        );
+      }
+      await loadHistory();
+      setShowManualModal(false);
+      setEditingHistory(null);
+    } catch (err) {
+      console.error("Error saving manual history entry:", err);
+      alert(err.message || "Failed to save history entry");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -208,14 +369,23 @@ const HistoryTab = ({ employmentId }) => {
                   <Calendar className="w-4 h-4" />
                   <span>{formatDate(item.changed_at)}</span>
                 </div>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  disabled={deletingId === item.id}
-                  className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                  title="Delete this history record"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => openEditHistory(item)}
+                    className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                    title="Edit this history record"
+                  >
+                    <Briefcase className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    disabled={deletingId === item.id}
+                    className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                    title="Delete this history record"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {item.change_description && (
@@ -261,38 +431,13 @@ const HistoryTab = ({ employmentId }) => {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
-  if (!groupedHistory) {
-    return (
-      <div className="text-center py-12 text-gray-500">
-        <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-        <p>No history available</p>
-      </div>
-    );
-  }
-
-  const allHistoryTypes = Object.keys(groupedHistory);
-  const hasAnyHistory = allHistoryTypes.some(
-    (type) => groupedHistory[type]?.length > 0
-  );
-
-  if (!hasAnyHistory) {
-    return (
-      <div className="text-center py-12 text-gray-500">
-        <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-        <p>No employment history recorded yet</p>
-      </div>
-    );
-  }
+  const allHistoryTypes = groupedHistory ? Object.keys(groupedHistory) : [];
+  const hasAnyHistory = groupedHistory
+    ? allHistoryTypes.some((type) => groupedHistory[type]?.length > 0)
+    : false;
 
   return (
+    <>
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-lg border border-gray-200">
         <h2 className="text-xl font-semibold text-gray-800 mb-2">
@@ -301,13 +446,139 @@ const HistoryTab = ({ employmentId }) => {
         <p className="text-sm text-gray-600">
           Complete record of all changes made to this employment record
         </p>
+        <div className="mt-4">
+          <button
+            onClick={openAddManual}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+          >
+            Add Manual History Entry
+          </button>
+        </div>
       </div>
-
-      {allHistoryTypes.map((type) => {
-        const items = groupedHistory[type];
-        return renderHistorySection(type, items);
-      })}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <LoadingSpinner />
+        </div>
+      )}
+      {!isLoading && !groupedHistory && (
+        <div className="text-center py-12 text-gray-500">
+          <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+          <p>No history loaded yet.</p>
+        </div>
+      )}
+      {!isLoading && groupedHistory && !hasAnyHistory && (
+        <div className="text-center py-12 text-gray-500">
+          <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+          <p>No employment history recorded yet.</p>
+        </div>
+      )}
+      {!isLoading && hasAnyHistory &&
+        allHistoryTypes.map((type) => {
+          const items = groupedHistory[type];
+          return renderHistorySection(type, items);
+        })}
     </div>
+    <EnhancedModal
+      isOpen={showManualModal}
+      onClose={handleModalClose}
+      title={editingHistory ? "Edit History Entry" : "Add History Entry"}
+      size="lg"
+    >
+      <form onSubmit={handleManualSubmit} className="space-y-4 p-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Field
+            </label>
+            <select
+              name="field_name"
+              value={formData.field_name}
+              onChange={handleFormChange}
+              className="w-full border rounded px-2 py-2 text-sm"
+            >
+              <option value="">Select a field</option>
+              {employmentFieldOptions.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              New Value
+            </label>
+            <input
+              name="new_value"
+              value={formData.new_value}
+              onChange={handleFormChange}
+              onFocus={() => setActiveField("new_value")}
+              className="w-full border rounded px-2 py-2 text-sm"
+              placeholder="Enter new value"
+              ref={newValueRef}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Changed At (optional)
+            </label>
+            <input
+              type="datetime-local"
+              name="changed_at"
+              value={formData.changed_at}
+              onChange={handleFormChange}
+              className="w-full border rounded px-2 py-2 text-sm"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Change Description (optional)
+            </label>
+            <input
+              name="change_description"
+              value={formData.change_description}
+              onChange={handleFormChange}
+              onFocus={() => setActiveField("change_description")}
+              className="w-full border rounded px-2 py-2 text-sm"
+              placeholder="If blank we will auto-generate"
+              ref={changeDescriptionRef}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Remarks (optional)
+            </label>
+            <textarea
+              name="remarks"
+              value={formData.remarks}
+              onChange={handleFormChange}
+              onFocus={() => setActiveField("remarks")}
+              rows={3}
+              className="w-full border rounded px-2 py-2 text-sm"
+              ref={remarksRef}
+            />
+          </div>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleModalClose}
+            disabled={saving}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-60"
+          >
+            {saving ? (editingHistory ? "Updating..." : "Saving...") : editingHistory ? "Update" : "Save"}
+          </button>
+        </div>
+      </form>
+    </EnhancedModal>
+    </>
   );
 };
 

@@ -184,6 +184,22 @@ router.get(
   employmentController.getEmploymentHistoryStats
 );
 
+// Manual history create
+router.post(
+  "/:id/history",
+  isAuthenticated,
+  authorize("employment.update"),
+  employmentController.createHistoryEntry
+);
+
+// Manual history update
+router.put(
+  "/history/:historyId",
+  isAuthenticated,
+  authorize("employment.update"),
+  employmentController.updateHistoryEntry
+);
+
 // Delete history routes
 router.delete(
   "/history/:historyId",

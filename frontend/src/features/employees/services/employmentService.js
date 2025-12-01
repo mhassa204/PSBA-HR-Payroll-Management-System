@@ -1119,6 +1119,46 @@ class EmploymentService {
       );
     }
   }
+
+  /**
+   * Manually create a history entry
+   * @param {number} employmentId
+   * @param {object} data
+   */
+  async createEmploymentHistoryEntry(employmentId, data) {
+    try {
+      const response = await this.apiClient.post(
+        `/employment/${employmentId}/history`,
+        data
+      );
+      return response.data.history || response.data;
+    } catch (error) {
+      console.error("Error creating manual history entry:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to create history entry"
+      );
+    }
+  }
+
+  /**
+   * Manually update a history entry
+   * @param {number} historyId
+   * @param {object} data
+   */
+  async updateEmploymentHistoryEntry(historyId, data) {
+    try {
+      const response = await this.apiClient.put(
+        `/employment/history/${historyId}`,
+        data
+      );
+      return response.data.history || response.data;
+    } catch (error) {
+      console.error("Error updating manual history entry:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to update history entry"
+      );
+    }
+  }
 }
 
 // Export singleton instance

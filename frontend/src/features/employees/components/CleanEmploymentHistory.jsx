@@ -204,9 +204,11 @@ const CleanEmploymentHistory = () => {
         employee_cnic: employee.cnic,
         // Employment data
         organization: employmentData.organization,
+        // Always send both id and text fields so backend can derive id/text correctly
+        department: departmentValue,
         department_id: departmentIdValue,
-        designation: designationValue, // Use properly extracted designation value
-        designation_id: designationIdValue, // Use properly extracted designation ID value
+        designation: designationValue,
+        designation_id: designationIdValue,
         employment_type: employmentData.employment_type || "Regular",
         role_tag_id: roleTagIdValue,
         scale_grade_id: scaleGradeIdValue,
@@ -408,9 +410,11 @@ const CleanEmploymentHistory = () => {
         user_id: employee.id,
         // Employment data
         organization: employmentData.organization,
+        // Always send both id and text fields so backend can derive id/text correctly
+        department: departmentValue,
         department_id: departmentIdValue,
-        designation: designationValue, // Keep original designation field
-        designation_id: designationIdValue, // Also map to designation_id for backend
+        designation: designationValue,
+        designation_id: designationIdValue,
         employment_type: employmentData.employment_type || "Regular",
         role_tag_id: roleTagIdValue,
         scale_grade_id: scaleGradeIdValue,
@@ -722,10 +726,16 @@ const CleanEmploymentHistory = () => {
                   <strong>Organization:</strong> {deletingRecord.organization}
                   <br />
                   <strong>Department:</strong>{" "}
-                  {deletingRecord.department?.name || "N/A"}
+                  {deletingRecord.department?.name ||
+                    deletingRecord.department_text ||
+                    deletingRecord.department ||
+                    "N/A"}
                   <br />
                   <strong>Designation:</strong>{" "}
-                  {deletingRecord.designation?.title || "N/A"}
+                  {deletingRecord.designation?.title ||
+                    deletingRecord.designation_text ||
+                    deletingRecord.designation ||
+                    "N/A"}
                   <br />
                   <strong>Effective From:</strong>{" "}
                   {deletingRecord.effective_from

@@ -286,7 +286,14 @@ const EnhancedUserProfile = () => {
   }
 
   const currentPosition = getCurrentPosition(employee.employmentRecords);
-  const totalExperience = calculateExperience(employee.employmentRecords);
+  // Calculate total employment experience from employment history only (all orgs)
+  const employmentRecords = Array.isArray(employee.employmentRecords)
+    ? employee.employmentRecords
+    : [];
+  const totalEmploymentExperience =
+    employmentRecords.length > 0
+      ? calculateExperience(employmentRecords)
+      : "No employment experience";
 
   // Debug logging for current position and salary
   console.log("🔍 EnhancedUserProfile: Current position:", currentPosition);
@@ -348,8 +355,8 @@ const EnhancedUserProfile = () => {
                 </h1>
                 <div className="flex items-center space-x-4 text-white">
                   <span>
-                    <i className="fas fa-id-badge mr-2"></i>
-                    {employee.employee_id || employee.user_id}
+                    <i className="fas fa-id-card mr-2"></i>
+                    {displayCNIC(employee.cnic) || "N/A"}
                   </span>
                   {currentPosition && (
                     <span>
@@ -366,8 +373,20 @@ const EnhancedUserProfile = () => {
                 <div className="flex items-center space-x-4 text-white mt-2">
                   <span>
                     <i className="fas fa-calendar mr-2"></i>
-                    {totalExperience} experience
+                    {totalEmploymentExperience}
                   </span>
+                  {currentPosition &&
+                    (currentPosition.scale_grade?.name ||
+                      currentPosition.scale_grade_id ||
+                      currentPosition.scale_grade) && (
+                      <span>
+                        <i className="fas fa-layer-group mr-2"></i>
+                        Scale/Grade:{" "}
+                        {currentPosition.scale_grade?.name ||
+                          currentPosition.scale_grade_id ||
+                          currentPosition.scale_grade}
+                      </span>
+                    )}
                   <span>
                     <i className="fas fa-envelope mr-2"></i>
                     {employee.email || "No email provided"}
@@ -424,9 +443,11 @@ const EnhancedUserProfile = () => {
                 <i className="fas fa-calendar text-green-600"></i>
               </div>
               <div className="ml-4">
-                <p className="text-sm text-gray-700 font-medium">Experience</p>
+                <p className="text-sm text-gray-700 font-medium">
+                  Employment Experience
+                </p>
                 <p className="text-lg font-bold text-gray-900">
-                  {totalExperience}
+                  {totalEmploymentExperience}
                 </p>
               </div>
             </div>

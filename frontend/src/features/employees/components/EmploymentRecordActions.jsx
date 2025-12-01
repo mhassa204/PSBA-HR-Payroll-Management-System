@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDateDisplay } from "../../../utils/formatters";
 import { motion } from "framer-motion";
 import { Pencil, Trash, Eye } from "lucide-react";
 import EnhancedModal from "../../../components/ui/EnhancedModal";
@@ -102,12 +103,7 @@ const EmploymentRecordActions = ({
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch (error) {
-      return "Invalid Date";
-    }
+    return formatDateDisplay(dateString) || "N/A";
   };
 
   const formatCurrency = (amount) => {
@@ -841,7 +837,7 @@ const EmploymentRecordActions = ({
       >
         {selectedRecord && selectedRecord.id && (
           <div className="p-4">
-            <HistoryTab employmentId={selectedRecord.id} />
+            <HistoryTab employmentId={selectedRecord.id} userId={userId} />
           </div>
         )}
       </EnhancedModal>

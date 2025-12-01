@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useEmployeeStore } from "../store/employeeStore";
@@ -247,12 +247,17 @@ const CreateEmployeeForm = () => {
     })();
   }, []);
 
-  // Watch for district changes to update cities
-  const watchedDistrictId = form.watch("district_id");
-  const watchedCityId = form.watch("city_id");
+  // Watch for district/city changes to update cities without re-running on unrelated field edits
+  const watchedDistrictId = form?.control
+    ? useWatch({ control: form.control, name: "district_id" })
+    : form.watch("district_id");
+  const watchedCityId = form?.control
+    ? useWatch({ control: form.control, name: "city_id" })
+    : form.watch("city_id");
   useEffect(() => {
     // Skip city loading during form restoration to prevent clearing restored city
-    if (isRestoring && isRestoring()) {
+    const restoring = typeof isRestoring === "function" ? isRestoring() : false;
+    if (restoring) {
       return;
     }
 
@@ -310,14 +315,15 @@ const CreateEmployeeForm = () => {
           });
 
           // Only reset city_id if it's not in the list AND we don't have a label for it
-          // Use functional update to check current state
+          // Additionally, avoid calling setValue if the value is already "" to prevent loops
           setCityMap((prev) => {
             const hasLabel = prev[String(watchedCityId)];
             const isInList = cList.some(
               (c) => String(c.value) === String(watchedCityId)
             );
 
-            if (watchedCityId && !isInList && !hasLabel) {
+            const currentCity = form.getValues("city_id");
+            if (watchedCityId && !isInList && !hasLabel && currentCity !== "") {
               // City not in list and no label - reset it
               form.setValue("city_id", "");
             }
@@ -328,7 +334,8 @@ const CreateEmployeeForm = () => {
           // Don't reset city_id if we have a label for it (form restoration case)
           setCityMap((prev) => {
             const hasLabel = prev[String(watchedCityId)];
-            if (!hasLabel) {
+            const currentCity = form.getValues("city_id");
+            if (!hasLabel && currentCity !== "") {
               form.setValue("city_id", "");
             }
             return prev; // Keep existing map
@@ -339,18 +346,23 @@ const CreateEmployeeForm = () => {
         // Don't reset city_id if we have a label for it (form restoration case)
         setCityMap((prev) => {
           const hasLabel = prev[String(watchedCityId)];
-          if (!hasLabel) {
+          const currentCity = form.getValues("city_id");
+          if (!hasLabel && currentCity !== "") {
             form.setValue("city_id", "");
           }
           return prev; // Keep existing map
         });
       }
     })();
-  }, [watchedDistrictId, watchedCityId, form, isRestoring]);
+  }, [watchedDistrictId, watchedCityId, form]);
 
-  // Watch for same address checkbox
-  const watchedSameAddress = form.watch("same_address");
-  const watchedPresentAddress = form.watch("present_address");
+  // Watch for same address checkbox (useWatch to avoid triggering on every keystroke elsewhere)
+  const watchedSameAddress = form?.control
+    ? useWatch({ control: form.control, name: "same_address" })
+    : form.watch("same_address");
+  const watchedPresentAddress = form?.control
+    ? useWatch({ control: form.control, name: "present_address" })
+    : form.watch("present_address");
   useEffect(() => {
     if (watchedSameAddress && watchedPresentAddress) {
       form.setValue("permanent_address", watchedPresentAddress);

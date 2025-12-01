@@ -1489,8 +1489,7 @@ const employmentController = {
   // Get form options (departments, designations, etc.)
   getFormOptions: async (req, res) => {
     try {
-      const { PrismaClient } = require("@prisma/client");
-      const prisma = new PrismaClient();
+      const prisma = require("../utils/prisma");
 
       let departments = [];
       let designations = [];
@@ -1818,8 +1817,7 @@ const employmentController = {
   // Get employees for reporting officer selection
   getEmployeesForReportingOfficer: async (req, res) => {
     try {
-      const { PrismaClient } = require("@prisma/client");
-      const prisma = new PrismaClient();
+      const prisma = require("../utils/prisma");
 
       const employees = await prisma.employee.findMany({
         where: {
@@ -1858,8 +1856,7 @@ const employmentController = {
   // Get designations by department
   getDesignationsByDepartment: async (req, res) => {
     try {
-      const { PrismaClient } = require("@prisma/client");
-      const prisma = new PrismaClient();
+      const prisma = require("../utils/prisma");
 
       const departmentId = parseInt(req.params.departmentId);
       const designations = await prisma.designation.findMany({
@@ -1946,6 +1943,30 @@ const employmentController = {
       });
     } catch (error) {
       console.error("Error fetching employment history stats:", error.message);
+      res.status(400).json({ success: false, error: error.message });
+    }
+  },
+
+  // Manually create a history entry
+  createHistoryEntry: async (req, res) => {
+    try {
+      const { id } = req.params; // employment id
+      const record = await employmentHistoryService.createManualHistory(id, req.body);
+      res.status(201).json({ success: true, history: record });
+    } catch (error) {
+      console.error("Error creating manual history entry:", error.message);
+      res.status(400).json({ success: false, error: error.message });
+    }
+  },
+
+  // Update a manually created history entry
+  updateHistoryEntry: async (req, res) => {
+    try {
+      const { historyId } = req.params;
+      const updated = await employmentHistoryService.updateManualHistory(historyId, req.body);
+      res.status(200).json({ success: true, history: updated });
+    } catch (error) {
+      console.error("Error updating manual history entry:", error.message);
       res.status(400).json({ success: false, error: error.message });
     }
   },

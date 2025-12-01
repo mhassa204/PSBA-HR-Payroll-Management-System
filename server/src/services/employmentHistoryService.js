@@ -1,6 +1,5 @@
-const { PrismaClient } = require("@prisma/client");
-
-const prisma = new PrismaClient();
+// Use shared prisma singleton instead of creating a new client
+const prisma = require("../utils/prisma");
 
 const employmentHistoryService = {
   /**
@@ -492,6 +491,151 @@ const employmentHistoryService = {
       where: { employment_id: parseInt(employmentId) },
     });
     return true;
+  },
+
+  /**
+   * Manually create a history record (user-entered)
+   */
+  async createManualHistory(employmentId, data) {
+    const employment_id = parseInt(employmentId);
+    if (Number.isNaN(employment_id)) throw new Error("Invalid employmentId");
+
+    const {
+      field_name = null,
+      history_type = null,
+      old_value = null,
+      new_value = null,
+      old_value_label = null,
+      new_value_label = null,
+      change_description = null,
+      remarks = null,
+      changed_by = null,
+      changed_at = null,
+    } = data;
+
+    // Derive history type if not provided but field_name exists
+    let finalHistoryType = history_type;
+    if (!finalHistoryType) {
+      finalHistoryType = field_name
+        ? employmentHistoryService.categorizeChange(field_name)
+        : "OTHER";
+    }
+
+    // If labels not provided attempt to derive simple labels from raw values
+    const deriveLabel = (val) => {
+      if (val === null || val === undefined) return null;
+      if (val === true || val === false) return val ? "Yes" : "No";
+      if (val instanceof Date) return val.toISOString().split("T")[0];
+      return String(val);
+    };
+
+    const finalOldLabel = old_value_label || deriveLabel(old_value);
+    const finalNewLabel = new_value_label || deriveLabel(new_value);
+
+    let finalDescription = change_description;
+    if (!finalDescription && field_name) {
+      // Reuse existing description generator if field_name supplied
+      finalDescription = await employmentHistoryService.generateChangeDescription(
+        prisma,
+        field_name,
+        finalOldLabel,
+        finalNewLabel
+      );
+    }
+    if (!finalDescription && !field_name) {
+      finalDescription = "Manual entry";
+    }
+
+    // Allow manual timestamp
+    let manualChangedAt = new Date();
+    if (changed_at) {
+      const parsed = new Date(changed_at);
+      if (!isNaN(parsed.getTime())) manualChangedAt = parsed;
+    }
+
+    const record = await prisma.employmentHistory.create({
+      data: {
+        employment_id,
+        history_type: finalHistoryType,
+        field_name: field_name || "manual",
+        old_value: old_value === undefined ? null : String(old_value),
+        new_value: new_value === undefined ? null : String(new_value),
+        old_value_label: finalOldLabel,
+        new_value_label: finalNewLabel,
+        change_description: finalDescription,
+        changed_by: changed_by ? parseInt(changed_by) : null,
+        remarks: remarks || null,
+        changed_at: manualChangedAt,
+      },
+    });
+    return record;
+  },
+
+  /**
+   * Update a manually created history record
+   */
+  async updateManualHistory(historyId, data) {
+    const id = parseInt(historyId);
+    if (Number.isNaN(id)) throw new Error("Invalid historyId");
+
+    const existing = await prisma.employmentHistory.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new Error("History record not found");
+
+    const {
+      field_name = existing.field_name,
+      history_type = existing.history_type,
+      old_value = existing.old_value,
+      new_value = existing.new_value,
+      old_value_label = existing.old_value_label,
+      new_value_label = existing.new_value_label,
+      change_description = existing.change_description,
+      remarks = existing.remarks,
+      changed_by = existing.changed_by,
+      changed_at = existing.changed_at,
+    } = data;
+
+    // Re-categorize if field_name changed and explicit history_type not supplied
+    let finalHistoryType = history_type;
+    if ((!history_type || history_type === existing.history_type) && field_name !== existing.field_name) {
+      finalHistoryType = employmentHistoryService.categorizeChange(field_name);
+    }
+
+    // Derive description again if field/value changed and no custom description provided
+    let finalDescription = change_description;
+    if (!finalDescription) {
+      finalDescription = await employmentHistoryService.generateChangeDescription(
+        prisma,
+        field_name,
+        old_value_label || old_value,
+        new_value_label || new_value
+      );
+    }
+
+    // Manual timestamp update if provided
+    let finalChangedAt = existing.changed_at;
+    if (changed_at) {
+      const parsed = new Date(changed_at);
+      if (!isNaN(parsed.getTime())) finalChangedAt = parsed;
+    }
+
+    const updated = await prisma.employmentHistory.update({
+      where: { id },
+      data: {
+        field_name,
+        history_type: finalHistoryType,
+        old_value: old_value,
+        new_value: new_value,
+        old_value_label: old_value_label,
+        new_value_label: new_value_label,
+        change_description: finalDescription,
+        remarks,
+        changed_by: changed_by ? parseInt(changed_by) : null,
+        changed_at: finalChangedAt,
+      },
+    });
+    return updated;
   },
 };
 
