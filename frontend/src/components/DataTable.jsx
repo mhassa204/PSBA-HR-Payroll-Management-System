@@ -80,6 +80,10 @@ const DataTable = ({
   actions = [],
   itemsPerPage = 10,
   storageKey = null,
+  // Optional server-side pagination support
+  serverPaginated = false,
+  serverTotal = 0,
+  serverTotalPages = 0,
 }) => {
   // Use persistent pagination state
   const {
@@ -150,14 +154,19 @@ const DataTable = ({
     }));
   };
 
-  const totalPages = Math.ceil(filteredData.length / pageSize);
+  const effectiveTotal = serverPaginated ? serverTotal : filteredData.length;
+  const totalPages = serverPaginated
+    ? Math.max(
+        1,
+        serverTotalPages || Math.ceil((serverTotal || 0) / pageSize) || 1
+      )
+    : Math.max(1, Math.ceil(filteredData.length / pageSize) || 1);
   const sortedData = sortConfig.key
     ? sortData(filteredData, sortConfig.key, sortConfig.direction)
     : filteredData;
-  const paginatedData = sortedData.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+  const paginatedData = serverPaginated
+    ? sortedData
+    : sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const getActionStyles = (label) => {
     const normalized = label.toLowerCase().trim();
@@ -198,10 +207,18 @@ const DataTable = ({
   return (
     <div className="w-full bg-white/90 backdrop-blur rounded-2xl shadow-xl ring-1 ring-slate-200 p-3 sm:p-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900">{title}</h1>
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900">
+          {title}
+        </h1>
         <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
           <span>Total:</span>
-          <span className="font-semibold text-slate-700">{Array.isArray(data) ? data.length : 0}</span>
+          <span className="font-semibold text-slate-700">
+            {serverPaginated
+              ? effectiveTotal
+              : Array.isArray(data)
+              ? data.length
+              : 0}
+          </span>
         </div>
       </div>
 
@@ -241,7 +258,9 @@ const DataTable = ({
         <table className="min-w-full bg-white rounded-xl">
           <thead className="bg-slate-800 text-white sticky top-0 z-10">
             <tr>
-              <th className="px-3 py-3 text-left text-xs sm:text-sm font-medium whitespace-nowrap">Sr. No.</th>
+              <th className="px-3 py-3 text-left text-xs sm:text-sm font-medium whitespace-nowrap">
+                Sr. No.
+              </th>
               {columns.map((column) => (
                 <th
                   key={column.accessor}
@@ -249,7 +268,9 @@ const DataTable = ({
                   onClick={() => handleSort(column.accessor)}
                 >
                   <div className="flex items-center justify-start gap-1">
-                    <span className="truncate max-w-[160px] sm:max-w-none">{column.header}</span>
+                    <span className="truncate max-w-[160px] sm:max-w-none">
+                      {column.header}
+                    </span>
                     {sortConfig.key === column.accessor && (
                       <span className="ml-1 sm:ml-2 text-slate-300 flex-shrink-0">
                         {sortConfig.direction === "asc" ? "↑" : "↓"}
@@ -259,21 +280,40 @@ const DataTable = ({
                 </th>
               ))}
               {actions.length > 0 && (
-                <th className="px-2 sm:px-3 py-3 text-center text-xs sm:text-sm font-medium whitespace-nowrap">Actions</th>
+                <th className="px-2 sm:px-3 py-3 text-center text-xs sm:text-sm font-medium whitespace-nowrap">
+                  Actions
+                </th>
               )}
             </tr>
           </thead>
           <tbody>
             {paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 2} className="px-6 py-8 bg-white text-center">
+                <td
+                  colSpan={columns.length + 2}
+                  className="px-6 py-8 bg-white text-center"
+                >
                   <div className="flex justify-center items-center">
                     <div>
-                      <svg className="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <svg
+                        className="mx-auto h-12 w-12 text-slate-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
                       </svg>
-                      <h3 className="mt-2 text-lg font-medium text-slate-800">No Results</h3>
-                      <p className="mt-1 text-sm text-slate-500">Try adjusting your search or add new employees.</p>
+                      <h3 className="mt-2 text-lg font-medium text-slate-800">
+                        No Results
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Try adjusting your search or add new employees.
+                      </p>
                     </div>
                   </div>
                 </td>
@@ -282,21 +322,32 @@ const DataTable = ({
               paginatedData.map((row, index) => (
                 <tr
                   key={row.id || index}
-                  className={`border-b border-slate-100 transition-colors duration-150 ${index % 2 === 0 ? "bg-white" : "bg-slate-50"} hover:bg-sky-50`}
+                  className={`border-b border-slate-100 transition-colors duration-150 ${
+                    index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                  } hover:bg-sky-50`}
                 >
                   <td className="px-2 sm:px-3 py-3 text-left text-slate-700 text-xs sm:text-sm font-medium whitespace-nowrap">
                     {(currentPage - 1) * pageSize + index + 1}
                   </td>
                   {columns.map((column) => {
-                    const hasRenderer = typeof column.render === 'function';
+                    const hasRenderer = typeof column.render === "function";
                     const value = !hasRenderer
-                      ? (column.accessor.includes(".")
-                        ? column.accessor.split(".").reduce((o, i) => o?.[i] || "", row)
-                        : row[column.accessor] || "")
+                      ? column.accessor.includes(".")
+                        ? column.accessor
+                            .split(".")
+                            .reduce((o, i) => o?.[i] || "", row)
+                        : row[column.accessor] || ""
                       : null;
                     return (
-                      <td key={column.accessor} className="px-2 sm:px-3 py-3 text-left text-slate-700 text-xs sm:text-sm align-middle">
-                        <div className={`max-w-[220px] md:max-w-[280px] ${hasRenderer ? 'overflow-visible' : ''}`}>
+                      <td
+                        key={column.accessor}
+                        className="px-2 sm:px-3 py-3 text-left text-slate-700 text-xs sm:text-sm align-middle"
+                      >
+                        <div
+                          className={`max-w-[220px] md:max-w-[280px] ${
+                            hasRenderer ? "overflow-visible" : ""
+                          }`}
+                        >
                           {hasRenderer ? (
                             column.render(row)
                           ) : (
@@ -312,7 +363,9 @@ const DataTable = ({
                     <td className="px-2 sm:px-3 py-3 text-sm whitespace-nowrap">
                       <div className="flex justify-start gap-2">
                         {actions.map((action) => {
-                          const { icon, className } = getActionStyles(action.label);
+                          const { icon, className } = getActionStyles(
+                            action.label
+                          );
                           return (
                             <button
                               key={action.label}
@@ -337,10 +390,18 @@ const DataTable = ({
       <div className="mt-6 border-t border-slate-200 bg-white/70 px-4 py-4 sm:px-6 rounded-b-xl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="text-sm text-slate-700">
-            Showing <span className="font-medium">{Math.min((currentPage - 1) * pageSize + 1, filteredData.length)}</span>
-            {" "}to{" "}
-            <span className="font-medium">{Math.min(currentPage * pageSize, filteredData.length)}</span>{" "}
-            of <span className="font-medium">{filteredData.length}</span> results
+            Showing{" "}
+            <span className="font-medium">
+              {Math.min((currentPage - 1) * pageSize + 1, effectiveTotal)}
+            </span>{" "}
+            to{" "}
+            <span className="font-medium">
+              {Math.min(
+                (currentPage - 1) * pageSize + paginatedData.length,
+                effectiveTotal
+              )}
+            </span>{" "}
+            of <span className="font-medium">{effectiveTotal}</span> results
           </div>
 
           <div className="flex items-center gap-3">
@@ -351,7 +412,9 @@ const DataTable = ({
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
             >
               {[5, 10, 20, 50].map((size) => (
-                <option key={size} value={size}>{size}</option>
+                <option key={size} value={size}>
+                  {size}
+                </option>
               ))}
             </select>
 
@@ -364,10 +427,13 @@ const DataTable = ({
                 Prev
               </button>
               <span className="text-sm text-slate-600">
-                Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages || 1}</span>
+                Page <span className="font-medium">{currentPage}</span> of{" "}
+                <span className="font-medium">{totalPages || 1}</span>
               </span>
               <button
-                onClick={() => setCurrentPage(Math.min(totalPages || 1, currentPage + 1))}
+                onClick={() =>
+                  setCurrentPage(Math.min(totalPages || 1, currentPage + 1))
+                }
                 disabled={currentPage >= (totalPages || 1)}
                 className="px-3 py-2 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >

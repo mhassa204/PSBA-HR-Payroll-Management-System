@@ -17,6 +17,7 @@ const EmployeeTable = () => {
     error,
     preloadEmployees,
     clearCache,
+    pagination,
   } = useEmployeeStore();
   const { employees: employeeNav, saveCurrentLocation } = useAppNavigation();
   const [searchParams] = useSearchParams();
@@ -308,6 +309,9 @@ const EmployeeTable = () => {
           actions={actions}
           itemsPerPage={10}
           storageKey="employeeTable"
+          serverPaginated={true}
+          serverTotal={pagination?.total || 0}
+          serverTotalPages={pagination?.totalPages || 0}
         />
       )}
     </div>
