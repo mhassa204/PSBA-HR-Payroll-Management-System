@@ -535,12 +535,13 @@ const employmentHistoryService = {
     let finalDescription = change_description;
     if (!finalDescription && field_name) {
       // Reuse existing description generator if field_name supplied
-      finalDescription = await employmentHistoryService.generateChangeDescription(
-        prisma,
-        field_name,
-        finalOldLabel,
-        finalNewLabel
-      );
+      finalDescription =
+        await employmentHistoryService.generateChangeDescription(
+          prisma,
+          field_name,
+          finalOldLabel,
+          finalNewLabel
+        );
     }
     if (!finalDescription && !field_name) {
       finalDescription = "Manual entry";
@@ -598,19 +599,23 @@ const employmentHistoryService = {
 
     // Re-categorize if field_name changed and explicit history_type not supplied
     let finalHistoryType = history_type;
-    if ((!history_type || history_type === existing.history_type) && field_name !== existing.field_name) {
+    if (
+      (!history_type || history_type === existing.history_type) &&
+      field_name !== existing.field_name
+    ) {
       finalHistoryType = employmentHistoryService.categorizeChange(field_name);
     }
 
     // Derive description again if field/value changed and no custom description provided
     let finalDescription = change_description;
     if (!finalDescription) {
-      finalDescription = await employmentHistoryService.generateChangeDescription(
-        prisma,
-        field_name,
-        old_value_label || old_value,
-        new_value_label || new_value
-      );
+      finalDescription =
+        await employmentHistoryService.generateChangeDescription(
+          prisma,
+          field_name,
+          old_value_label || old_value,
+          new_value_label || new_value
+        );
     }
 
     // Manual timestamp update if provided

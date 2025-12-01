@@ -93,7 +93,13 @@ const HistoryTab = ({ employmentId, userId }) => {
     if (targetRef?.current && document.activeElement !== targetRef.current) {
       targetRef.current.focus();
     }
-  }, [showManualModal, activeField, formData.new_value, formData.change_description, formData.remarks]);
+  }, [
+    showManualModal,
+    activeField,
+    formData.new_value,
+    formData.change_description,
+    formData.remarks,
+  ]);
 
   const loadHistory = useCallback(async () => {
     if (!employmentId) return;
@@ -438,146 +444,153 @@ const HistoryTab = ({ employmentId, userId }) => {
 
   return (
     <>
-    <div className="space-y-6">
-      <div className="bg-white p-4 rounded-lg border border-gray-200">
-        <h2 className="text-xl font-semibold text-gray-800 mb-2">
-          Employment History
-        </h2>
-        <p className="text-sm text-gray-600">
-          Complete record of all changes made to this employment record
-        </p>
-        <div className="mt-4">
-          <button
-            onClick={openAddManual}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-          >
-            Add Manual History Entry
-          </button>
-        </div>
-      </div>
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <LoadingSpinner />
-        </div>
-      )}
-      {!isLoading && !groupedHistory && (
-        <div className="text-center py-12 text-gray-500">
-          <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-          <p>No history loaded yet.</p>
-        </div>
-      )}
-      {!isLoading && groupedHistory && !hasAnyHistory && (
-        <div className="text-center py-12 text-gray-500">
-          <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-          <p>No employment history recorded yet.</p>
-        </div>
-      )}
-      {!isLoading && hasAnyHistory &&
-        allHistoryTypes.map((type) => {
-          const items = groupedHistory[type];
-          return renderHistorySection(type, items);
-        })}
-    </div>
-    <EnhancedModal
-      isOpen={showManualModal}
-      onClose={handleModalClose}
-      title={editingHistory ? "Edit History Entry" : "Add History Entry"}
-      size="lg"
-    >
-      <form onSubmit={handleManualSubmit} className="space-y-4 p-2">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Field
-            </label>
-            <select
-              name="field_name"
-              value={formData.field_name}
-              onChange={handleFormChange}
-              className="w-full border rounded px-2 py-2 text-sm"
+      <div className="space-y-6">
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            Employment History
+          </h2>
+          <p className="text-sm text-gray-600">
+            Complete record of all changes made to this employment record
+          </p>
+          <div className="mt-4">
+            <button
+              onClick={openAddManual}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
             >
-              <option value="">Select a field</option>
-              {employmentFieldOptions.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              New Value
-            </label>
-            <input
-              name="new_value"
-              value={formData.new_value}
-              onChange={handleFormChange}
-              onFocus={() => setActiveField("new_value")}
-              className="w-full border rounded px-2 py-2 text-sm"
-              placeholder="Enter new value"
-              ref={newValueRef}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Changed At (optional)
-            </label>
-            <input
-              type="datetime-local"
-              name="changed_at"
-              value={formData.changed_at}
-              onChange={handleFormChange}
-              className="w-full border rounded px-2 py-2 text-sm"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Change Description (optional)
-            </label>
-            <input
-              name="change_description"
-              value={formData.change_description}
-              onChange={handleFormChange}
-              onFocus={() => setActiveField("change_description")}
-              className="w-full border rounded px-2 py-2 text-sm"
-              placeholder="If blank we will auto-generate"
-              ref={changeDescriptionRef}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Remarks (optional)
-            </label>
-            <textarea
-              name="remarks"
-              value={formData.remarks}
-              onChange={handleFormChange}
-              onFocus={() => setActiveField("remarks")}
-              rows={3}
-              className="w-full border rounded px-2 py-2 text-sm"
-              ref={remarksRef}
-            />
+              Add Manual History Entry
+            </button>
           </div>
         </div>
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={handleModalClose}
-            disabled={saving}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-60"
-          >
-            {saving ? (editingHistory ? "Updating..." : "Saving...") : editingHistory ? "Update" : "Save"}
-          </button>
-        </div>
-      </form>
-    </EnhancedModal>
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <LoadingSpinner />
+          </div>
+        )}
+        {!isLoading && !groupedHistory && (
+          <div className="text-center py-12 text-gray-500">
+            <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+            <p>No history loaded yet.</p>
+          </div>
+        )}
+        {!isLoading && groupedHistory && !hasAnyHistory && (
+          <div className="text-center py-12 text-gray-500">
+            <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+            <p>No employment history recorded yet.</p>
+          </div>
+        )}
+        {!isLoading &&
+          hasAnyHistory &&
+          allHistoryTypes.map((type) => {
+            const items = groupedHistory[type];
+            return renderHistorySection(type, items);
+          })}
+      </div>
+      <EnhancedModal
+        isOpen={showManualModal}
+        onClose={handleModalClose}
+        title={editingHistory ? "Edit History Entry" : "Add History Entry"}
+        size="lg"
+      >
+        <form onSubmit={handleManualSubmit} className="space-y-4 p-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Field
+              </label>
+              <select
+                name="field_name"
+                value={formData.field_name}
+                onChange={handleFormChange}
+                className="w-full border rounded px-2 py-2 text-sm"
+              >
+                <option value="">Select a field</option>
+                {employmentFieldOptions.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                New Value
+              </label>
+              <input
+                name="new_value"
+                value={formData.new_value}
+                onChange={handleFormChange}
+                onFocus={() => setActiveField("new_value")}
+                className="w-full border rounded px-2 py-2 text-sm"
+                placeholder="Enter new value"
+                ref={newValueRef}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Changed At (optional)
+              </label>
+              <input
+                type="datetime-local"
+                name="changed_at"
+                value={formData.changed_at}
+                onChange={handleFormChange}
+                className="w-full border rounded px-2 py-2 text-sm"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Change Description (optional)
+              </label>
+              <input
+                name="change_description"
+                value={formData.change_description}
+                onChange={handleFormChange}
+                onFocus={() => setActiveField("change_description")}
+                className="w-full border rounded px-2 py-2 text-sm"
+                placeholder="If blank we will auto-generate"
+                ref={changeDescriptionRef}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Remarks (optional)
+              </label>
+              <textarea
+                name="remarks"
+                value={formData.remarks}
+                onChange={handleFormChange}
+                onFocus={() => setActiveField("remarks")}
+                rows={3}
+                className="w-full border rounded px-2 py-2 text-sm"
+                ref={remarksRef}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleModalClose}
+              disabled={saving}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-60"
+            >
+              {saving
+                ? editingHistory
+                  ? "Updating..."
+                  : "Saving..."
+                : editingHistory
+                ? "Update"
+                : "Save"}
+            </button>
+          </div>
+        </form>
+      </EnhancedModal>
     </>
   );
 };
