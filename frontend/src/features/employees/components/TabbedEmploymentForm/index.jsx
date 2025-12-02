@@ -919,6 +919,9 @@ const TabbedEmploymentForm = forwardRef(
             ? editingRecord?.employee_id || userId
             : userId,
           ...employmentData,
+          // ensure probation fields flow through to preview and final submit
+          is_on_probation: employmentData.is_on_probation || false,
+          probation_end_date: employmentData.probation_end_date || "",
           basic_salary:
             currentOrganization === "MBWO"
               ? 0
@@ -1044,6 +1047,11 @@ const TabbedEmploymentForm = forwardRef(
             reporting_officer_id: previewData.reporting_officer_id || "",
             effective_from: previewData.effective_from || "",
             effective_till: previewData.effective_till || null,
+            is_on_probation:
+              typeof previewData.is_on_probation === "string"
+                ? previewData.is_on_probation === "true"
+                : Boolean(previewData.is_on_probation),
+            probation_end_date: previewData.probation_end_date || null,
             filer_status: previewData.filer_status || "non_filer",
             filer_active_status: previewData.filer_active_status || "",
             employment_status: previewData.employment_status || "active",

@@ -72,13 +72,34 @@ class EmploymentService {
    */
   async getFormOptions() {
     try {
-      const response = await this.apiClient.get("/employment/form-options");
+      const [optsRes, locRes] = await Promise.all([
+        this.apiClient.get("/employment/form-options"),
+        // Fetch ALL locations so Head Office/Quarters are included
+        this.apiClient.get("/locations"),
+      ]);
 
-      if (response.data.success && response.data.options) {
-        return response.data.options;
-      } else {
-        throw new Error("Invalid response format from API");
+      if (optsRes.data.success && optsRes.data.options) {
+        const options = optsRes.data.options;
+        let locations = [];
+        if (locRes?.data?.locations) {
+          locations = locRes.data.locations.map((l) => ({
+            value: l.id,
+            label: l.name,
+            district: l.district?.name,
+            city: l.city?.name,
+          }));
+        } else if (locRes?.data?.bazaars) {
+          // Fallback: some servers might expose only bazaars
+          locations = locRes.data.bazaars.map((l) => ({
+            value: l.id,
+            label: l.name,
+            district: l.district?.name,
+            city: l.city?.name,
+          }));
+        }
+        return { ...options, locations };
       }
+      throw new Error("Invalid response format from API");
     } catch (error) {
       console.error("❌ Error fetching form options:", error);
 
@@ -282,6 +303,12 @@ class EmploymentService {
             employee_id: "EMP003",
             cnic: "12345-1234567-3",
           },
+        ],
+        // Basic fallback locations to keep UI usable
+        locations: [
+          { value: 1, label: "Head Office" },
+          { value: 2, label: "Main Bazaar" },
+          { value: 3, label: "Regional Office" },
         ],
         contractTypes: [
           {

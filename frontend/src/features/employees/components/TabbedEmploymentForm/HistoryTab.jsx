@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { getOrganizationConfig, ORGANIZATION_VALIDATION_RULES } from "../../../../constants/organizationFieldConfig";
 import {
   ArrowRight,
   Calendar,
@@ -23,6 +24,8 @@ const HistoryTab = ({ employmentId, userId }) => {
   const [editingHistory, setEditingHistory] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formOptions, setFormOptions] = useState(null);
+  const [employmentOrg, setEmploymentOrg] = useState(null);
+  const [orgConfig, setOrgConfig] = useState(null);
   const employmentFieldOptions = useMemo(
     () => [
       // Core employment fields
@@ -125,6 +128,22 @@ const HistoryTab = ({ employmentId, userId }) => {
       loadHistory();
     }
   }, [employmentId, loadHistory]);
+
+  // Load employment record to determine organization for conditional field rendering
+  useEffect(() => {
+    const loadEmployment = async () => {
+      try {
+        if (!employmentId) return;
+        const emp = await employmentService.getEmploymentById(employmentId);
+        const org = emp?.organization || emp?.employment?.organization || emp?.employment?.organization_name || null;
+        setEmploymentOrg(org);
+        setOrgConfig(getOrganizationConfig(org));
+      } catch (err) {
+        console.error("Error loading employment for org context:", err);
+      }
+    };
+    loadEmployment();
+  }, [employmentId]);
 
   const handleDelete = async (historyId) => {
     if (
@@ -489,14 +508,61 @@ const HistoryTab = ({ employmentId, userId }) => {
     ],
   };
 
+  // Map fields to input types
+  const fieldMeta = useMemo(() => {
+    const orgUpper = String(employmentOrg).toUpperCase();
+    const isPMBMC = orgUpper === "PMBMC";
+    const isMBWO = orgUpper === "MBWO";
+    return {
+      department_id: isPMBMC ? { type: "text" } : { type: "relation", optionsKey: "departments" },
+      // MBWO requires designation as free text; PMBMC also allowed as text
+      designation_id: isPMBMC || isMBWO ? { type: "text" } : { type: "relation", optionsKey: "designations" },
+      role_tag_id: { type: "relation", optionsKey: "roleTags" },
+      scale_grade_id: { type: "relation", optionsKey: "scaleGrades" },
+      location_id: { type: "relation", optionsKey: "locations" },
+      reporting_officer_id: { type: "relation", optionsKey: "users" },
+      employment_type: { type: "enum", enumKey: "employment_type" },
+      employment_status: { type: "enum", enumKey: "employment_status" },
+      filer_status: { type: "enum", enumKey: "filer_status" },
+      filer_active_status: { type: "enum", enumKey: "filer_active_status" },
+      payment_mode: { type: "enum", enumKey: "payment_mode" },
+      payroll_status: { type: "boolean" },
+      is_current: { type: "boolean" },
+      is_on_probation: { type: "boolean" },
+      is_renewed: { type: "boolean" },
+      effective_from: { type: "date" },
+      effective_till: { type: "date" },
+      salary_effective_from: { type: "date" },
+      salary_effective_till: { type: "date" },
+      start_date: { type: "date" },
+      end_date: { type: "date" },
+      confirmation_date: { type: "date" },
+      probation_end_date: { type: "date" },
+      basic_salary: { type: "number" },
+      gross_salary: { type: "number" },
+      medical_allowance: { type: "number" },
+      house_rent: { type: "number" },
+      conveyance_allowance: { type: "number" },
+      other_allowances: { type: "number" },
+      daily_wage_rate: { type: "number" },
+      renewal_count: { type: "number" },
+      bank_account_primary: { type: "text" },
+      bank_name_primary: { type: "text" },
+      contract_type: { type: "text" },
+      contract_number: { type: "text" },
+      office_location: { type: "text" },
+      remarks: { type: "text" },
+    };
+  }, [employmentOrg]);
+
   const fieldOptionSource = useMemo(() => {
     return {
-      department_id: formOptions?.departments || [],
-      designation_id: formOptions?.designations || [],
-      role_tag_id: formOptions?.roleTags || [],
-      scale_grade_id: formOptions?.scaleGrades || [],
-      location_id: formOptions?.locations || [],
-      reporting_officer_id: formOptions?.users || [],
+      departments: formOptions?.departments || [],
+      designations: formOptions?.designations || [],
+      roleTags: formOptions?.roleTags || [],
+      scaleGrades: formOptions?.scaleGrades || [],
+      locations: formOptions?.locations || [],
+      users: formOptions?.users || [],
       employment_type: enumOptions.employment_type,
       employment_status: enumOptions.employment_status,
       filer_status: enumOptions.filer_status,
@@ -507,16 +573,187 @@ const HistoryTab = ({ employmentId, userId }) => {
 
   const handleOptionSelect = (e) => {
     const selectedId = e.target.value;
-    const options = fieldOptionSource[formData.field_name] || [];
-    const selected = options.find(
-      (o) => String(o.value) === String(selectedId)
-    );
+    const meta = fieldMeta[formData.field_name];
+    const optionsKey = meta?.optionsKey || meta?.enumKey;
+    const options = optionsKey ? fieldOptionSource[optionsKey] || [] : [];
+    const selected = options.find((o) => String(o.value) === String(selectedId));
+
+    const getDepartmentNameById = (id) => {
+      const dep = (fieldOptionSource.departments || []).find(
+        (d) => String(d.value) === String(id)
+      );
+      return dep?.label || "";
+    };
+
+    const formatOptionLabel = (fieldName, opt) => {
+      if (fieldName === "designation_id" && opt) {
+        const depName =
+          opt.department_label ||
+          opt.departmentName ||
+          opt.department ||
+          getDepartmentNameById(opt.department_id || opt.departmentId);
+        return depName ? `${opt.label} - ${depName}` : opt.label;
+      }
+      return opt?.label ?? String(selectedId);
+    };
     setFormData((prev) => ({
       ...prev,
       new_value: selectedId,
-      new_value_label: selected?.label || selectedId,
+      new_value_label: formatOptionLabel(formData.field_name, selected),
     }));
   };
+
+  // Friendly field labels per organization
+  const getFriendlyLabel = (fieldName) => {
+    const labels = ORGANIZATION_VALIDATION_RULES?.[String(employmentOrg || "PSBA").toUpperCase()]?.fieldLabels || {};
+    const defaultLabels = {
+      department_id: "Department",
+      designation_id: "Designation",
+      role_tag_id: "Role Tag",
+      scale_grade_id: "Scale/Grade",
+      location_id: "Location",
+      reporting_officer_id: "Reporting Officer",
+      employment_type: "Employment Type",
+      employment_status: "Employment Status",
+      filer_status: "Filer Status",
+      filer_active_status: "Filer Active Status",
+      is_current: "Current Employment",
+      is_on_probation: "On Probation",
+      probation_end_date: "Probation End Date",
+      effective_from: "Effective From",
+      effective_till: "Effective Till",
+      basic_salary: "Basic Salary",
+      gross_salary: "Gross Salary",
+      medical_allowance: "Medical Allowance",
+      house_rent: "House Rent",
+      conveyance_allowance: "Conveyance Allowance",
+      other_allowances: "Other Allowances",
+      daily_wage_rate: "Daily Wage Rate",
+      bank_account_primary: "Bank Account",
+      bank_name_primary: "Bank Name",
+      payment_mode: "Payment Mode",
+      salary_effective_from: "Salary Effective From",
+      salary_effective_till: "Salary Effective Till",
+      contract_type: "Contract Type",
+      contract_number: "Contract Number",
+      start_date: "Start Date",
+      end_date: "End Date",
+      renewal_count: "Renewal Count",
+      confirmation_status: "Confirmation Status",
+      confirmation_date: "Confirmation Date",
+      is_renewed: "Renewed",
+      office_location: "Office Location",
+      remarks: "Remarks",
+    };
+    const mapped = {
+      department_id: labels.department || defaultLabels.department_id,
+      designation_id: labels.designation || defaultLabels.designation_id,
+      role_tag_id: labels.role_tag || defaultLabels.role_tag_id,
+      scale_grade_id: labels.scale_grade || defaultLabels.scale_grade_id,
+      employment_type: labels.employment_type || defaultLabels.employment_type,
+      employment_status: labels.employment_status || defaultLabels.employment_status,
+      is_current: labels.is_current || defaultLabels.is_current,
+      filer_status: labels.filer_status || defaultLabels.filer_status,
+      filer_active_status: labels.filer_active_status || defaultLabels.filer_active_status,
+      effective_from: labels.effective_from || defaultLabels.effective_from,
+      effective_till: labels.effective_till || defaultLabels.effective_till,
+      reporting_officer_id: labels.reporting_officer_id || defaultLabels.reporting_officer_id,
+      office_location: labels.office_location || defaultLabels.office_location,
+      remarks: labels.remarks || defaultLabels.remarks,
+    };
+    return mapped[fieldName] || defaultLabels[fieldName] || fieldName;
+  };
+
+  // Filter fields by organization visibility across sections
+  const visibleEmploymentFields = useMemo(() => {
+    if (!orgConfig) return employmentFieldOptions;
+
+    // Map each field to its section for org visibility rules
+    const fieldSectionMap = {
+      // employment section
+      department_id: "employment",
+      designation_id: "employment",
+      role_tag_id: "employment",
+      scale_grade_id: "employment",
+      location_id: "location",
+      employment_type: "employment",
+      employment_status: "employment",
+      is_current: "employment",
+      filer_status: "employment",
+      filer_active_status: "employment",
+      is_on_probation: "employment",
+      probation_end_date: "employment",
+      reporting_officer_id: "employment",
+      office_location: "employment",
+      remarks: "employment",
+      effective_from: "employment",
+      effective_till: "employment",
+      // salary section
+      basic_salary: "salary",
+      gross_salary: "salary",
+      medical_allowance: "salary",
+      house_rent: "salary",
+      conveyance_allowance: "salary",
+      other_allowances: "salary",
+      daily_wage_rate: "salary",
+      bank_account_primary: "salary",
+      bank_name_primary: "salary",
+      payment_mode: "salary",
+      salary_effective_from: "salary",
+      salary_effective_till: "salary",
+      payroll_status: "salary",
+      // contract section
+      contract_type: "contract",
+      contract_number: "contract",
+      start_date: "contract",
+      end_date: "contract",
+      renewal_count: "contract",
+      confirmation_status: "contract",
+      confirmation_date: "contract",
+      is_renewed: "contract",
+    };
+
+    const { visibleFields = {}, hiddenFields = {} } = orgConfig;
+
+    const isFieldVisibleByOrg = (field) => {
+      const section = fieldSectionMap[field] || "employment";
+      const visible = visibleFields[section];
+      const hidden = new Set(hiddenFields[section] || []);
+
+      // Normalize identifiers for hidden list comparisons
+      const normalizedForHidden = field
+        .replace("_id", "")
+        .replace("_status", "status");
+
+      if (visible === "all") {
+        return !hidden.has(normalizedForHidden);
+      }
+      if (Array.isArray(visible)) {
+        // Map shorthand names to actual field keys when necessary
+        const allowed = new Set(
+          visible.map((f) => {
+            switch (f) {
+              case "department":
+                return "department_id";
+              case "designation":
+                return "designation_id";
+              case "role_tag":
+                return "role_tag_id";
+              case "scale_grade":
+                return "scale_grade_id";
+              default:
+                return f;
+            }
+          })
+        );
+        return allowed.has(field);
+      }
+      // Default visible
+      return true;
+    };
+
+    return employmentFieldOptions.filter((f) => isFieldVisibleByOrg(f));
+  }, [orgConfig, employmentFieldOptions]);
 
   return (
     <>
@@ -580,9 +817,9 @@ const HistoryTab = ({ employmentId, userId }) => {
                 className="w-full border rounded px-2 py-2 text-sm"
               >
                 <option value="">Select a field</option>
-                {employmentFieldOptions.map((f) => (
+                {visibleEmploymentFields.map((f) => (
                   <option key={f} value={f}>
-                    {f}
+                    {getFriendlyLabel(f)}
                   </option>
                 ))}
               </select>
@@ -591,33 +828,117 @@ const HistoryTab = ({ employmentId, userId }) => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 New Value
               </label>
-              {fieldOptionSource[formData.field_name]?.length ? (
-                <select
-                  name="new_value"
-                  value={formData.new_value}
-                  onChange={handleOptionSelect}
-                  onFocus={() => setActiveField("new_value")}
-                  className="w-full border rounded px-2 py-2 text-sm"
-                  ref={newValueRef}
-                >
-                  <option value="">Select new value</option>
-                  {fieldOptionSource[formData.field_name].map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  name="new_value"
-                  value={formData.new_value}
-                  onChange={handleFormChange}
-                  onFocus={() => setActiveField("new_value")}
-                  className="w-full border rounded px-2 py-2 text-sm"
-                  placeholder="Enter new value"
-                  ref={newValueRef}
-                />
-              )}
+              {(() => {
+                const meta = fieldMeta[formData.field_name];
+                if (!meta) {
+                  return (
+                    <input
+                      name="new_value"
+                      value={formData.new_value}
+                      onChange={handleFormChange}
+                      onFocus={() => setActiveField("new_value")}
+                      className="w-full border rounded px-2 py-2 text-sm"
+                      placeholder="Enter new value"
+                      ref={newValueRef}
+                    />
+                  );
+                }
+                if (meta.type === "relation" || meta.type === "enum") {
+                  const optionsKey = meta.optionsKey || meta.enumKey;
+                  const opts = optionsKey ? fieldOptionSource[optionsKey] || [] : [];
+                  const getDepartmentNameById = (id) => {
+                    const dep = (fieldOptionSource.departments || []).find(
+                      (d) => String(d.value) === String(id)
+                    );
+                    return dep?.label || "";
+                  };
+                  const formatOptionLabel = (fieldName, opt) => {
+                    if (fieldName === "designation_id" && opt) {
+                      const depName =
+                        opt.department_label ||
+                        opt.departmentName ||
+                        opt.department ||
+                        getDepartmentNameById(opt.department_id || opt.departmentId);
+                      return depName ? `${opt.label} - ${depName}` : opt.label;
+                    }
+                    return opt.label;
+                  };
+                  return (
+                    <select
+                      name="new_value"
+                      value={formData.new_value}
+                      onChange={handleOptionSelect}
+                      onFocus={() => setActiveField("new_value")}
+                      className="w-full border rounded px-2 py-2 text-sm"
+                      ref={newValueRef}
+                    >
+                      <option value="">Select {getFriendlyLabel(formData.field_name)}</option>
+                      {opts.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {formatOptionLabel(formData.field_name, opt)}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                }
+                if (meta.type === "boolean") {
+                  return (
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={String(formData.new_value) === "true"}
+                          onChange={(e) =>
+                            setFormData((p) => ({
+                              ...p,
+                              new_value: e.target.checked ? "true" : "false",
+                              new_value_label: e.target.checked ? "Yes" : "No",
+                            }))
+                          }
+                        />
+                        <span>Yes / No</span>
+                      </label>
+                    </div>
+                  );
+                }
+                if (meta.type === "date") {
+                  return (
+                    <input
+                      type="date"
+                      name="new_value"
+                      value={formData.new_value}
+                      onChange={handleFormChange}
+                      onFocus={() => setActiveField("new_value")}
+                      className="w-full border rounded px-2 py-2 text-sm"
+                      ref={newValueRef}
+                    />
+                  );
+                }
+                if (meta.type === "number") {
+                  return (
+                    <input
+                      type="number"
+                      name="new_value"
+                      value={formData.new_value}
+                      onChange={handleFormChange}
+                      onFocus={() => setActiveField("new_value")}
+                      className="w-full border rounded px-2 py-2 text-sm"
+                      ref={newValueRef}
+                    />
+                  );
+                }
+                return (
+                  <input
+                    name="new_value"
+                    value={formData.new_value}
+                    onChange={handleFormChange}
+                    onFocus={() => setActiveField("new_value")}
+                    className="w-full border rounded px-2 py-2 text-sm"
+                    placeholder={`Enter ${getFriendlyLabel(formData.field_name)}`}
+                    ref={newValueRef}
+                  />
+                );
+              })()}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

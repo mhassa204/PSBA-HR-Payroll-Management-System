@@ -223,7 +223,9 @@ const EmploymentTab = ({
                 Employment Type <span className="text-red-500">*</span>
               </label>
               <SearchableSelect
-                options={formOptions?.employmentTypes || []}
+                options={(formOptions?.employmentTypes || []).filter(
+                  (opt) => opt.value !== "Probation"
+                )}
                 value={watch("employment_type")}
                 onChange={(value) =>
                   employmentForm.setValue("employment_type", value)

@@ -1951,10 +1951,7 @@ const employmentController = {
   createHistoryEntry: async (req, res) => {
     try {
       const { id } = req.params; // employment id
-      const record = await employmentHistoryService.createManualHistory(
-        id,
-        req.body
-      );
+      const record = await employmentHistoryService.createManualHistory(id, req.body);
       res.status(201).json({ success: true, history: record });
     } catch (error) {
       console.error("Error creating manual history entry:", error.message);
@@ -1966,10 +1963,7 @@ const employmentController = {
   updateHistoryEntry: async (req, res) => {
     try {
       const { historyId } = req.params;
-      const updated = await employmentHistoryService.updateManualHistory(
-        historyId,
-        req.body
-      );
+      const updated = await employmentHistoryService.updateManualHistory(historyId, req.body);
       res.status(200).json({ success: true, history: updated });
     } catch (error) {
       console.error("Error updating manual history entry:", error.message);
