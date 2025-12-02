@@ -84,6 +84,7 @@ const HistoryTab = ({ employmentId, userId }) => {
     remarks: "",
   });
   const newValueRef = useRef(null);
+  const oldValueRef = useRef(null);
   const changeDescriptionRef = useRef(null);
   const remarksRef = useRef(null);
   const [activeField, setActiveField] = useState("");
@@ -93,6 +94,7 @@ const HistoryTab = ({ employmentId, userId }) => {
     if (!showManualModal || !activeField) return;
     const refMap = {
       new_value: newValueRef,
+      old_value: oldValueRef,
       change_description: changeDescriptionRef,
       remarks: remarksRef,
     };
@@ -176,6 +178,7 @@ const HistoryTab = ({ employmentId, userId }) => {
     setEditingHistory(null);
     setFormData({
       field_name: "",
+      old_value: "",
       new_value: "",
       changed_at: "",
       change_description: "",
@@ -188,6 +191,7 @@ const HistoryTab = ({ employmentId, userId }) => {
     setEditingHistory(item);
     setFormData({
       field_name: item.field_name === "manual" ? "" : item.field_name,
+      old_value: item.old_value_label || item.old_value || "",
       new_value: item.new_value_label || item.new_value || "",
       changed_at: item.changed_at
         ? new Date(item.changed_at).toISOString().slice(0, 16)
@@ -228,6 +232,8 @@ const HistoryTab = ({ employmentId, userId }) => {
       }
       const payload = {
         field_name: formData.field_name,
+        old_value: formData.old_value || undefined,
+        old_value_label: formData.old_value_label || formData.old_value,
         new_value: formData.new_value,
         new_value_label: formData.new_value_label || formData.new_value,
         change_description: formData.change_description || undefined,
@@ -617,6 +623,40 @@ const HistoryTab = ({ employmentId, userId }) => {
     }));
   };
 
+  const handleOldOptionSelect = (e) => {
+    const selectedId = e.target.value;
+    const meta = fieldMeta[formData.field_name];
+    const optionsKey = meta?.optionsKey || meta?.enumKey;
+    const options = optionsKey ? fieldOptionSource[optionsKey] || [] : [];
+    const selected = options.find(
+      (o) => String(o.value) === String(selectedId)
+    );
+
+    const getDepartmentNameById = (id) => {
+      const dep = (fieldOptionSource.departments || []).find(
+        (d) => String(d.value) === String(id)
+      );
+      return dep?.label || "";
+    };
+
+    const formatOptionLabel = (fieldName, opt) => {
+      if (fieldName === "designation_id" && opt) {
+        const depName =
+          opt.department_label ||
+          opt.departmentName ||
+          opt.department ||
+          getDepartmentNameById(opt.department_id || opt.departmentId);
+        return depName ? `${opt.label} - ${depName}` : opt.label;
+      }
+      return opt?.label ?? String(selectedId);
+    };
+    setFormData((prev) => ({
+      ...prev,
+      old_value: selectedId,
+      old_value_label: formatOptionLabel(formData.field_name, selected),
+    }));
+  };
+
   // Friendly field labels per organization
   const getFriendlyLabel = (fieldName) => {
     const labels =
@@ -964,6 +1004,132 @@ const HistoryTab = ({ employmentId, userId }) => {
                       formData.field_name
                     )}`}
                     ref={newValueRef}
+                  />
+                );
+              })()}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Old Value
+              </label>
+              {(() => {
+                const meta = fieldMeta[formData.field_name];
+                if (!meta) {
+                  return (
+                    <input
+                      name="old_value"
+                      value={formData.old_value || ""}
+                      onChange={handleFormChange}
+                      onFocus={() => setActiveField("old_value")}
+                      className="w-full border rounded px-2 py-2 text-sm"
+                      placeholder={`Enter previous ${getFriendlyLabel(
+                        formData.field_name
+                      )}`}
+                      ref={oldValueRef}
+                    />
+                  );
+                }
+                if (meta.type === "relation" || meta.type === "enum") {
+                  const optionsKey = meta.optionsKey || meta.enumKey;
+                  const opts = optionsKey
+                    ? fieldOptionSource[optionsKey] || []
+                    : [];
+                  const getDepartmentNameById = (id) => {
+                    const dep = (fieldOptionSource.departments || []).find(
+                      (d) => String(d.value) === String(id)
+                    );
+                    return dep?.label || "";
+                  };
+                  const formatOptionLabel = (fieldName, opt) => {
+                    if (fieldName === "designation_id" && opt) {
+                      const depName =
+                        opt.department_label ||
+                        opt.departmentName ||
+                        opt.department ||
+                        getDepartmentNameById(
+                          opt.department_id || opt.departmentId
+                        );
+                      return depName ? `${opt.label} - ${depName}` : opt.label;
+                    }
+                    return opt.label;
+                  };
+                  return (
+                    <select
+                      name="old_value"
+                      value={formData.old_value || ""}
+                      onChange={handleOldOptionSelect}
+                      onFocus={() => setActiveField("old_value")}
+                      className="w-full border rounded px-2 py-2 text-sm"
+                      ref={oldValueRef}
+                    >
+                      <option value="">
+                        Select previous {getFriendlyLabel(formData.field_name)}
+                      </option>
+                      {opts.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {formatOptionLabel(formData.field_name, opt)}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                }
+                if (meta.type === "boolean") {
+                  return (
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={String(formData.old_value) === "true"}
+                          onChange={(e) =>
+                            setFormData((p) => ({
+                              ...p,
+                              old_value: e.target.checked ? "true" : "false",
+                              old_value_label: e.target.checked ? "Yes" : "No",
+                            }))
+                          }
+                        />
+                        <span>Yes / No</span>
+                      </label>
+                    </div>
+                  );
+                }
+                if (meta.type === "date") {
+                  return (
+                    <input
+                      type="date"
+                      name="old_value"
+                      value={formData.old_value || ""}
+                      onChange={handleFormChange}
+                      onFocus={() => setActiveField("old_value")}
+                      className="w-full border rounded px-2 py-2 text-sm"
+                      ref={oldValueRef}
+                    />
+                  );
+                }
+                if (meta.type === "number") {
+                  return (
+                    <input
+                      type="number"
+                      name="old_value"
+                      value={formData.old_value || ""}
+                      onChange={handleFormChange}
+                      onFocus={() => setActiveField("old_value")}
+                      className="w-full border rounded px-2 py-2 text-sm"
+                      ref={oldValueRef}
+                    />
+                  );
+                }
+                return (
+                  <input
+                    name="old_value"
+                    value={formData.old_value || ""}
+                    onChange={handleFormChange}
+                    onFocus={() => setActiveField("old_value")}
+                    className="w-full border rounded px-2 py-2 text-sm"
+                    placeholder={`Enter previous ${getFriendlyLabel(
+                      formData.field_name
+                    )}`}
+                    ref={oldValueRef}
                   />
                 );
               })()}
