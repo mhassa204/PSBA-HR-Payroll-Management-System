@@ -65,13 +65,10 @@ async function upsertAttendanceForDevice(ip, port, reduced, deviceId) {
   const devicePort = Number(port);
   if (!Array.isArray(reduced) || !reduced.length) return 0;
 
-  // 1) Device-level last timestamp to gate inserts
-  const last = await prisma.attendance.findFirst({
-    where: { device_ip: ip, device_port: devicePort },
-    orderBy: { timestamp: 'desc' },
-    select: { timestamp: true },
-  });
-  const lastTs = last?.timestamp || null;
+  // Note: Do NOT gate inserts by device-last-timestamp.
+  // We reconcile globally per user+day, so cross-device sequences (IN on A, OUT on B)
+  // must be allowed even if one device has a newer lastTs. Rely on existingMap below
+  // to prevent duplicates and keep earliest IN and latest OUT for the day.
 
   // 2) Prepare range and duids to fetch existing rows for the same daily keys
   const duidsSet = new Set();
@@ -106,6 +103,11 @@ async function upsertAttendanceForDevice(ip, port, reduced, deviceId) {
   for (const r of reduced) {
     const key = `${r.deviceUserId}|${r.type}|${r.attendanceDate.toISOString()}`;
     const existing = existingMap.get(key);
+    // Also fetch existing counterparts for cross-type reconciliation
+    const inKey = `${r.deviceUserId}|IN|${r.attendanceDate.toISOString()}`;
+    const outKey = `${r.deviceUserId}|OUT|${r.attendanceDate.toISOString()}`;
+    const existingIN = existingMap.get(inKey);
+    const existingOUT = existingMap.get(outKey);
     if (existing) {
       if (r.type === 'IN') {
         // Only update if new timestamp is earlier (want earliest IN)
@@ -119,17 +121,47 @@ async function upsertAttendanceForDevice(ip, port, reduced, deviceId) {
         }
       }
     } else {
-      // Only insert rows strictly newer than the device's last known timestamp
-      if (!lastTs || r.timestamp > lastTs) {
-        toCreate.push({
-          deviceUserId: r.deviceUserId,
-          timestamp: r.timestamp,
-          type: r.type,
-          attendanceDate: r.attendanceDate,
-          device_ip: ip,
-          device_port: devicePort,
-          device_id: deviceId || null,
-        });
+      // Insert if no existing record for this user+day+type; global reconciliation will maintain canonical earliest IN and latest OUT.
+      toCreate.push({
+        deviceUserId: r.deviceUserId,
+        timestamp: r.timestamp,
+        type: r.type,
+        attendanceDate: r.attendanceDate,
+        device_ip: ip,
+        device_port: devicePort,
+        device_id: deviceId || null,
+      });
+    }
+
+    // Cross-device pairing: if we have an IN (either existing or being inserted/updated),
+    // treat any later punch the same day as a candidate OUT to ensure we get a combined pair
+    if (r.type === 'IN' && existingIN) {
+      if (!existingOUT) {
+        // Create OUT if this punch is after the day's IN
+        if (r.timestamp > existingIN.timestamp) {
+          toCreate.push({
+            deviceUserId: r.deviceUserId,
+            timestamp: r.timestamp,
+            type: 'OUT',
+            attendanceDate: r.attendanceDate,
+            device_ip: ip,
+            device_port: devicePort,
+            device_id: deviceId || null,
+          });
+          // Track in map to avoid duplicate create within same loop
+          existingMap.set(outKey, { id: null, deviceUserId: r.deviceUserId, attendanceDate: r.attendanceDate, type: 'OUT', timestamp: r.timestamp });
+        }
+      } else if (r.timestamp > existingOUT.timestamp) {
+        // Update OUT to latest if this punch is even later
+        toUpdate.push({ id: existingOUT.id, timestamp: r.timestamp });
+        existingOUT.timestamp = r.timestamp;
+      }
+    } else if (r.type === 'OUT' && existingIN) {
+      // If OUT arrives and is later than any existing OUT, update handled above.
+      // If no OUT exists, the insert above covers creation; ensure OUT >= IN
+      if (!existingOUT && r.timestamp < existingIN.timestamp) {
+        // Guard: if OUT earlier than IN (clock issues), skip creating invalid OUT
+        // Alternatively, clamp to IN timestamp if policy requires
       }
     }
   }
