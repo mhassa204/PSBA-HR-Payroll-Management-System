@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { getOrganizationConfig, ORGANIZATION_VALIDATION_RULES } from "../../../../constants/organizationFieldConfig";
+import {
+  getOrganizationConfig,
+  ORGANIZATION_VALIDATION_RULES,
+} from "../../../../constants/organizationFieldConfig";
 import {
   ArrowRight,
   Calendar,
@@ -135,7 +138,11 @@ const HistoryTab = ({ employmentId, userId }) => {
       try {
         if (!employmentId) return;
         const emp = await employmentService.getEmploymentById(employmentId);
-        const org = emp?.organization || emp?.employment?.organization || emp?.employment?.organization_name || null;
+        const org =
+          emp?.organization ||
+          emp?.employment?.organization ||
+          emp?.employment?.organization_name ||
+          null;
         setEmploymentOrg(org);
         setOrgConfig(getOrganizationConfig(org));
       } catch (err) {
@@ -514,9 +521,14 @@ const HistoryTab = ({ employmentId, userId }) => {
     const isPMBMC = orgUpper === "PMBMC";
     const isMBWO = orgUpper === "MBWO";
     return {
-      department_id: isPMBMC ? { type: "text" } : { type: "relation", optionsKey: "departments" },
+      department_id: isPMBMC
+        ? { type: "text" }
+        : { type: "relation", optionsKey: "departments" },
       // MBWO requires designation as free text; PMBMC also allowed as text
-      designation_id: isPMBMC || isMBWO ? { type: "text" } : { type: "relation", optionsKey: "designations" },
+      designation_id:
+        isPMBMC || isMBWO
+          ? { type: "text" }
+          : { type: "relation", optionsKey: "designations" },
       role_tag_id: { type: "relation", optionsKey: "roleTags" },
       scale_grade_id: { type: "relation", optionsKey: "scaleGrades" },
       location_id: { type: "relation", optionsKey: "locations" },
@@ -576,7 +588,9 @@ const HistoryTab = ({ employmentId, userId }) => {
     const meta = fieldMeta[formData.field_name];
     const optionsKey = meta?.optionsKey || meta?.enumKey;
     const options = optionsKey ? fieldOptionSource[optionsKey] || [] : [];
-    const selected = options.find((o) => String(o.value) === String(selectedId));
+    const selected = options.find(
+      (o) => String(o.value) === String(selectedId)
+    );
 
     const getDepartmentNameById = (id) => {
       const dep = (fieldOptionSource.departments || []).find(
@@ -605,7 +619,10 @@ const HistoryTab = ({ employmentId, userId }) => {
 
   // Friendly field labels per organization
   const getFriendlyLabel = (fieldName) => {
-    const labels = ORGANIZATION_VALIDATION_RULES?.[String(employmentOrg || "PSBA").toUpperCase()]?.fieldLabels || {};
+    const labels =
+      ORGANIZATION_VALIDATION_RULES?.[
+        String(employmentOrg || "PSBA").toUpperCase()
+      ]?.fieldLabels || {};
     const defaultLabels = {
       department_id: "Department",
       designation_id: "Designation",
@@ -651,13 +668,16 @@ const HistoryTab = ({ employmentId, userId }) => {
       role_tag_id: labels.role_tag || defaultLabels.role_tag_id,
       scale_grade_id: labels.scale_grade || defaultLabels.scale_grade_id,
       employment_type: labels.employment_type || defaultLabels.employment_type,
-      employment_status: labels.employment_status || defaultLabels.employment_status,
+      employment_status:
+        labels.employment_status || defaultLabels.employment_status,
       is_current: labels.is_current || defaultLabels.is_current,
       filer_status: labels.filer_status || defaultLabels.filer_status,
-      filer_active_status: labels.filer_active_status || defaultLabels.filer_active_status,
+      filer_active_status:
+        labels.filer_active_status || defaultLabels.filer_active_status,
       effective_from: labels.effective_from || defaultLabels.effective_from,
       effective_till: labels.effective_till || defaultLabels.effective_till,
-      reporting_officer_id: labels.reporting_officer_id || defaultLabels.reporting_officer_id,
+      reporting_officer_id:
+        labels.reporting_officer_id || defaultLabels.reporting_officer_id,
       office_location: labels.office_location || defaultLabels.office_location,
       remarks: labels.remarks || defaultLabels.remarks,
     };
@@ -845,7 +865,9 @@ const HistoryTab = ({ employmentId, userId }) => {
                 }
                 if (meta.type === "relation" || meta.type === "enum") {
                   const optionsKey = meta.optionsKey || meta.enumKey;
-                  const opts = optionsKey ? fieldOptionSource[optionsKey] || [] : [];
+                  const opts = optionsKey
+                    ? fieldOptionSource[optionsKey] || []
+                    : [];
                   const getDepartmentNameById = (id) => {
                     const dep = (fieldOptionSource.departments || []).find(
                       (d) => String(d.value) === String(id)
@@ -858,7 +880,9 @@ const HistoryTab = ({ employmentId, userId }) => {
                         opt.department_label ||
                         opt.departmentName ||
                         opt.department ||
-                        getDepartmentNameById(opt.department_id || opt.departmentId);
+                        getDepartmentNameById(
+                          opt.department_id || opt.departmentId
+                        );
                       return depName ? `${opt.label} - ${depName}` : opt.label;
                     }
                     return opt.label;
@@ -872,7 +896,9 @@ const HistoryTab = ({ employmentId, userId }) => {
                       className="w-full border rounded px-2 py-2 text-sm"
                       ref={newValueRef}
                     >
-                      <option value="">Select {getFriendlyLabel(formData.field_name)}</option>
+                      <option value="">
+                        Select {getFriendlyLabel(formData.field_name)}
+                      </option>
                       {opts.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {formatOptionLabel(formData.field_name, opt)}
@@ -934,7 +960,9 @@ const HistoryTab = ({ employmentId, userId }) => {
                     onChange={handleFormChange}
                     onFocus={() => setActiveField("new_value")}
                     className="w-full border rounded px-2 py-2 text-sm"
-                    placeholder={`Enter ${getFriendlyLabel(formData.field_name)}`}
+                    placeholder={`Enter ${getFriendlyLabel(
+                      formData.field_name
+                    )}`}
                     ref={newValueRef}
                   />
                 );
