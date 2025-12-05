@@ -612,7 +612,8 @@ const EnhancedUserProfile = () => {
                           Probation End Date
                         </p>
                         <p className="font-semibold text-gray-900">
-                          {currentPosition.is_on_probation && currentPosition.probation_end_date
+                          {currentPosition.is_on_probation &&
+                          currentPosition.probation_end_date
                             ? formatDate(currentPosition.probation_end_date)
                             : "N/A"}
                         </p>
@@ -869,7 +870,8 @@ const EnhancedUserProfile = () => {
                                     Probation End:
                                   </span>
                                   <p className="font-semibold text-gray-900">
-                                    {record.is_on_probation && record.probation_end_date
+                                    {record.is_on_probation &&
+                                    record.probation_end_date
                                       ? formatDate(record.probation_end_date)
                                       : "N/A"}
                                   </p>

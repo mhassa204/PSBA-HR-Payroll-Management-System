@@ -1727,7 +1727,8 @@ const TabbedEmploymentForm = forwardRef(
                       <span className="text-gray-600">Probation End Date:</span>{" "}
                       <span className="ml-1 text-gray-900">
                         {previewData.is_on_probation
-                          ? displayValue(previewData.probation_end_date) || "N/A"
+                          ? displayValue(previewData.probation_end_date) ||
+                            "N/A"
                           : "N/A"}
                       </span>
                     </div>

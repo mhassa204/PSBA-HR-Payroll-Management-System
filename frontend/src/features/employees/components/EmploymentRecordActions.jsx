@@ -136,10 +136,18 @@ const EmploymentRecordActions = ({
             const candidateA = String(e?.value ?? "").trim();
             const candidateB = String(e?.employee_id ?? "").trim();
             const candidateC = String(e?.id ?? "").trim();
-            return roId && (roId === candidateA || roId === candidateB || roId === candidateC);
+            return (
+              roId &&
+              (roId === candidateA ||
+                roId === candidateB ||
+                roId === candidateC)
+            );
           });
           if (matchA) {
-            const name = matchA.full_name || matchA.name || matchA.label?.split(" - ")?.[0];
+            const name =
+              matchA.full_name ||
+              matchA.name ||
+              matchA.label?.split(" - ")?.[0];
             const cnic = matchA.cnic || matchA.label?.split(" - ")?.[1];
             display = matchA.label || [name, cnic].filter(Boolean).join(" - ");
           }
@@ -149,7 +157,9 @@ const EmploymentRecordActions = ({
         if (!display) {
           const dropdown = await employeeService.getAllEmployeesForDropdown();
           if (Array.isArray(dropdown)) {
-            const matchB = dropdown.find((opt) => String(opt?.value ?? "").trim() === roId);
+            const matchB = dropdown.find(
+              (opt) => String(opt?.value ?? "").trim() === roId
+            );
             if (matchB?.label) {
               display = matchB.label.replace("_", " - ");
             }
@@ -554,20 +564,25 @@ const EmploymentRecordActions = ({
                       {selectedRecord.employment_status || "N/A"}
                     </span>
                   </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">On Probation:</span>
-                      <span className="text-gray-900">
-                        {selectedRecord.is_on_probation ? "Yes" : "No"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Probation End Date:</span>
-                      <span className="text-gray-900">
-                        {selectedRecord.is_on_probation && selectedRecord.probation_end_date
-                          ? formatDate(selectedRecord.probation_end_date)
-                          : "N/A"}
-                      </span>
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">
+                      On Probation:
+                    </span>
+                    <span className="text-gray-900">
+                      {selectedRecord.is_on_probation ? "Yes" : "No"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">
+                      Probation End Date:
+                    </span>
+                    <span className="text-gray-900">
+                      {selectedRecord.is_on_probation &&
+                      selectedRecord.probation_end_date
+                        ? formatDate(selectedRecord.probation_end_date)
+                        : "N/A"}
+                    </span>
+                  </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Current:</span>
                     <span className="text-gray-900">
@@ -575,8 +590,12 @@ const EmploymentRecordActions = ({
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Reporting Officer (Name & CNIC):</span>
-                    <span className="text-gray-900">{reportingOfficerDisplay}</span>
+                    <span className="font-medium text-gray-600">
+                      Reporting Officer (Name & CNIC):
+                    </span>
+                    <span className="text-gray-900">
+                      {reportingOfficerDisplay}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -724,7 +743,9 @@ const EmploymentRecordActions = ({
                   </div>
                   {selectedRecord.contract.probation_start && (
                     <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Probation Start:</span>
+                      <span className="font-medium text-gray-600">
+                        Probation Start:
+                      </span>
                       <span className="text-gray-900">
                         {formatDate(selectedRecord.contract.probation_start)}
                       </span>
@@ -740,7 +761,9 @@ const EmploymentRecordActions = ({
                   </div>
                   {selectedRecord.contract.probation_end && (
                     <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">Probation End:</span>
+                      <span className="font-medium text-gray-600">
+                        Probation End:
+                      </span>
                       <span className="text-gray-900">
                         {formatDate(selectedRecord.contract.probation_end)}
                       </span>

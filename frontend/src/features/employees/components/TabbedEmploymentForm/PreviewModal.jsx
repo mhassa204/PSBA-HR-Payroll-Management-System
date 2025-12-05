@@ -168,13 +168,17 @@ const PreviewModal = ({
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">On Probation:</span>
+                  <span className="font-medium text-gray-600">
+                    On Probation:
+                  </span>
                   <span className="text-gray-900">
                     {previewData.is_on_probation ? "Yes" : "No"}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium text-gray-600">Probation End Date:</span>
+                  <span className="font-medium text-gray-600">
+                    Probation End Date:
+                  </span>
                   <span className="text-gray-900">
                     {previewData.is_on_probation
                       ? displayValue(previewData.probation_end_date) || "N/A"
@@ -201,13 +205,17 @@ const PreviewModal = ({
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Probation Start:</span>
+                    <span className="font-medium text-gray-600">
+                      Probation Start:
+                    </span>
                     <span className="text-gray-900">
                       {displayValue(previewData.probation_start) || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Probation End:</span>
+                    <span className="font-medium text-gray-600">
+                      Probation End:
+                    </span>
                     <span className="text-gray-900">
                       {displayValue(previewData.probation_end) || "N/A"}
                     </span>
