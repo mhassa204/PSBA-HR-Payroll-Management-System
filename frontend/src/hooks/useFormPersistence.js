@@ -732,8 +732,11 @@ export const useFormPersistence = ({
   }, [enabled, formData, saveFormData]);
 
   // Watch additional state and save on change (debounced)
-  // Use a ref to track the previous uploadedFiles to detect actual changes
+  // Use refs to track previous values to detect actual changes
   const prevUploadedFilesRef = useRef(null);
+  const prevExperiencesRef = useRef(null);
+  const prevEducationsRef = useRef(null);
+  const prevProfilePreviewRef = useRef(null);
 
   useEffect(() => {
     if (!enabled || isRestoringRef.current) return;
@@ -778,6 +781,32 @@ export const useFormPersistence = ({
         return current !== prev;
       });
 
+    // Detect experiences/educations/profile picture changes
+    const expsChanged = (() => {
+      const prev = prevExperiencesRef.current;
+      const curr = additionalState.experiences;
+      if (prev === null) return true;
+      try {
+        return JSON.stringify(prev) !== JSON.stringify(curr);
+      } catch {
+        return true;
+      }
+    })();
+
+    const edusChanged = (() => {
+      const prev = prevEducationsRef.current;
+      const curr = additionalState.educations;
+      if (prev === null) return true;
+      try {
+        return JSON.stringify(prev) !== JSON.stringify(curr);
+      } catch {
+        return true;
+      }
+    })();
+
+    const profileChanged =
+      prevProfilePreviewRef.current !== additionalState.profilePicturePreview;
+
     if (filesChanged) {
       prevUploadedFilesRef.current = currentFiles;
 
@@ -796,6 +825,25 @@ export const useFormPersistence = ({
       return () => {
         clearTimeout(timeoutId);
       };
+    }
+
+    // Debounced light save for experiences/educations/profile picture changes
+    if (expsChanged || edusChanged || profileChanged) {
+      prevExperiencesRef.current = additionalState.experiences;
+      prevEducationsRef.current = additionalState.educations;
+      prevProfilePreviewRef.current = additionalState.profilePicturePreview;
+
+      const timeoutId = setTimeout(() => {
+        if (
+          isMountedRef.current &&
+          !isRestoringRef.current &&
+          !isNavigatingRef.current
+        ) {
+          saveFormData({ includeFiles: false });
+        }
+      }, 300);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [
     enabled,

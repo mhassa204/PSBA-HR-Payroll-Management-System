@@ -9,6 +9,7 @@ export const employeeSchema = {
   cnic: "string",
   cnic_issue_date: "string | null",
   cnic_expiry_date: "string | null",
+  cnic_lifetime: "boolean",
   date_of_birth: "string | null",
   gender: "string | null",
   marital_status: "string | null", // Optional now
@@ -68,10 +69,10 @@ export const employeeSchema = {
     updatedAt: "string",
   },
   documents: "array",
-}
+};
 
 // API Response structure
 export const apiResponseSchema = {
   success: "boolean",
   employees: "Employee[]",
-}
+};

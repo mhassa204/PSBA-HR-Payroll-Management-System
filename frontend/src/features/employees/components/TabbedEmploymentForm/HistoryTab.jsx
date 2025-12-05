@@ -78,6 +78,7 @@ const HistoryTab = ({ employmentId, userId }) => {
 
   const [formData, setFormData] = useState({
     field_name: "",
+    old_value: "",
     new_value: "",
     changed_at: "",
     change_description: "",
@@ -105,6 +106,7 @@ const HistoryTab = ({ employmentId, userId }) => {
   }, [
     showManualModal,
     activeField,
+    formData.old_value,
     formData.new_value,
     formData.change_description,
     formData.remarks,

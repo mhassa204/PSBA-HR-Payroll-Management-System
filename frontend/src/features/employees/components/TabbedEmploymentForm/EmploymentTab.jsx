@@ -133,6 +133,7 @@ const EmploymentTab = ({
                 />
               )}
               {!formLoading &&
+                currentOrganization !== "PMBMC" &&
                 (!formOptions?.departments ||
                   formOptions.departments.length === 0) && (
                   <p className="text-yellow-600 text-sm mt-1">
@@ -203,6 +204,8 @@ const EmploymentTab = ({
                 </>
               )}
               {!formLoading &&
+                currentOrganization !== "MBWO" &&
+                currentOrganization !== "PMBMC" &&
                 (!availableDesignations ||
                   availableDesignations.length === 0) && (
                   <p className="text-yellow-600 text-sm mt-1">

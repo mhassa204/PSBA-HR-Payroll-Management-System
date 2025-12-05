@@ -65,7 +65,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "kasur", label: "Kasur" },
       { value: "sheikhupura", label: "Sheikhupura" },
       { value: "nankana_sahib", label: "Nankana Sahib" },
-    ]
+    ],
   },
   {
     value: "karachi",
@@ -77,7 +77,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "karachi_south", label: "Karachi South" },
       { value: "malir", label: "Malir" },
       { value: "korangi", label: "Korangi" },
-    ]
+    ],
   },
   {
     value: "islamabad",
@@ -86,7 +86,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "islamabad_city", label: "Islamabad City" },
       { value: "rawalpindi", label: "Rawalpindi" },
       { value: "attock", label: "Attock" },
-    ]
+    ],
   },
   {
     value: "faisalabad",
@@ -95,7 +95,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "faisalabad_city", label: "Faisalabad City" },
       { value: "jhang", label: "Jhang" },
       { value: "toba_tek_singh", label: "Toba Tek Singh" },
-    ]
+    ],
   },
   {
     value: "multan",
@@ -105,7 +105,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "khanewal", label: "Khanewal" },
       { value: "lodhran", label: "Lodhran" },
       { value: "vehari", label: "Vehari" },
-    ]
+    ],
   },
   {
     value: "peshawar",
@@ -114,7 +114,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "peshawar_city", label: "Peshawar City" },
       { value: "charsadda", label: "Charsadda" },
       { value: "nowshera", label: "Nowshera" },
-    ]
+    ],
   },
   {
     value: "quetta",
@@ -123,7 +123,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "quetta_city", label: "Quetta City" },
       { value: "pishin", label: "Pishin" },
       { value: "killa_abdullah", label: "Killa Abdullah" },
-    ]
+    ],
   },
   {
     value: "gujranwala",
@@ -133,7 +133,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "gujrat", label: "Gujrat" },
       { value: "sialkot", label: "Sialkot" },
       { value: "narowal", label: "Narowal" },
-    ]
+    ],
   },
   {
     value: "hyderabad",
@@ -142,7 +142,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "hyderabad_city", label: "Hyderabad City" },
       { value: "badin", label: "Badin" },
       { value: "thatta", label: "Thatta" },
-    ]
+    ],
   },
   {
     value: "bahawalpur",
@@ -151,7 +151,7 @@ export const PAKISTAN_DISTRICTS = [
       { value: "bahawalpur_city", label: "Bahawalpur City" },
       { value: "bahawalnagar", label: "Bahawalnagar" },
       { value: "rahim_yar_khan", label: "Rahim Yar Khan" },
-    ]
+    ],
   },
 ];
 
@@ -161,9 +161,10 @@ export const getCitiesForDistrict = (districtValue) => {
 
   // Make case-insensitive comparison
   const normalizedValue = districtValue.toLowerCase();
-  const district = PAKISTAN_DISTRICTS.find(d =>
-    d.value.toLowerCase() === normalizedValue ||
-    d.label.toLowerCase() === normalizedValue
+  const district = PAKISTAN_DISTRICTS.find(
+    (d) =>
+      d.value.toLowerCase() === normalizedValue ||
+      d.label.toLowerCase() === normalizedValue
   );
   return district ? district.cities : [];
 };
@@ -196,44 +197,44 @@ export const FILE_UPLOAD_CONFIG = {
     types: ["image/jpeg", "image/png"],
   },
   domicile_certificate: {
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     maxSize: 50 * 1024 * 1024, // 50MB
-    types: ["application/pdf"],
+    types: ["application/pdf", "image/jpeg", "image/png"],
   },
   disability_document: {
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     maxSize: 50 * 1024 * 1024, // 50MB
-    types: ["application/pdf"],
+    types: ["application/pdf", "image/jpeg", "image/png"],
   },
   certificates: {
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     maxSize: 50 * 1024 * 1024, // 50MB
-    types: ["application/pdf"],
+    types: ["application/pdf", "image/jpeg", "image/png"],
   },
   education_document: {
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     maxSize: 50 * 1024 * 1024, // 50MB
-    types: ["application/pdf"],
+    types: ["application/pdf", "image/jpeg", "image/png"],
   },
   experience_document: {
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     maxSize: 50 * 1024 * 1024, // 50MB
-    types: ["application/pdf"],
+    types: ["application/pdf", "image/jpeg", "image/png"],
   },
   medical_fitness_file: {
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     maxSize: 50 * 1024 * 1024, // 50MB
-    types: ["application/pdf"],
+    types: ["application/pdf", "image/jpeg", "image/png"],
   },
   police_character_certificate_file: {
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     maxSize: 50 * 1024 * 1024, // 50MB
-    types: ["application/pdf"],
+    types: ["application/pdf", "image/jpeg", "image/png"],
   },
   other_documents: {
-    accept: "application/pdf",
+    accept: "application/pdf,image/jpeg,image/png",
     maxSize: 50 * 1024 * 1024, // 50MB
-    types: ["application/pdf"],
+    types: ["application/pdf", "image/jpeg", "image/png"],
   },
 };
 

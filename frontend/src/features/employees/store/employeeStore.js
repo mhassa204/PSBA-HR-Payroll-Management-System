@@ -48,10 +48,51 @@ const useEmployeeStore = create(
           actualSearchTerm = searchTerm;
         }
 
-        const result = await employeeService.getAllEmployees(page, actualLimit, actualSearchTerm);
+        const result = await employeeService.getAllEmployees(
+          page,
+          actualLimit,
+          actualSearchTerm
+        );
+
+        // Sort by latest activity (employee updated_at/created_at or employment record dates)
+        const deriveLatestActivity = (emp) => {
+          const parseDate = (val) => {
+            if (!val) return 0;
+            const ts = new Date(val).getTime();
+            return Number.isNaN(ts) ? 0 : ts;
+          };
+
+          const selfDates = [
+            parseDate(emp.updated_at),
+            parseDate(emp.created_at),
+            parseDate(emp.updatedAt),
+            parseDate(emp.createdAt),
+          ];
+
+          const employmentDates = (emp.employmentRecords || []).flatMap(
+            (rec) => [
+              parseDate(rec.updated_at),
+              parseDate(rec.created_at),
+              parseDate(rec.updatedAt),
+              parseDate(rec.createdAt),
+              parseDate(rec.effective_from),
+              parseDate(rec.start_date),
+              parseDate(rec.end_date),
+            ]
+          );
+
+          return Math.max(
+            ...selfDates,
+            ...(employmentDates.length ? employmentDates : [0])
+          );
+        };
+
+        const sortedEmployees = [...(result.data || [])].sort(
+          (a, b) => deriveLatestActivity(b) - deriveLatestActivity(a)
+        );
 
         set({
-          employees: result.data,
+          employees: sortedEmployees,
           pagination: {
             page: result.page,
             limit: result.limit,
@@ -80,8 +121,6 @@ const useEmployeeStore = create(
         if (!employee) {
           throw new Error("Employee not found");
         }
-
-        
 
         set({
           currentEmployee: employee,
@@ -113,10 +152,10 @@ const useEmployeeStore = create(
         // Log audit trail
         auditService.logEmployeeCreated(newEmployee, {
           metadata: {
-            creation_method: 'manual_form',
+            creation_method: "manual_form",
             has_past_experience: employeeData.past_experiences?.length > 0,
-            experience_count: employeeData.past_experiences?.length || 0
-          }
+            experience_count: employeeData.past_experiences?.length || 0,
+          },
         });
 
         // Update the employees list
@@ -147,7 +186,10 @@ const useEmployeeStore = create(
           throw new Error("Employee not found");
         }
 
-        const updatedEmployee = await employeeService.updateEmployee(id, updateData);
+        const updatedEmployee = await employeeService.updateEmployee(
+          id,
+          updateData
+        );
         if (!updatedEmployee) {
           throw new Error("Failed to update employee");
         }
@@ -155,9 +197,9 @@ const useEmployeeStore = create(
         // Log audit trail
         auditService.logEmployeeUpdated(id, oldEmployee, updatedEmployee, {
           metadata: {
-            update_method: 'manual_form',
-            fields_updated: Object.keys(updateData)
-          }
+            update_method: "manual_form",
+            fields_updated: Object.keys(updateData),
+          },
         });
 
         // Update the employees list
@@ -183,50 +225,50 @@ const useEmployeeStore = create(
     },
 
     // Delete employee
-  deleteEmployee: async (id) => {
-  set({ loading: true, error: null });
+    deleteEmployee: async (id) => {
+      set({ loading: true, error: null });
 
-  try {
-    // Get employee data before deletion for audit logging
-    const employeeToDelete = await employeeService.getEmployeeById(id);
-    if (!employeeToDelete) {
-      throw new Error("Employee not found");
-    }
+      try {
+        // Get employee data before deletion for audit logging
+        const employeeToDelete = await employeeService.getEmployeeById(id);
+        if (!employeeToDelete) {
+          throw new Error("Employee not found");
+        }
 
-    const success = await employeeService.deleteEmployee(id);
-    if (!success) {
-      throw new Error("Failed to delete employee");
-    }
+        const success = await employeeService.deleteEmployee(id);
+        if (!success) {
+          throw new Error("Failed to delete employee");
+        }
 
-    // Log audit trail
-    auditService.logEmployeeDeleted(employeeToDelete, {
-      metadata: {
-        deletion_method: 'manual_action',
-        had_employment_records: employeeToDelete.employmentRecords?.length > 0
+        // Log audit trail
+        auditService.logEmployeeDeleted(employeeToDelete, {
+          metadata: {
+            deletion_method: "manual_action",
+            had_employment_records:
+              employeeToDelete.employmentRecords?.length > 0,
+          },
+        });
+
+        // Update the employees list
+        const currentState = get();
+        const filteredEmployees = currentState.employees.filter(
+          (emp) => emp.id !== parseInt(id)
+        );
+
+        set({
+          employees: filteredEmployees,
+          loading: false,
+        });
+
+        return true; // ✅ or return employeeToDelete if needed
+      } catch (error) {
+        set({
+          error: error.message || "Failed to delete employee",
+          loading: false,
+        });
+        throw error;
       }
-    });
-
-    // Update the employees list
-    const currentState = get();
-    const filteredEmployees = currentState.employees.filter(
-      (emp) => emp.id !== parseInt(id)
-    );
-
-    set({
-      employees: filteredEmployees,
-      loading: false,
-    });
-
-    return true; // ✅ or return employeeToDelete if needed
-  } catch (error) {
-    set({
-      error: error.message || "Failed to delete employee",
-      loading: false,
-    });
-    throw error;
-  }
-}
-,
+    },
     // Employment Record Methods - Using real employment service
     addEmploymentRecord: async (recordData) => {
       set({ loading: true, error: null });
@@ -248,12 +290,12 @@ const useEmployeeStore = create(
         // Log audit trail
         auditService.logEmploymentRecordCreated(newRecord, {
           metadata: {
-            creation_method: 'tabbed_form',
+            creation_method: "tabbed_form",
             organization: recordData.organization,
             has_salary: !!recordData.salary,
             has_location: !!recordData.location,
-            has_contract: !!recordData.contract
-          }
+            has_contract: !!recordData.contract,
+          },
         });
 
         set({ loading: false });
@@ -272,7 +314,9 @@ const useEmployeeStore = create(
       set({ loading: true, error: null });
 
       try {
-        const history = await employmentService.getEmploymentHistory(employeeId);
+        const history = await employmentService.getEmploymentHistory(
+          employeeId
+        );
 
         set({ loading: false });
         return history;
@@ -293,18 +337,26 @@ const useEmployeeStore = create(
         // Get old record for audit logging
         const oldRecord = await employmentService.getEmploymentById(recordId);
 
-        const updatedRecord = await employmentService.updateEmployment(recordId, updateData);
+        const updatedRecord = await employmentService.updateEmployment(
+          recordId,
+          updateData
+        );
         if (!updatedRecord) {
           throw new Error("Employment record not found");
         }
 
         // Log audit trail
-        auditService.logEmploymentRecordUpdated(recordId, oldRecord, updatedRecord, {
-          metadata: {
-            update_method: 'tabbed_form',
-            fields_updated: Object.keys(updateData)
+        auditService.logEmploymentRecordUpdated(
+          recordId,
+          oldRecord,
+          updatedRecord,
+          {
+            metadata: {
+              update_method: "tabbed_form",
+              fields_updated: Object.keys(updateData),
+            },
           }
-        });
+        );
 
         set({ loading: false });
         return updatedRecord;
@@ -323,19 +375,26 @@ const useEmployeeStore = create(
 
       try {
         // Get record data before deletion for audit logging
-        const recordToDelete = await employmentService.getEmploymentById(recordId);
+        const recordToDelete = await employmentService.getEmploymentById(
+          recordId
+        );
 
-        const deletedRecord = await employmentService.deleteEmployment(recordId);
+        const deletedRecord = await employmentService.deleteEmployment(
+          recordId
+        );
         if (!deletedRecord) {
           throw new Error("Employment record not found");
         }
 
         // Log audit trail
-        auditService.logEmploymentRecordDeleted(recordToDelete || deletedRecord, {
-          metadata: {
-            deletion_method: 'manual_action'
+        auditService.logEmploymentRecordDeleted(
+          recordToDelete || deletedRecord,
+          {
+            metadata: {
+              deletion_method: "manual_action",
+            },
           }
-        });
+        );
 
         set({ loading: false });
         return deletedRecord;

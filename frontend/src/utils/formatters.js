@@ -344,3 +344,18 @@ export const formatCurrency = (amount) => {
     maximumFractionDigits: 2,
   })}`;
 };
+
+/**
+ * Capitalize each word for display, converting snake_case to spaced title case.
+ * @param {string|number} value - Raw value
+ * @returns {string}
+ */
+export const toTitleCase = (value) => {
+  if (value === null || value === undefined) return "";
+  const str = String(value).replace(/_/g, " ").trim();
+  if (!str) return "";
+  return str.replace(
+    /\b\w+/g,
+    (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  );
+};

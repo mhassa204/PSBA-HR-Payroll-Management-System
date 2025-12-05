@@ -16,6 +16,7 @@ import {
   calculateAge,
   formatCityName,
   formatDistrictName,
+  toTitleCase,
 } from "../../../utils/formatters";
 
 // Helper functions for experience calculations
@@ -664,7 +665,7 @@ const EnhancedUserProfile = () => {
                           Marital Status:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {employee.marital_status || "N/A"}
+                          {toTitleCase(employee.marital_status || "N/A")}
                         </span>
                       </div>
                     </div>
@@ -1024,7 +1025,7 @@ const EnhancedUserProfile = () => {
                           Marital Status:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {employee.marital_status || "N/A"}
+                          {toTitleCase(employee.marital_status || "N/A")}
                         </span>
                       </div>
                       <div className="flex justify-between py-2 border-b border-gray-100">
@@ -1119,7 +1120,9 @@ const EnhancedUserProfile = () => {
                       <div className="flex justify-between py-2 border-b border-gray-100">
                         <span className="text-gray-600">Expire Date:</span>
                         <span className="font-medium">
-                          {formatDate(employee.cnic_expire_date)}
+                          {employee.cnic_lifetime
+                            ? "Lifetime"
+                            : formatDate(employee.cnic_expire_date)}
                         </span>
                       </div>
                       <div className="flex justify-between py-2 border-b border-gray-100">
@@ -1189,6 +1192,14 @@ const EnhancedUserProfile = () => {
                                   </span>
                                   <span className="font-medium">
                                     {education.marks_gpa || "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 text-sm">
+                                    Roll No:
+                                  </span>
+                                  <span className="font-medium">
+                                    {education.roll_no || "N/A"}
                                   </span>
                                 </div>
                               </div>

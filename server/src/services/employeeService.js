@@ -69,6 +69,9 @@ const employeeService = {
       cnic: processedData.cnic,
       cnic_issue_date: processedData.cnic_issue_date,
       cnic_expire_date: processedData.cnic_expire_date,
+      cnic_lifetime:
+        processedData.cnic_lifetime === "true" ||
+        processedData.cnic_lifetime === true,
       date_of_birth: processedData.date_of_birth,
       gender: processedData.gender,
       marital_status: processedData.marital_status,
@@ -200,6 +203,8 @@ const employeeService = {
             institution_name: edu.institution_name,
             year_of_completion: completionDate,
             marks_gpa: edu.marks_gpa || null,
+            roll_no: edu.roll_no || null,
+            total_marks: edu.total_marks ? parseInt(edu.total_marks) : null,
             start_date: startYear || null,
           };
           if (typeof levelId === "number" && !isNaN(levelId)) {
@@ -338,6 +343,7 @@ const employeeService = {
       "cnic",
       "cnic_issue_date",
       "cnic_expire_date",
+      "cnic_lifetime",
       "date_of_birth",
       "gender",
       "marital_status",
@@ -365,7 +371,11 @@ const employeeService = {
 
     for (const key of allowedFields) {
       if (processedData[key] !== undefined) {
-        if (key === "same_address" || key === "has_disability") {
+        if (
+          key === "same_address" ||
+          key === "has_disability" ||
+          key === "cnic_lifetime"
+        ) {
           employeeUpdateData[key] =
             processedData[key] === "true" || processedData[key] === true;
         } else if (dateFields.includes(key)) {

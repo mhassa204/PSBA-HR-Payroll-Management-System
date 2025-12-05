@@ -6,7 +6,11 @@ import { useEmployeeStore } from "../store/employeeStore";
 import useAppNavigation from "../../../hooks/useAppNavigation";
 import Loader from "../../../components/Loader";
 import { useConfirmationContext } from "../../../components/ui/ConfirmationProvider";
-import { displayCNIC, displayPhoneNumber } from "../../../utils/formatters";
+import {
+  displayCNIC,
+  displayPhoneNumber,
+  toTitleCase,
+} from "../../../utils/formatters";
 
 const EmployeeTable = () => {
   const {
@@ -142,16 +146,18 @@ const EmployeeTable = () => {
         accessor: "designation",
         render: (row) => {
           const ce = getCurrentEmployment(row);
-          const dept =
+          const dept = toTitleCase(
             ce?.department?.name ||
-            ce?.department_text ||
-            ce?.department ||
-            "N/A";
-          const desig =
+              ce?.department_text ||
+              ce?.department ||
+              "N/A"
+          );
+          const desig = toTitleCase(
             ce?.designation?.title ||
-            ce?.designation_text ||
-            ce?.designation ||
-            "N/A";
+              ce?.designation_text ||
+              ce?.designation ||
+              "N/A"
+          );
           return (
             <div className="text-left">
               <div
@@ -188,7 +194,7 @@ const EmployeeTable = () => {
         accessor: "employment_status",
         render: (row) => {
           const ce = getCurrentEmployment(row);
-          const status = ce?.employment_status || "N/A";
+          const status = toTitleCase(ce?.employment_status || "N/A");
           return (
             <span
               className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ring-1 ring-inset ${statusColor(

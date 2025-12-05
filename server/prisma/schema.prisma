@@ -17,6 +17,7 @@ model Employee {
   cnic                    String?                  @unique
   cnic_issue_date         DateTime?
   cnic_expire_date        DateTime?
+  cnic_lifetime           Boolean                  @default(false)
   date_of_birth           DateTime?
   gender                  String?
   marital_status          String?
@@ -213,6 +214,8 @@ model EducationQualification {
   institution_name   String
   year_of_completion DateTime? // Changed to DateTime for date selection
   marks_gpa          String?
+  roll_no            String?
+  total_marks        Int?
   // Start year for the education record (year selection)
   start_date         String?   // Changed to String for year selection
   createdAt          DateTime  @default(now())

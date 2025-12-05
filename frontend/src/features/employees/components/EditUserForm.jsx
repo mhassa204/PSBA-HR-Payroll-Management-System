@@ -1,3 +1,4 @@
+import PhoneInput from "../../../components/ui/PhoneInput";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -109,6 +110,7 @@ const EditUserForm = ({ user }) => {
       cnic_issue_date: formatDatabaseDateForInput(user?.cnic_issue_date) || "",
       cnic_expire_date:
         formatDatabaseDateForInput(user?.cnic_expire_date) || "",
+      cnic_lifetime: user?.cnic_lifetime || false,
       date_of_birth: formatDatabaseDateForInput(user?.date_of_birth) || "",
       gender: user?.gender || "",
       marital_status: user?.marital_status || "",
@@ -1071,39 +1073,71 @@ const EditUserForm = ({ user }) => {
                 </div>
 
                 <div>
-                  <label className="form-label required">
-                    CNIC Expiry Date
+                  <label className="form-label flex items-center justify-between">
+                    <span>
+                      CNIC Expiry Date
+                      {!form.watch("cnic_lifetime") && (
+                        <span className="text-red-500 ml-1">*</span>
+                      )}
+                    </span>
+                    <label className="inline-flex items-center text-xs font-normal text-gray-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        checked={form.watch("cnic_lifetime")}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          form.setValue("cnic_lifetime", checked);
+                          if (checked) {
+                            form.setValue("cnic_expire_date", "");
+                          }
+                        }}
+                      />
+                      Lifetime CNIC (no expiry)
+                    </label>
                   </label>
                   <input
                     type="date"
                     min={getTodayDateString()}
+                    disabled={form.watch("cnic_lifetime")}
                     {...register("cnic_expire_date", {
-                      required: "CNIC expiry date is required",
                       validate: (value) => {
-                        const expiryValidation = validateCNICExpiryDate(value);
+                        const isLifetime = form.getValues("cnic_lifetime");
+                        const expiryValidation = validateCNICExpiryDate(
+                          value,
+                          isLifetime
+                        );
                         if (!expiryValidation.isValid) {
                           return expiryValidation.message;
                         }
                         const issueDate = form.getValues("cnic_issue_date");
                         const datesValidation = validateCNICDates(
                           issueDate,
-                          value
+                          value,
+                          isLifetime
                         );
                         return (
                           datesValidation.isValid || datesValidation.message
                         );
                       },
                     })}
-                    className="form-input w-full"
+                    className="form-input w-full disabled:bg-gray-100 disabled:text-gray-500"
                   />
                   {errors.cnic_expire_date && (
                     <p className="error-message">
                       {errors.cnic_expire_date.message}
                     </p>
                   )}
-                  <p className="text-sm text-gray-500 mt-1">
-                    Select today's date or a future date
-                  </p>
+                  {!form.watch("cnic_lifetime") && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Select today's date or a future date
+                    </p>
+                  )}
+                  {form.watch("cnic_lifetime") && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Lifetime CNIC selected; expiry date is not required.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1267,16 +1301,17 @@ const EditUserForm = ({ user }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="form-label">Mobile Number</label>
-                      <input
-                        type="text"
-                        {...register("mobile_number", {
-                          pattern: {
-                            value: /^(\+92|0)?[0-9]{10}$/,
-                            message: "Invalid mobile number format",
-                          },
-                        })}
-                        className="form-input w-full"
-                        placeholder="+92-300-1234567"
+                      <PhoneInput
+                        value={watch("mobile_number")}
+                        onChange={(e) =>
+                          setValue("mobile_number", e.target.value, {
+                            shouldValidate: true,
+                          })
+                        }
+                        placeholder="xxxx-xxxxxxx"
+                        name="mobile_number"
+                        showValidation={true}
+                        error={errors.mobile_number?.message}
                       />
                       {errors.mobile_number && (
                         <p className="error-message">
@@ -1345,12 +1380,17 @@ const EditUserForm = ({ user }) => {
                     </div>
                     <div>
                       <label className="form-label">Domicile District</label>
-                      <input
-                        type="text"
+                      <select
                         {...register("domicile_district")}
                         className="form-input w-full"
-                        placeholder="Enter domicile district"
-                      />
+                      >
+                        <option value="">Select domicile district</option>
+                        {(districtOptions || []).map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-6">
@@ -1422,14 +1462,6 @@ const EditUserForm = ({ user }) => {
                           <i className="fas fa-graduation-cap mr-2 text-green-600"></i>
                           Education Qualifications
                         </h3>
-                        <button
-                          type="button"
-                          onClick={addEducation}
-                          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                        >
-                          <i className="fas fa-plus mr-2"></i>
-                          Add Education
-                        </button>
                       </div>
                       {educations.length === 0 ? (
                         <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
@@ -1565,6 +1597,47 @@ const EditUserForm = ({ user }) => {
                                   />
                                 </div>
 
+                                {/* Total Marks */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Total Marks
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={education.total_marks || ""}
+                                    onChange={(e) =>
+                                      updateEducation(
+                                        education.id,
+                                        "total_marks",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="form-input w-full"
+                                    placeholder="Enter total marks (e.g., 1100)"
+                                  />
+                                </div>
+
+                                {/* Roll No */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Roll No
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={education.roll_no || ""}
+                                    onChange={(e) =>
+                                      updateEducation(
+                                        education.id,
+                                        "roll_no",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="form-input w-full"
+                                    placeholder="Enter exam roll number"
+                                  />
+                                </div>
+
                                 {/* Start Year */}
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1589,6 +1662,16 @@ const EditUserForm = ({ user }) => {
                               </div>
                             </div>
                           ))}
+                          <div className="pt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={addEducation}
+                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                            >
+                              <i className="fas fa-plus mr-2"></i>
+                              Add Education
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1623,14 +1706,6 @@ const EditUserForm = ({ user }) => {
                           <i className="fas fa-briefcase mr-2 text-indigo-600"></i>
                           Past Work Experience
                         </h3>
-                        <button
-                          type="button"
-                          onClick={addExperience}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        >
-                          <i className="fas fa-plus mr-2"></i>
-                          Add Experience
-                        </button>
                       </div>
                       {experiences.length === 0 ? (
                         <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
@@ -1767,6 +1842,16 @@ const EditUserForm = ({ user }) => {
                               </div>
                             </div>
                           ))}
+                          <div className="pt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={addExperience}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            >
+                              <i className="fas fa-plus mr-2"></i>
+                              Add Experience
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1809,7 +1894,7 @@ const EditUserForm = ({ user }) => {
                     documents={documentManager.documents}
                     documentType="domicile"
                     title="Domicile Certificate"
-                    accept="application/pdf"
+                    accept="application/pdf,image/jpeg,image/png"
                     maxSize={50 * 1024 * 1024}
                     onDocumentAdd={documentManager.addDocument}
                     onDocumentRemove={documentManager.removeDocument}
@@ -1819,7 +1904,7 @@ const EditUserForm = ({ user }) => {
                       documents={documentManager.documents}
                       documentType="medical_fitness"
                       title="Medical Fitness Report (Optional)"
-                      accept="application/pdf"
+                      accept="application/pdf,image/jpeg,image/png"
                       maxSize={50 * 1024 * 1024}
                       onDocumentAdd={documentManager.addDocument}
                       onDocumentRemove={documentManager.removeDocument}
@@ -1828,7 +1913,7 @@ const EditUserForm = ({ user }) => {
                       documents={documentManager.documents}
                       documentType="police_character"
                       title="Police Character Certificate (Optional)"
-                      accept="application/pdf"
+                      accept="application/pdf,image/jpeg,image/png"
                       maxSize={50 * 1024 * 1024}
                       onDocumentAdd={documentManager.addDocument}
                       onDocumentRemove={documentManager.removeDocument}
@@ -1850,7 +1935,7 @@ const EditUserForm = ({ user }) => {
                           associatedLabel={`${
                             experience.company_name || "Experience"
                           } ${index + 1}`}
-                          accept="application/pdf"
+                          accept="application/pdf,image/jpeg,image/png"
                           maxSize={50 * 1024 * 1024}
                           multiple={false}
                           onDocumentAdd={documentManager.addDocument}
@@ -1877,7 +1962,7 @@ const EditUserForm = ({ user }) => {
                           } ${index + 1} - ${
                             education.institution_name || "Institution"
                           }`}
-                          accept="application/pdf"
+                          accept="application/pdf,image/jpeg,image/png"
                           maxSize={50 * 1024 * 1024}
                           multiple={false}
                           onDocumentAdd={documentManager.addDocument}
@@ -1891,7 +1976,7 @@ const EditUserForm = ({ user }) => {
                       documents={documentManager.documents}
                       documentType="disability"
                       title="Disability Supporting Document"
-                      accept="application/pdf"
+                      accept="application/pdf,image/jpeg,image/png"
                       maxSize={50 * 1024 * 1024}
                       onDocumentAdd={documentManager.addDocument}
                       onDocumentRemove={documentManager.removeDocument}
@@ -1901,7 +1986,7 @@ const EditUserForm = ({ user }) => {
                     documents={documentManager.documents}
                     documentType="other"
                     title="Other Documents"
-                    accept="application/pdf"
+                    accept="application/pdf,image/jpeg,image/png"
                     maxSize={50 * 1024 * 1024}
                     multiple={true}
                     onDocumentAdd={documentManager.addDocument}

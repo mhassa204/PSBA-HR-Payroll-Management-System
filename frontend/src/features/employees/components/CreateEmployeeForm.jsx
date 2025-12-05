@@ -11,11 +11,13 @@ import { useAuditLog } from "../../../hooks/useAuditLog";
 import { forceRestoreScroll } from "../../../utils/scrollUtils";
 import ProfilePicture from "../../../components/ui/ProfilePicture";
 import CNICInput from "../../../components/ui/CNICInput";
+import PhoneInput from "../../../components/ui/PhoneInput";
 import PDFPreview from "../../../components/ui/PDFPreview";
 import { districtService } from "../../settings/services/districtService";
 import { cityService } from "../../settings/services/cityService";
 import { educationLevelService } from "../../settings/services/educationLevelService";
 import { useFormPersistence } from "../../../hooks/useFormPersistence";
+import { toTitleCase } from "../../../utils/formatters";
 import {
   RELIGION_OPTIONS,
   DISABILITY_TYPES,
@@ -85,6 +87,7 @@ const CreateEmployeeForm = () => {
       cnic: "",
       cnic_issue_date: "",
       cnic_expire_date: "",
+      cnic_lifetime: false,
       date_of_birth: "",
       gender: "",
       marital_status: "", // Now optional
@@ -1137,7 +1140,7 @@ const CreateEmployeeForm = () => {
       return `${day}/${month}/${year}`;
     }
 
-    return String(value);
+    return typeof value === "string" ? toTitleCase(value) : String(value);
   };
 
   if (isLoading) {
@@ -1307,22 +1310,18 @@ const CreateEmployeeForm = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Mobile Number <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    {...form.register("mobile_number", {
-                      required: "Mobile number is required",
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter mobile number"
+                  <PhoneInput
+                    value={form.watch("mobile_number")}
+                    onChange={(e) =>
+                      form.setValue("mobile_number", e.target.value)
+                    }
+                    label="Mobile Number"
+                    required={true}
+                    placeholder="xxxx-xxxxxxx"
+                    error={form.formState.errors.mobile_number?.message}
+                    name="mobile_number"
+                    showValidation={true}
                   />
-                  {form.formState.errors.mobile_number && (
-                    <p className="text-red-600 text-sm mt-1">
-                      {form.formState.errors.mobile_number.message}
-                    </p>
-                  )}
                 </div>
 
                 <div>
@@ -1420,44 +1419,73 @@ const CreateEmployeeForm = () => {
                   )}
                 </div>
 
-                {/* CNIC Expiry Date */}
+                {/* CNIC Expiry / Lifetime */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    CNIC Expiry Date <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center justify-between">
+                    <span>
+                      CNIC Expiry Date
+                      {!form.watch("cnic_lifetime") && (
+                        <span className="text-red-500">*</span>
+                      )}
+                    </span>
+                    <label className="inline-flex items-center text-xs font-normal text-gray-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        checked={form.watch("cnic_lifetime")}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          form.setValue("cnic_lifetime", checked);
+                          if (checked) {
+                            form.setValue("cnic_expire_date", "");
+                          }
+                        }}
+                      />
+                      Lifetime CNIC (no expiry)
+                    </label>
                   </label>
                   <input
                     type="date"
                     min={getTodayDateString()}
+                    disabled={form.watch("cnic_lifetime")}
                     {...form.register("cnic_expire_date", {
-                      required: "CNIC expiry date is required",
                       validate: (value) => {
-                        // First validate that it's not in the past
-                        const expiryValidation = validateCNICExpiryDate(value);
+                        const isLifetime = form.getValues("cnic_lifetime");
+                        const expiryValidation = validateCNICExpiryDate(
+                          value,
+                          isLifetime
+                        );
                         if (!expiryValidation.isValid) {
                           return expiryValidation.message;
                         }
-
-                        // Then validate against issue date
                         const issueDate = form.getValues("cnic_issue_date");
                         const datesValidation = validateCNICDates(
                           issueDate,
-                          value
+                          value,
+                          isLifetime
                         );
                         return (
                           datesValidation.isValid || datesValidation.message
                         );
                       },
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                   />
                   {form.formState.errors.cnic_expire_date && (
                     <p className="text-red-600 text-sm mt-1">
                       {form.formState.errors.cnic_expire_date.message}
                     </p>
                   )}
-                  <p className="text-sm text-gray-500 mt-1">
-                    Select today's date or a future date
-                  </p>
+                  {!form.watch("cnic_lifetime") && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Select today's date or a future date
+                    </p>
+                  )}
+                  {form.watch("cnic_lifetime") && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Lifetime CNIC selected; expiry date is not required.
+                    </p>
+                  )}
                 </div>
 
                 {/* WhatsApp Number */}
@@ -1654,7 +1682,7 @@ const CreateEmployeeForm = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select Domicile District</option>
-                    {PAKISTAN_DISTRICTS.map((district) => (
+                    {districtOptions.map((district) => (
                       <option key={district.value} value={district.value}>
                         {district.label}
                       </option>
@@ -1777,14 +1805,6 @@ const CreateEmployeeForm = () => {
                       <i className="fas fa-briefcase mr-2 text-indigo-600"></i>
                       Past Work Experience
                     </h3>
-                    <button
-                      type="button"
-                      onClick={addExperience}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    >
-                      <i className="fas fa-plus mr-2"></i>
-                      Add Experience
-                    </button>
                   </div>
 
                   {experiences.length === 0 ? (
@@ -1930,6 +1950,16 @@ const CreateEmployeeForm = () => {
                           </div>
                         </div>
                       ))}
+                      <div className="pt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={addExperience}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        >
+                          <i className="fas fa-plus mr-2"></i>
+                          Add Experience
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1943,14 +1973,6 @@ const CreateEmployeeForm = () => {
                       <i className="fas fa-graduation-cap mr-2 text-green-600"></i>
                       Education Qualifications
                     </h3>
-                    <button
-                      type="button"
-                      onClick={addEducation}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                    >
-                      <i className="fas fa-plus mr-2"></i>
-                      Add Education
-                    </button>
                   </div>
 
                   {educations.length === 0 ? (
@@ -2094,6 +2116,47 @@ const CreateEmployeeForm = () => {
                               />
                             </div>
 
+                            {/* Total Marks */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Total Marks
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={education.total_marks || ""}
+                                onChange={(e) =>
+                                  updateEducation(
+                                    education.id,
+                                    "total_marks",
+                                    e.target.value
+                                  )
+                                }
+                                className="form-input w-full"
+                                placeholder="Enter total marks (e.g., 1100)"
+                              />
+                            </div>
+
+                            {/* Roll No */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Roll No
+                              </label>
+                              <input
+                                type="text"
+                                value={education.roll_no || ""}
+                                onChange={(e) =>
+                                  updateEducation(
+                                    education.id,
+                                    "roll_no",
+                                    e.target.value
+                                  )
+                                }
+                                className="form-input w-full"
+                                placeholder="Enter exam roll number"
+                              />
+                            </div>
+
                             {/* Start Year */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2118,6 +2181,16 @@ const CreateEmployeeForm = () => {
                           </div>
                         </div>
                       ))}
+                      <div className="pt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={addEducation}
+                          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                        >
+                          <i className="fas fa-plus mr-2"></i>
+                          Add Education
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2257,7 +2330,7 @@ const CreateEmployeeForm = () => {
                     <div className="space-y-2">
                       <input
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,image/jpeg,image/png"
                         data-file-type="certificates"
                         onChange={(e) => handleFileUpload(e, "certificates")}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2316,7 +2389,7 @@ const CreateEmployeeForm = () => {
                     <div className="space-y-2">
                       <input
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,image/jpeg,image/png"
                         data-file-type="medical_fitness_file"
                         onChange={(e) =>
                           handleFileUpload(e, "medical_fitness_file")
@@ -2375,7 +2448,7 @@ const CreateEmployeeForm = () => {
                     <div className="space-y-2">
                       <input
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,image/jpeg,image/png"
                         data-file-type="police_character_certificate_file"
                         onChange={(e) =>
                           handleFileUpload(
@@ -2444,7 +2517,7 @@ const CreateEmployeeForm = () => {
                       <div className="space-y-2">
                         <input
                           type="file"
-                          accept="application/pdf"
+                          accept="application/pdf,image/jpeg,image/png"
                           data-file-type="disability_document"
                           onChange={(e) =>
                             handleFileUpload(e, "disability_document")
@@ -2528,7 +2601,7 @@ const CreateEmployeeForm = () => {
                                   ] || "initial"
                                 }`}
                                 type="file"
-                                accept="application/pdf"
+                                accept="application/pdf,image/jpeg,image/png"
                                 data-file-type="experience_documents"
                                 data-file-id={experience.id}
                                 onChange={(e) =>
@@ -2613,7 +2686,7 @@ const CreateEmployeeForm = () => {
                                   ] || "initial"
                                 }`}
                                 type="file"
-                                accept="application/pdf"
+                                accept="application/pdf,image/jpeg,image/png"
                                 data-file-type="education_documents"
                                 data-file-id={education.id}
                                 onChange={(e) =>
@@ -2677,7 +2750,7 @@ const CreateEmployeeForm = () => {
                       <input
                         id="other-documents-input"
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,image/jpeg,image/png"
                         multiple
                         onChange={(e) => {
                           handleFileUpload(e, "other_documents", true);
@@ -2945,10 +3018,12 @@ const CreateEmployeeForm = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">
-                      CNIC Expiry Date:
+                      CNIC Expiry:
                     </span>
                     <span className="text-gray-900">
-                      {displayValue(previewData.cnic_expire_date)}
+                      {previewData.cnic_lifetime
+                        ? "Lifetime"
+                        : displayValue(previewData.cnic_expire_date)}
                     </span>
                   </div>
                 </div>

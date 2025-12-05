@@ -22,6 +22,7 @@ import { forceRestoreScroll } from "../../../../utils/scrollUtils";
 import { validateEmploymentData } from "../../../../constants/organizationFieldConfig";
 import { employmentService } from "../../services/employmentService";
 import useToast from "../../../../hooks/useToast";
+import { toTitleCase } from "../../../../utils/formatters";
 
 const TabbedEmploymentForm = forwardRef(
   (
@@ -282,7 +283,32 @@ const TabbedEmploymentForm = forwardRef(
         const office_location =
           eForm.office_location ?? employmentBase.office_location ?? "";
 
-        // 1) Preserve existing record using EXISTING values; only flip is_current to false
+        // 1) Preserve existing record with required fields; mark not current
+        const baseOrg = employmentBase.organization || organization || "";
+        const pickText = (v) =>
+          v == null
+            ? ""
+            : typeof v === "object"
+            ? v.name || v.label || v.title || v.text || v.value || ""
+            : String(v);
+        const pickId = (v) =>
+          v == null ? "" : typeof v === "object" ? v.id || v.value || "" : v;
+
+        const existingDepartmentId =
+          employmentBase.department_id ||
+          pickId(employmentBase.department) ||
+          "";
+        const existingDesignationId =
+          employmentBase.designation_id ||
+          pickId(employmentBase.designation) ||
+          "";
+        const existingRoleTagId =
+          employmentBase.role_tag_id || pickId(employmentBase.role_tag) || "";
+        const existingScaleGradeId =
+          employmentBase.scale_grade_id ||
+          pickId(employmentBase.scale_grade) ||
+          "";
+
         const oldUpdatePayload = {
           employee_id:
             existing?.employee_id ||
@@ -290,37 +316,62 @@ const TabbedEmploymentForm = forwardRef(
             editingRecord?.employee_id ||
             editingRecord?.employee?.id ||
             transformedInitialData?.employee_id,
-          organization: employmentBase.organization || "",
-          department:
-            employmentBase.department || employmentBase.department_id || "",
-          department_id:
-            employmentBase.department_id || employmentBase.department || "",
-          designation:
-            employmentBase.designation || employmentBase.designation_id || "",
-          designation_id:
-            employmentBase.designation_id || employmentBase.designation || "",
+          organization: baseOrg,
           employment_type: employmentBase.employment_type || "Regular",
-          role_tag: employmentBase.role_tag || employmentBase.role_tag_id || "",
-          role_tag_id:
-            employmentBase.role_tag_id || employmentBase.role_tag || "",
           effective_from: employmentBase.effective_from || "",
           effective_till: normalizeDateField(
             employmentBase.effective_till ?? null
           ),
           filer_status: employmentBase.filer_status || "non_filer",
           remarks: employmentBase.remarks ?? "",
-          scale_grade:
-            employmentBase.scale_grade || employmentBase.scale_grade_id || "",
-          scale_grade_id:
-            employmentBase.scale_grade_id || employmentBase.scale_grade || "",
           reporting_officer_id: employmentBase.reporting_officer_id ?? "",
           office_location: employmentBase.office_location ?? "",
           is_current: false,
         };
-        await employmentService.updateEmployment(
-          savedEmploymentId,
-          oldUpdatePayload
-        );
+
+        if (existingRoleTagId) oldUpdatePayload.role_tag_id = existingRoleTagId;
+        if (existingScaleGradeId)
+          oldUpdatePayload.scale_grade_id = existingScaleGradeId;
+
+        if (baseOrg === "PSBA") {
+          if (existingDepartmentId)
+            oldUpdatePayload.department_id = existingDepartmentId;
+          if (existingDesignationId)
+            oldUpdatePayload.designation_id = existingDesignationId;
+        } else if (baseOrg === "MBWO") {
+          if (existingDepartmentId)
+            oldUpdatePayload.department_id = existingDepartmentId;
+          const existingDesignationText =
+            pickText(employmentBase.designation) ||
+            employmentBase.designation_text ||
+            "";
+          if (existingDesignationText)
+            oldUpdatePayload.designation = existingDesignationText;
+        } else if (baseOrg === "PMBMC") {
+          const existingDepartmentText =
+            employmentBase.department_text ||
+            pickText(employmentBase.department) ||
+            "";
+          const existingDesignationText =
+            employmentBase.designation_text ||
+            pickText(employmentBase.designation) ||
+            "";
+          if (existingDepartmentText)
+            oldUpdatePayload.department = existingDepartmentText;
+          if (existingDesignationText)
+            oldUpdatePayload.designation = existingDesignationText;
+        } else {
+          if (existingDepartmentId)
+            oldUpdatePayload.department_id = existingDepartmentId;
+          if (existingDesignationId)
+            oldUpdatePayload.designation_id = existingDesignationId;
+        }
+        if (baseOrg === "PSBA") {
+          await employmentService.updateEmployment(
+            savedEmploymentId,
+            oldUpdatePayload
+          );
+        }
 
         // 2) Create new employment from merged values (including user's latest edits)
         const newEmploymentPayload = {
@@ -330,23 +381,35 @@ const TabbedEmploymentForm = forwardRef(
             editingRecord?.employee?.id ||
             transformedInitialData?.employee_id,
           organization,
-          department,
-          department_id: department,
-          designation,
-          designation_id: designation,
           employment_type,
-          role_tag,
-          role_tag_id: role_tag,
           effective_from,
           effective_till: effective_till === null ? null : effective_till,
           filer_status,
           remarks,
-          scale_grade,
-          scale_grade_id: scale_grade,
           reporting_officer_id,
           office_location,
-          is_current: true,
+          is_current: organization === "PSBA",
         };
+
+        // Common IDs for dropdown-based fields
+        if (role_tag) newEmploymentPayload.role_tag_id = role_tag;
+        if (scale_grade) newEmploymentPayload.scale_grade_id = scale_grade;
+
+        // Organization-specific mapping for department/designation
+        if (organization === "PSBA") {
+          if (department) newEmploymentPayload.department_id = department; // dropdown
+          if (designation) newEmploymentPayload.designation_id = designation; // dropdown
+        } else if (organization === "MBWO") {
+          if (department) newEmploymentPayload.department_id = department; // dropdown
+          if (designation) newEmploymentPayload.designation = designation; // free-text
+        } else if (organization === "PMBMC") {
+          if (department) newEmploymentPayload.department = department; // text
+          if (designation) newEmploymentPayload.designation = designation; // text
+        } else {
+          // default: treat like PSBA
+          if (department) newEmploymentPayload.department_id = department;
+          if (designation) newEmploymentPayload.designation_id = designation;
+        }
         const created = await employmentService.createEmployment(
           newEmploymentPayload
         );
@@ -1058,9 +1121,9 @@ const TabbedEmploymentForm = forwardRef(
             is_current:
               previewData.is_current !== undefined
                 ? previewData.is_current
-                : previewData.organization === "MBWO"
-                ? false
-                : true,
+                : previewData.organization === "PSBA"
+                ? true
+                : false,
             remarks: previewData.remarks || "",
             ...filesToUpload,
             documents_to_remove: documentsToRemove,
@@ -1223,7 +1286,7 @@ const TabbedEmploymentForm = forwardRef(
         return `${day}/${month}/${year}`;
       }
 
-      return String(value);
+      return typeof value === "string" ? toTitleCase(value) : String(value);
     };
 
     const handleContinueToNext = () => {
@@ -1273,14 +1336,82 @@ const TabbedEmploymentForm = forwardRef(
               editingRecord.id
             );
             if (employmentData) {
+              const org = employmentData.organization || "";
+              const toText = (val) => {
+                if (val === null || val === undefined) return "";
+                if (typeof val === "string") return val;
+                if (typeof val === "number") return String(val);
+                if (typeof val === "object") {
+                  // Prefer common readable keys from various API shapes
+                  return (
+                    val.department_name ||
+                    val.designation_name ||
+                    val.name ||
+                    val.label ||
+                    val.title ||
+                    val.designation ||
+                    val.department ||
+                    val.text ||
+                    val.display_name ||
+                    val.code ||
+                    val.value ||
+                    ""
+                  );
+                }
+                return "";
+              };
+              const firstNonEmpty = (...vals) => {
+                for (const v of vals) {
+                  const s = toText(v);
+                  if (s && String(s).trim() !== "") return s;
+                }
+                return "";
+              };
+
               const transformedData = {
                 id: employmentData.id,
                 employee_id: employmentData.employee_id,
                 user_id: employmentData.employee_id,
                 employment: {
-                  organization: employmentData.organization || "",
-                  department: employmentData.department_id || "",
-                  designation: employmentData.designation_id || "",
+                  organization: org,
+                  // Department: PMBMC uses free-text, others use dropdown (ID)
+                  department:
+                    org === "PMBMC"
+                      ? firstNonEmpty(
+                          employmentData.department_text,
+                          employmentData.department,
+                          employmentData.department_name,
+                          employmentData.department_label,
+                          employmentData.departmentTitle,
+                          employmentData.departmentText,
+                          employmentData.department_display_name,
+                          employmentData.department_code,
+                          employmentData.department_value,
+                          employmentData.departmentObj,
+                          employmentData.department_object,
+                          employmentData.department_ref,
+                          employmentData.department_id
+                        )
+                      : employmentData.department_id || "",
+                  // Designation: MBWO and PMBMC use free-text, PSBA uses dropdown (ID)
+                  designation:
+                    org === "MBWO" || org === "PMBMC"
+                      ? firstNonEmpty(
+                          employmentData.designation_text,
+                          employmentData.designation,
+                          employmentData.designation_name,
+                          employmentData.designation_label,
+                          employmentData.designationTitle,
+                          employmentData.designationText,
+                          employmentData.designation_display_name,
+                          employmentData.designation_code,
+                          employmentData.designation_value,
+                          employmentData.designationObj,
+                          employmentData.designation_object,
+                          employmentData.designation_ref,
+                          employmentData.designation_id
+                        )
+                      : employmentData.designation_id || "",
                   employment_type: employmentData.employment_type || "Regular",
                   role_tag: employmentData.role_tag_id || "",
                   effective_from: employmentData.effective_from
