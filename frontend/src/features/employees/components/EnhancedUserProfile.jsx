@@ -601,6 +601,24 @@ const EnhancedUserProfile = () => {
                       </div>
                       <div>
                         <p className="text-sm text-gray-700 font-medium">
+                          On Probation
+                        </p>
+                        <p className="font-semibold text-gray-900">
+                          {currentPosition.is_on_probation ? "Yes" : "No"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-700 font-medium">
+                          Probation End Date
+                        </p>
+                        <p className="font-semibold text-gray-900">
+                          {currentPosition.is_on_probation && currentPosition.probation_end_date
+                            ? formatDate(currentPosition.probation_end_date)
+                            : "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-700 font-medium">
                           Office Location
                         </p>
                         <p className="font-semibold text-gray-900">
@@ -836,6 +854,24 @@ const EnhancedUserProfile = () => {
                                   </span>
                                   <p className="font-semibold text-gray-900">
                                     {record.employment_type}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-700 font-medium">
+                                    On Probation:
+                                  </span>
+                                  <p className="font-semibold text-gray-900">
+                                    {record.is_on_probation ? "Yes" : "No"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-700 font-medium">
+                                    Probation End:
+                                  </span>
+                                  <p className="font-semibold text-gray-900">
+                                    {record.is_on_probation && record.probation_end_date
+                                      ? formatDate(record.probation_end_date)
+                                      : "N/A"}
                                   </p>
                                 </div>
                                 <div>

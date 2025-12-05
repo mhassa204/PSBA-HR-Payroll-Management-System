@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatDateDisplay } from "../../../utils/formatters";
 import { motion } from "framer-motion";
 import { Pencil, Trash, Eye } from "lucide-react";
@@ -6,6 +6,8 @@ import EnhancedModal from "../../../components/ui/EnhancedModal";
 import TabbedEmploymentForm from "./TabbedEmploymentForm";
 import HistoryTab from "./TabbedEmploymentForm/HistoryTab";
 import PDFPreview from "../../../components/ui/PDFPreview";
+import { employmentService } from "../services/employmentService";
+import { employeeService } from "../services/employeeService";
 
 const EmploymentRecordActions = ({
   employmentRecords = [],
@@ -17,6 +19,7 @@ const EmploymentRecordActions = ({
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [reportingOfficerDisplay, setReportingOfficerDisplay] = useState("N/A");
 
   const organizationOptions = [
     {
@@ -110,6 +113,69 @@ const EmploymentRecordActions = ({
     if (!amount || amount === 0) return "N/A";
     return `PKR ${Number(amount).toLocaleString()}`;
   };
+
+  // Resolve Reporting Officer label (Name - CNIC) for details modal
+  useEffect(() => {
+    const roId = String(selectedRecord?.reporting_officer_id || "").trim();
+    if (!showDetailsModal) {
+      setReportingOfficerDisplay(roId || "N/A");
+      return;
+    }
+    if (!roId) {
+      setReportingOfficerDisplay("N/A");
+      return;
+    }
+    let cancelled = false;
+    const loadRO = async () => {
+      try {
+        // 1) Try specialized RO source (usually returns label: "Name - CNIC")
+        const list = await employmentService.getEmployeesForReportingOfficer();
+        let display = null;
+        if (Array.isArray(list)) {
+          const matchA = list.find((e) => {
+            const candidateA = String(e?.value ?? "").trim();
+            const candidateB = String(e?.employee_id ?? "").trim();
+            const candidateC = String(e?.id ?? "").trim();
+            return roId && (roId === candidateA || roId === candidateB || roId === candidateC);
+          });
+          if (matchA) {
+            const name = matchA.full_name || matchA.name || matchA.label?.split(" - ")?.[0];
+            const cnic = matchA.cnic || matchA.label?.split(" - ")?.[1];
+            display = matchA.label || [name, cnic].filter(Boolean).join(" - ");
+          }
+        }
+
+        // 2) Fallback to generic employee dropdown
+        if (!display) {
+          const dropdown = await employeeService.getAllEmployeesForDropdown();
+          if (Array.isArray(dropdown)) {
+            const matchB = dropdown.find((opt) => String(opt?.value ?? "").trim() === roId);
+            if (matchB?.label) {
+              display = matchB.label.replace("_", " - ");
+            }
+          }
+        }
+
+        // 3) Final attempt: direct employee lookup if roId is numeric
+        if (!display && /^\d+$/.test(roId)) {
+          try {
+            const emp = await employeeService.getEmployeeById(roId);
+            if (emp?.full_name || emp?.cnic) {
+              display = [emp.full_name, emp.cnic].filter(Boolean).join(" - ");
+            }
+          } catch {}
+        }
+
+        if (!cancelled) setReportingOfficerDisplay(display || roId);
+      } catch (err) {
+        if (!cancelled) setReportingOfficerDisplay(roId);
+      }
+    };
+    loadRO();
+    return () => {
+      cancelled = true;
+    };
+  }, [showDetailsModal, selectedRecord?.reporting_officer_id]);
 
   // New: location formatter without city/district
   const formatLocation = (rec) => {
@@ -276,6 +342,24 @@ const EmploymentRecordActions = ({
                   <span className="font-medium text-gray-600">Status:</span>
                   <span className="ml-2 text-gray-900">
                     {record.employment_status || "N/A"}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">
+                    On Probation:
+                  </span>
+                  <span className="ml-2 text-gray-900">
+                    {record.is_on_probation ? "Yes" : "No"}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">
+                    Probation End:
+                  </span>
+                  <span className="ml-2 text-gray-900">
+                    {record.is_on_probation && record.probation_end_date
+                      ? formatDate(record.probation_end_date)
+                      : "N/A"}
                   </span>
                 </div>
                 {record.salary && (
@@ -470,6 +554,20 @@ const EmploymentRecordActions = ({
                       {selectedRecord.employment_status || "N/A"}
                     </span>
                   </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">On Probation:</span>
+                      <span className="text-gray-900">
+                        {selectedRecord.is_on_probation ? "Yes" : "No"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Probation End Date:</span>
+                      <span className="text-gray-900">
+                        {selectedRecord.is_on_probation && selectedRecord.probation_end_date
+                          ? formatDate(selectedRecord.probation_end_date)
+                          : "N/A"}
+                      </span>
+                    </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Current:</span>
                     <span className="text-gray-900">
@@ -477,12 +575,8 @@ const EmploymentRecordActions = ({
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Reporting Officer ID:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.reporting_officer_id || "N/A"}
-                    </span>
+                    <span className="font-medium text-gray-600">Reporting Officer (Name & CNIC):</span>
+                    <span className="text-gray-900">{reportingOfficerDisplay}</span>
                   </div>
                 </div>
               </div>
@@ -628,6 +722,14 @@ const EmploymentRecordActions = ({
                       {selectedRecord.contract.contract_number || "N/A"}
                     </span>
                   </div>
+                  {selectedRecord.contract.probation_start && (
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Probation Start:</span>
+                      <span className="text-gray-900">
+                        {formatDate(selectedRecord.contract.probation_start)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">
                       Start Date:
@@ -636,6 +738,14 @@ const EmploymentRecordActions = ({
                       {formatDate(selectedRecord.contract.start_date)}
                     </span>
                   </div>
+                  {selectedRecord.contract.probation_end && (
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Probation End:</span>
+                      <span className="text-gray-900">
+                        {formatDate(selectedRecord.contract.probation_end)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">End Date:</span>
                     <span className="text-gray-900">

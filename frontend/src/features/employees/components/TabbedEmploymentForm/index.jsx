@@ -1718,6 +1718,20 @@ const TabbedEmploymentForm = forwardRef(
                       </span>
                     </div>
                     <div>
+                      <span className="text-gray-600">On Probation:</span>{" "}
+                      <span className="ml-1 text-gray-900">
+                        {previewData.is_on_probation ? "Yes" : "No"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Probation End Date:</span>{" "}
+                      <span className="ml-1 text-gray-900">
+                        {previewData.is_on_probation
+                          ? displayValue(previewData.probation_end_date) || "N/A"
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div>
                       <span className="text-gray-600">
                         Reporting Officer ID:
                       </span>{" "}
@@ -1852,6 +1866,18 @@ const TabbedEmploymentForm = forwardRef(
                         <span className="text-gray-600">End Date:</span>{" "}
                         <span className="ml-1 text-gray-900">
                           {displayValue(previewData.contract_end_date)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Probation Start:</span>{" "}
+                        <span className="ml-1 text-gray-900">
+                          {displayValue(previewData.probation_start)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Probation End:</span>{" "}
+                        <span className="ml-1 text-gray-900">
+                          {displayValue(previewData.probation_end)}
                         </span>
                       </div>
                       <div>

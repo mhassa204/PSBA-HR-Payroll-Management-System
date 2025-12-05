@@ -167,6 +167,20 @@ const PreviewModal = ({
                     {previewData.is_current ? "Yes" : "No"}
                   </span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-600">On Probation:</span>
+                  <span className="text-gray-900">
+                    {previewData.is_on_probation ? "Yes" : "No"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-gray-600">Probation End Date:</span>
+                  <span className="text-gray-900">
+                    {previewData.is_on_probation
+                      ? displayValue(previewData.probation_end_date) || "N/A"
+                      : "N/A"}
+                  </span>
+                </div>
               </div>
               {previewData.remarks && (
                 <div>
@@ -178,7 +192,29 @@ const PreviewModal = ({
               )}
             </div>
 
-            {/* Salary, Location, and Contract sections omitted for brevity in this extracted modal */}
+            {/* Contract Information (including probation fields if provided) */}
+            {isContractual && (
+              <div className="space-y-4">
+                <h4 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                  <i className="fas fa-file-contract mr-2 text-blue-600"></i>
+                  Contract Information
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Probation Start:</span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.probation_start) || "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-600">Probation End:</span>
+                    <span className="text-gray-900">
+                      {displayValue(previewData.probation_end) || "N/A"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex justify-between gap-4 pt-6 border-t border-gray-200">
