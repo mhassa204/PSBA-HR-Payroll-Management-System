@@ -483,13 +483,20 @@ export const useFormPersistence = ({
         // Restore form values AFTER labels are set
         formData.reset(parsed.formValues);
 
-        // Restore experiences
+        // Restore experiences - only if different from current state to avoid redundant updates
         if (
           parsed.experiences &&
           Array.isArray(parsed.experiences) &&
           additionalState.setExperiences
         ) {
-          additionalState.setExperiences(parsed.experiences);
+          const currentExperiences = additionalState.experiences || [];
+          const needsUpdate =
+            JSON.stringify(currentExperiences) !==
+            JSON.stringify(parsed.experiences);
+
+          if (needsUpdate) {
+            additionalState.setExperiences(parsed.experiences);
+          }
         }
 
         // Restore educations (after levelMap is updated so labels are available)
@@ -509,7 +516,16 @@ export const useFormPersistence = ({
             }
             return edu;
           });
-          additionalState.setEducations(updatedEducations);
+
+          // Only update if different from current state
+          const currentEducations = additionalState.educations || [];
+          const needsUpdate =
+            JSON.stringify(currentEducations) !==
+            JSON.stringify(updatedEducations);
+
+          if (needsUpdate) {
+            additionalState.setEducations(updatedEducations);
+          }
         }
 
         // Restore uploaded files

@@ -38,6 +38,24 @@ import { districtService } from "../../settings/services/districtService";
 import { cityService } from "../../settings/services/cityService";
 import { educationLevelService } from "../../settings/services/educationLevelService";
 
+// Helper function to get initial experiences/educations from localStorage
+const getInitialArrayState = (storageKey, arrayKey, fallbackValue = []) => {
+  try {
+    const savedData = localStorage.getItem(storageKey);
+    if (savedData) {
+      const parsed = JSON.parse(savedData);
+      // Check if data is not too old (24 hours)
+      const maxAge = 24 * 60 * 60 * 1000;
+      if (parsed.timestamp && Date.now() - parsed.timestamp <= maxAge) {
+        return parsed[arrayKey] || fallbackValue;
+      }
+    }
+  } catch (error) {
+    // Ignore errors and return fallback value
+  }
+  return fallbackValue;
+};
+
 const EditUserForm = ({ user }) => {
   console.log("EditUserForm received user data:", user);
   console.log("User profile_picture field:", user?.profile_picture);
@@ -45,9 +63,20 @@ const EditUserForm = ({ user }) => {
   const { updateEmployee } = useEmployeeStore();
   const { error, isLoading, clearError, withErrorHandling } = useErrorHandler();
 
-  // State for dynamic sections and file uploads
-  const [educations, setEducations] = useState(() =>
-    (user?.educationQualifications || []).map((eq) => ({
+  // Initialize educations with fallback to localStorage, then user data
+  const [educations, setEducations] = useState(() => {
+    const storageKey = `editEmployeeForm_${user?.id || "new"}`;
+    const savedEducations = getInitialArrayState(
+      storageKey,
+      "educations",
+      null
+    );
+
+    if (savedEducations && savedEducations.length > 0) {
+      return savedEducations;
+    }
+
+    return (user?.educationQualifications || []).map((eq) => ({
       id: eq.id,
       education_level_id: eq.education_level_id || eq.level?.id || "",
       education_level: eq.level?.name || eq.education_level || "",
@@ -56,9 +85,24 @@ const EditUserForm = ({ user }) => {
         formatDatabaseDateForInput(eq.year_of_completion) || "", // Now DateTime, format as date
       marks_gpa: eq.marks_gpa || "",
       start_date: eq.start_date || "", // Now String (year), use directly
-    }))
-  );
-  const [experiences, setExperiences] = useState(user?.pastExperiences || []);
+    }));
+  });
+
+  // Initialize experiences with fallback to localStorage, then user data
+  const [experiences, setExperiences] = useState(() => {
+    const storageKey = `editEmployeeForm_${user?.id || "new"}`;
+    const savedExperiences = getInitialArrayState(
+      storageKey,
+      "experiences",
+      null
+    );
+
+    if (savedExperiences && savedExperiences.length > 0) {
+      return savedExperiences;
+    }
+
+    return user?.pastExperiences || [];
+  });
 
   // API-driven master data
   const [districtOptions, setDistrictOptions] = useState([]);

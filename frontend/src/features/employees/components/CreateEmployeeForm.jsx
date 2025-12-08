@@ -38,6 +38,24 @@ import {
   getTodayDateString,
 } from "../../../utils/employeeValidation";
 
+// Helper function to get initial experiences/educations from localStorage
+const getInitialArrayState = (storageKey, arrayKey) => {
+  try {
+    const savedData = localStorage.getItem(storageKey);
+    if (savedData) {
+      const parsed = JSON.parse(savedData);
+      // Check if data is not too old (24 hours)
+      const maxAge = 24 * 60 * 60 * 1000;
+      if (parsed.timestamp && Date.now() - parsed.timestamp <= maxAge) {
+        return parsed[arrayKey] || [];
+      }
+    }
+  } catch (error) {
+    // Ignore errors and return empty array
+  }
+  return [];
+};
+
 const CreateEmployeeForm = () => {
   const navigate = useNavigate();
   const { createEmployee } = useEmployeeStore();
@@ -45,8 +63,14 @@ const CreateEmployeeForm = () => {
   const { logPageView, logFormSubmission, logError } = useAuditLog();
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewData, setPreviewData] = useState(null);
-  const [experiences, setExperiences] = useState([]);
-  const [educations, setEducations] = useState([]);
+
+  // Initialize experiences and educations from localStorage to prevent empty state flash
+  const [experiences, setExperiences] = useState(() =>
+    getInitialArrayState("createEmployeeForm", "experiences")
+  );
+  const [educations, setEducations] = useState(() =>
+    getInitialArrayState("createEmployeeForm", "educations")
+  );
 
   // Master data options (API-driven)
   const [districtOptions, setDistrictOptions] = useState([]);
