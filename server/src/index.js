@@ -45,9 +45,9 @@ const corsOptions = {
   origin: [
     "http://localhost:5173",
     "http://localhost:5174",
-    "http://localhost:5175",
-    "http://175.107.30.178:5175",
-    "http://192.168.1.115:5175",
+    "http://localhost:5176",
+    "http://175.107.30.178:5176",
+    "http://192.168.1.115:5176",
   ],
   credentials: true,
   optionsSuccessStatus: 200, // ✅ fixed spelling

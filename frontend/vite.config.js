@@ -91,7 +91,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 5175,
+      port: 5176,
       strictPort: true,
       host: true, // binds to all interfaces (0.0.0.0)
       proxy: {
@@ -105,7 +105,7 @@ export default defineConfig(({ mode }) => {
         ? {
             host: HMR_HOST,
             protocol: HMR_HTTPS ? "wss" : "ws",
-            clientPort: HMR_HTTPS ? 443 : 5175,
+            clientPort: HMR_HTTPS ? 443 : 5176,
           }
         : undefined,
     },
