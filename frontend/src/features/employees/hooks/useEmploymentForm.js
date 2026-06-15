@@ -187,25 +187,19 @@ export const useEmploymentForm = ({
         (!!departmentId && /^\d+$/.test(String(departmentId)));
 
       if (isNumericId) {
+        // Department selected: show ONLY that department's designations
         setIsLoading(true);
         try {
           const designations =
             await employmentService.getDesignationsByDepartment(departmentId);
-          // Always also include department-less (field) designations so roles like
-          // "Security & Parking Attendant" remain selectable for any department.
-          const deptless = allDesignations.filter((d) => !d.department_id);
-          const byId = new Map();
-          [...(designations || []), ...deptless].forEach((d) =>
-            byId.set(d.value ?? d.id, d)
-          );
-          setAvailableDesignations(Array.from(byId.values()));
+          setAvailableDesignations(designations || []);
         } catch {
-          setAvailableDesignations(allDesignations.filter((d) => !d.department_id));
+          setAvailableDesignations([]);
         } finally {
           setIsLoading(false);
         }
       } else {
-        // No department selected: show department-less (field) designations,
+        // No department selected: show only department-less (field) designations,
         // e.g. "Security & Parking Attendant", "Sanitation Attendant".
         setAvailableDesignations(allDesignations.filter((d) => !d.department_id));
       }

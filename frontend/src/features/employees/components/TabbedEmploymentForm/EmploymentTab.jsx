@@ -107,9 +107,11 @@ const EmploymentTab = ({
                 <SearchableSelect
                   options={formOptions?.departments || []}
                   value={watch("department")}
-                  onChange={(value) =>
-                    employmentForm.setValue("department", value)
-                  }
+                  onChange={(value) => {
+                    employmentForm.setValue("department", value);
+                    // Clearing the department resets the designation selection
+                    if (!value) employmentForm.setValue("designation", "");
+                  }}
                   placeholder={
                     formOptions?.departments?.length > 0
                       ? "Select Department"
@@ -117,6 +119,7 @@ const EmploymentTab = ({
                   }
                   register={register}
                   name="department"
+                  allowClear={true}
                   required={
                     getValidationRules("employment", "department", {
                       required: "Department is required",
