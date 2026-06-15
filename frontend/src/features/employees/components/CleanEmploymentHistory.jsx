@@ -8,13 +8,14 @@ import ErrorMessage from "../../../components/ui/ErrorMessage";
 import EnhancedModal from "../../../components/ui/EnhancedModal";
 import TabbedEmploymentForm from "./TabbedEmploymentForm";
 import EmploymentRecordActions from "./EmploymentRecordActions";
-import { validateEmploymentData } from '../../../constants/organizationFieldConfig';
+import { validateEmploymentData } from "../../../constants/organizationFieldConfig";
 
 const CleanEmploymentHistory = () => {
   const { employeeId } = useParams();
   const navigate = useNavigate();
   const { getEmployee } = useEmployeeStore();
-  const { error, isLoading, handleError, clearError, withErrorHandling } = useErrorHandler();
+  const { error, isLoading, handleError, clearError, withErrorHandling } =
+    useErrorHandler();
 
   const [employee, setEmployee] = useState(null);
   const [employmentRecords, setEmploymentRecords] = useState([]);
@@ -25,10 +26,10 @@ const CleanEmploymentHistory = () => {
   const [showDeleteEmployeeModal, setShowDeleteEmployeeModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [deletingRecord, setDeletingRecord] = useState(null);
-  
+
   // Ref for the edit form to call refresh function
   const editFormRef = useRef(null);
-  
+
   // Add a key to force entire component refresh when data is updated
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -42,10 +43,11 @@ const CleanEmploymentHistory = () => {
 
   // Debug: Log when editingRecord changes
   useEffect(() => {
-    console.log("🔍 CleanEmploymentHistory: editingRecord changed:", editingRecord);
+    console.log(
+      "🔍 CleanEmploymentHistory: editingRecord changed:",
+      editingRecord
+    );
   }, [editingRecord]);
-  
-
 
   const loadEmployeeData = async () => {
     try {
@@ -58,10 +60,10 @@ const CleanEmploymentHistory = () => {
         throw new Error("Employee not found");
       }
       setEmployee(employeeData);
-      
+
       // Load employment records using the employment service
       const employmentData = await withErrorHandling(
-        () => employmentService.getEmploymentHistory(numericId),
+        () => employmentService.getEmploymentByUserId(numericId),
         { showAlert: false }
       );
       setEmploymentRecords(employmentData || []);
@@ -70,6 +72,12 @@ const CleanEmploymentHistory = () => {
       setEmployee(null);
       setEmploymentRecords([]);
     }
+  };
+
+  // Provide a refresh callback for child forms to trigger page refresh after clone/edit
+  const refreshEmploymentPage = async () => {
+    await loadEmployeeData();
+    setRefreshKey((prev) => prev + 1);
   };
 
   const handleAddEmployment = async (data) => {
@@ -90,30 +98,102 @@ const CleanEmploymentHistory = () => {
       const locationData = data.location || {};
       const contractData = data.contract || {};
 
-      console.log("📋 CleanEmploymentHistory: Extracted employment data:", employmentData);
+      console.log(
+        "📋 CleanEmploymentHistory: Extracted employment data:",
+        employmentData
+      );
 
+      // Check if designation is at the top level (from TabbedEmploymentForm)
+      const designationValue = data.designation || employmentData.designation;
+      const designationIdValue =
+        data.designation_id ||
+        employmentData.designation_id ||
+        designationValue;
 
+      // Check if department and role_tag are at the top level or nested
+      const departmentValue = data.department || employmentData.department;
+      const departmentIdValue =
+        data.department_id || employmentData.department_id || departmentValue;
+      const roleTagValue = data.role_tag || employmentData.role_tag;
+      const roleTagIdValue =
+        data.role_tag_id || employmentData.role_tag_id || roleTagValue;
+      const scaleGradeValue = data.scale_grade || employmentData.scale_grade;
+      const scaleGradeIdValue =
+        data.scale_grade_id || employmentData.scale_grade_id || scaleGradeValue;
 
-      console.log("📝 CleanEmploymentHistory: Creating employment record with data:", data);
+      console.log("🔍 CleanEmploymentHistory: Field extraction:", {
+        topLevelDesignation: data.designation,
+        nestedDesignation: employmentData.designation,
+        topLevelDesignationId: data.designation_id,
+        nestedDesignationId: employmentData.designation_id,
+        finalDesignationValue: designationValue,
+        finalDesignationIdValue: designationIdValue,
+        topLevelDepartment: data.department,
+        nestedDepartment: employmentData.department,
+        topLevelDepartmentId: data.department_id,
+        nestedDepartmentId: employmentData.department_id,
+        finalDepartmentValue: departmentValue,
+        finalDepartmentIdValue: departmentIdValue,
+        topLevelRoleTag: data.role_tag,
+        nestedRoleTag: employmentData.role_tag,
+        topLevelRoleTagId: data.role_tag_id,
+        nestedRoleTagId: employmentData.role_tag_id,
+        finalRoleTagValue: roleTagValue,
+        finalRoleTagIdValue: roleTagIdValue,
+        topLevelScaleGrade: data.scale_grade,
+        nestedScaleGrade: employmentData.scale_grade,
+        topLevelScaleGradeId: data.scale_grade_id,
+        nestedScaleGradeId: employmentData.scale_grade_id,
+        finalScaleGradeValue: scaleGradeValue,
+        finalScaleGradeIdValue: scaleGradeIdValue,
+      });
+
+      console.log(
+        "📝 CleanEmploymentHistory: Creating employment record with data:",
+        data
+      );
 
       // Add employee_id to the data for validation
       const dataWithEmployeeId = {
         ...employmentData,
+        designation: designationValue, // Ensure designation field is present for validation
+        designation_id: designationIdValue, // Also include designation_id
+        department: departmentValue, // Ensure department field is present for validation
+        department_id: departmentIdValue, // Also include department_id
+        role_tag: roleTagValue, // Ensure role_tag field is present for validation
+        role_tag_id: roleTagIdValue, // Also include role_tag_id
+        scale_grade: scaleGradeValue, // Ensure scale_grade field is present for validation
+        scale_grade_id: scaleGradeIdValue, // Also include scale_grade_id
         employee_id: employee.id,
-        user_id: employee.id
+        user_id: employee.id,
       };
 
-      console.log("🔍 CleanEmploymentHistory: Data being validated:", dataWithEmployeeId);
-      console.log("🔍 CleanEmploymentHistory: Designation value:", dataWithEmployeeId.designation);
-      console.log("🔍 CleanEmploymentHistory: Designation ID value:", dataWithEmployeeId.designation_id);
-      console.log("🔍 CleanEmploymentHistory: Organization value:", dataWithEmployeeId.organization);
-      console.log("🔍 CleanEmploymentHistory: Effective from value:", dataWithEmployeeId.effective_from);
+      console.log(
+        "🔍 CleanEmploymentHistory: Data being validated:",
+        dataWithEmployeeId
+      );
+      console.log(
+        "🔍 CleanEmploymentHistory: Designation value:",
+        dataWithEmployeeId.designation
+      );
+      console.log(
+        "🔍 CleanEmploymentHistory: Designation ID value:",
+        dataWithEmployeeId.designation_id
+      );
+      console.log(
+        "🔍 CleanEmploymentHistory: Organization value:",
+        dataWithEmployeeId.organization
+      );
+      console.log(
+        "🔍 CleanEmploymentHistory: Effective from value:",
+        dataWithEmployeeId.effective_from
+      );
 
       // Organization-specific validation
       const validation = validateEmploymentData(dataWithEmployeeId);
       if (!validation.isValid) {
         console.error("❌ Validation errors:", validation.errors);
-        throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+        throw new Error(`Validation failed: ${validation.errors.join(", ")}`);
       }
 
       // Create a comprehensive employment record with all form data
@@ -124,37 +204,54 @@ const CleanEmploymentHistory = () => {
         employee_cnic: employee.cnic,
         // Employment data
         organization: employmentData.organization,
-        department_id: employmentData.department,
-        designation: employmentData.designation, // Keep original designation field
-        designation_id: employmentData.designation, // Also map to designation_id for backend
+        // Always send both id and text fields so backend can derive id/text correctly
+        department: departmentValue,
+        department_id: departmentIdValue,
+        designation: designationValue,
+        designation_id: designationIdValue,
         employment_type: employmentData.employment_type || "Regular",
-        role_tag: employmentData.role_tag,
+        role_tag_id: roleTagIdValue,
+        scale_grade_id: scaleGradeIdValue,
         effective_from: employmentData.effective_from,
         effective_till: employmentData.effective_till || null,
         reporting_officer_id: employmentData.reporting_officer_id || null,
         office_location: employmentData.office_location || null,
         remarks: employmentData.remarks || null,
-        scale_grade: employmentData.scale_grade || null,
         employment_status: employmentData.employment_status || "active",
-        is_current: employmentData.is_current !== undefined ? employmentData.is_current : true,
+        is_current:
+          employmentData.is_current !== undefined
+            ? employmentData.is_current
+            : employmentData.organization === "MBWO"
+            ? false
+            : true,
         filer_status: employmentData.filer_status || "non_filer",
         filer_active_status: employmentData.filer_active_status || null,
         is_on_probation: employmentData.is_on_probation || false,
         probation_end_date: employmentData.probation_end_date || null,
         // Document uploads
-        medical_fitness_report_pdf: employmentData.medical_fitness_report_pdf || null,
-        police_character_certificate: employmentData.police_character_certificate || null,
+        medical_fitness_report_pdf:
+          employmentData.medical_fitness_report_pdf || null,
+        police_character_certificate:
+          employmentData.police_character_certificate || null,
         // Related data
         salary: Object.keys(salaryData).length > 0 ? salaryData : null,
         location: Object.keys(locationData).length > 0 ? locationData : null,
         contract: Object.keys(contractData).length > 0 ? contractData : null,
       };
 
-      console.log("📤 CleanEmploymentHistory: Creating employment record:", completeEmploymentData);
+      console.log(
+        "📤 CleanEmploymentHistory: Creating employment record:",
+        completeEmploymentData
+      );
 
       // Use the employment service to create the record
-      const newEmployment = await employmentService.createEmployment(completeEmploymentData);
-      console.log("✅ CleanEmploymentHistory: Employment record created:", newEmployment);
+      const newEmployment = await employmentService.createEmployment(
+        completeEmploymentData
+      );
+      console.log(
+        "✅ CleanEmploymentHistory: Employment record created:",
+        newEmployment
+      );
 
       // Refresh the employment records
       await loadEmployeeData();
@@ -162,27 +259,46 @@ const CleanEmploymentHistory = () => {
       // Close modal and show success message
       setShowAddModal(false);
       alert("Employment record created successfully!");
-
     } catch (error) {
-      console.error("❌ CleanEmploymentHistory: Error creating employment record:", error);
+      console.error(
+        "❌ CleanEmploymentHistory: Error creating employment record:",
+        error
+      );
       alert(`Error creating employment record: ${error.message}`);
     }
   };
 
   const handleEditEmployment = (record) => {
-    console.log("🔍 CleanEmploymentHistory: handleEditEmployment called with record:", record);
-    console.log("🔍 CleanEmploymentHistory: Current editingRecord state:", editingRecord);
+    console.log(
+      "🔍 CleanEmploymentHistory: handleEditEmployment called with record:",
+      record
+    );
+    console.log(
+      "🔍 CleanEmploymentHistory: Current editingRecord state:",
+      editingRecord
+    );
     setEditingRecord(record);
     setShowEditModal(true);
-    console.log("🔍 CleanEmploymentHistory: Set editingRecord and showEditModal to true");
+    console.log(
+      "🔍 CleanEmploymentHistory: Set editingRecord and showEditModal to true"
+    );
   };
 
   const handleUpdateEmployment = async (updatedRecord) => {
     try {
-      console.log("📝 CleanEmploymentHistory: Updating employment record:", updatedRecord);
+      console.log(
+        "📝 CleanEmploymentHistory: Updating employment record:",
+        updatedRecord
+      );
 
-      if (!updatedRecord || !updatedRecord.employment || !updatedRecord.employment.id) {
-        throw new Error("Invalid employment record for update - missing employment ID");
+      if (
+        !updatedRecord ||
+        !updatedRecord.employment ||
+        !updatedRecord.employment.id
+      ) {
+        throw new Error(
+          "Invalid employment record for update - missing employment ID"
+        );
       }
 
       // Extract data from the updated record
@@ -191,15 +307,82 @@ const CleanEmploymentHistory = () => {
       const locationData = updatedRecord.location || {};
       const contractData = updatedRecord.contract || {};
 
+      // Check if designation is at the top level (from TabbedEmploymentForm)
+      const designationValue =
+        updatedRecord.designation || employmentData.designation;
+      const designationIdValue =
+        updatedRecord.designation_id ||
+        employmentData.designation_id ||
+        designationValue;
+
+      // Check if department, role_tag, and scale_grade are at the top level or nested
+      const departmentValue =
+        updatedRecord.department || employmentData.department;
+      const departmentIdValue =
+        updatedRecord.department_id ||
+        employmentData.department_id ||
+        departmentValue;
+      const roleTagValue = updatedRecord.role_tag || employmentData.role_tag;
+      const roleTagIdValue =
+        updatedRecord.role_tag_id || employmentData.role_tag_id || roleTagValue;
+      const scaleGradeValue =
+        updatedRecord.scale_grade || employmentData.scale_grade;
+      const scaleGradeIdValue =
+        updatedRecord.scale_grade_id ||
+        employmentData.scale_grade_id ||
+        scaleGradeValue;
+      const reportingOfficerValue =
+        updatedRecord.reporting_officer_id ||
+        employmentData.reporting_officer_id;
+
+      console.log("🔍 CleanEmploymentHistory: Field extraction for update:", {
+        topLevelDesignation: updatedRecord.designation,
+        employmentDesignation: employmentData.designation,
+        finalDesignationValue: designationValue,
+        finalDesignationIdValue: designationIdValue,
+        hasDesignation: !!designationValue,
+        topLevelDepartment: updatedRecord.department,
+        nestedDepartment: employmentData.department,
+        finalDepartmentValue: departmentValue,
+        finalDepartmentIdValue: departmentIdValue,
+        topLevelRoleTag: updatedRecord.role_tag,
+        nestedRoleTag: employmentData.role_tag,
+        finalRoleTagValue: roleTagValue,
+        finalRoleTagIdValue: roleTagIdValue,
+        topLevelScaleGrade: updatedRecord.scale_grade,
+        nestedScaleGrade: employmentData.scale_grade,
+        finalScaleGradeValue: scaleGradeValue,
+        finalScaleGradeIdValue: scaleGradeIdValue,
+        topLevelReportingOfficer: updatedRecord.reporting_officer_id,
+        nestedReportingOfficer: employmentData.reporting_officer_id,
+        finalReportingOfficerValue: reportingOfficerValue,
+      });
+
       // Add employee_id and document fields to the data for validation
       const dataWithEmployeeId = {
         ...employmentData,
+        designation: designationValue, // Ensure designation field is present for validation
+        designation_id: designationIdValue, // Also include designation_id
+        department: departmentValue, // Ensure department field is present for validation
+        department_id: departmentIdValue, // Also include department_id
+        role_tag: roleTagValue, // Ensure role_tag field is present for validation
+        role_tag_id: roleTagIdValue, // Also include role_tag_id
+        scale_grade: scaleGradeValue, // Ensure scale_grade field is present for validation
+        scale_grade_id: scaleGradeIdValue, // Also include scale_grade_id
+        reporting_officer_id: reportingOfficerValue, // Ensure reporting_officer_id field is present for validation
         // Include document fields for validation
-        medical_fitness_report_pdf: updatedRecord.medical_fitness_report_pdf || employmentData.medical_fitness_report_pdf || null,
-        police_character_certificate: updatedRecord.police_character_certificate || employmentData.police_character_certificate || null,
-        renewal_report: updatedRecord.renewal_report || employmentData.renewal_report || null,
+        medical_fitness_report_pdf:
+          updatedRecord.medical_fitness_report_pdf ||
+          employmentData.medical_fitness_report_pdf ||
+          null,
+        police_character_certificate:
+          updatedRecord.police_character_certificate ||
+          employmentData.police_character_certificate ||
+          null,
+        renewal_report:
+          updatedRecord.renewal_report || employmentData.renewal_report || null,
         employee_id: employee.id,
-        user_id: employee.id
+        user_id: employee.id,
       };
 
       // Organization-specific validation
@@ -209,13 +392,13 @@ const CleanEmploymentHistory = () => {
         hasPoliceCharacter: !!dataWithEmployeeId.police_character_certificate,
         medicalFitnessValue: dataWithEmployeeId.medical_fitness_report_pdf,
         policeCharacterValue: dataWithEmployeeId.police_character_certificate,
-        organization: dataWithEmployeeId.organization
+        organization: dataWithEmployeeId.organization,
       });
-      
+
       const validation = validateEmploymentData(dataWithEmployeeId);
       if (!validation.isValid) {
         console.error("❌ Validation errors:", validation.errors);
-        throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+        throw new Error(`Validation failed: ${validation.errors.join(", ")}`);
       }
 
       // Prepare update data
@@ -227,93 +410,153 @@ const CleanEmploymentHistory = () => {
         user_id: employee.id,
         // Employment data
         organization: employmentData.organization,
-        department_id: employmentData.department,
-        designation: employmentData.designation, // Keep original designation field
-        designation_id: employmentData.designation, // Also map to designation_id for backend
+        // Always send both id and text fields so backend can derive id/text correctly
+        department: departmentValue,
+        department_id: departmentIdValue,
+        designation: designationValue,
+        designation_id: designationIdValue,
         employment_type: employmentData.employment_type || "Regular",
-        role_tag: employmentData.role_tag,
+        role_tag_id: roleTagIdValue,
+        scale_grade_id: scaleGradeIdValue,
         effective_from: employmentData.effective_from,
         effective_till: employmentData.effective_till || null,
-        reporting_officer_id: employmentData.reporting_officer_id || null,
+        reporting_officer_id: reportingOfficerValue,
         office_location: employmentData.office_location || null,
         remarks: employmentData.remarks || null,
         scale_grade: employmentData.scale_grade || null,
         employment_status: employmentData.employment_status || "active",
-        is_current: employmentData.is_current !== undefined ? employmentData.is_current : true,
+        is_current:
+          employmentData.is_current !== undefined
+            ? employmentData.is_current
+            : employmentData.organization === "MBWO"
+            ? false
+            : true,
         filer_status: employmentData.filer_status || "non_filer",
         filer_active_status: employmentData.filer_active_status || null,
         is_on_probation: employmentData.is_on_probation || false,
         probation_end_date: employmentData.probation_end_date || null,
         // Document uploads - properly structure document data for backend
-        medical_fitness_report_pdf: updatedRecord.medical_fitness_report_pdf || employmentData.medical_fitness_report_pdf || null,
-        police_character_certificate: updatedRecord.police_character_certificate || employmentData.police_character_certificate || null,
+        medical_fitness_report_pdf:
+          updatedRecord.medical_fitness_report_pdf ||
+          employmentData.medical_fitness_report_pdf ||
+          null,
+        police_character_certificate:
+          updatedRecord.police_character_certificate ||
+          employmentData.police_character_certificate ||
+          null,
+        // Pass-through existing renewal report metadata if present (when no new upload)
+        ...(updatedRecord.renewal_report_id ||
+        updatedRecord.renewal_report_url ||
+        updatedRecord.renewal_report_file_path ||
+        updatedRecord.renewal_report_document_name ||
+        updatedRecord.renewal_report_file_type ||
+        updatedRecord.renewal_report_file_size ||
+        updatedRecord.renewal_report_mime_type
+          ? {
+              renewal_report_id: updatedRecord.renewal_report_id,
+              renewal_report_url: updatedRecord.renewal_report_url,
+              renewal_report_file_path: updatedRecord.renewal_report_file_path,
+              renewal_report_document_name:
+                updatedRecord.renewal_report_document_name,
+              renewal_report_file_type: updatedRecord.renewal_report_file_type,
+              renewal_report_file_size: updatedRecord.renewal_report_file_size,
+              renewal_report_mime_type: updatedRecord.renewal_report_mime_type,
+            }
+          : {}),
         // Document removal - include documents to remove
         documents_to_remove: employmentData.documents_to_remove || [],
         // Related data
         salary: Object.keys(salaryData).length > 0 ? salaryData : null,
         location: Object.keys(locationData).length > 0 ? locationData : null,
         // Flatten contract data for backend processing
-        ...(Object.keys(contractData).length > 0 ? {
-          contract_contract_type: contractData.contract_type || "",
-          contract_contract_number: contractData.contract_number || "",
-          contract_start_date: contractData.start_date || "",
-          contract_end_date: contractData.end_date || "",
-          renewal_count: contractData.renewal_count || 0,
-          probation_start: contractData.probation_start || "",
-          probation_end: contractData.probation_end || "",
-          confirmation_status: contractData.confirmation_status || "",
-          confirmation_date: contractData.confirmation_date || "",
-          contract_is_renewed: contractData.is_renewed || false,  // Fixed: Use contract_is_renewed to match backend
-          renewal_report: contractData.renewal_report || null
-        } : {}),
+        ...(Object.keys(contractData).length > 0
+          ? {
+              contract_contract_type: contractData.contract_type || "",
+              contract_contract_number: contractData.contract_number || "",
+              contract_start_date: contractData.start_date || "",
+              contract_end_date: contractData.end_date || "",
+              renewal_count: contractData.renewal_count || 0,
+              probation_start: contractData.probation_start || "",
+              probation_end: contractData.probation_end || "",
+              confirmation_status: contractData.confirmation_status || "",
+              confirmation_date: contractData.confirmation_date || "",
+              contract_is_renewed: contractData.is_renewed || false, // Fixed: Use contract_is_renewed to match backend
+              renewal_report: contractData.renewal_report || null,
+            }
+          : {}),
       };
 
-      console.log("📤 CleanEmploymentHistory: Updating employment record:", updateData);
+      console.log(
+        "📤 CleanEmploymentHistory: Updating employment record:",
+        updateData
+      );
       console.log("🔍 CleanEmploymentHistory: Document removal data:", {
         documentsToRemove: employmentData.documents_to_remove,
         documentsToRemoveType: typeof employmentData.documents_to_remove,
-        documentsToRemoveLength: Array.isArray(employmentData.documents_to_remove) ? employmentData.documents_to_remove.length : 'not array'
+        documentsToRemoveLength: Array.isArray(
+          employmentData.documents_to_remove
+        )
+          ? employmentData.documents_to_remove.length
+          : "not array",
       });
       console.log("🔍 CleanEmploymentHistory: Contract data being sent:", {
         originalContractData: contractData,
-        flattenedContractFields: Object.keys(updateData).filter(key => key.startsWith('contract_') || key === 'renewal_count' || key === 'probation_start' || key === 'probation_end' || key === 'confirmation_status' || key === 'confirmation_date' || key === 'is_renewed' || key === 'renewal_report')
+        flattenedContractFields: Object.keys(updateData).filter(
+          (key) =>
+            key.startsWith("contract_") ||
+            key === "renewal_count" ||
+            key === "probation_start" ||
+            key === "probation_end" ||
+            key === "confirmation_status" ||
+            key === "confirmation_date" ||
+            key === "is_renewed" ||
+            key === "renewal_report"
+        ),
       });
 
       // Use the employment service to update the record
-      const updatedEmployment = await employmentService.updateEmployment(updatedRecord.employment.id, updateData);
-      console.log("✅ CleanEmploymentHistory: Employment record updated:", updatedEmployment);
+      const updatedEmployment = await employmentService.updateEmployment(
+        updatedRecord.employment.id,
+        updateData
+      );
+      console.log(
+        "✅ CleanEmploymentHistory: Employment record updated:",
+        updatedEmployment
+      );
       console.log("🔍 CleanEmploymentHistory: Updated employment structure:", {
         id: updatedEmployment?.id,
         organization: updatedEmployment?.organization,
         contract: updatedEmployment?.contract,
         contractIsRenewed: updatedEmployment?.contract?.is_renewed,
-        allKeys: Object.keys(updatedEmployment || {})
+        allKeys: Object.keys(updatedEmployment || {}),
       });
 
       // Show success message
       alert("Employment record updated successfully!");
-      
+
       // Close modal first
       setShowEditModal(false);
-      
+
       // Refresh the employment records to keep the list in sync
       await loadEmployeeData();
-      
+
       // Force entire component refresh by changing the key
-      setRefreshKey(prev => prev + 1);
-      
+      setRefreshKey((prev) => prev + 1);
+
       // Reset all state to force fresh data load
       setEditingRecord(null);
-
     } catch (error) {
-      console.error("❌ CleanEmploymentHistory: Error updating employment record:", error);
+      console.error(
+        "❌ CleanEmploymentHistory: Error updating employment record:",
+        error
+      );
       alert(`Error updating employment record: ${error.message}`);
     }
   };
 
   const handleDeleteEmployment = (record) => {
-          setDeletingRecord(record);
-      setShowDeleteModal(true);
+    setDeletingRecord(record);
+    setShowDeleteModal(true);
   };
 
   const confirmDeleteEmployment = async () => {
@@ -325,7 +568,6 @@ const CleanEmploymentHistory = () => {
       // Use the employment service to delete the record
       await employmentService.deleteEmployment(deletingRecord.id);
 
-
       // Refresh the employment records
       await loadEmployeeData();
 
@@ -333,9 +575,11 @@ const CleanEmploymentHistory = () => {
       setShowDeleteModal(false);
       setDeletingRecord(null);
       alert("Employment record deleted successfully!");
-
     } catch (error) {
-      console.error("❌ CleanEmploymentHistory: Error deleting employment record:", error);
+      console.error(
+        "❌ CleanEmploymentHistory: Error deleting employment record:",
+        error
+      );
       alert(`Error deleting employment record: ${error.message}`);
     }
   };
@@ -365,7 +609,7 @@ const CleanEmploymentHistory = () => {
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <ErrorMessage 
+        <ErrorMessage
           title="Error Loading Employment History"
           message={error}
           onRetry={loadEmployeeData}
@@ -378,8 +622,12 @@ const CleanEmploymentHistory = () => {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Employee Not Found</h2>
-          <p className="text-gray-600 mb-4">The requested employee could not be found.</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Employee Not Found
+          </h2>
+          <p className="text-gray-600 mb-4">
+            The requested employee could not be found.
+          </p>
           <button
             onClick={() => navigate("/employees")}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -436,22 +684,24 @@ const CleanEmploymentHistory = () => {
         employeeName={employee.full_name}
         userId={employee.id}
         isEditMode={false}
+        onRefresh={refreshEmploymentPage}
       />
 
-                          {/* Edit Employment Modal */}
-                    {editingRecord && (
-                      <TabbedEmploymentForm
-                        ref={editFormRef}
-                        key={`edit-${editingRecord.id}-${refreshKey}`}
-                        isOpen={showEditModal}
-                        onClose={handleEditModalClose}
-                        onSubmit={handleUpdateEmployment}
-                        editingRecord={editingRecord}
-                        isEditMode={true}
-                        employeeName={employee.full_name}
-                        userId={employee.id}
-                      />
-                    )}
+      {/* Edit Employment Modal */}
+      {editingRecord && (
+        <TabbedEmploymentForm
+          ref={editFormRef}
+          key={`edit-${editingRecord.id}-${refreshKey}`}
+          isOpen={showEditModal}
+          onClose={handleEditModalClose}
+          onSubmit={handleUpdateEmployment}
+          editingRecord={editingRecord}
+          isEditMode={true}
+          employeeName={employee.full_name}
+          userId={employee.id}
+          onRefresh={refreshEmploymentPage}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       <EnhancedModal
@@ -467,15 +717,32 @@ const CleanEmploymentHistory = () => {
               Confirm Deletion
             </h3>
             <p className="text-gray-600">
-              Are you sure you want to delete this employment record? This action cannot be undone.
+              Are you sure you want to delete this employment record? This
+              action cannot be undone.
             </p>
             {deletingRecord && (
               <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-700">
-                  <strong>Organization:</strong> {deletingRecord.organization}<br />
-                  <strong>Department:</strong> {deletingRecord.department?.name || 'N/A'}<br />
-                  <strong>Designation:</strong> {deletingRecord.designation?.title || 'N/A'}<br />
-                  <strong>Effective From:</strong> {deletingRecord.effective_from ? new Date(deletingRecord.effective_from).toLocaleDateString() : 'N/A'}
+                  <strong>Organization:</strong> {deletingRecord.organization}
+                  <br />
+                  <strong>Department:</strong>{" "}
+                  {deletingRecord.department?.name ||
+                    deletingRecord.department_text ||
+                    deletingRecord.department ||
+                    "N/A"}
+                  <br />
+                  <strong>Designation:</strong>{" "}
+                  {deletingRecord.designation?.title ||
+                    deletingRecord.designation_text ||
+                    deletingRecord.designation ||
+                    "N/A"}
+                  <br />
+                  <strong>Effective From:</strong>{" "}
+                  {deletingRecord.effective_from
+                    ? new Date(
+                        deletingRecord.effective_from
+                      ).toLocaleDateString()
+                    : "N/A"}
                 </p>
               </div>
             )}

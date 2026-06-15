@@ -3,8 +3,25 @@ const crypto = require("crypto");
 
 const algorithm = "aes-256-cbc";
 
-// 👇 Must be exactly 32 characters (1 char = 1 byte in UTF-8)
-const secretKey = Buffer.from(process.env.ENCRYPTION_SECRET, "utf8"); // ✅ 32-byte key
+// Derive/validate a 32-byte key for AES-256-CBC
+const secretFromEnv = process.env.ENCRYPTION_SECRET;
+if (!secretFromEnv) {
+  throw new Error(
+    "ENCRYPTION_SECRET is not set. Please define it in your server/.env file."
+  );
+}
+
+// If exactly 32 bytes in UTF-8, use directly for backward compatibility; otherwise derive via SHA-256
+let secretKey;
+if (Buffer.byteLength(secretFromEnv, "utf8") === 32) {
+  secretKey = Buffer.from(secretFromEnv, "utf8");
+} else {
+  // Use a deterministic 32-byte key derived from the provided secret
+  secretKey = crypto
+    .createHash("sha256")
+    .update(secretFromEnv, "utf8")
+    .digest();
+}
 
 function encrypt(text) {
   const iv = crypto.randomBytes(16); // 16 bytes required for aes-256-cbc

@@ -1,108 +1,34 @@
+import axiosInstance from '../../../lib/axios';
+
 class DepartmentService {
-  constructor() {
-    this.apiBaseUrl = this.getApiBaseUrl();
-  }
-
-  getApiBaseUrl() {
-    if (typeof process !== "undefined" && process.env) {
-      return process.env.REACT_APP_API_BASE_URL || "http://localhost:3000/api";
-    }
-    return "http://localhost:3000/api";
-  }
-
   async getAllDepartments() {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/departments`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching departments:", error);
-      throw new Error("Failed to fetch departments");
-    }
+    const { data } = await axiosInstance.get('/departments');
+    return data;
   }
 
   async getDepartmentById(id) {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/departments/${id}`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      const result = await response.json();
-      return result.department || result;
-    } catch (error) {
-      console.error("Error fetching department:", error);
-      throw new Error("Failed to fetch department");
-    }
+    const { data } = await axiosInstance.get(`/departments/${id}`);
+    return data.department || data;
   }
 
-  async createDepartment(data) {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/departments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-      }
-      const result = await response.json();
-      return result.department || result;
-    } catch (error) {
-      console.error("Error creating department:", error);
-      throw error;
-    }
+  async createDepartment(payload) {
+    const { data } = await axiosInstance.post('/departments', payload);
+    return data.department || data;
   }
 
-  async updateDepartment(id, data) {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/departments/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-      }
-      const result = await response.json();
-      return result.department || result;
-    } catch (error) {
-      console.error("Error updating department:", error);
-      throw error;
-    }
+  async updateDepartment(id, payload) {
+    const { data } = await axiosInstance.put(`/departments/${id}`, payload);
+    return data.department || data;
   }
 
   async deleteDepartment(id) {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/departments/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-      }
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error("Error deleting department:", error);
-      throw error;
-    }
+    const { data } = await axiosInstance.delete(`/departments/${id}`);
+    return data;
   }
 
   async getDepartmentStatistics() {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/departments/statistics`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching department statistics:", error);
-      throw new Error("Failed to fetch department statistics");
-    }
+    const { data } = await axiosInstance.get('/departments/statistics');
+    return data;
   }
 }
 

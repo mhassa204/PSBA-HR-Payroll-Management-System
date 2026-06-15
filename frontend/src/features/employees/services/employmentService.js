@@ -9,7 +9,7 @@
  * @version 2.0.0
  */
 
-import axios from 'axios';
+import axios from "axios";
 
 /**
  * Employment Service Class
@@ -23,8 +23,17 @@ class EmploymentService {
     this.apiClient = axios.create({
       baseURL: this.apiBaseUrl,
       timeout: 30000,
-      withCredentials: true
+      withCredentials: true,
     });
+
+    // Debug logging for development
+    if (import.meta.env?.MODE === "development") {
+      console.log(
+        "🔧 EmploymentService initialized with API URL:",
+        this.apiBaseUrl
+      );
+      console.log("📍 Current hostname:", window.location.hostname);
+    }
   }
 
   /**
@@ -32,10 +41,29 @@ class EmploymentService {
    * @returns {string} API base URL
    */
   getApiBaseUrl() {
-    if (typeof process !== "undefined" && process.env) {
-      return process.env.REACT_APP_API_BASE_URL || "http://localhost:3000/api";
-    }
-    return "http://localhost:3000/api";
+    // Prefer localhost inference when app is opened on localhost to keep cookies same-site.
+    const preferLocal = (() => {
+      try {
+        const h = window.location.hostname;
+        return h === "localhost" || h === "127.0.0.1";
+      } catch {
+        return false;
+      }
+    })();
+
+    const inferredApi = (() => {
+      try {
+        const { protocol, hostname } = window.location;
+        return `${protocol}//${hostname}:3000/api`;
+      } catch {
+        return "";
+      }
+    })();
+
+    // Use localhost inference when on localhost, otherwise use Vite env or fallback
+    return preferLocal
+      ? inferredApi
+      : import.meta.env?.VITE_API_URL || inferredApi;
   }
 
   /**
@@ -44,17 +72,37 @@ class EmploymentService {
    */
   async getFormOptions() {
     try {
-      const response = await this.apiClient.get("/employment/form-options");
-      
-      if (response.data.success && response.data.options) {
-        return response.data.options;
-      } else {
-        throw new Error("Invalid response format from API");
+      const [optsRes, locRes] = await Promise.all([
+        this.apiClient.get("/employment/form-options"),
+        // Fetch ALL locations so Head Office/Quarters are included
+        this.apiClient.get("/locations"),
+      ]);
+
+      if (optsRes.data.success && optsRes.data.options) {
+        const options = optsRes.data.options;
+        let locations = [];
+        if (locRes?.data?.locations) {
+          locations = locRes.data.locations.map((l) => ({
+            value: l.id,
+            label: l.name,
+            district: l.district?.name,
+            city: l.city?.name,
+          }));
+        } else if (locRes?.data?.bazaars) {
+          // Fallback: some servers might expose only bazaars
+          locations = locRes.data.bazaars.map((l) => ({
+            value: l.id,
+            label: l.name,
+            district: l.district?.name,
+            city: l.city?.name,
+          }));
+        }
+        return { ...options, locations };
       }
+      throw new Error("Invalid response format from API");
     } catch (error) {
       console.error("❌ Error fetching form options:", error);
 
-      
       // Return comprehensive fallback options
       return {
         departments: [
@@ -64,7 +112,7 @@ class EmploymentService {
           { value: 4, label: "Administration", code: "ADMIN" },
           { value: 5, label: "Finance", code: "FIN" },
           { value: 6, label: "Legal", code: "LEGAL" },
-          { value: 7, label: "Operations", code: "OPS" }
+          { value: 7, label: "Operations", code: "OPS" },
         ],
         designations: [
           { value: 1, label: "Junior Engineer", department_id: 1, level: 1 },
@@ -72,50 +120,264 @@ class EmploymentService {
           { value: 3, label: "Engineer", department_id: 1, level: 3 },
           { value: 4, label: "Senior Engineer", department_id: 1, level: 4 },
           { value: 5, label: "Software Developer", department_id: 2, level: 1 },
-          { value: 6, label: "Senior Software Developer", department_id: 2, level: 2 },
+          {
+            value: 6,
+            label: "Senior Software Developer",
+            department_id: 2,
+            level: 2,
+          },
           { value: 7, label: "IT Manager", department_id: 2, level: 3 },
           { value: 8, label: "HR Officer", department_id: 3, level: 1 },
           { value: 9, label: "Senior HR Officer", department_id: 3, level: 2 },
           { value: 10, label: "HR Manager", department_id: 3, level: 3 },
-          { value: 11, label: "Administrative Officer", department_id: 4, level: 1 },
-          { value: 12, label: "Senior Administrative Officer", department_id: 4, level: 2 },
-          { value: 13, label: "Administrative Manager", department_id: 4, level: 3 },
+          {
+            value: 11,
+            label: "Administrative Officer",
+            department_id: 4,
+            level: 1,
+          },
+          {
+            value: 12,
+            label: "Senior Administrative Officer",
+            department_id: 4,
+            level: 2,
+          },
+          {
+            value: 13,
+            label: "Administrative Manager",
+            department_id: 4,
+            level: 3,
+          },
           { value: 14, label: "Accounts Officer", department_id: 5, level: 1 },
-          { value: 15, label: "Senior Accounts Officer", department_id: 5, level: 2 },
+          {
+            value: 15,
+            label: "Senior Accounts Officer",
+            department_id: 5,
+            level: 2,
+          },
           { value: 16, label: "Finance Manager", department_id: 5, level: 3 },
           { value: 17, label: "Legal Officer", department_id: 6, level: 1 },
-          { value: 18, label: "Senior Legal Officer", department_id: 6, level: 2 },
+          {
+            value: 18,
+            label: "Senior Legal Officer",
+            department_id: 6,
+            level: 2,
+          },
           { value: 19, label: "Legal Manager", department_id: 6, level: 3 },
-          { value: 20, label: "Operations Officer", department_id: 7, level: 1 },
-          { value: 21, label: "Senior Operations Officer", department_id: 7, level: 2 },
-          { value: 22, label: "Operations Manager", department_id: 7, level: 3 }
+          {
+            value: 20,
+            label: "Operations Officer",
+            department_id: 7,
+            level: 1,
+          },
+          {
+            value: 21,
+            label: "Senior Operations Officer",
+            department_id: 7,
+            level: 2,
+          },
+          {
+            value: 22,
+            label: "Operations Manager",
+            department_id: 7,
+            level: 3,
+          },
         ],
         organizations: [
           { value: "MBWO", label: "Model Bazaar Welfare Organization" },
           { value: "PMBMC", label: "Punjab Model Bazaars Management Company" },
-          { value: "PSBA", label: "Punjab Sahulat Bazaars Authority" }
+          { value: "PSBA", label: "Punjab Sahulat Bazaars Authority" },
         ],
         employmentTypes: [
-          { value: "Regular", label: "Regular", description: "Permanent employment" },
-          { value: "Contract", label: "Contract", description: "Fixed-term contract" },
-          { value: "Probation", label: "Probation", description: "Probationary period" },
-          { value: "Internship", label: "Internship", description: "Training position" },
-          { value: "Daily Wager", label: "Daily Wager", description: "Daily wage employment" }
+          {
+            value: "Regular",
+            label: "Regular",
+            description: "Permanent employment",
+          },
+          {
+            value: "Contract",
+            label: "Contract",
+            description: "Fixed-term contract",
+          },
+          {
+            value: "Probation",
+            label: "Probation",
+            description: "Probationary period",
+          },
+          {
+            value: "Internship",
+            label: "Internship",
+            description: "Training position",
+          },
+          {
+            value: "Daily Wager",
+            label: "Daily Wager",
+            description: "Daily wage employment",
+          },
         ],
         roleTags: [
-          { value: "admin", label: "Administrator" },
-          { value: "manager", label: "Manager" },
-          { value: "supervisor", label: "Supervisor" },
-          { value: "staff", label: "Staff" },
-          { value: "worker", label: "Worker" }
+          {
+            value: 1,
+            label: "admin",
+            description: "Administrator",
+            category: "Management",
+          },
+          {
+            value: 2,
+            label: "manager",
+            description: "Manager",
+            category: "Management",
+          },
+          {
+            value: 3,
+            label: "supervisor",
+            description: "Supervisor",
+            category: "Supervision",
+          },
+          {
+            value: 4,
+            label: "staff",
+            description: "Staff",
+            category: "Operations",
+          },
+          {
+            value: 5,
+            label: "worker",
+            description: "Worker",
+            category: "Operations",
+          },
+        ],
+        scaleGrades: [
+          {
+            value: 1,
+            label: "BPS-17",
+            description: "Basic Pay Scale 17",
+            level: 17,
+            category: "Government",
+          },
+          {
+            value: 2,
+            label: "BPS-18",
+            description: "Basic Pay Scale 18",
+            level: 18,
+            category: "Government",
+          },
+          {
+            value: 3,
+            label: "BPS-19",
+            description: "Basic Pay Scale 19",
+            level: 19,
+            category: "Government",
+          },
+          {
+            value: 4,
+            label: "Grade-A",
+            description: "Grade A",
+            level: 1,
+            category: "Private",
+          },
+          {
+            value: 5,
+            label: "Grade-B",
+            description: "Grade B",
+            level: 2,
+            category: "Private",
+          },
+        ],
+        users: [
+          {
+            value: 1,
+            label: "John Doe - EMP001",
+            employee_id: "EMP001",
+            cnic: "12345-1234567-1",
+          },
+          {
+            value: 2,
+            label: "Jane Smith - EMP002",
+            employee_id: "EMP002",
+            cnic: "12345-1234567-2",
+          },
+          {
+            value: 3,
+            label: "Bob Johnson - EMP003",
+            employee_id: "EMP003",
+            cnic: "12345-1234567-3",
+          },
+        ],
+        // Basic fallback locations to keep UI usable
+        locations: [
+          { value: 1, label: "Head Office" },
+          { value: 2, label: "Main Bazaar" },
+          { value: 3, label: "Regional Office" },
         ],
         contractTypes: [
-          { value: "Contractual", label: "Contractual", description: "Fixed-term contract" },
-          { value: "Fixed-term", label: "Fixed-term", description: "Fixed duration contract" },
-          { value: "Project-based", label: "Project-based", description: "Project-specific contract" },
-          { value: "Temporary", label: "Temporary", description: "Temporary contract" }
-        ]
+          {
+            value: "Contractual",
+            label: "Contractual",
+            description: "Fixed-term contract",
+          },
+          {
+            value: "Fixed-term",
+            label: "Fixed-term",
+            description: "Fixed duration contract",
+          },
+          {
+            value: "Project-based",
+            label: "Project-based",
+            description: "Project-specific contract",
+          },
+          {
+            value: "Temporary",
+            label: "Temporary",
+            description: "Temporary contract",
+          },
+        ],
       };
+    }
+  }
+
+  /**
+   * Get employees for reporting officer selection
+   * @returns {Promise<Array>} Array of employees formatted for dropdown
+   */
+  async getEmployeesForReportingOfficer() {
+    try {
+      const response = await this.apiClient.get(
+        "/employment/employees-for-reporting-officer"
+      );
+
+      if (response.data.success && response.data.employees) {
+        return response.data.employees;
+      } else {
+        throw new Error("Invalid response format from API");
+      }
+    } catch (error) {
+      console.error(
+        "❌ Error fetching employees for reporting officer:",
+        error
+      );
+
+      // Return fallback data
+      return [
+        {
+          value: 1,
+          label: "John Doe - 12345-1234567-1",
+          employee_id: "EMP001",
+          cnic: "12345-1234567-1",
+        },
+        {
+          value: 2,
+          label: "Jane Smith - 23456-2345678-2",
+          employee_id: "EMP002",
+          cnic: "23456-2345678-2",
+        },
+        {
+          value: 3,
+          label: "Bob Johnson - 34567-3456789-3",
+          employee_id: "EMP003",
+          cnic: "34567-3456789-3",
+        },
+      ];
     }
   }
 
@@ -126,8 +388,10 @@ class EmploymentService {
    */
   async getDesignationsByDepartment(departmentId) {
     try {
-      const response = await this.apiClient.get(`/employment/designations/${departmentId}`);
-      
+      const response = await this.apiClient.get(
+        `/employment/designations/${departmentId}`
+      );
+
       if (response.data.success && response.data.designations) {
         return response.data.designations;
       } else {
@@ -136,47 +400,98 @@ class EmploymentService {
     } catch (error) {
       console.error("❌ Error fetching designations:", error);
 
-      
       // Fallback designations by department
       const fallbackDesignations = {
-        1: [ // Engineering
+        1: [
+          // Engineering
           { value: 1, label: "Junior Engineer", department_id: 1, level: 1 },
           { value: 2, label: "Assistant Engineer", department_id: 1, level: 2 },
           { value: 3, label: "Engineer", department_id: 1, level: 3 },
-          { value: 4, label: "Senior Engineer", department_id: 1, level: 4 }
+          { value: 4, label: "Senior Engineer", department_id: 1, level: 4 },
         ],
-        2: [ // IT
+        2: [
+          // IT
           { value: 5, label: "Software Developer", department_id: 2, level: 1 },
-          { value: 6, label: "Senior Software Developer", department_id: 2, level: 2 },
-          { value: 7, label: "IT Manager", department_id: 2, level: 3 }
+          {
+            value: 6,
+            label: "Senior Software Developer",
+            department_id: 2,
+            level: 2,
+          },
+          { value: 7, label: "IT Manager", department_id: 2, level: 3 },
         ],
-        3: [ // HR
+        3: [
+          // HR
           { value: 8, label: "HR Officer", department_id: 3, level: 1 },
           { value: 9, label: "Senior HR Officer", department_id: 3, level: 2 },
-          { value: 10, label: "HR Manager", department_id: 3, level: 3 }
+          { value: 10, label: "HR Manager", department_id: 3, level: 3 },
         ],
-        4: [ // Administration
-          { value: 11, label: "Administrative Officer", department_id: 4, level: 1 },
-          { value: 12, label: "Senior Administrative Officer", department_id: 4, level: 2 },
-          { value: 13, label: "Administrative Manager", department_id: 4, level: 3 }
+        4: [
+          // Administration
+          {
+            value: 11,
+            label: "Administrative Officer",
+            department_id: 4,
+            level: 1,
+          },
+          {
+            value: 12,
+            label: "Senior Administrative Officer",
+            department_id: 4,
+            level: 2,
+          },
+          {
+            value: 13,
+            label: "Administrative Manager",
+            department_id: 4,
+            level: 3,
+          },
         ],
-        5: [ // Finance
+        5: [
+          // Finance
           { value: 14, label: "Accounts Officer", department_id: 5, level: 1 },
-          { value: 15, label: "Senior Accounts Officer", department_id: 5, level: 2 },
-          { value: 16, label: "Finance Manager", department_id: 5, level: 3 }
+          {
+            value: 15,
+            label: "Senior Accounts Officer",
+            department_id: 5,
+            level: 2,
+          },
+          { value: 16, label: "Finance Manager", department_id: 5, level: 3 },
         ],
-        6: [ // Legal
+        6: [
+          // Legal
           { value: 17, label: "Legal Officer", department_id: 6, level: 1 },
-          { value: 18, label: "Senior Legal Officer", department_id: 6, level: 2 },
-          { value: 19, label: "Legal Manager", department_id: 6, level: 3 }
+          {
+            value: 18,
+            label: "Senior Legal Officer",
+            department_id: 6,
+            level: 2,
+          },
+          { value: 19, label: "Legal Manager", department_id: 6, level: 3 },
         ],
-        7: [ // Operations
-          { value: 20, label: "Operations Officer", department_id: 7, level: 1 },
-          { value: 21, label: "Senior Operations Officer", department_id: 7, level: 2 },
-          { value: 22, label: "Operations Manager", department_id: 7, level: 3 }
-        ]
+        7: [
+          // Operations
+          {
+            value: 20,
+            label: "Operations Officer",
+            department_id: 7,
+            level: 1,
+          },
+          {
+            value: 21,
+            label: "Senior Operations Officer",
+            department_id: 7,
+            level: 2,
+          },
+          {
+            value: 22,
+            label: "Operations Manager",
+            department_id: 7,
+            level: 3,
+          },
+        ],
       };
-      
+
       return fallbackDesignations[departmentId] || [];
     }
   }
@@ -222,53 +537,55 @@ class EmploymentService {
    */
   async createEmployment(employmentData) {
     try {
-      
-
       // Create FormData for file uploads
       const formData = new FormData();
-      
+
       // Helper function to flatten nested objects
-      const flattenObject = (obj, prefix = '') => {
+      const flattenObject = (obj, prefix = "") => {
         for (const key in obj) {
           if (obj.hasOwnProperty(key)) {
             const value = obj[key];
             const newKey = prefix ? `${prefix}_${key}` : key;
-            
+
             if (value !== null && value !== undefined) {
-              if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof File)) {
+              if (
+                typeof value === "object" &&
+                !Array.isArray(value) &&
+                !(value instanceof File)
+              ) {
                 // Recursively flatten nested objects
                 flattenObject(value, newKey);
               } else {
                 formData.append(newKey, value);
-        
               }
             }
           }
         }
       };
-      
+
       // Flatten the entire employment data object
       flattenObject(employmentData);
 
-      // Handle document files that are passed directly as properties
-      const documentFields = ['medical_fitness_report_pdf', 'police_character_certificate', 'renewal_report'];
-      documentFields.forEach(field => {
+      // Employment-level medical fitness and police certificate removed; only renewal_report remains
+      const documentFields = ["renewal_report"];
+      documentFields.forEach((field) => {
         if (employmentData[field] && employmentData[field] instanceof File) {
           formData.append(field, employmentData[field]);
         }
       });
 
-      const response = await this.apiClient.post('/employment', formData, {
+      const response = await this.apiClient.post("/employment", formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          "Content-Type": "multipart/form-data",
         },
       });
-
 
       return response.data.employment || response.data;
     } catch (error) {
       console.error("❌ Error creating employment record:", error);
-      throw new Error(error.response?.data?.error || "Failed to create employment record");
+      throw new Error(
+        error.response?.data?.error || "Failed to create employment record"
+      );
     }
   }
 
@@ -280,26 +597,29 @@ class EmploymentService {
    */
   async updateEmployment(employmentId, employmentData) {
     try {
-
-
       // Create FormData for file uploads
       const formData = new FormData();
-      
+
       // Helper function to flatten nested objects
-      const flattenObject = (obj, prefix = '') => {
+      const flattenObject = (obj, prefix = "") => {
         for (const key in obj) {
           if (obj.hasOwnProperty(key)) {
             const value = obj[key];
             const newKey = prefix ? `${prefix}_${key}` : key;
-            
-            if (value !== null && value !== undefined) {
-              if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof File)) {
+
+            if (value !== undefined) {
+              if (value === null) {
+                formData.append(newKey, "null"); // Send "null" as string
+              } else if (
+                typeof value === "object" &&
+                !Array.isArray(value) &&
+                !(value instanceof File)
+              ) {
                 // Recursively flatten nested objects
                 flattenObject(value, newKey);
               } else if (Array.isArray(value)) {
                 // Handle arrays properly - convert to JSON string to preserve structure
                 formData.append(newKey, JSON.stringify(value));
-
               } else {
                 formData.append(newKey, value);
               }
@@ -307,29 +627,34 @@ class EmploymentService {
           }
         }
       };
-      
+
       // Flatten the entire employment data object
       flattenObject(employmentData);
 
-      // Handle document files that are passed directly as properties
-      const documentFields = ['medical_fitness_report_pdf', 'police_character_certificate', 'renewal_report'];
-      documentFields.forEach(field => {
+      // Employment-level medical fitness and police certificate removed; only renewal_report remains
+      const documentFields = ["renewal_report"];
+      documentFields.forEach((field) => {
         if (employmentData[field] && employmentData[field] instanceof File) {
           formData.append(field, employmentData[field]);
         }
       });
 
-      const response = await this.apiClient.put(`/employment/${employmentId}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
+      const response = await this.apiClient.put(
+        `/employment/${employmentId}`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
 
       return response.data.employment || response.data;
     } catch (error) {
       console.error("Error updating employment record:", error);
-      throw new Error(error.response?.data?.error || "Failed to update employment record");
+      throw new Error(
+        error.response?.data?.error || "Failed to update employment record"
+      );
     }
   }
 
@@ -340,11 +665,15 @@ class EmploymentService {
    */
   async deleteEmployment(employmentId) {
     try {
-      const response = await this.apiClient.delete(`/employment/${employmentId}`);
+      const response = await this.apiClient.delete(
+        `/employment/${employmentId}`
+      );
       return response.data.success || true;
     } catch (error) {
       console.error("Error deleting employment record:", error);
-      throw new Error(error.response?.data?.error || "Failed to delete employment record");
+      throw new Error(
+        error.response?.data?.error || "Failed to delete employment record"
+      );
     }
   }
 
@@ -355,14 +684,17 @@ class EmploymentService {
    */
   async createSalary(employmentId, salaryData) {
     try {
-
-
-      const response = await this.apiClient.post(`/employment/${employmentId}/salary`, salaryData);
+      const response = await this.apiClient.post(
+        `/employment/${employmentId}/salary`,
+        salaryData
+      );
 
       return response.data.salary || response.data;
     } catch (error) {
       console.error("❌ Error creating salary record:", error);
-      throw new Error(error.response?.data?.error || "Failed to create salary record");
+      throw new Error(
+        error.response?.data?.error || "Failed to create salary record"
+      );
     }
   }
 
@@ -374,11 +706,16 @@ class EmploymentService {
    */
   async updateSalary(employmentId, salaryData) {
     try {
-      const response = await this.apiClient.put(`/employment/${employmentId}/salary`, salaryData);
+      const response = await this.apiClient.put(
+        `/employment/${employmentId}/salary`,
+        salaryData
+      );
       return response.data.salary || response.data;
     } catch (error) {
       console.error("Error updating salary record:", error);
-      throw new Error(error.response?.data?.error || "Failed to update salary record");
+      throw new Error(
+        error.response?.data?.error || "Failed to update salary record"
+      );
     }
   }
 
@@ -389,11 +726,15 @@ class EmploymentService {
    */
   async deleteSalary(employmentId) {
     try {
-      const response = await this.apiClient.delete(`/employment/${employmentId}/salary`);
+      const response = await this.apiClient.delete(
+        `/employment/${employmentId}/salary`
+      );
       return response.data.success || true;
     } catch (error) {
       console.error("Error deleting salary record:", error);
-      throw new Error(error.response?.data?.error || "Failed to delete salary record");
+      throw new Error(
+        error.response?.data?.error || "Failed to delete salary record"
+      );
     }
   }
 
@@ -404,14 +745,17 @@ class EmploymentService {
    */
   async createLocation(employmentId, locationData) {
     try {
-
-
-      const response = await this.apiClient.post(`/employment/${employmentId}/location`, locationData);
+      const response = await this.apiClient.post(
+        `/employment/${employmentId}/location`,
+        locationData
+      );
 
       return response.data.location || response.data;
     } catch (error) {
       console.error("❌ Error creating location record:", error);
-      throw new Error(error.response?.data?.error || "Failed to create location record");
+      throw new Error(
+        error.response?.data?.error || "Failed to create location record"
+      );
     }
   }
 
@@ -423,11 +767,16 @@ class EmploymentService {
    */
   async updateLocation(employmentId, locationData) {
     try {
-      const response = await this.apiClient.put(`/employment/${employmentId}/location`, locationData);
+      const response = await this.apiClient.put(
+        `/employment/${employmentId}/location`,
+        locationData
+      );
       return response.data.location || response.data;
     } catch (error) {
       console.error("Error updating location record:", error);
-      throw new Error(error.response?.data?.error || "Failed to update location record");
+      throw new Error(
+        error.response?.data?.error || "Failed to update location record"
+      );
     }
   }
 
@@ -438,11 +787,15 @@ class EmploymentService {
    */
   async deleteLocation(employmentId) {
     try {
-      const response = await this.apiClient.delete(`/employment/${employmentId}/location`);
+      const response = await this.apiClient.delete(
+        `/employment/${employmentId}/location`
+      );
       return response.data.success || true;
     } catch (error) {
       console.error("Error deleting location record:", error);
-      throw new Error(error.response?.data?.error || "Failed to delete location record");
+      throw new Error(
+        error.response?.data?.error || "Failed to delete location record"
+      );
     }
   }
 
@@ -453,14 +806,12 @@ class EmploymentService {
    */
   async createContract(employmentId, contractData) {
     try {
-
-
       // Create FormData for file uploads
       const formData = new FormData();
-      
+
       // Add all form fields
-      Object.keys(contractData).forEach(key => {
-        if (key !== 'files' && key !== 'documentRecords') {
+      Object.keys(contractData).forEach((key) => {
+        if (key !== "files" && key !== "documentRecords") {
           if (contractData[key] !== null && contractData[key] !== undefined) {
             formData.append(key, contractData[key]);
           }
@@ -469,24 +820,29 @@ class EmploymentService {
 
       // Add files if present
       if (contractData.files) {
-        Object.keys(contractData.files).forEach(key => {
+        Object.keys(contractData.files).forEach((key) => {
           if (contractData.files[key]) {
             formData.append(key, contractData.files[key]);
           }
         });
       }
 
-      const response = await this.apiClient.post(`/employment/${employmentId}/contract`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
+      const response = await this.apiClient.post(
+        `/employment/${employmentId}/contract`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
 
       return response.data.contract || response.data;
     } catch (error) {
       console.error("❌ Error creating contract record:", error);
-      throw new Error(error.response?.data?.error || "Failed to create contract record");
+      throw new Error(
+        error.response?.data?.error || "Failed to create contract record"
+      );
     }
   }
 
@@ -498,14 +854,12 @@ class EmploymentService {
    */
   async updateContract(employmentId, contractData) {
     try {
-
-
       // Create FormData for file uploads
       const formData = new FormData();
-      
+
       // Add all form fields
-      Object.keys(contractData).forEach(key => {
-        if (key !== 'files' && key !== 'documentRecords') {
+      Object.keys(contractData).forEach((key) => {
+        if (key !== "files" && key !== "documentRecords") {
           if (contractData[key] !== null && contractData[key] !== undefined) {
             formData.append(key, contractData[key]);
           }
@@ -514,24 +868,29 @@ class EmploymentService {
 
       // Add files if present
       if (contractData.files) {
-        Object.keys(contractData.files).forEach(key => {
+        Object.keys(contractData.files).forEach((key) => {
           if (contractData.files[key]) {
             formData.append(key, contractData.files[key]);
           }
         });
       }
 
-      const response = await this.apiClient.put(`/employment/${employmentId}/contract`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
+      const response = await this.apiClient.put(
+        `/employment/${employmentId}/contract`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
 
       return response.data.contract || response.data;
     } catch (error) {
       console.error("Error updating contract record:", error);
-      throw new Error(error.response?.data?.error || "Failed to update contract record");
+      throw new Error(
+        error.response?.data?.error || "Failed to update contract record"
+      );
     }
   }
 
@@ -542,11 +901,15 @@ class EmploymentService {
    */
   async deleteContract(employmentId) {
     try {
-      const response = await this.apiClient.delete(`/employment/${employmentId}/contract`);
+      const response = await this.apiClient.delete(
+        `/employment/${employmentId}/contract`
+      );
       return response.data.success || true;
     } catch (error) {
       console.error("Error deleting contract record:", error);
-      throw new Error(error.response?.data?.error || "Failed to delete contract record");
+      throw new Error(
+        error.response?.data?.error || "Failed to delete contract record"
+      );
     }
   }
 
@@ -557,13 +920,14 @@ class EmploymentService {
    */
   async getEmploymentById(employmentId) {
     try {
-
       const response = await this.apiClient.get(`/employment/${employmentId}`);
-      
+
       return response.data.employment || response.data;
     } catch (error) {
       console.error("❌ Error fetching employment record:", error);
-      throw new Error(error.response?.data?.error || "Failed to fetch employment record");
+      throw new Error(
+        error.response?.data?.error || "Failed to fetch employment record"
+      );
     }
   }
 
@@ -574,11 +938,15 @@ class EmploymentService {
    */
   async getEmploymentByUserId(userId) {
     try {
-      const response = await this.apiClient.get(`/employment/employee/${userId}`);
+      const response = await this.apiClient.get(
+        `/employment/employee/${userId}`
+      );
       return response.data.employments || [];
     } catch (error) {
       console.error("Error fetching employment records:", error);
-      throw new Error(error.response?.data?.error || "Failed to load employment records");
+      throw new Error(
+        error.response?.data?.error || "Failed to load employment records"
+      );
     }
   }
 
@@ -589,11 +957,15 @@ class EmploymentService {
    */
   async getEmploymentHistory(employeeId) {
     try {
-      const response = await this.apiClient.get(`/employment/employee/${employeeId}`);
+      const response = await this.apiClient.get(
+        `/employment/employee/${employeeId}`
+      );
       return response.data.employments || [];
     } catch (error) {
       console.error("Error fetching employment history:", error);
-      throw new Error(error.response?.data?.error || "Failed to load employment history");
+      throw new Error(
+        error.response?.data?.error || "Failed to load employment history"
+      );
     }
   }
 
@@ -604,11 +976,13 @@ class EmploymentService {
    */
   async createEmploymentRecord(recordData) {
     try {
-      const response = await this.apiClient.post('/employment', recordData);
+      const response = await this.apiClient.post("/employment", recordData);
       return response.data.employment || response.data;
     } catch (error) {
       console.error("Error creating employment record:", error);
-      throw new Error(error.response?.data?.error || "Failed to create employment record");
+      throw new Error(
+        error.response?.data?.error || "Failed to create employment record"
+      );
     }
   }
 
@@ -620,11 +994,16 @@ class EmploymentService {
    */
   async updateEmploymentRecord(recordId, recordData) {
     try {
-      const response = await this.apiClient.put(`/employment/${recordId}`, recordData);
+      const response = await this.apiClient.put(
+        `/employment/${recordId}`,
+        recordData
+      );
       return response.data.employment || response.data;
     } catch (error) {
       console.error("Error updating employment record:", error);
-      throw new Error(error.response?.data?.error || "Failed to update employment record");
+      throw new Error(
+        error.response?.data?.error || "Failed to update employment record"
+      );
     }
   }
 
@@ -639,7 +1018,9 @@ class EmploymentService {
       return response.data.success || true;
     } catch (error) {
       console.error("Error deleting employment record:", error);
-      throw new Error(error.response?.data?.error || "Failed to delete employment record");
+      throw new Error(
+        error.response?.data?.error || "Failed to delete employment record"
+      );
     }
   }
 
@@ -649,11 +1030,160 @@ class EmploymentService {
    */
   async getEmploymentStatistics() {
     try {
-      const response = await this.apiClient.get('/employment/statistics');
+      const response = await this.apiClient.get("/employment/statistics");
       return response.data.statistics || {};
     } catch (error) {
       console.error("Error fetching employment statistics:", error);
-      throw new Error(error.response?.data?.error || "Failed to load employment statistics");
+      throw new Error(
+        error.response?.data?.error || "Failed to load employment statistics"
+      );
+    }
+  }
+
+  /**
+   * Get employment history
+   * @param {number} employmentId - Employment ID
+   * @param {object} filters - Optional filters (historyType, limit, offset)
+   * @returns {Promise<object>} History records and total count
+   */
+  async getEmploymentHistory(employmentId, filters = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (filters.historyType)
+        params.append("historyType", filters.historyType);
+      if (filters.limit) params.append("limit", filters.limit);
+      if (filters.offset) params.append("offset", filters.offset);
+
+      const response = await this.apiClient.get(
+        `/employment/${employmentId}/history?${params.toString()}`
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching employment history:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to fetch employment history"
+      );
+    }
+  }
+
+  /**
+   * Get employment history grouped by type
+   * @param {number} employmentId - Employment ID
+   * @returns {Promise<object>} Grouped history records
+   */
+  async getEmploymentHistoryGrouped(employmentId) {
+    try {
+      const response = await this.apiClient.get(
+        `/employment/${employmentId}/history/grouped`
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching grouped employment history:", error);
+      throw new Error(
+        error.response?.data?.error ||
+          "Failed to fetch grouped employment history"
+      );
+    }
+  }
+
+  /**
+   * Get employment history statistics
+   * @param {number} employmentId - Employment ID
+   * @returns {Promise<object>} History statistics
+   */
+  async getEmploymentHistoryStats(employmentId) {
+    try {
+      const response = await this.apiClient.get(
+        `/employment/${employmentId}/history/stats`
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching employment history stats:", error);
+      throw new Error(
+        error.response?.data?.error ||
+          "Failed to fetch employment history stats"
+      );
+    }
+  }
+
+  /**
+   * Delete a single history record
+   * @param {number} historyId - History record ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteHistoryRecord(historyId) {
+    try {
+      const response = await this.apiClient.delete(
+        `/employment/history/${historyId}`
+      );
+      return response.data.success || true;
+    } catch (error) {
+      console.error("Error deleting history record:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to delete history record"
+      );
+    }
+  }
+
+  /**
+   * Delete all history for an employment
+   * @param {number} employmentId - Employment ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteAllHistory(employmentId) {
+    try {
+      const response = await this.apiClient.delete(
+        `/employment/${employmentId}/history`
+      );
+      return response.data.success || true;
+    } catch (error) {
+      console.error("Error deleting all history:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to delete all history"
+      );
+    }
+  }
+
+  /**
+   * Manually create a history entry
+   * @param {number} employmentId
+   * @param {object} data
+   */
+  async createEmploymentHistoryEntry(employmentId, data) {
+    try {
+      const response = await this.apiClient.post(
+        `/employment/${employmentId}/history`,
+        data
+      );
+      return response.data.history || response.data;
+    } catch (error) {
+      console.error("Error creating manual history entry:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to create history entry"
+      );
+    }
+  }
+
+  /**
+   * Manually update a history entry
+   * @param {number} historyId
+   * @param {object} data
+   */
+  async updateEmploymentHistoryEntry(historyId, data) {
+    try {
+      const response = await this.apiClient.put(
+        `/employment/history/${historyId}`,
+        data
+      );
+      return response.data.history || response.data;
+    } catch (error) {
+      console.error("Error updating manual history entry:", error);
+      throw new Error(
+        error.response?.data?.error || "Failed to update history entry"
+      );
     }
   }
 }

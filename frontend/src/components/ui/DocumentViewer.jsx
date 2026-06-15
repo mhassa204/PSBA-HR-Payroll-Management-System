@@ -5,6 +5,7 @@ import {
   getFileTypeIcon, 
   formatFileSize 
 } from '../../utils/imageUtils';
+import PDFPreview from './PDFPreview';
 
 /**
  * DocumentViewer Component
@@ -33,6 +34,9 @@ const DocumentViewer = ({
 
   const documentUrl = getDocumentUrl(document);
   const isImage = isImageFile(document.file_path);
+  const isPDF = document.file_path && /\.pdf$/i.test(document.file_path) || 
+                document.mime_type === 'application/pdf' ||
+                (document.document_name && /\.pdf$/i.test(document.document_name));
   const fileIcon = getFileTypeIcon(document.file_path);
   const fileSize = formatFileSize(document.file_size);
 
@@ -81,6 +85,15 @@ const DocumentViewer = ({
                   <i className="fas fa-expand-alt text-sm"></i>
                 </button>
               </div>
+            </div>
+          ) : isPDF ? (
+            <div className="relative">
+              <PDFPreview
+                url={documentUrl}
+                fileName={document.document_name || 'Document'}
+                height="200px"
+                showControls={true}
+              />
             </div>
           ) : (
             <div 

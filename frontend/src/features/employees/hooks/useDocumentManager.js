@@ -1,7 +1,3 @@
-
-
-
-
 import { useState, useCallback } from 'react';
 
 /**
@@ -36,69 +32,33 @@ export const useDocumentManager = (initialDocuments = []) => {
 
 
   const removeDocument = useCallback((documentId, documentType) => {
-  
-  
+    // Determine if this is an existing document (numeric id) or a newly added file (string id)
+    const parsedId =
+      typeof documentId === 'number' && Number.isInteger(documentId) && documentId > 0
+        ? documentId
+        : (typeof documentId === 'string' && /^\d+$/.test(documentId) ? parseInt(documentId, 10) : null);
 
-  // Validate documentId
-  const parsedDocumentId = typeof documentId === 'string' ? parseInt(documentId, 10) : documentId;
-  if (isNaN(parsedDocumentId) || parsedDocumentId <= 0) {
-    console.error('🗑️ Invalid documentId:', documentId);
-    return;
-  }
+    const existingDoc = parsedId ? documents.find(doc => doc.id === parsedId) : null;
 
-  // Check if it's an existing document
-  const existingDoc = documents.find(doc => doc.id === parsedDocumentId);
-  console.log('🗑️ Found existing doc:', JSON.stringify(existingDoc, null, 2));
+    if (existingDoc) {
+      // Mark existing document for removal and remove from view
+      setRemovedDocuments(prev => (prev.some(doc => doc.id === existingDoc.id) ? prev : [...prev, existingDoc]));
+      setDocuments(prev => prev.filter(doc => doc.id !== existingDoc.id));
+      return;
+    }
 
-  if (existingDoc) {
-    // Mark existing document for removal
-    console.log('🗑️ Marking existing document for removal:', existingDoc.id);
-    setRemovedDocuments(prev => {
-      // Avoid duplicates
-      if (!prev.some(doc => doc.id === parsedDocumentId)) {
-        const updated = [...prev, { ...existingDoc, id: parsedDocumentId }];
-        console.log('🗑️ Updated removedDocuments:', JSON.stringify(updated, null, 2));
-        return updated;
-      }
-      console.log('🗑️ Document already marked for removal:', parsedDocumentId);
-      return prev;
-    });
-    // Remove from documents to reflect UI change
-    setDocuments(prev => {
-      const updated = prev.filter(doc => doc.id !== parsedDocumentId);
-      console.log('🗑️ Updated documents:', JSON.stringify(updated, null, 2));
-      return updated;
-    });
-  } else {
-    // Remove from new files
-    console.log('🗑️ Removing from new files');
+    // Otherwise, remove from new files by temporary ID
     setNewFiles(prev => {
       const updated = { ...prev };
-      let found = false;
-
       Object.keys(updated).forEach(key => {
         if (updated[key]) {
-          const originalLength = updated[key].length;
           updated[key] = updated[key].filter(item => item.id !== documentId);
-          if (updated[key].length < originalLength) {
-            found = true;
-            console.log(`🗑️ Removed file from key: ${key}`);
-          }
-          if (updated[key].length === 0) {
-            delete updated[key]; // Clean up empty keys
-          }
+          if (updated[key].length === 0) delete updated[key];
         }
       });
-
-      if (!found) {
-        console.warn('🗑️ File not found in newFiles for ID:', documentId);
-      }
-
-      console.log('🗑️ Updated newFiles:', JSON.stringify(Object.keys(updated), null, 2));
       return updated;
     });
-  }
-}, [documents, newFiles]);
+  }, [documents]);
   // Get all documents for display (existing + new files as preview)
   const getAllDocuments = useCallback(() => {
     const displayDocuments = [...documents];
@@ -171,8 +131,11 @@ export const useDocumentManager = (initialDocuments = []) => {
 
         let fieldName = documentTypeToFieldName[documentType] || documentType;
 
-        if (associatedId && (documentType === 'education' || documentType === 'experience')) {
-          fieldName = `${fieldName}_${associatedId}`;
+        if (associatedId !== null && associatedId !== undefined && (documentType === 'education' || documentType === 'experience')) {
+          // Ensure associatedId is converted to string for consistent field naming
+          const idString = String(associatedId);
+          fieldName = `${fieldName}_${idString}`;
+          console.log(`📎 Document field name: ${fieldName} for ${documentType} with associatedId: ${idString}`);
         }
 
         if (files.length === 1) {

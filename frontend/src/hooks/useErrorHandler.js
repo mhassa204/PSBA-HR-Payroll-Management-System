@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useToastContext } from '../components/ui/ToastContainer';
 
 export const useErrorHandler = () => {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { showError, showSuccess } = useToastContext();
 
   const handleError = useCallback((error, options = {}) => {
     const {
@@ -34,7 +36,7 @@ export const useErrorHandler = () => {
 
     // Show alert if requested
     if (showAlert) {
-      alert(getErrorMessage());
+      showError(getErrorMessage());
     }
 
     // Handle specific error codes
@@ -130,8 +132,8 @@ export const useApiCall = () => {
       setIsLoading(true);
       const result = await apiFunction();
       
-      if (showSuccessAlert) {
-        alert(successMessage);
+      if (successMessage) {
+        showSuccess(successMessage);
       }
       
       if (onSuccess) {

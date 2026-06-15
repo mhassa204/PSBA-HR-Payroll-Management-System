@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 
 /**
  * Hook for managing employment documents
- * Handles medical fitness and police character certificate uploads and removals
+ * Previously handled medical fitness and police character certificate uploads; now deprecated
  */
 export const useEmploymentDocumentManager = (initialDocuments = []) => {
   const [documents, setDocuments] = useState(initialDocuments);

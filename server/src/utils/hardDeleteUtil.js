@@ -14,6 +14,11 @@ class HardDeleteUtil {
   static async hardDeleteEmployee(employeeId) {
     return await prisma.$transaction(async (tx) => {
       // Delete all related records in reverse dependency order
+
+      // 0. Delete duty roster entries referencing this employee (prevents FK violations)
+      await tx.dutyRosterEntry.deleteMany({
+        where: { employee_id: employeeId }
+      });
       
       // 1. Delete employment documents
       await tx.employmentDocument.deleteMany({
@@ -33,16 +38,7 @@ class HardDeleteUtil {
         }
       });
 
-      // 3. Delete employment locations
-      await tx.employmentLocation.deleteMany({
-        where: {
-          employment: {
-            employee_id: employeeId
-          }
-        }
-      });
-
-      // 4. Delete employment salaries
+      // 3. Delete employment salaries
       await tx.employmentSalary.deleteMany({
         where: {
           employment: {
@@ -51,27 +47,27 @@ class HardDeleteUtil {
         }
       });
 
-      // 5. Delete employment records
+      // 4. Delete employment records
       await tx.employment.deleteMany({
         where: { employee_id: employeeId }
       });
 
-      // 6. Delete employee documents
+      // 5. Delete employee documents
       await tx.employeeDocument.deleteMany({
         where: { employee_id: employeeId }
       });
 
-      // 7. Delete education qualifications
+      // 6. Delete education qualifications
       await tx.educationQualification.deleteMany({
         where: { employee_id: employeeId }
       });
 
-      // 8. Delete past experiences
+      // 7. Delete past experiences
       await tx.pastExperience.deleteMany({
         where: { employee_id: employeeId }
       });
 
-      // 9. Finally delete the employee
+      // 8. Finally delete the employee
       const deletedEmployee = await tx.employee.delete({
         where: { id: employeeId }
       });
@@ -103,17 +99,12 @@ class HardDeleteUtil {
         where: { employment_id: employmentId }
       });
 
-      // 3. Delete employment location
-      await tx.employmentLocation.deleteMany({
-        where: { employment_id: employmentId }
-      });
-
-      // 4. Delete employment salary
+      // 3. Delete employment salary
       await tx.employmentSalary.deleteMany({
         where: { employment_id: employmentId }
       });
 
-      // 5. Finally delete the employment record
+      // 4. Finally delete the employment record
       const deletedEmployment = await tx.employment.delete({
         where: { id: employmentId }
       });
@@ -241,15 +232,6 @@ class HardDeleteUtil {
           }
         });
         cleanupResults.employmentContracts = deletedContracts.count;
-
-        // Clean up soft-deleted employment locations
-        const deletedLocations = await tx.employmentLocation.deleteMany({
-          where: {
-            is_deleted: true,
-            updatedAt: { lt: cutoffDate }
-          }
-        });
-        cleanupResults.employmentLocations = deletedLocations.count;
 
         // Clean up soft-deleted employment salaries
         const deletedSalaries = await tx.employmentSalary.deleteMany({

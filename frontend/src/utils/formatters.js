@@ -10,18 +10,18 @@
  */
 export const formatDateDisplay = (dateInput) => {
   if (!dateInput) return "N/A";
-  
+
   try {
     const date = new Date(dateInput);
     if (isNaN(date.getTime())) return "N/A";
-    
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+
+    const day = date.getDate().toString().padStart(2, "0");
+    const month = (date.getMonth() + 1).toString().padStart(2, "0");
     const year = date.getFullYear();
-    
+
     return `${day}/${month}/${year}`;
   } catch (error) {
-    console.warn('Invalid date format:', dateInput);
+    console.warn("Invalid date format:", dateInput);
     return "N/A";
   }
 };
@@ -33,29 +33,33 @@ export const formatDateDisplay = (dateInput) => {
  */
 export const parseDateInput = (dateString) => {
   if (!dateString || dateString === "N/A") return null;
-  
+
   try {
     // Handle DD/MM/YYYY format
-    const parts = dateString.split('/');
+    const parts = dateString.split("/");
     if (parts.length === 3) {
       const [day, month, year] = parts;
       const date = new Date(year, month - 1, day);
-      
+
       // Validate the date
-      if (date.getDate() == day && date.getMonth() == month - 1 && date.getFullYear() == year) {
-        return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+      if (
+        date.getDate() == day &&
+        date.getMonth() == month - 1 &&
+        date.getFullYear() == year
+      ) {
+        return date.toISOString().split("T")[0]; // Return YYYY-MM-DD format
       }
     }
-    
+
     // Fallback: try to parse as-is
     const date = new Date(dateString);
     if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
+      return date.toISOString().split("T")[0];
     }
-    
+
     return null;
   } catch (error) {
-    console.warn('Invalid date input:', dateString);
+    console.warn("Invalid date input:", dateString);
     return null;
   }
 };
@@ -72,7 +76,7 @@ export const formatDateForInput = (dateInput) => {
     const date = new Date(dateInput);
     if (isNaN(date.getTime())) return "";
 
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   } catch (error) {
     return "";
   }
@@ -93,9 +97,9 @@ export const formatDatabaseDateForInput = (dateInput) => {
     if (isNaN(date.getTime())) return "";
 
     // Return in YYYY-MM-DD format for HTML date inputs
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   } catch (error) {
-    console.warn('Invalid database date format:', dateInput);
+    console.warn("Invalid database date format:", dateInput);
     return "";
   }
 };
@@ -107,15 +111,15 @@ export const formatDatabaseDateForInput = (dateInput) => {
  */
 export const formatCNIC = (cnic) => {
   if (!cnic) return "";
-  
+
   // Remove all dashes and spaces
-  const cleaned = cnic.toString().replace(/[-\s]/g, '');
-  
+  const cleaned = cnic.toString().replace(/[-\s]/g, "");
+
   // Validate it's 13 digits
   if (/^\d{13}$/.test(cleaned)) {
     return cleaned;
   }
-  
+
   // Return original if not valid 13-digit format
   return cnic.toString();
 };
@@ -136,9 +140,9 @@ export const displayCNIC = (cnic) => {
  */
 export const formatPhoneNumber = (phone) => {
   if (!phone) return "";
-  
+
   // Remove all dashes, spaces, and parentheses
-  return phone.toString().replace(/[-\s()]/g, '');
+  return phone.toString().replace(/[-\s()]/g, "");
 };
 
 /**
@@ -188,20 +192,23 @@ export const getCurrentDateDisplay = () => {
  */
 export const calculateAge = (dateOfBirth) => {
   if (!dateOfBirth) return null;
-  
+
   try {
     const birth = new Date(dateOfBirth);
     const today = new Date();
-    
+
     if (isNaN(birth.getTime())) return null;
-    
+
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birth.getDate())
+    ) {
       age--;
     }
-    
+
     return age >= 0 ? age : null;
   } catch (error) {
     return null;
@@ -216,22 +223,24 @@ export const calculateAge = (dateOfBirth) => {
  */
 export const calculateDuration = (startDate, endDate = null) => {
   if (!startDate) return "N/A";
-  
+
   try {
     const start = new Date(startDate);
     const end = endDate ? new Date(endDate) : new Date();
-    
+
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return "N/A";
-    
+
     const diffTime = Math.abs(end - start);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     const years = Math.floor(diffDays / 365);
     const months = Math.floor((diffDays % 365) / 30);
-    
+
     if (years > 0) {
-      return `${years} year${years > 1 ? 's' : ''} ${months} month${months > 1 ? 's' : ''}`;
+      return `${years} year${years > 1 ? "s" : ""} ${months} month${
+        months > 1 ? "s" : ""
+      }`;
     }
-    return `${months} month${months > 1 ? 's' : ''}`;
+    return `${months} month${months > 1 ? "s" : ""}`;
   } catch (error) {
     return "N/A";
   }
@@ -247,4 +256,106 @@ export const formatDateRange = (startDate, endDate = null) => {
   const start = formatDateDisplay(startDate);
   const end = endDate ? formatDateDisplay(endDate) : "Present";
   return `${start} - ${end}`;
+};
+
+/**
+ * Format city name from snake_case to proper title case
+ * @param {string} cityValue - City value in snake_case format (e.g., "lahore_city")
+ * @returns {string} - Formatted city name (e.g., "Lahore City")
+ */
+export const formatCityName = (cityValue) => {
+  if (!cityValue) return "N/A";
+
+  // Handle common city name patterns
+  const cityMappings = {
+    lahore_city: "Lahore City",
+    karachi_central: "Karachi Central",
+    karachi_east: "Karachi East",
+    karachi_west: "Karachi West",
+    karachi_south: "Karachi South",
+    islamabad_city: "Islamabad City",
+    faisalabad_city: "Faisalabad City",
+    toba_tek_singh: "Toba Tek Singh",
+    nankana_sahib: "Nankana Sahib",
+    rawalpindi: "Rawalpindi",
+    attock: "Attock",
+    jhang: "Jhang",
+    kasur: "Kasur",
+    sheikhupura: "Sheikhupura",
+    malir: "Malir",
+    korangi: "Korangi",
+  };
+
+  // Check if we have a direct mapping
+  if (cityMappings[cityValue]) {
+    return cityMappings[cityValue];
+  }
+
+  // Fallback: convert snake_case to title case
+  return cityValue
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
+/**
+ * Format district name to proper title case
+ * @param {string} districtValue - District value in lowercase format (e.g., "lahore")
+ * @returns {string} - Formatted district name (e.g., "Lahore")
+ */
+export const formatDistrictName = (districtValue) => {
+  if (!districtValue) return "N/A";
+
+  // Handle common district name patterns
+  const districtMappings = {
+    lahore: "Lahore",
+    karachi: "Karachi",
+    islamabad: "Islamabad",
+    faisalabad: "Faisalabad",
+    multan: "Multan",
+    peshawar: "Peshawar",
+    quetta: "Quetta",
+    gujranwala: "Gujranwala",
+    hyderabad: "Hyderabad",
+    bahawalpur: "Bahawalpur",
+  };
+
+  // Check if we have a direct mapping
+  if (districtMappings[districtValue]) {
+    return districtMappings[districtValue];
+  }
+
+  // Fallback: capitalize first letter
+  return (
+    districtValue.charAt(0).toUpperCase() + districtValue.slice(1).toLowerCase()
+  );
+};
+
+/**
+ * Format currency amount for display
+ * @param {number|string} amount - Amount to format
+ * @returns {string} - Formatted currency string (e.g., "PKR 1,234.56")
+ */
+export const formatCurrency = (amount) => {
+  const numAmount = Number(amount);
+  if (isNaN(numAmount)) return "PKR 0.00";
+  return `PKR ${numAmount.toLocaleString("en-PK", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+/**
+ * Capitalize each word for display, converting snake_case to spaced title case.
+ * @param {string|number} value - Raw value
+ * @returns {string}
+ */
+export const toTitleCase = (value) => {
+  if (value === null || value === undefined) return "";
+  const str = String(value).replace(/_/g, " ").trim();
+  if (!str) return "";
+  return str.replace(
+    /\b\w+/g,
+    (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  );
 };

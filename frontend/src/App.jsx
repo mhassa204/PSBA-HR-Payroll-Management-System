@@ -1,58 +1,272 @@
 import EditEmployee from "./features/employees/pages/EditEmployee";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import "./styles/globals.css";
 import { useEffect } from "react";
+import { useAuthStore } from "./features/auth/authStore";
 import { emergencyScrollRestore } from "./utils/scrollUtils";
 import PrivateRoute from "./features/auth/PrivateRoute";
 import Login from "./features/auth/Login";
+import Dashboard from "./features/dashboard/pages/Dashboard";
 import EmployeeTable from "./features/employees/components/EmployeeTable";
-import { Header, Footer } from "./components/HeaderFooter";
+import LeftSidebarLayout from "./components/layout/LeftSidebarLayout";
 // import EmployeeList from "./features/employees/components/EmployeeList";
 import EnhancedUserProfile from "./features/employees/components/EnhancedUserProfile";
 // import PaginationTest from "./components/PaginationTest";
-import { ColorThemeProvider } from "./components/ColorThemeProvider";
 // import ColorSystemDemo from "./components/ColorSystemDemo";
 import CreateEmployeeForm from "./features/employees/components/CreateEmployeeForm";
 import CleanEmploymentHistory from "./features/employees/components/CleanEmploymentHistory";
 import AuditLogsDashboard from "./features/audit/components/AuditLogsDashboard";
 import ConfirmationProvider from "./components/ui/ConfirmationProvider";
 import ToastProvider from "./components/ui/ToastContainer";
-import { 
-  SettingsDashboard, 
-  DepartmentManagement, 
-  DesignationManagement 
+import {
+  SettingsDashboard,
+  DepartmentManagement,
+  DesignationManagement,
+  RoleTagManagement,
+  ScaleGradeManagement,
+  RoleManagement,
+  LocationManagement,
+  DeviceManagement,
+  DistrictManagement,
+  CityManagement,
+  EducationLevelManagement,
+  TravelRateManagement,
 } from "./features/settings";
+import { UserManagement } from "./features/users";
+import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
+import SecuritySettings from "./features/settings/pages/SecuritySettings";
+import RosterList from "./features/roster/pages/RosterList";
+import CreateRoster from "./features/roster/pages/CreateRoster";
+import EditRoster from "./features/roster/pages/EditRoster";
+import ViewRoster from "./features/roster/pages/ViewRoster";
+import AttendanceDashboard from "./features/attendance/pages/AttendanceDashboard";
+import AttendanceLocations from "./features/attendance/pages/AttendanceLocations";
+import AttendanceLocationDetail from "./features/attendance/pages/AttendanceLocationDetail";
+import AttendanceDevices from "./features/attendance/pages/AttendanceDevices";
+import AttendanceLocationDetailHome from "./features/attendance/pages/AttendanceLocationDetailHome";
+import LocationFMOPage from "./features/attendance/pages/LocationFMOPage";
+import LocationRosterPage from "./features/attendance/pages/LocationRosterPage";
+import LeaveManagement from "./features/attendance/pages/LeaveManagement";
+import LeaveBankPage from "./features/attendance/pages/LeaveBankPage";
+import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
+import LeaveApply from "./features/attendance/pages/LeaveApply";
+import LeaveApprovalsPage from "./features/attendance/pages/LeaveApprovalsPage";
+import AllLeavesPage from "./features/attendance/pages/AllLeavesPage";
+import TravelRequestsPage from "./features/travel/pages/TravelRequestsPage";
+import TravelClaimsPage from "./features/travel/pages/TravelClaimsPage";
+import ManageTravelRequests from "./features/travel/pages/ManageTravelRequests";
+import TravelApprovalsPage from "./features/travel/pages/TravelApprovalsPage";
+import TravelExpenseClaimsPage from "./features/travel/pages/TravelExpenseClaimsPage";
+import ManageExpenseClaimApprovals from "./features/travel/pages/ManageExpenseClaimApprovals";
+import AllTadaRequestsPage from "./features/travel/pages/AllTadaRequestsPage";
+import AccountsTranchesPage from "./features/travel/pages/AccountsTranchesPage";
+import TravelManualEntryPage from "./features/travel/pages/TravelManualEntryPage";
+import PayrollList from "./features/payroll/pages/PayrollList";
+import PayrollDetail from "./features/payroll/pages/PayrollDetail";
+import PayrollTranches from "./features/payroll/pages/PayrollTranches";
+
+// Payroll Route Guard - Restrict access to Super Admin, Accounts, and Establishment roles only
+const PayrollRouteGuard = () => {
+  const user = useAuthStore((s) => s.user);
+  const isChecking = useAuthStore((s) => s.isChecking);
+  const fetchSession = useAuthStore((s) => s.fetchSession);
+
+  // Fetch session if needed
+  useEffect(() => {
+    if (user === undefined && !isChecking) {
+      fetchSession();
+    }
+  }, [user, isChecking, fetchSession]);
+
+  if (isChecking || user === undefined) {
+    return null; // Show loading state
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  // Check role permissions
+  const userRole = user?.role?.name || "";
+  const isSuperAdmin = userRole === "Super Admin";
+  const isAccounts = /accounts|finance|budget|payroll/i.test(userRole);
+  const isEstablishment = /establishment/i.test(userRole);
+
+  if (isSuperAdmin || isAccounts || isEstablishment) {
+    return <PayrollList />;
+  }
+
+  // Access denied - redirect to home
+  return <Navigate to="/" />;
+};
+
+// Payroll Tranches Route Guard - Restrict access to Accounts role users only
+const PayrollTranchesRouteGuard = () => {
+  const user = useAuthStore((s) => s.user);
+  const isChecking = useAuthStore((s) => s.isChecking);
+  const fetchSession = useAuthStore((s) => s.fetchSession);
+
+  useEffect(() => {
+    if (!isChecking && !user) {
+      fetchSession();
+    }
+  }, [isChecking, user, fetchSession]);
+
+  if (isChecking || !user) {
+    return <Loader />;
+  }
+
+  const userRole = user?.role?.name || "";
+  const isSuperAdmin = userRole === "Super Admin";
+  const isAccounts = /accounts|finance|budget|payroll/i.test(userRole);
+
+  // Only Accounts role can access (Super Admin excluded)
+  if (isAccounts && !isSuperAdmin) {
+    return <PayrollTranches />;
+  }
+
+  return <Navigate to="/" />;
+};
+
+// Payroll Detail Route Guard
+const PayrollDetailRouteGuard = () => {
+  const user = useAuthStore((s) => s.user);
+  const isChecking = useAuthStore((s) => s.isChecking);
+  const fetchSession = useAuthStore((s) => s.fetchSession);
+
+  useEffect(() => {
+    if (user === undefined && !isChecking) {
+      fetchSession();
+    }
+  }, [user, isChecking, fetchSession]);
+
+  if (isChecking || user === undefined) {
+    return null;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  const userRole = user?.role?.name || "";
+  const isSuperAdmin = userRole === "Super Admin";
+  const isAccounts = /accounts|finance|budget|payroll/i.test(userRole);
+  const isEstablishment = /establishment/i.test(userRole);
+
+  if (isSuperAdmin || isAccounts || isEstablishment) {
+    return <PayrollDetail />;
+  }
+
+  return <Navigate to="/" />;
+};
+
 function App() {
+  const fetchSession = useAuthStore((s) => s.fetchSession);
+  const location = useLocation();
+
   // Emergency scroll restore keyboard shortcut (Ctrl+Shift+S)
   useEffect(() => {
+    // Only fetch session if we're not on the login page
+    if (location.pathname !== "/login") {
+      fetchSession();
+    }
+
     const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+      if (e.ctrlKey && e.shiftKey && e.key === "S") {
         e.preventDefault();
         console.log("🚨 Emergency scroll restore triggered by user");
         emergencyScrollRestore();
       }
     };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [fetchSession, location.pathname]);
 
   return (
-    <ColorThemeProvider defaultTheme="default">
-      <ToastProvider>
-        <ConfirmationProvider>
-          <Header />
-          <Routes>
-            <Route path="/login" element={<Login />} />
+    <ToastProvider>
+      <ConfirmationProvider>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/unauthorized"
+            element={<div>Unauthorized Access</div>}
+          />
+
+          {/* App layout route keeps sidebar mounted across navigations */}
+          <Route element={<LeftSidebarLayout />}>
+            {/* Home */}
             <Route
-              path="/unauthorized"
-              element={<div>Unauthorized Access</div>}
+              index
+              element={
+                <PrivateRoute
+                  permissions={[
+                    "employees.read",
+                    "departments.read",
+                    "designations.read",
+                  ]}
+                >
+                  <div className="text-center py-20">
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">
+                      Welcome to PSBA HR Portal
+                    </h1>
+                    <p className="text-xl text-slate-600">
+                      Select an option from the sidebar to get started
+                    </p>
+                  </div>
+                </PrivateRoute>
+              }
             />
 
+            {/* Dashboard */}
             <Route
-              path="/employees"
+              path="dashboard"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["dashboard.read"]}>
+                  <Dashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Roster routes */}
+            <Route
+              path="rosters"
+              element={
+                <PrivateRoute permissions={["roster.read"]}>
+                  <RosterList />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="rosters/create"
+              element={
+                <PrivateRoute permissions={["roster.create"]}>
+                  <CreateRoster />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="rosters/:id"
+              element={
+                <PrivateRoute permissions={["roster.read"]}>
+                  <ViewRoster />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="rosters/:id/edit"
+              element={
+                <PrivateRoute permissions={["roster.update"]}>
+                  <EditRoster />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Employees */}
+            <Route
+              path="employees"
+              element={
+                <PrivateRoute permissions={["employees.read"]}>
                   <EmployeeTable />
                 </PrivateRoute>
               }
@@ -60,7 +274,7 @@ function App() {
             <Route
               path="employees/view/:id"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.read"]}>
                   <EnhancedUserProfile />
                 </PrivateRoute>
               }
@@ -68,49 +282,422 @@ function App() {
             <Route
               path="employees/:id/edit"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.update"]}>
                   <EditEmployee />
                 </PrivateRoute>
               }
             />
-
-            <Route path="/employees/create" element={<CreateEmployeeForm />} />
             <Route
-              path="/employees/:employeeId/employment"
-              element={<CleanEmploymentHistory />}
-            />
-            <Route path="/audit-logs" element={<AuditLogsDashboard />} />
-            
-            {/* Settings Routes */}
-            <Route
-              path="/settings"
+              path="employees/create"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["employees.create"]}>
+                  <CreateEmployeeForm />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="employees/:employeeId/employment"
+              element={
+                <PrivateRoute permissions={["employment.read"]}>
+                  <CleanEmploymentHistory />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Reports */}
+            <Route
+              path="reports"
+              element={
+                <PrivateRoute permissions={["reports.read"]}>
+                  <div className="text-center py-20">
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">
+                      Reports & Analytics
+                    </h1>
+                    <p className="text-xl text-slate-600">
+                      Analytics and reporting dashboard coming soon
+                    </p>
+                  </div>
+                </PrivateRoute>
+              }
+            />
+
+            {/* Payroll */}
+            <Route path="payroll" element={<PayrollRouteGuard />} />
+            <Route
+              path="payroll/employee/:employeeId"
+              element={<PayrollDetailRouteGuard />}
+            />
+            <Route
+              path="payroll/tranches"
+              element={
+                <PrivateRoute permissions={["payroll.read"]}>
+                  <PayrollTranchesRouteGuard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Audit Logs */}
+            <Route
+              path="audit-logs"
+              element={
+                <PrivateRoute permissions={["audit.read"]}>
+                  <AuditLogsDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Settings */}
+            <Route
+              path="settings"
+              element={
+                <PrivateRoute
+                  permissions={[
+                    "departments.read",
+                    "designations.read",
+                    "role-tags.read",
+                    "scale-grades.read",
+                    "travel.rates.read",
+                  ]}
+                >
                   <SettingsDashboard />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/departments"
+              path="settings/departments"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["departments.read"]}>
                   <DepartmentManagement />
                 </PrivateRoute>
               }
             />
             <Route
-              path="/settings/designations"
+              path="settings/designations"
               element={
-                <PrivateRoute roles={["super_admin", "hr_admin"]}>
+                <PrivateRoute permissions={["designations.read"]}>
                   <DesignationManagement />
                 </PrivateRoute>
               }
             />
-          </Routes>
-          <Footer />
-        </ConfirmationProvider>
-      </ToastProvider>
-    </ColorThemeProvider>
+            <Route
+              path="settings/role-tags"
+              element={
+                <PrivateRoute permissions={["role-tags.read"]}>
+                  <RoleTagManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/scale-grades"
+              element={
+                <PrivateRoute permissions={["scale-grades.read"]}>
+                  <ScaleGradeManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/locations"
+              element={
+                <PrivateRoute permissions={["locations.read"]}>
+                  <LocationManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/devices"
+              element={
+                <PrivateRoute permissions={["devices.read"]}>
+                  <DeviceManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/roles"
+              element={
+                <PrivateRoute permissions={["roles.read"]}>
+                  <RoleManagement />
+                </PrivateRoute>
+              }
+            />
+            {/* New Settings routes */}
+            <Route
+              path="settings/districts"
+              element={
+                <PrivateRoute permissions={["districts.read"]}>
+                  <DistrictManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/cities"
+              element={
+                <PrivateRoute permissions={["cities.read"]}>
+                  <CityManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/education-levels"
+              element={
+                <PrivateRoute permissions={["education-levels.read"]}>
+                  <EducationLevelManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/database"
+              element={
+                <PrivateRoute permissions={["system.database.read"]}>
+                  <DatabaseSettings />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/security"
+              element={
+                <PrivateRoute permissions={["system.security.read"]}>
+                  <SecuritySettings />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/travel-rates"
+              element={
+                <PrivateRoute permissions={["travel.rates.read"]}>
+                  <TravelRateManagement />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Users */}
+            <Route
+              path="users"
+              element={
+                <PrivateRoute permissions={["users.read"]}>
+                  <UserManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="users/create"
+              element={
+                <PrivateRoute permissions={["users.manage"]}>
+                  <UserManagement />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Attendance */}
+            <Route
+              path="attendance"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <AttendanceLocations />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <AttendanceLocations />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations/:id"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <AttendanceLocationDetailHome />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations/:id/fmo"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <LocationFMOPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations/:id/roster"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <LocationRosterPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/devices"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <AttendanceDevices />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance/leaves"
+              element={
+                <PrivateRoute permissions={["attendance.read", "leaves.read"]}>
+                  <LeaveManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance/leaves/all"
+              element={
+                <PrivateRoute permissions={["leaves.read"]}>
+                  <AllLeavesPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance/leave-bank"
+              element={
+                <PrivateRoute permissions={["attendance.read", "leaves.read"]}>
+                  <LeaveBankPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance/leave-apply"
+              element={
+                <PrivateRoute permissions={["leaves.apply"]}>
+                  <LeaveApply />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/attendance/leave-approvals"
+              element={
+                <PrivateRoute
+                  permissions={["leaves.read", "leaves.status", "leaves.apply"]}
+                >
+                  <LeaveApprovalsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations/:id/lsr"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <LocationLSRPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Travel */}
+            <Route
+              path="travel/requests"
+              element={
+                <PrivateRoute permissions={["travel.read"]}>
+                  <TravelRequestsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="travel/manage"
+              element={
+                <PrivateRoute
+                  permissions={[
+                    // Only Establishment, Operations, Accounts should access Manage
+                    "travel.claim.verify.establishment",
+                    "travel.request.approve.ops",
+                    // DG approvers can also access Manage
+                    "travel.request.approve.dg",
+                    "travel.claim.approve.ops",
+                    "travel.claim.process.start",
+                    // Include super-admin wildcard and travel.manage if granted
+                    "*",
+                    "travel.manage",
+                  ]}
+                >
+                  <ManageTravelRequests />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/travel/requests/all"
+              element={
+                <PrivateRoute permissions={["travel.read"]}>
+                  <AllTadaRequestsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="travel/approvals"
+              element={
+                <PrivateRoute
+                  permissions={[
+                    // Normal employees with travel read
+                    "travel.read",
+                    // Ops and DG approvers
+                    "travel.request.approve.ops",
+                    "travel.request.approve.dg",
+                    // Management/administrators
+                    "travel.manage",
+                    "*",
+                  ]}
+                >
+                  <TravelApprovalsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="travel/expense-claims"
+              element={
+                <PrivateRoute
+                  permissions={[
+                    "travel.claim.create",
+                    "travel.claim.read",
+                    "travel.read",
+                  ]}
+                >
+                  <TravelExpenseClaimsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="travel/expense-claim-approvals"
+              element={
+                <PrivateRoute
+                  permissions={[
+                    // Normal employees with claim read (recommender visibility)
+                    "travel.claim.read",
+                    "travel.read",
+                    // Accounts, Establishment, and Ops department approvers
+                    "travel.claim.process.start",
+                    "travel.claim.verify.establishment",
+                    "travel.claim.approve.ops",
+                    // Management/administrators
+                    "*",
+                  ]}
+                >
+                  <ManageExpenseClaimApprovals />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="travel/accounts/tranches"
+              element={
+                <PrivateRoute permissions={["travel.claim.process.start"]}>
+                  <AccountsTranchesPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="travel/manual"
+              element={
+                <PrivateRoute roles={["Super Admin"]}>
+                  <TravelManualEntryPage />
+                </PrivateRoute>
+              }
+            />
+          </Route>
+        </Routes>
+      </ConfirmationProvider>
+    </ToastProvider>
   );
 }
 

@@ -1,0 +1,48 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start backend dev",
+			"type": "shell",
+			"command": "npm run dev --silent",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [
+				"$eslint-compact"
+			],
+			"group": "build"
+		},
+		{
+			"label": "seed-rbac-update",
+			"type": "shell",
+			"command": "npm run seed",
+			"args": [],
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run server dev",
+			"type": "shell",
+			"command": "npm run dev",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Seed DB",
+			"type": "shell",
+			"command": "npm run seed",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		}
+	]
+}

@@ -1,6 +1,10 @@
 // Enhanced validation utilities for employee forms
 
-import { CNIC_REGEX, VALIDATION_MESSAGES, FILE_UPLOAD_CONFIG } from '../constants/employeeOptions';
+import {
+  CNIC_REGEX,
+  VALIDATION_MESSAGES,
+  FILE_UPLOAD_CONFIG,
+} from "../constants/employeeOptions";
 
 /**
  * Validate CNIC format
@@ -11,11 +15,11 @@ export const validateCNIC = (cnic) => {
   if (!cnic) {
     return { isValid: false, message: VALIDATION_MESSAGES.required_field };
   }
-  
+
   if (!CNIC_REGEX.test(cnic)) {
     return { isValid: false, message: VALIDATION_MESSAGES.cnic_format };
   }
-  
+
   return { isValid: true, message: "" };
 };
 
@@ -25,7 +29,14 @@ export const validateCNIC = (cnic) => {
  * @param {string} expiryDate - CNIC expiry date
  * @returns {object} Validation result
  */
-export const validateCNICDates = (issueDate, expiryDate) => {
+export const validateCNICDates = (
+  issueDate,
+  expiryDate,
+  isLifetime = false
+) => {
+  if (isLifetime) {
+    return { isValid: true, message: "" };
+  }
   const today = new Date();
   today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
   const issue = new Date(issueDate);
@@ -36,7 +47,7 @@ export const validateCNICDates = (issueDate, expiryDate) => {
     return {
       isValid: false,
       message: "CNIC expiry date cannot be in the past",
-      field: 'expiry'
+      field: "expiry",
     };
   }
 
@@ -45,7 +56,7 @@ export const validateCNICDates = (issueDate, expiryDate) => {
     return {
       isValid: false,
       message: VALIDATION_MESSAGES.cnic_issue_before_expiry,
-      field: 'issue'
+      field: "issue",
     };
   }
 
@@ -57,7 +68,10 @@ export const validateCNICDates = (issueDate, expiryDate) => {
  * @param {string} expiryDate - CNIC expiry date
  * @returns {object} Validation result
  */
-export const validateCNICExpiryDate = (expiryDate) => {
+export const validateCNICExpiryDate = (expiryDate, isLifetime = false) => {
+  if (isLifetime) {
+    return { isValid: true, message: "" };
+  }
   if (!expiryDate) {
     return { isValid: false, message: "CNIC expiry date is required" };
   }
@@ -69,7 +83,7 @@ export const validateCNICExpiryDate = (expiryDate) => {
   if (expiry < today) {
     return {
       isValid: false,
-      message: "CNIC expiry date cannot be in the past"
+      message: "CNIC expiry date cannot be in the past",
     };
   }
 
@@ -86,29 +100,29 @@ export const validateFileUpload = (file, fileType) => {
   if (!file) {
     return { isValid: true, message: "" }; // File is optional
   }
-  
+
   const config = FILE_UPLOAD_CONFIG[fileType];
   if (!config) {
     return { isValid: false, message: "Unknown file type" };
   }
-  
+
   // Check file size
   if (file.size > config.maxSize) {
     const maxSizeMB = Math.round(config.maxSize / (1024 * 1024));
-    return { 
-      isValid: false, 
-      message: `${VALIDATION_MESSAGES.file_size_exceeded} (Max: ${maxSizeMB}MB)` 
+    return {
+      isValid: false,
+      message: `${VALIDATION_MESSAGES.file_size_exceeded} (Max: ${maxSizeMB}MB)`,
     };
   }
-  
+
   // Check file type
   if (!config.types.includes(file.type)) {
-    return { 
-      isValid: false, 
-      message: VALIDATION_MESSAGES.file_type_invalid 
+    return {
+      isValid: false,
+      message: VALIDATION_MESSAGES.file_type_invalid,
     };
   }
-  
+
   return { isValid: true, message: "" };
 };
 
@@ -123,25 +137,25 @@ export const validateMultipleFiles = (files, fileType, maxFiles = 5) => {
   if (!files || files.length === 0) {
     return { isValid: true, message: "" };
   }
-  
+
   if (files.length > maxFiles) {
-    return { 
-      isValid: false, 
-      message: `Maximum ${maxFiles} files allowed` 
+    return {
+      isValid: false,
+      message: `Maximum ${maxFiles} files allowed`,
     };
   }
-  
+
   // Validate each file
   for (let i = 0; i < files.length; i++) {
     const fileValidation = validateFileUpload(files[i], fileType);
     if (!fileValidation.isValid) {
-      return { 
-        isValid: false, 
-        message: `File ${i + 1}: ${fileValidation.message}` 
+      return {
+        isValid: false,
+        message: `File ${i + 1}: ${fileValidation.message}`,
       };
     }
   }
-  
+
   return { isValid: true, message: "" };
 };
 
@@ -154,12 +168,12 @@ export const validateEmail = (email) => {
   if (!email) {
     return { isValid: true, message: "" }; // Email is optional
   }
-  
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return { isValid: false, message: "Please enter a valid email address" };
   }
-  
+
   return { isValid: true, message: "" };
 };
 
@@ -172,18 +186,18 @@ export const validatePhoneNumber = (phone) => {
   if (!phone) {
     return { isValid: true, message: "" }; // Phone is optional
   }
-  
+
   // Pakistani phone number format
   const phoneRegex = /^(\+92|0)?[0-9]{10}$/;
-  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-  
+  const cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
+
   if (!phoneRegex.test(cleanPhone)) {
-    return { 
-      isValid: false, 
-      message: "Please enter a valid Pakistani phone number" 
+    return {
+      isValid: false,
+      message: "Please enter a valid Pakistani phone number",
     };
   }
-  
+
   return { isValid: true, message: "" };
 };
 
@@ -195,13 +209,13 @@ export const validatePhoneNumber = (phone) => {
  * @returns {object} Validation result
  */
 export const validateRequiredField = (value, isRequired, fieldName) => {
-  if (isRequired && (!value || (typeof value === 'string' && !value.trim()))) {
-    return { 
-      isValid: false, 
-      message: `${fieldName} is required` 
+  if (isRequired && (!value || (typeof value === "string" && !value.trim()))) {
+    return {
+      isValid: false,
+      message: `${fieldName} is required`,
     };
   }
-  
+
   return { isValid: true, message: "" };
 };
 
@@ -213,10 +227,10 @@ export const validateRequiredField = (value, isRequired, fieldName) => {
  */
 export const validateFatherHusbandName = (name, relationshipType) => {
   if (!name || !name.trim()) {
-    const nameType = relationshipType === 'father' ? 'Father' : 'Husband';
+    const nameType = relationshipType === "father" ? "Father" : "Husband";
     return {
       isValid: false,
-      message: `${nameType} name is required`
+      message: `${nameType} name is required`,
     };
   }
 
@@ -229,13 +243,13 @@ export const validateFatherHusbandName = (name, relationshipType) => {
  * @returns {string} Formatted file size
  */
 export const formatFileSize = (bytes) => {
-  if (bytes === 0) return '0 Bytes';
-  
+  if (bytes === 0) return "0 Bytes";
+
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 };
 
 /**
@@ -244,7 +258,7 @@ export const formatFileSize = (bytes) => {
  * @returns {string} File extension
  */
 export const getFileExtension = (filename) => {
-  return filename.slice((filename.lastIndexOf(".") - 1 >>> 0) + 2);
+  return filename.slice(((filename.lastIndexOf(".") - 1) >>> 0) + 2);
 };
 
 /**
@@ -253,5 +267,5 @@ export const getFileExtension = (filename) => {
  */
 export const getTodayDateString = () => {
   const today = new Date();
-  return today.toISOString().split('T')[0];
+  return today.toISOString().split("T")[0];
 };
