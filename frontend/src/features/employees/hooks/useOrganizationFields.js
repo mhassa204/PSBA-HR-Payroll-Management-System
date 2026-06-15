@@ -164,7 +164,20 @@ export const useOrganizationFields = (selectedOrganization, formData, setFormDat
         },
         PSBA: {
           employment: {
-            office_location: {} // No validation for hidden field
+            // Only designation is required for PSBA; everything else is optional.
+            // Must set required:false explicitly to override the default rules.
+            office_location: { required: false },
+            department: { required: false },
+            role_tag: { required: false },
+            employment_type: { required: false },
+            filer_status: { required: false },
+            filer_active_status: { required: false },
+            employment_status: { required: false },
+            scale_grade: { required: false },
+            reporting_officer_id: { required: false },
+            is_current: { required: false },
+            is_on_probation: { required: false },
+            probation_end_date: { required: false }
           },
           location: {
             bazaar_name: { 

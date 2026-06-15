@@ -92,8 +92,11 @@ const TabbedEmploymentForm = forwardRef(
             designation: editingRecord.designation || "",
             employment_type: editingRecord.employment_type || "Regular",
             role_tag: editingRecord.role_tag || "",
+            joining_date: editingRecord.joining_date || "",
             effective_from: editingRecord.effective_from || "",
             effective_till: editingRecord.effective_till || "",
+            appointment_letter_issue_date:
+              editingRecord.appointment_letter_issue_date || "",
             reporting_officer_id: editingRecord.reporting_officer_id || "",
             remarks: editingRecord.remarks || "",
             is_current:
@@ -318,6 +321,10 @@ const TabbedEmploymentForm = forwardRef(
             transformedInitialData?.employee_id,
           organization: baseOrg,
           employment_type: employmentBase.employment_type || "Regular",
+          joining_date: normalizeDateField(employmentBase.joining_date ?? null),
+          appointment_letter_issue_date: normalizeDateField(
+            employmentBase.appointment_letter_issue_date ?? null
+          ),
           effective_from: employmentBase.effective_from || "",
           effective_till: normalizeDateField(
             employmentBase.effective_till ?? null
@@ -949,31 +956,10 @@ const TabbedEmploymentForm = forwardRef(
         const salaryData = salaryForm.getValues();
         const locationData = locationForm.getValues();
         const contractData = contractForm.getValues();
-        if (currentOrganization === "MBWO" && !employmentData.designation) {
-          alert(
-            "Please select a designation before proceeding. Designation is required for MBWO organization."
-          );
+        // Only designation is required (department, role_tag, employment_type are optional)
+        if (!employmentData.designation) {
+          alert("Please select a designation before proceeding.");
           return;
-        }
-        if (currentOrganization === "PSBA") {
-          if (!employmentData.department) {
-            alert(
-              "Please select a department before proceeding. Department is required for PSBA organization."
-            );
-            return;
-          }
-          if (!employmentData.role_tag) {
-            alert(
-              "Please select a role tag before proceeding. Role tag is required for PSBA organization."
-            );
-            return;
-          }
-          if (!employmentData.employment_type) {
-            alert(
-              "Please select an employment type before proceeding. Employment type is required for PSBA organization."
-            );
-            return;
-          }
         }
         const completeData = {
           id: savedEmploymentId || Date.now(),
@@ -1098,6 +1084,9 @@ const TabbedEmploymentForm = forwardRef(
           role_tag: previewData.role_tag || "",
           scale_grade: previewData.scale_grade || null,
           reporting_officer_id: previewData.reporting_officer_id || "",
+          joining_date: previewData.joining_date || "",
+          appointment_letter_issue_date:
+            previewData.appointment_letter_issue_date || "",
           effective_from: previewData.effective_from || "",
           employment: {
             id: previewData.id,
@@ -1108,6 +1097,7 @@ const TabbedEmploymentForm = forwardRef(
             employment_type: previewData.employment_type || "Regular",
             role_tag_id: previewData.role_tag || "",
             reporting_officer_id: previewData.reporting_officer_id || "",
+            joining_date: previewData.joining_date || "",
             effective_from: previewData.effective_from || "",
             effective_till: previewData.effective_till || null,
             is_on_probation:
@@ -1189,7 +1179,7 @@ const TabbedEmploymentForm = forwardRef(
     };
 
     const getLocationTypeLabel = (value, organization) => {
-      if (!value) return "N/A";
+      if (!value) return "—";
       if (organization === "PSBA") {
         switch (value) {
           case "HEAD_QUARTER":
@@ -1211,7 +1201,7 @@ const TabbedEmploymentForm = forwardRef(
       }
     };
     const getLabelFromId = (id, options, field = "label") => {
-      if (id === null || id === undefined || id === "") return "N/A";
+      if (id === null || id === undefined || id === "") return "—";
       // If a plain string (non-numeric), treat as free text
       if (typeof id === "string" && isNaN(Number(id))) {
         return id;
@@ -1227,7 +1217,7 @@ const TabbedEmploymentForm = forwardRef(
         value === "" ||
         (typeof value === "number" && isNaN(value))
       )
-        return "N/A";
+        return "—";
       if (type === "currency") return `PKR ${Number(value).toLocaleString()}`;
       if (type === "boolean") return value ? "Yes" : "No";
 
@@ -1414,6 +1404,13 @@ const TabbedEmploymentForm = forwardRef(
                       : employmentData.designation_id || "",
                   employment_type: employmentData.employment_type || "Regular",
                   role_tag: employmentData.role_tag_id || "",
+                  joining_date: employmentData.joining_date
+                    ? employmentData.joining_date.split("T")[0]
+                    : "",
+                  appointment_letter_issue_date:
+                    employmentData.appointment_letter_issue_date
+                      ? employmentData.appointment_letter_issue_date.split("T")[0]
+                      : "",
                   effective_from: employmentData.effective_from
                     ? employmentData.effective_from.split("T")[0]
                     : "",
@@ -1630,6 +1627,7 @@ const TabbedEmploymentForm = forwardRef(
                   getValidationRules={getValidationRules}
                   handleOrganizationChange={handleOrganizationChange}
                   onEmploymentSubmit={onEmploymentSubmit}
+                  documentManager={documentManager}
                   isEditMode={isEditMode}
                   currentOrganization={currentOrganization}
                   watchedEmploymentType={watchedEmploymentType}
@@ -1777,7 +1775,7 @@ const TabbedEmploymentForm = forwardRef(
                     Please review all information before saving
                   </h3>
                   <p className="text-gray-600">
-                    Fields showing "N/A" indicate no value was entered. You can
+                    Fields showing "—" indicate no value was entered. You can
                     go back to edit or proceed to save.
                   </p>
                 </div>
@@ -1859,8 +1857,8 @@ const TabbedEmploymentForm = forwardRef(
                       <span className="ml-1 text-gray-900">
                         {previewData.is_on_probation
                           ? displayValue(previewData.probation_end_date) ||
-                            "N/A"
-                          : "N/A"}
+                            "—"
+                          : "—"}
                       </span>
                     </div>
                     <div>

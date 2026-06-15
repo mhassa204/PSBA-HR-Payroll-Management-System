@@ -100,7 +100,6 @@ async function listEmployeesForDeviceUsers(req, res) {
       ...(search ? {
         OR: [
           { full_name: { contains: search, mode: 'insensitive' } },
-          { employee_id: { contains: search, mode: 'insensitive' } },
           { email: { contains: search, mode: 'insensitive' } },
           { cnic: { contains: search, mode: 'insensitive' } },
         ]
@@ -108,7 +107,7 @@ async function listEmployeesForDeviceUsers(req, res) {
     };
     const employees = await prisma.employee.findMany({
       where,
-      select: { id: true, employee_id: true, full_name: true, cnic: true, deviceUserId: true },
+      select: { id: true, full_name: true, cnic: true, deviceUserId: true },
       orderBy: [
         { full_name: 'asc' },
         { id: 'asc' }

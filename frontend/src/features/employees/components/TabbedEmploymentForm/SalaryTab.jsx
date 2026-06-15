@@ -39,8 +39,8 @@ const SalaryTab = ({
                 Daily Wager Salary Information
               </h4>
               <p className="text-sm text-gray-600 mb-4">
-                For Daily Wager employment, please provide either a gross salary
-                or daily wage rate (at least one is required).
+                For Daily Wager employment, you may provide a gross salary and/or
+                a daily wage rate. Both are optional.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -50,24 +50,10 @@ const SalaryTab = ({
                   </label>
                   <input
                     type="number"
-                    {...register("basic_salary", {
-                      validate: (value) => {
-                        const dailyWageRate = watch("daily_wage_rate");
-                        if (!value && !dailyWageRate)
-                          return "Either gross salary or daily wage rate is required";
-                        if (value && value <= 0)
-                          return "Salary must be greater than 0";
-                        return true;
-                      },
-                    })}
+                    {...register("basic_salary")}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
                     placeholder="Enter gross salary (optional)"
                   />
-                  {salaryErrors?.basic_salary && (
-                    <p className="text-red-600 text-sm mt-1">
-                      {salaryErrors.basic_salary.message}
-                    </p>
-                  )}
                 </div>
 
                 <div>
@@ -76,24 +62,10 @@ const SalaryTab = ({
                   </label>
                   <input
                     type="number"
-                    {...register("daily_wage_rate", {
-                      validate: (value) => {
-                        const basicSalary = watch("basic_salary");
-                        if (!value && !basicSalary)
-                          return "Either gross salary or daily wage rate is required";
-                        if (value && value <= 0)
-                          return "Daily wage rate must be greater than 0";
-                        return true;
-                      },
-                    })}
+                    {...register("daily_wage_rate")}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
                     placeholder="Enter daily wage rate (optional)"
                   />
-                  {salaryErrors?.daily_wage_rate && (
-                    <p className="text-red-600 text-sm mt-1">
-                      {salaryErrors.daily_wage_rate.message}
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
@@ -104,28 +76,14 @@ const SalaryTab = ({
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   {currentOrganization === "MBWO"
                     ? "Gross Salary (PKR)"
-                    : "Basic Salary (PKR)"}{" "}
-                  <span className="text-red-500">*</span>
+                    : "Basic Salary (PKR)"}
                 </label>
                 <input
                   type="number"
                   {...register(
                     currentOrganization === "MBWO"
                       ? "gross_salary"
-                      : "basic_salary",
-                    {
-                      required:
-                        currentOrganization === "MBWO"
-                          ? "Gross salary is required"
-                          : "Basic salary is required",
-                      min: {
-                        value: 1,
-                        message:
-                          currentOrganization === "MBWO"
-                            ? "Gross salary must be greater than 0"
-                            : "Basic salary must be greater than 0",
-                      },
-                    }
+                      : "basic_salary"
                   )}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
                   placeholder={
@@ -287,31 +245,13 @@ const SalaryTab = ({
             <div className={getFieldClasses("salary", "bank_branch_code")}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Bank Branch Code
-                {(watch("bank_name_primary") ||
-                  watch("bank_account_primary")) && (
-                  <span className="text-red-500"> *</span>
-                )}
               </label>
               <input
                 type="text"
-                {...register("bank_branch_code", {
-                  validate: (value) => {
-                    const bankName = watch("bank_name_primary");
-                    const bankAccount = watch("bank_account_primary");
-                    if ((bankName || bankAccount) && !value) {
-                      return "Bank branch code is required when bank details are provided";
-                    }
-                    return true;
-                  },
-                })}
+                {...register("bank_branch_code")}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-gray-900"
                 placeholder="Enter bank branch code"
               />
-              {salaryErrors?.bank_branch_code && (
-                <p className="text-red-600 text-sm mt-1">
-                  {salaryErrors.bank_branch_code.message}
-                </p>
-              )}
             </div>
 
             <div className={getFieldClasses("salary", "payroll_status")}>
@@ -341,7 +281,7 @@ const SalaryTab = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
             <div className={getFieldClasses("employment", "filer_status")}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tax Filer Status <span className="text-red-500">*</span>
+                Tax Filer Status
               </label>
               <SearchableSelect
                 options={[
@@ -355,11 +295,7 @@ const SalaryTab = ({
                 placeholder="Select Tax Filer Status"
                 register={registerEmployment}
                 name="filer_status"
-                required={
-                  getValidationRules("employment", "filer_status", {
-                    required: "Filer status is required",
-                  }).required
-                }
+                required={false}
                 error={employmentErrors?.filer_status?.message}
               />
               {employmentErrors?.filer_status && (
@@ -373,7 +309,7 @@ const SalaryTab = ({
                 className={getFieldClasses("employment", "filer_active_status")}
               >
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Filer Active Status <span className="text-red-500">*</span>
+                  Filer Active Status
                 </label>
                 <SearchableSelect
                   options={[
@@ -387,14 +323,7 @@ const SalaryTab = ({
                   placeholder="Select Status"
                   register={registerEmployment}
                   name="filer_active_status"
-                  required={
-                    getValidationRules("employment", "filer_active_status", {
-                      required:
-                        watchedFilerStatus === "filer"
-                          ? "Filer active status is required"
-                          : false,
-                    }).required
-                  }
+                  required={false}
                   error={employmentErrors?.filer_active_status?.message}
                 />
                 {employmentErrors?.filer_active_status && (

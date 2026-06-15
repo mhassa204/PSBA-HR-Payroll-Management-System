@@ -314,7 +314,7 @@ const HistoryTab = ({ employmentId, userId }) => {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
+    if (!dateString) return "—";
     try {
       return new Date(dateString).toLocaleDateString("en-PK", {
         year: "numeric",
@@ -329,7 +329,7 @@ const HistoryTab = ({ employmentId, userId }) => {
   };
 
   const formatValue = (value) => {
-    if (value === null || value === undefined) return "N/A";
+    if (value === null || value === undefined) return "—";
     if (value === "true") return "Yes";
     if (value === "false") return "No";
     return String(value);

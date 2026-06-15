@@ -212,8 +212,11 @@ const CleanEmploymentHistory = () => {
         employment_type: employmentData.employment_type || "Regular",
         role_tag_id: roleTagIdValue,
         scale_grade_id: scaleGradeIdValue,
-        effective_from: employmentData.effective_from,
+        joining_date: employmentData.joining_date || null,
+        effective_from: employmentData.effective_from || null,
         effective_till: employmentData.effective_till || null,
+        appointment_letter_issue_date:
+          employmentData.appointment_letter_issue_date || null,
         reporting_officer_id: employmentData.reporting_officer_id || null,
         office_location: employmentData.office_location || null,
         remarks: employmentData.remarks || null,
@@ -418,8 +421,11 @@ const CleanEmploymentHistory = () => {
         employment_type: employmentData.employment_type || "Regular",
         role_tag_id: roleTagIdValue,
         scale_grade_id: scaleGradeIdValue,
-        effective_from: employmentData.effective_from,
+        joining_date: employmentData.joining_date || null,
+        effective_from: employmentData.effective_from || null,
         effective_till: employmentData.effective_till || null,
+        appointment_letter_issue_date:
+          employmentData.appointment_letter_issue_date || null,
         reporting_officer_id: reportingOfficerValue,
         office_location: employmentData.office_location || null,
         remarks: employmentData.remarks || null,
@@ -648,7 +654,7 @@ const CleanEmploymentHistory = () => {
               Employment History - {employee.full_name}
             </h1>
             <p className="text-gray-600 mt-2">
-              Employee ID: {employee.employee_id || employee.id}
+              CNIC: {employee.cnic || employee.id}
             </p>
           </div>
           <div className="flex space-x-4">
@@ -723,26 +729,45 @@ const CleanEmploymentHistory = () => {
             {deletingRecord && (
               <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-700">
-                  <strong>Organization:</strong> {deletingRecord.organization}
-                  <br />
-                  <strong>Department:</strong>{" "}
-                  {deletingRecord.department?.name ||
+                  {deletingRecord.organization && (
+                    <>
+                      <strong>Organization:</strong>{" "}
+                      {deletingRecord.organization}
+                      <br />
+                    </>
+                  )}
+                  {(deletingRecord.department?.name ||
                     deletingRecord.department_text ||
-                    deletingRecord.department ||
-                    "N/A"}
-                  <br />
-                  <strong>Designation:</strong>{" "}
-                  {deletingRecord.designation?.title ||
+                    deletingRecord.department) && (
+                    <>
+                      <strong>Department:</strong>{" "}
+                      {deletingRecord.department?.name ||
+                        deletingRecord.department_text ||
+                        deletingRecord.department}
+                      <br />
+                    </>
+                  )}
+                  {(deletingRecord.designation?.title ||
                     deletingRecord.designation_text ||
-                    deletingRecord.designation ||
-                    "N/A"}
-                  <br />
-                  <strong>Effective From:</strong>{" "}
-                  {deletingRecord.effective_from
-                    ? new Date(
-                        deletingRecord.effective_from
-                      ).toLocaleDateString()
-                    : "N/A"}
+                    deletingRecord.designation) && (
+                    <>
+                      <strong>Designation:</strong>{" "}
+                      {deletingRecord.designation?.title ||
+                        deletingRecord.designation_text ||
+                        deletingRecord.designation}
+                      <br />
+                    </>
+                  )}
+                  {(deletingRecord.joining_date ||
+                    deletingRecord.effective_from) && (
+                    <>
+                      <strong>Joining Date:</strong>{" "}
+                      {new Date(
+                        deletingRecord.joining_date ||
+                          deletingRecord.effective_from
+                      ).toLocaleDateString()}
+                    </>
+                  )}
                 </p>
               </div>
             )}

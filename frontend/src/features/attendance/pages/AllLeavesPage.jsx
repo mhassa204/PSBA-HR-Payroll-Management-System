@@ -293,9 +293,7 @@ const AllLeavesPage = () => {
                   <span className="text-gray-600">Employee:</span>{" "}
                   <span className="ml-1 font-medium">
                     {selectedLeave.employee?.full_name} (
-                    {selectedLeave.employee?.cnic ||
-                      selectedLeave.employee?.employee_id ||
-                      "-"}
+                    {selectedLeave.employee?.cnic || "-"}
                     )
                   </span>
                 </div>

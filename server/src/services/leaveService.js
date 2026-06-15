@@ -141,7 +141,6 @@ module.exports = {
             ? {
                 OR: [
                   { full_name: { contains: search, mode: "insensitive" } },
-                  { employee_id: { contains: search, mode: "insensitive" } },
                   { cnic: { contains: search, mode: "insensitive" } },
                   { email: { contains: search, mode: "insensitive" } },
                 ],
@@ -180,7 +179,6 @@ module.exports = {
             ? {
                 OR: [
                   { full_name: { contains: search, mode: "insensitive" } },
-                  { employee_id: { contains: search, mode: "insensitive" } },
                   { cnic: { contains: search, mode: "insensitive" } },
                   { email: { contains: search, mode: "insensitive" } },
                 ],
@@ -208,7 +206,6 @@ module.exports = {
             ? {
                 OR: [
                   { full_name: { contains: search, mode: "insensitive" } },
-                  { employee_id: { contains: search, mode: "insensitive" } },
                   { cnic: { contains: search, mode: "insensitive" } },
                   { email: { contains: search, mode: "insensitive" } },
                 ],
@@ -273,7 +270,6 @@ module.exports = {
         ? {
             OR: [
               { full_name: { contains: search, mode: "insensitive" } },
-              { employee_id: { contains: search, mode: "insensitive" } },
               { cnic: { contains: search, mode: "insensitive" } },
               { email: { contains: search, mode: "insensitive" } },
             ],
@@ -379,7 +375,7 @@ module.exports = {
                 id: true,
                 email: true,
                 employee: {
-                  select: { id: true, full_name: true, employee_id: true },
+                  select: { id: true, full_name: true, cnic: true },
                 },
               },
             },
@@ -392,7 +388,7 @@ module.exports = {
                 id: true,
                 email: true,
                 employee: {
-                  select: { id: true, full_name: true, employee_id: true },
+                  select: { id: true, full_name: true, cnic: true },
                 },
               },
             },
@@ -689,7 +685,7 @@ module.exports = {
                 id: true,
                 email: true,
                 employee: {
-                  select: { id: true, full_name: true, employee_id: true },
+                  select: { id: true, full_name: true, cnic: true },
                 },
               },
             },
@@ -721,7 +717,7 @@ module.exports = {
                 },
                 {
                   employee: {
-                    employee_id: { contains: search, mode: "insensitive" },
+                    cnic: { contains: search, mode: "insensitive" },
                   },
                 },
               ],
@@ -822,7 +818,7 @@ module.exports = {
                 },
                 {
                   employee: {
-                    employee_id: { contains: search, mode: "insensitive" },
+                    cnic: { contains: search, mode: "insensitive" },
                   },
                 },
               ],
@@ -889,7 +885,7 @@ module.exports = {
               select: {
                 id: true,
                 email: true,
-                employee: { select: { full_name: true, employee_id: true } },
+                employee: { select: { full_name: true, cnic: true } },
                 role: {
                   select: {
                     id: true,
@@ -907,7 +903,7 @@ module.exports = {
               select: {
                 id: true,
                 email: true,
-                employee: { select: { full_name: true, employee_id: true } },
+                employee: { select: { full_name: true, cnic: true } },
               },
             },
           },
@@ -1002,7 +998,7 @@ module.exports = {
               select: {
                 id: true,
                 email: true,
-                employee: { select: { full_name: true, employee_id: true } },
+                employee: { select: { full_name: true, cnic: true } },
                 role: {
                   select: {
                     id: true,
@@ -1020,7 +1016,7 @@ module.exports = {
               select: {
                 id: true,
                 email: true,
-                employee: { select: { full_name: true, employee_id: true } },
+                employee: { select: { full_name: true, cnic: true } },
               },
             },
           },
@@ -1067,7 +1063,7 @@ module.exports = {
               select: {
                 id: true,
                 email: true,
-                employee: { select: { full_name: true, employee_id: true } },
+                employee: { select: { full_name: true, cnic: true } },
                 role: {
                   select: {
                     id: true,
@@ -1085,7 +1081,7 @@ module.exports = {
               select: {
                 id: true,
                 email: true,
-                employee: { select: { full_name: true, employee_id: true } },
+                employee: { select: { full_name: true, cnic: true } },
               },
             },
           },

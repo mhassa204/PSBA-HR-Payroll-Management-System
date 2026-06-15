@@ -1,0 +1,105 @@
+============================================================
+ETL SUMMARY
+============================================================
+Total Excel rows         : 1547
+Employees seeded         : 1546
+Quarantined (not seeded) : 1
+Flagged (kept w/ fix)    : 13
+Check: seeded+quarantined = 1547 (should be 1547)
+
+Distinct locations       : 75
+    [SPECIAL_UNIT ] Anti Encroachment Squad
+    [SPECIAL_UNIT ] Anti Theft Cell
+    [HEAD_OFFICE  ] Head Quarter
+    [BAZAAR       ] Sahulat Bazaar Arif Wala
+    [MOBILE_BAZAAR] Sahulat Bazaar Awan Town (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Bahawalpur
+    [MOBILE_BAZAAR] Sahulat Bazaar Barki Road (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Bhakkar
+    [BAZAAR       ] Sahulat Bazaar Bhalwal
+    [BAZAAR       ] Sahulat Bazaar Bhera
+    [BAZAAR       ] Sahulat Bazaar Burewala
+    [BAZAAR       ] Sahulat Bazaar Chakwal
+    [BAZAAR       ] Sahulat Bazaar China Scheme
+    [BAZAAR       ] Sahulat Bazaar Chiniot
+    [MOBILE_BAZAAR] Sahulat Bazaar Chowk Azam Layyah (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Chung
+    [BAZAAR       ] Sahulat Bazaar Chunian
+    [BAZAAR       ] Sahulat Bazaar DG Khan
+    [BAZAAR       ] Sahulat Bazaar Farooqabad
+    [MOBILE_BAZAAR] Sahulat Bazaar Fatehpur Layyah (On the GO)
+    [MOBILE_BAZAAR] Sahulat Bazaar Ferozwala (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Gujranwala
+    [BAZAAR       ] Sahulat Bazaar Gujrat
+    [MOBILE_BAZAAR] Sahulat Bazaar Gulshan Ravi (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Hafizabad
+    [BAZAAR       ] Sahulat Bazaar Harbanspura
+    [BAZAAR       ] Sahulat Bazaar Jalalpur Pirwala
+    [BAZAAR       ] Sahulat Bazaar Jampur
+    [BAZAAR       ] Sahulat Bazaar Jaranwala
+    [BAZAAR       ] Sahulat Bazaar Jhang
+    [BAZAAR       ] Sahulat Bazaar Jhang Road
+    [MOBILE_BAZAAR] Sahulat Bazaar Karor Lal Easan Layyah (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Kasur
+    [BAZAAR       ] Sahulat Bazaar Khanewal
+    [MOBILE_BAZAAR] Sahulat Bazaar Kharak Nala (On the GO)
+    [MOBILE_BAZAAR] Sahulat Bazaar Khatam e Nabuwat (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Khushab
+    [MOBILE_BAZAAR] Sahulat Bazaar Kot Sultan Site Layyah (On the GO)
+    [MOBILE_BAZAAR] Sahulat Bazaar Kotha Pind Faisal Town (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Layyah
+    [BAZAAR       ] Sahulat Bazaar Lodhran
+    [MOBILE_BAZAAR] Sahulat Bazaar Mader e Millat (On the GO)
+    [MOBILE_BAZAAR] Sahulat Bazaar Madina Market Township (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Mandi Bahauddin
+    [BAZAAR       ] Sahulat Bazaar Mandi Faizabad
+    [MOBILE_BAZAAR] Sahulat Bazaar Manga Mandi (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Mian Plaza
+    [BAZAAR       ] Sahulat Bazaar Mianwali
+    [BAZAAR       ] Sahulat Bazaar Millat Road
+    [MOBILE_BAZAAR] Sahulat Bazaar Minor Road Layyah (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Muzaffargarh
+    [BAZAAR       ] Sahulat Bazaar Nishtar Town
+    [BAZAAR       ] Sahulat Bazaar Nowshera Virkan
+    [BAZAAR       ] Sahulat Bazaar Okara
+    [BAZAAR       ] Sahulat Bazaar Pakpattan
+    [BAZAAR       ] Sahulat Bazaar Pattoki
+    [BAZAAR       ] Sahulat Bazaar Raiwind
+    [MOBILE_BAZAAR] Sahulat Bazaar Raiwind Sundar Road (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Rawalpindi
+    [BAZAAR       ] Sahulat Bazaar Sabzazaar
+    [BAZAAR       ] Sahulat Bazaar Sahiwal
+    [BAZAAR       ] Sahulat Bazaar Sargodha
+    [MOBILE_BAZAAR] Sahulat Bazaar Shadman (On the GO)
+    [MOBILE_BAZAAR] Sahulat Bazaar Shahdarah (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Sharaqpur Sharif
+    [BAZAAR       ] Sahulat Bazaar Shershah
+    [BAZAAR       ] Sahulat Bazaar Sialkot
+    [BAZAAR       ] Sahulat Bazaar Taunsa Sharif
+    [BAZAAR       ] Sahulat Bazaar Thokar
+    [BAZAAR       ] Sahulat Bazaar Toba Tek Singh
+    [BAZAAR       ] Sahulat Bazaar Township
+    [MOBILE_BAZAAR] Sahulat Bazaar Valencia (On the GO)
+    [BAZAAR       ] Sahulat Bazaar Vehari
+    [BAZAAR       ] Sahulat Bazaar Wahdat Colony
+    [BAZAAR       ] Sahulat Bazaar Wazirabad
+
+Distinct departments     : 15 -> ['Accounts Department', 'Admin Department', 'Audit Department', 'Civil Department', 'Competent Authority', 'Devops Department', 'Electrical Department', 'Establishment Department', 'Home Delivery Department', 'IT Department', 'Legal Department', 'Media Department', 'Monitoring Department', 'Operations Department', 'Projects & Management Unit Department']
+Distinct scale grades    : ['BS-1', 'BS-3', 'BS-4', 'BS-5', 'BS-6', 'BS-7', 'BS-9', 'BS-11', 'BS-12', 'BS-14', 'BS-16', 'BS-17', 'BS-18', 'BS-19', 'BS-20']
+Distinct designations    : 52
+Education levels used     : ['Associate Degree', 'Bachelor', 'Diploma (DAE)', 'Intermediate (FA/FSc)', 'Literate', 'MPhil', 'Master', 'Matric', 'No Formal Education', 'PhD', 'Professional Certification', 'Religious (Hafiz)']
+
+CNIC duplicates in output     : []
+Biometric duplicates in output: []
+Email duplicates in output    : []
+Employees missing scale_grade : 642
+Employees missing department  : 1375
+Employees missing biometric   : 588
+Employees missing email       : 1432
+
+All cost centers mapped. OK
+
+Outputs:
+  C:\Users\PSBA\Desktop\PSBA-HR-Payroll-Management-System\server\prisma\import\employees.normalized.json
+  C:\Users\PSBA\Desktop\PSBA-HR-Payroll-Management-System\server\prisma\import\import_issues.csv
+  C:\Users\PSBA\Desktop\PSBA-HR-Payroll-Management-System\server\prisma\import\etl_summary.txt

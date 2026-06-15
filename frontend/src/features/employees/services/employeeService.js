@@ -168,6 +168,26 @@ class EmployeeService {
   }
 
   /**
+   * Live-check whether a CNIC already exists (for the add/edit form).
+   * @param {string} cnic
+   * @param {number|null} excludeId - employee id to ignore (edit mode)
+   * @returns {Promise<{exists:boolean, employee:?{id:number,full_name:string}}>}
+   */
+  async checkCnic(cnic, excludeId = null) {
+    try {
+      const params = { cnic };
+      if (excludeId) params.excludeId = excludeId;
+      const result = await this.apiClient.get(`/employees/check-cnic`, {
+        params,
+      });
+      return result.data || { exists: false };
+    } catch (error) {
+      // Fail open — don't block the form if the check errors
+      return { exists: false };
+    }
+  }
+
+  /**
    * Create new employee
    * @param {Object} employeeData - Employee data including files
    * @returns {Promise<Object>} Created employee data

@@ -1526,7 +1526,6 @@ const employmentController = {
                 id: true,
                 full_name: true,
                 cnic: true,
-                employee_id: true,
               },
               orderBy: { full_name: "asc" },
             }),
@@ -1828,7 +1827,6 @@ const employmentController = {
           id: true,
           full_name: true,
           cnic: true,
-          employee_id: true,
         },
         orderBy: { full_name: "asc" },
       });

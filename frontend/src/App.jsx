@@ -26,11 +26,9 @@ import {
   ScaleGradeManagement,
   RoleManagement,
   LocationManagement,
-  DeviceManagement,
   DistrictManagement,
   CityManagement,
   EducationLevelManagement,
-  TravelRateManagement,
 } from "./features/settings";
 import { UserManagement } from "./features/users";
 import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
@@ -42,7 +40,6 @@ import ViewRoster from "./features/roster/pages/ViewRoster";
 import AttendanceDashboard from "./features/attendance/pages/AttendanceDashboard";
 import AttendanceLocations from "./features/attendance/pages/AttendanceLocations";
 import AttendanceLocationDetail from "./features/attendance/pages/AttendanceLocationDetail";
-import AttendanceDevices from "./features/attendance/pages/AttendanceDevices";
 import AttendanceLocationDetailHome from "./features/attendance/pages/AttendanceLocationDetailHome";
 import LocationFMOPage from "./features/attendance/pages/LocationFMOPage";
 import LocationRosterPage from "./features/attendance/pages/LocationRosterPage";
@@ -52,15 +49,6 @@ import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
 import LeaveApply from "./features/attendance/pages/LeaveApply";
 import LeaveApprovalsPage from "./features/attendance/pages/LeaveApprovalsPage";
 import AllLeavesPage from "./features/attendance/pages/AllLeavesPage";
-import TravelRequestsPage from "./features/travel/pages/TravelRequestsPage";
-import TravelClaimsPage from "./features/travel/pages/TravelClaimsPage";
-import ManageTravelRequests from "./features/travel/pages/ManageTravelRequests";
-import TravelApprovalsPage from "./features/travel/pages/TravelApprovalsPage";
-import TravelExpenseClaimsPage from "./features/travel/pages/TravelExpenseClaimsPage";
-import ManageExpenseClaimApprovals from "./features/travel/pages/ManageExpenseClaimApprovals";
-import AllTadaRequestsPage from "./features/travel/pages/AllTadaRequestsPage";
-import AccountsTranchesPage from "./features/travel/pages/AccountsTranchesPage";
-import TravelManualEntryPage from "./features/travel/pages/TravelManualEntryPage";
 import PayrollList from "./features/payroll/pages/PayrollList";
 import PayrollDetail from "./features/payroll/pages/PayrollDetail";
 import PayrollTranches from "./features/payroll/pages/PayrollTranches";
@@ -356,7 +344,6 @@ function App() {
                     "designations.read",
                     "role-tags.read",
                     "scale-grades.read",
-                    "travel.rates.read",
                   ]}
                 >
                   <SettingsDashboard />
@@ -400,14 +387,6 @@ function App() {
               element={
                 <PrivateRoute permissions={["locations.read"]}>
                   <LocationManagement />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="settings/devices"
-              element={
-                <PrivateRoute permissions={["devices.read"]}>
-                  <DeviceManagement />
                 </PrivateRoute>
               }
             />
@@ -457,14 +436,6 @@ function App() {
               element={
                 <PrivateRoute permissions={["system.security.read"]}>
                   <SecuritySettings />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="settings/travel-rates"
-              element={
-                <PrivateRoute permissions={["travel.rates.read"]}>
-                  <TravelRateManagement />
                 </PrivateRoute>
               }
             />
@@ -529,14 +500,6 @@ function App() {
               }
             />
             <Route
-              path="attendance/devices"
-              element={
-                <PrivateRoute permissions={["attendance.read"]}>
-                  <AttendanceDevices />
-                </PrivateRoute>
-              }
-            />
-            <Route
               path="/attendance/leaves"
               element={
                 <PrivateRoute permissions={["attendance.read", "leaves.read"]}>
@@ -587,113 +550,6 @@ function App() {
               }
             />
 
-            {/* Travel */}
-            <Route
-              path="travel/requests"
-              element={
-                <PrivateRoute permissions={["travel.read"]}>
-                  <TravelRequestsPage />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="travel/manage"
-              element={
-                <PrivateRoute
-                  permissions={[
-                    // Only Establishment, Operations, Accounts should access Manage
-                    "travel.claim.verify.establishment",
-                    "travel.request.approve.ops",
-                    // DG approvers can also access Manage
-                    "travel.request.approve.dg",
-                    "travel.claim.approve.ops",
-                    "travel.claim.process.start",
-                    // Include super-admin wildcard and travel.manage if granted
-                    "*",
-                    "travel.manage",
-                  ]}
-                >
-                  <ManageTravelRequests />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/travel/requests/all"
-              element={
-                <PrivateRoute permissions={["travel.read"]}>
-                  <AllTadaRequestsPage />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="travel/approvals"
-              element={
-                <PrivateRoute
-                  permissions={[
-                    // Normal employees with travel read
-                    "travel.read",
-                    // Ops and DG approvers
-                    "travel.request.approve.ops",
-                    "travel.request.approve.dg",
-                    // Management/administrators
-                    "travel.manage",
-                    "*",
-                  ]}
-                >
-                  <TravelApprovalsPage />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="travel/expense-claims"
-              element={
-                <PrivateRoute
-                  permissions={[
-                    "travel.claim.create",
-                    "travel.claim.read",
-                    "travel.read",
-                  ]}
-                >
-                  <TravelExpenseClaimsPage />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="travel/expense-claim-approvals"
-              element={
-                <PrivateRoute
-                  permissions={[
-                    // Normal employees with claim read (recommender visibility)
-                    "travel.claim.read",
-                    "travel.read",
-                    // Accounts, Establishment, and Ops department approvers
-                    "travel.claim.process.start",
-                    "travel.claim.verify.establishment",
-                    "travel.claim.approve.ops",
-                    // Management/administrators
-                    "*",
-                  ]}
-                >
-                  <ManageExpenseClaimApprovals />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="travel/accounts/tranches"
-              element={
-                <PrivateRoute permissions={["travel.claim.process.start"]}>
-                  <AccountsTranchesPage />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="travel/manual"
-              element={
-                <PrivateRoute roles={["Super Admin"]}>
-                  <TravelManualEntryPage />
-                </PrivateRoute>
-              }
-            />
           </Route>
         </Routes>
       </ConfirmationProvider>

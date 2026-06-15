@@ -58,8 +58,10 @@ export const useEmploymentForm = ({
       department: "",
       designation: "",
       employment_type: "Regular",
+      joining_date: "",
       effective_from: "",
       effective_till: "",
+      appointment_letter_issue_date: "",
       role_tag: "",
       reporting_officer_id: "",
       office_location: "",
@@ -161,31 +163,25 @@ export const useEmploymentForm = ({
 
   useEffect(() => {
     async function updateDesignationsForDepartment() {
-      if (
-        !formOptions ||
-        !formOptions.departments ||
-        formOptions.departments.length === 0
-      )
-        return;
-      // Detect org-specific behavior
+      // Only need the designations list to be loaded; departments may be empty.
+      if (!formOptions) return;
+      const allDesignations = formOptions.designations || [];
       const isMBWO = currentOrganization === "MBWO";
       const isPMBMC = currentOrganization === "PMBMC";
 
       if (isMBWO) {
         // For MBWO, show all designations (handled separately)
-        setAvailableDesignations(formOptions.designations || []);
+        setAvailableDesignations(allDesignations);
         return;
       }
 
       if (isPMBMC) {
         // For PMBMC, department and designation are free-text; skip fetching
-        // Ensure availableDesignations is cleared to avoid dropdown logic
         if (availableDesignations.length !== 0) setAvailableDesignations([]);
         return;
       }
-      // For non-MBWO: get current selected department from employmentForm
+
       const departmentId = watchedDepartment || null;
-      // Only fetch when departmentId is a valid numeric id (avoid on each keystroke of text)
       const isNumericId =
         typeof departmentId === "number" ||
         (!!departmentId && /^\d+$/.test(String(departmentId)));
@@ -195,24 +191,28 @@ export const useEmploymentForm = ({
         try {
           const designations =
             await employmentService.getDesignationsByDepartment(departmentId);
-          setAvailableDesignations(designations || []);
+          // Always also include department-less (field) designations so roles like
+          // "Security & Parking Attendant" remain selectable for any department.
+          const deptless = allDesignations.filter((d) => !d.department_id);
+          const byId = new Map();
+          [...(designations || []), ...deptless].forEach((d) =>
+            byId.set(d.value ?? d.id, d)
+          );
+          setAvailableDesignations(Array.from(byId.values()));
         } catch {
-          /* ignore */
+          setAvailableDesignations(allDesignations.filter((d) => !d.department_id));
         } finally {
           setIsLoading(false);
         }
       } else {
-        // No department selected; empty designation dropdown
-        setAvailableDesignations([]);
+        // No department selected: show department-less (field) designations,
+        // e.g. "Security & Parking Attendant", "Sanitation Attendant".
+        setAvailableDesignations(allDesignations.filter((d) => !d.department_id));
       }
     }
     updateDesignationsForDepartment();
-  }, [
-    formOptions,
-    currentOrganization,
-    watchedDepartment,
-    availableDesignations.length,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formOptions, currentOrganization, watchedDepartment]);
 
   // Watch employment type to determine if contractual
   useEffect(() => {

@@ -88,12 +88,18 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
+        // Single-source validation shared with the backend (repo-root /shared)
+        "@shared": path.resolve(__dirname, "../shared"),
       },
     },
     server: {
       port: 5176,
       strictPort: true,
       host: true, // binds to all interfaces (0.0.0.0)
+      fs: {
+        // allow importing the shared/ folder which lives outside frontend/
+        allow: [path.resolve(__dirname, ".."), __dirname],
+      },
       proxy: {
         "/api": {
           target: "http://127.0.0.1:3000", // backend running on same server

@@ -150,13 +150,13 @@ const EmployeeTable = () => {
             ce?.department?.name ||
               ce?.department_text ||
               ce?.department ||
-              "N/A"
+              "—"
           );
           const desig = toTitleCase(
             ce?.designation?.title ||
               ce?.designation_text ||
               ce?.designation ||
-              "N/A"
+              "—"
           );
           return (
             <div className="text-left">
@@ -181,7 +181,7 @@ const EmployeeTable = () => {
         accessor: "scale_grade",
         render: (row) => {
           const ce = getCurrentEmployment(row);
-          const scale = ce?.scale_grade?.name || ce?.scale_grade_id || "N/A";
+          const scale = ce?.scale_grade?.name || ce?.scale_grade_id || "—";
           return (
             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ring-1 ring-inset bg-slate-50 text-slate-700 ring-slate-200">
               {scale}
@@ -194,7 +194,7 @@ const EmployeeTable = () => {
         accessor: "employment_status",
         render: (row) => {
           const ce = getCurrentEmployment(row);
-          const status = toTitleCase(ce?.employment_status || "N/A");
+          const status = toTitleCase(ce?.employment_status || "—");
           return (
             <span
               className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ring-1 ring-inset ${statusColor(
@@ -258,7 +258,7 @@ const EmployeeTable = () => {
                   return (
                     currentEmployment?.department?.name ||
                     currentEmployment?.department_id ||
-                    "N/A"
+                    "—"
                   );
                 })()}
               </p>
@@ -295,7 +295,7 @@ const EmployeeTable = () => {
   }
 
   return (
-    <div className="w-[95%] h-full my-4 m-auto px-2 sm:px-4 lg:px-6">
+    <div className="w-full h-full my-4 m-auto px-2 sm:px-4 lg:px-6">
       {loading && !isInitialLoad && (
         <div className="fixed top-20 right-4 z-50 bg-white shadow-lg rounded-lg px-4 py-2 border border-gray-200">
           <div className="flex items-center text-sm text-gray-600">

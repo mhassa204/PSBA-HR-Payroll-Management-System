@@ -21,7 +21,7 @@ class UserService {
             select: {
               id: true,
               full_name: true,
-              employee_id: true,
+              cnic: true,
             },
           },
           // New: include linked department if any
@@ -64,7 +64,7 @@ class UserService {
             select: {
               id: true,
               full_name: true,
-              employee_id: true,
+              cnic: true,
               email: true,
             },
           },
@@ -190,7 +190,7 @@ class UserService {
             select: {
               id: true,
               full_name: true,
-              employee_id: true,
+              cnic: true,
             },
           },
           department: { select: { id: true, name: true, code: true } },
@@ -328,7 +328,7 @@ class UserService {
             select: {
               id: true,
               full_name: true,
-              employee_id: true,
+              cnic: true,
             },
           },
           department: { select: { id: true, name: true, code: true } },
@@ -419,7 +419,6 @@ class UserService {
         select: {
           id: true,
           full_name: true,
-          employee_id: true,
           email: true,
           cnic: true,
         },
@@ -441,7 +440,6 @@ class UserService {
           select: {
             id: true,
             full_name: true,
-            employee_id: true,
             email: true,
             cnic: true,
           },

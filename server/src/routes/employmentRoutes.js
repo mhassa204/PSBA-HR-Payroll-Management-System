@@ -5,6 +5,7 @@ const employmentController = require("../controllers/employmentController");
 const multer = require("multer");
 const { employmentStorage } = require("../config/multer");
 const { isAuthenticated, authorize } = require("../middleware/auth");
+const { validateBody } = require("../middleware/sharedValidate");
 
 // Custom multer configuration for employment document uploads
 const employmentUpload = multer({
@@ -19,6 +20,7 @@ const employmentUpload = multer({
       /^renewal_report(_\d+)?(_file)?$/,
       /^contract_renewal_report(_\d+)?(_file)?$/,
       /^contract_document(_\d+)?(_file)?$/,
+      /^appointment_letter(_\d+)?(_file)?$/,
     ];
 
     const isAllowed = allowedPatterns.some((pattern) =>
@@ -44,6 +46,7 @@ router.post(
   isAuthenticated,
   authorize("employment.create"),
   employmentUpload.any(),
+  validateBody("employment"),
   employmentController.createEmployment
 );
 router.get(
@@ -93,6 +96,7 @@ router.put(
   isAuthenticated,
   authorize("employment.update"),
   employmentUpload.any(),
+  validateBody("employment", { partial: true }),
   employmentController.updateEmployment
 );
 router.delete(

@@ -8,6 +8,7 @@ import ErrorMessage from "../../../components/ui/ErrorMessage";
 import ProfilePicture from "../../../components/ui/ProfilePicture";
 import DocumentViewer from "../../../components/ui/DocumentViewer";
 import OrganizedDocumentGrid from "../../../components/ui/OrganizedDocumentGrid";
+import DetailField, { hasValue } from "../../../components/ui/DetailField";
 import { getImageUrl } from "../../../utils/imageUtils";
 import {
   formatDateDisplay,
@@ -83,6 +84,15 @@ const getUniqueCompaniesCount = (experiences) => {
   return uniqueCompanies.size.toString();
 };
 
+// Label/value block that renders nothing when the value is empty (no "")
+const ProfileField = ({ label, value }) =>
+  hasValue(value) ? (
+    <div>
+      <p className="text-sm text-gray-700 font-medium">{label}</p>
+      <p className="font-semibold text-gray-900">{value}</p>
+    </div>
+  ) : null;
+
 const EnhancedUserProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -155,14 +165,18 @@ const EnhancedUserProfile = () => {
       return "No experience";
 
     const totalMonths = employmentRecords.reduce((total, record) => {
-      const startDate = new Date(record.effective_from);
+      // Experience is based on employment DURATION only (joining/effective dates),
+      // never on salary data (req #12). Prefer the permanent joining_date.
+      const startRaw = record.joining_date || record.effective_from;
+      if (!startRaw) return total;
+      const startDate = new Date(startRaw);
       const endDate = record.effective_till
         ? new Date(record.effective_till)
         : new Date();
       const months =
         (endDate.getFullYear() - startDate.getFullYear()) * 12 +
         (endDate.getMonth() - startDate.getMonth());
-      return total + months;
+      return total + Math.max(0, months);
     }, 0);
 
     const years = Math.floor(totalMonths / 12);
@@ -192,8 +206,10 @@ const EnhancedUserProfile = () => {
 
     // If still no current record, get the most recent one
     if (!currentRecord && employmentRecords.length > 0) {
-      currentRecord = employmentRecords.sort(
-        (a, b) => new Date(b.effective_from) - new Date(a.effective_from)
+      currentRecord = [...employmentRecords].sort(
+        (a, b) =>
+          new Date(b.joining_date || b.effective_from || 0) -
+          new Date(a.joining_date || a.effective_from || 0)
       )[0];
     }
 
@@ -226,10 +242,10 @@ const EnhancedUserProfile = () => {
         BAZAAR: "Bazaar",
         SAHULAT_BAZAAR: "Sahulat Bazaar",
       };
-      return typeMap[loc.type] || rec?.office_location || "N/A";
+      return typeMap[loc.type] || rec?.office_location || "";
     }
     // Fallback for older data without populated location relation
-    return rec?.office_location || "N/A";
+    return rec?.office_location || "";
   };
 
   if (isLoading) {
@@ -357,7 +373,7 @@ const EnhancedUserProfile = () => {
                 <div className="flex items-center space-x-4 text-white">
                   <span>
                     <i className="fas fa-id-card mr-2"></i>
-                    {displayCNIC(employee.cnic) || "N/A"}
+                    {displayCNIC(employee.cnic) || ""}
                   </span>
                   {currentPosition && (
                     <span>
@@ -366,7 +382,7 @@ const EnhancedUserProfile = () => {
                         currentPosition.designation_text ||
                         (typeof currentPosition.designation === "string"
                           ? currentPosition.designation
-                          : "N/A")}{" "}
+                          : "")}{" "}
                       at {currentPosition.organization}
                     </span>
                   )}
@@ -390,7 +406,7 @@ const EnhancedUserProfile = () => {
                     )}
                   <span>
                     <i className="fas fa-envelope mr-2"></i>
-                    {employee.email || "No email provided"}
+                    {employee.email || ""}
                   </span>
                 </div>
               </div>
@@ -485,9 +501,9 @@ const EnhancedUserProfile = () => {
 
                         return totalSalary > 0
                           ? `PKR ${totalSalary.toLocaleString()}`
-                          : "N/A";
+                          : "";
                       })()
-                    : "N/A"}
+                    : ""}
                 </p>
               </div>
             </div>
@@ -501,7 +517,7 @@ const EnhancedUserProfile = () => {
               <div className="ml-4">
                 <p className="text-sm text-gray-700 font-medium">Current Org</p>
                 <p className="text-lg font-bold text-gray-900">
-                  {currentPosition?.organization || "N/A"}
+                  {currentPosition?.organization || ""}
                 </p>
               </div>
             </div>
@@ -560,73 +576,53 @@ const EnhancedUserProfile = () => {
                           {currentPosition.organization}
                         </p>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-700 font-medium">
-                          Designation
-                        </p>
-                        <p className="font-semibold text-gray-900">
-                          {currentPosition.designation?.title ||
-                            currentPosition.designation_text ||
-                            (typeof currentPosition.designation === "string"
-                              ? currentPosition.designation
-                              : "N/A")}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-700 font-medium">
-                          Department
-                        </p>
-                        <p className="font-semibold text-gray-900">
-                          {currentPosition.department?.name ||
-                            currentPosition.department_text ||
-                            (typeof currentPosition.department === "string"
-                              ? currentPosition.department
-                              : "N/A")}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-700 font-medium">
-                          Start Date
-                        </p>
-                        <p className="font-semibold text-gray-900">
-                          {formatDate(currentPosition.effective_from)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-700 font-medium">
-                          Employment Type
-                        </p>
-                        <p className="font-semibold text-gray-900">
-                          {currentPosition.employment_type}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-700 font-medium">
-                          On Probation
-                        </p>
-                        <p className="font-semibold text-gray-900">
-                          {currentPosition.is_on_probation ? "Yes" : "No"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-700 font-medium">
-                          Probation End Date
-                        </p>
-                        <p className="font-semibold text-gray-900">
-                          {currentPosition.is_on_probation &&
-                          currentPosition.probation_end_date
-                            ? formatDate(currentPosition.probation_end_date)
-                            : "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-700 font-medium">
-                          Office Location
-                        </p>
-                        <p className="font-semibold text-gray-900">
-                          {displayEmploymentLocation(currentPosition)}
-                        </p>
-                      </div>
+                      <ProfileField
+                        label="Designation"
+                        value={
+                          currentPosition.designation?.title ||
+                          currentPosition.designation_text ||
+                          (typeof currentPosition.designation === "string"
+                            ? currentPosition.designation
+                            : "")
+                        }
+                      />
+                      <ProfileField
+                        label="Department"
+                        value={
+                          currentPosition.department?.name ||
+                          currentPosition.department_text ||
+                          (typeof currentPosition.department === "string"
+                            ? currentPosition.department
+                            : "")
+                        }
+                      />
+                      <ProfileField
+                        label="Joining Date"
+                        value={formatDate(
+                          currentPosition.joining_date ||
+                            currentPosition.effective_from
+                        )}
+                      />
+                      <ProfileField
+                        label="Employment Type"
+                        value={currentPosition.employment_type}
+                      />
+                      <ProfileField
+                        label="On Probation"
+                        value={currentPosition.is_on_probation ? "Yes" : ""}
+                      />
+                      {currentPosition.is_on_probation && (
+                        <ProfileField
+                          label="Probation End Date"
+                          value={formatDate(
+                            currentPosition.probation_end_date
+                          )}
+                        />
+                      )}
+                      <ProfileField
+                        label="Office Location"
+                        value={displayEmploymentLocation(currentPosition)}
+                      />
                     </div>
                   </div>
                 )}
@@ -657,7 +653,7 @@ const EnhancedUserProfile = () => {
                           Gender:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {employee.gender || "N/A"}
+                          {employee.gender || ""}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -665,7 +661,7 @@ const EnhancedUserProfile = () => {
                           Marital Status:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {toTitleCase(employee.marital_status || "N/A")}
+                          {toTitleCase(employee.marital_status || "")}
                         </span>
                       </div>
                     </div>
@@ -681,7 +677,7 @@ const EnhancedUserProfile = () => {
                           Mobile:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {displayPhoneNumber(employee.mobile_number) || "N/A"}
+                          {displayPhoneNumber(employee.mobile_number) || ""}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -689,7 +685,7 @@ const EnhancedUserProfile = () => {
                           Email:
                         </span>
                         <span className="font-semibold text-gray-900">
-                          {employee.email || "N/A"}
+                          {employee.email || ""}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -697,7 +693,7 @@ const EnhancedUserProfile = () => {
                         <span className="font-semibold text-gray-900">
                           {employee.cityRef?.name ||
                             formatCityName(employee.city) ||
-                            "N/A"}
+                            ""}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -707,7 +703,7 @@ const EnhancedUserProfile = () => {
                         <span className="font-semibold text-gray-900">
                           {employee.districtRef?.name ||
                             formatDistrictName(employee.district) ||
-                            "N/A"}
+                            ""}
                         </span>
                       </div>
                     </div>
@@ -725,11 +721,11 @@ const EnhancedUserProfile = () => {
                 {employee.employmentRecords &&
                 employee.employmentRecords.length > 0 ? (
                   <div className="space-y-4">
-                    {employee.employmentRecords
+                    {[...employee.employmentRecords]
                       .sort(
                         (a, b) =>
-                          new Date(b.effective_from) -
-                          new Date(a.effective_from)
+                          new Date(b.joining_date || b.effective_from || 0) -
+                          new Date(a.joining_date || a.effective_from || 0)
                       )
                       .map((record) => (
                         <div
@@ -758,7 +754,7 @@ const EnhancedUserProfile = () => {
                                     record.designation_text ||
                                     (typeof record.designation === "string"
                                       ? record.designation
-                                      : "N/A")}
+                                      : "")}
                                 </h4>
                                 {/* Org Tag */}
                                 {(() => {
@@ -803,7 +799,7 @@ const EnhancedUserProfile = () => {
                                   record.department_text ||
                                   (typeof record.department === "string"
                                     ? record.department
-                                    : "N/A")}
+                                    : "")}
                               </p>
                               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                                 <div>
@@ -811,92 +807,83 @@ const EnhancedUserProfile = () => {
                                     Period:
                                   </span>
                                   <p className="font-semibold text-gray-900">
-                                    {formatDate(record.effective_from)} -{" "}
+                                    {formatDate(
+                                      record.joining_date || record.effective_from
+                                    )}{" "}
+                                    -{" "}
                                     {record.effective_till
                                       ? formatDate(record.effective_till)
                                       : "Present"}
                                   </p>
                                 </div>
-                                <div>
-                                  <span className="text-gray-700 font-medium">
-                                    Salary:
-                                  </span>
-                                  <p className="font-semibold text-gray-900">
-                                    {record.salary
-                                      ? (() => {
-                                          const salary = record.salary;
-                                          let totalSalary = 0;
-
-                                          // Calculate total salary based on organization
-                                          if (record.organization === "MBWO") {
-                                            // MBWO uses gross_salary
-                                            totalSalary =
-                                              salary.gross_salary || 0;
-                                          } else {
-                                            // Other organizations use sum of components
-                                            totalSalary =
-                                              (salary.basic_salary || 0) +
-                                              (salary.medical_allowance || 0) +
-                                              (salary.house_rent || 0) +
-                                              (salary.conveyance_allowance ||
-                                                0) +
-                                              (salary.other_allowances || 0);
-                                          }
-
-                                          return totalSalary > 0
-                                            ? `PKR ${totalSalary.toLocaleString()}`
-                                            : "N/A";
-                                        })()
-                                      : "N/A"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <span className="text-gray-700 font-medium">
-                                    Type:
-                                  </span>
-                                  <p className="font-semibold text-gray-900">
-                                    {record.employment_type}
-                                  </p>
-                                </div>
-                                <div>
-                                  <span className="text-gray-700 font-medium">
-                                    On Probation:
-                                  </span>
-                                  <p className="font-semibold text-gray-900">
-                                    {record.is_on_probation ? "Yes" : "No"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <span className="text-gray-700 font-medium">
-                                    Probation End:
-                                  </span>
-                                  <p className="font-semibold text-gray-900">
-                                    {record.is_on_probation &&
-                                    record.probation_end_date
-                                      ? formatDate(record.probation_end_date)
-                                      : "N/A"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <span className="text-gray-700 font-medium">
-                                    Scale/Grade:
-                                  </span>
-                                  <p className="font-semibold text-gray-900">
-                                    {record.scale_grade?.name ||
-                                      record.scale_grade_id ||
-                                      "N/A"}
-                                  </p>
-                                </div>
-                                <div>
-                                  <span className="text-gray-700 font-medium">
-                                    Role Tag:
-                                  </span>
-                                  <p className="font-semibold text-gray-900">
-                                    {record.role_tag?.name ||
-                                      record.role_tag_id ||
-                                      "N/A"}
-                                  </p>
-                                </div>
+                                {(() => {
+                                  const salary = record.salary;
+                                  if (!salary) return null;
+                                  const totalSalary =
+                                    record.organization === "MBWO"
+                                      ? salary.gross_salary || 0
+                                      : (salary.basic_salary || 0) +
+                                        (salary.medical_allowance || 0) +
+                                        (salary.house_rent || 0) +
+                                        (salary.conveyance_allowance || 0) +
+                                        (salary.other_allowances || 0);
+                                  if (totalSalary <= 0) return null;
+                                  return (
+                                    <div>
+                                      <span className="text-gray-700 font-medium">
+                                        Salary:
+                                      </span>
+                                      <p className="font-semibold text-gray-900">
+                                        {`PKR ${totalSalary.toLocaleString()}`}
+                                      </p>
+                                    </div>
+                                  );
+                                })()}
+                                {record.employment_type && (
+                                  <div>
+                                    <span className="text-gray-700 font-medium">
+                                      Type:
+                                    </span>
+                                    <p className="font-semibold text-gray-900">
+                                      {record.employment_type}
+                                    </p>
+                                  </div>
+                                )}
+                                {record.is_on_probation &&
+                                  record.probation_end_date && (
+                                    <div>
+                                      <span className="text-gray-700 font-medium">
+                                        Probation End:
+                                      </span>
+                                      <p className="font-semibold text-gray-900">
+                                        {formatDate(record.probation_end_date)}
+                                      </p>
+                                    </div>
+                                  )}
+                                {(record.scale_grade?.name ||
+                                  record.scale_grade_id) && (
+                                  <div>
+                                    <span className="text-gray-700 font-medium">
+                                      Scale/Grade:
+                                    </span>
+                                    <p className="font-semibold text-gray-900">
+                                      {record.scale_grade?.name ||
+                                        record.scale_grade_id}
+                                    </p>
+                                  </div>
+                                )}
+                                {(record.role_tag?.name ||
+                                  record.role_tag_id) && (
+                                  <div>
+                                    <span className="text-gray-700 font-medium">
+                                      Role Tag:
+                                    </span>
+                                    <p className="font-semibold text-gray-900">
+                                      {record.role_tag?.name ||
+                                        record.role_tag_id}
+                                    </p>
+                                  </div>
+                                )}
                                 <div>
                                   <span className="text-gray-700 font-medium">
                                     Location:
@@ -964,32 +951,29 @@ const EnhancedUserProfile = () => {
                           {employee.full_name}
                         </span>
                       </div>
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-700 font-medium">
-                          {employee.relationship_type === "father"
+                      <DetailField
+                        layout="row"
+                        className="border-b border-gray-100"
+                        label={
+                          employee.relationship_type === "father"
                             ? "Father Name:"
-                            : "Husband Name:"}
-                        </span>
-                        <span className="font-semibold text-gray-900">
-                          {employee.father_husband_name || "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-700 font-medium">
-                          Relationship Type:
-                        </span>
-                        <span className="font-semibold text-gray-900 capitalize">
-                          {employee.relationship_type || "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-700 font-medium">
-                          Mother Name:
-                        </span>
-                        <span className="font-semibold text-gray-900">
-                          {employee.mother_name || "N/A"}
-                        </span>
-                      </div>
+                            : "Husband Name:"
+                        }
+                        value={employee.father_husband_name}
+                      />
+                      <DetailField
+                        layout="row"
+                        className="border-b border-gray-100"
+                        label="Relationship Type:"
+                        value={employee.relationship_type}
+                        valueClassName="capitalize"
+                      />
+                      <DetailField
+                        layout="row"
+                        className="border-b border-gray-100"
+                        label="Mother Name:"
+                        value={employee.mother_name}
+                      />
                       <div className="flex justify-between py-2 border-b border-gray-100">
                         <span className="text-gray-700 font-medium">CNIC:</span>
                         <span className="font-semibold text-gray-900">
@@ -1012,46 +996,11 @@ const EnhancedUserProfile = () => {
                       Personal Details
                     </h3>
                     <div className="space-y-3">
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-700 font-medium">
-                          Gender:
-                        </span>
-                        <span className="font-semibold text-gray-900">
-                          {employee.gender || "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-700 font-medium">
-                          Marital Status:
-                        </span>
-                        <span className="font-semibold text-gray-900">
-                          {toTitleCase(employee.marital_status || "N/A")}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-700 font-medium">
-                          Nationality:
-                        </span>
-                        <span className="font-semibold text-gray-900">
-                          {employee.nationality || "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-700 font-medium">
-                          Religion:
-                        </span>
-                        <span className="font-semibold text-gray-900">
-                          {employee.religion || "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-gray-700 font-medium">
-                          Blood Group:
-                        </span>
-                        <span className="font-semibold text-gray-900">
-                          {employee.blood_group || "N/A"}
-                        </span>
-                      </div>
+                      <DetailField layout="row" className="border-b border-gray-100" label="Gender:" value={employee.gender} />
+                      <DetailField layout="row" className="border-b border-gray-100" label="Marital Status:" value={hasValue(employee.marital_status) ? toTitleCase(employee.marital_status) : ""} />
+                      <DetailField layout="row" className="border-b border-gray-100" label="Nationality:" value={employee.nationality} />
+                      <DetailField layout="row" className="border-b border-gray-100" label="Religion:" value={employee.religion} />
+                      <DetailField layout="row" className="border-b border-gray-100" label="Blood Group:" value={employee.blood_group} />
                     </div>
                   </div>
 
@@ -1082,7 +1031,7 @@ const EnhancedUserProfile = () => {
                               Disability Type:
                             </span>
                             <span className="font-semibold text-gray-900">
-                              {employee.disability_type || "N/A"}
+                              {employee.disability_type || ""}
                             </span>
                           </div>
                           {employee.disability_description && (
@@ -1109,6 +1058,12 @@ const EnhancedUserProfile = () => {
                         <span className="text-gray-600">CNIC Number:</span>
                         <span className="font-medium">
                           {displayCNIC(employee.cnic)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-gray-100">
+                        <span className="text-gray-600">Biometric ID:</span>
+                        <span className="font-medium">
+                          {employee.deviceUserId || ""}
                         </span>
                       </div>
                       <div className="flex justify-between py-2 border-b border-gray-100">
@@ -1157,7 +1112,7 @@ const EnhancedUserProfile = () => {
                                   <span className="font-medium text-green-800">
                                     {education.level?.name ||
                                       education.education_level ||
-                                      "N/A"}
+                                      ""}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -1165,7 +1120,7 @@ const EnhancedUserProfile = () => {
                                     Institution:
                                   </span>
                                   <span className="font-medium">
-                                    {education.institution_name || "N/A"}
+                                    {education.institution_name || ""}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -1173,7 +1128,7 @@ const EnhancedUserProfile = () => {
                                     Start Year:
                                   </span>
                                   <span className="font-medium">
-                                    {education.start_date || "N/A"}
+                                    {education.start_date || ""}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -1183,7 +1138,7 @@ const EnhancedUserProfile = () => {
                                   <span className="font-medium">
                                     {education.year_of_completion
                                       ? formatDate(education.year_of_completion)
-                                      : "N/A"}
+                                      : ""}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -1191,7 +1146,7 @@ const EnhancedUserProfile = () => {
                                     Marks/GPA:
                                   </span>
                                   <span className="font-medium">
-                                    {education.marks_gpa || "N/A"}
+                                    {education.marks_gpa || ""}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -1199,7 +1154,7 @@ const EnhancedUserProfile = () => {
                                     Roll No:
                                   </span>
                                   <span className="font-medium">
-                                    {education.roll_no || "N/A"}
+                                    {education.roll_no || ""}
                                   </span>
                                 </div>
                               </div>
@@ -1254,64 +1209,33 @@ const EnhancedUserProfile = () => {
                     Contact Details
                   </h3>
                   <div className="space-y-3">
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-gray-600">Mobile Number:</span>
-                      <span className="font-medium">
-                        {displayPhoneNumber(employee.mobile_number) || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-gray-600">WhatsApp Number:</span>
-                      <span className="font-medium">
-                        {employee.whatsapp_number || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-gray-600">Email:</span>
-                      <span className="font-medium">
-                        {employee.email || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-gray-600">City:</span>
-                      <span className="font-medium">
-                        {employee.cityRef?.name ||
-                          formatCityName(employee.city) ||
-                          "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-gray-600">District:</span>
-                      <span className="font-medium">
-                        {employee.districtRef?.name ||
-                          formatDistrictName(employee.district) ||
-                          "N/A"}
-                      </span>
-                    </div>
+                    <DetailField layout="row" className="border-b border-gray-100" label="Mobile Number:" value={displayPhoneNumber(employee.mobile_number)} />
+                    <DetailField layout="row" className="border-b border-gray-100" label="WhatsApp Number:" value={employee.whatsapp_number} />
+                    <DetailField layout="row" className="border-b border-gray-100" label="Email:" value={employee.email} />
+                    <DetailField layout="row" className="border-b border-gray-100" label="City:" value={employee.cityRef?.name || formatCityName(employee.city)} />
+                    <DetailField layout="row" className="border-b border-gray-100" label="District:" value={employee.districtRef?.name || formatDistrictName(employee.district)} />
                   </div>
                 </div>
 
                 <div className="text-gray-800">
                   <h3 className="text-lg font-semibold mb-4">Addresses</h3>
                   <div className="space-y-4">
-                    <div>
-                      <span className="text-gray-600 text-sm">
-                        Present Address:
-                      </span>
-                      <p className="font-medium mt-1 p-3 bg-gray-50 rounded">
-                        {employee.present_address ||
-                          "No present address provided"}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 text-sm">
-                        Permanent Address:
-                      </span>
-                      <p className="font-medium mt-1 p-3 bg-gray-50 rounded">
-                        {employee.permanent_address ||
-                          "No permanent address provided"}
-                      </p>
-                    </div>
+                    {hasValue(employee.present_address) && (
+                      <div>
+                        <span className="text-gray-600 text-sm">Present Address:</span>
+                        <p className="font-medium mt-1 p-3 bg-gray-50 rounded">
+                          {employee.present_address}
+                        </p>
+                      </div>
+                    )}
+                    {hasValue(employee.permanent_address) && (
+                      <div>
+                        <span className="text-gray-600 text-sm">Permanent Address:</span>
+                        <p className="font-medium mt-1 p-3 bg-gray-50 rounded">
+                          {employee.permanent_address}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>

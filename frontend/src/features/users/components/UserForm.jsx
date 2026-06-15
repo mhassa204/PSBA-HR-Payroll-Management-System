@@ -198,8 +198,8 @@ const UserForm = ({ user, onSubmit, onCancel }) => {
   const getEmployeeOptions = () => {
     return availableEmployees.map((employee) => ({
       value: employee.id.toString(),
-      label: `${employee.full_name} - ${employee.cnic || employee.employee_id}`,
-      description: `Employee ID: ${employee.employee_id}${
+      label: `${employee.full_name} - ${employee.cnic}`,
+      description: `CNIC: ${employee.cnic}${
         employee.email ? ` | ${employee.email}` : ""
       }`,
     }));

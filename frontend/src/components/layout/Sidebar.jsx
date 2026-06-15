@@ -77,7 +77,6 @@ const navigation = [
       { name: "Role Tags", href: "/settings/role-tags" },
       { name: "Scale Grades", href: "/settings/scale-grades" },
       { name: "Locations", href: "/settings/locations" },
-      { name: "Devices", href: "/settings/devices" },
       { name: "Roles", href: "/settings/roles" },
       // New entries
       { name: "Districts", href: "/settings/districts" },
@@ -96,25 +95,9 @@ const Sidebar = ({ isOpen, onClose, currentPath }) => {
   const isSuper =
     user?.role?.name === "Super Admin" ||
     (user?.permissions || []).includes("*");
-  const canAccounts =
-    isSuper ||
-    can("travel.claim.process.start") ||
-    /accounts|finance|budget|payroll|reconciliation/i.test(
-      user?.role?.name || ""
-    );
-
-  // Build navigation dynamically to inject Accounts section
+  // Build navigation dynamically
   const nav = React.useMemo(() => {
     const base = [...navigation];
-    if (canAccounts) {
-      base.push({
-        name: "Accounts",
-        href: "/travel/accounts",
-        icon: CogIcon,
-        description: "Accounts processing",
-        children: [{ name: "Tranches", href: "/travel/accounts/tranches" }],
-      });
-    }
     return base;
   }, [canAccounts]);
 

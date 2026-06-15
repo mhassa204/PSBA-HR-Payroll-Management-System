@@ -21,11 +21,6 @@ const employeeService = {
       ...rest
     } = data;
 
-    // Generate employee_id if not provided
-    const employee_id =
-      data.employee_id ||
-      `EMP${new Date().getFullYear()}${String(Date.now()).slice(-3)}`;
-
     // Process date fields
     const processedData = { ...rest };
     dateFields.forEach((field) => {
@@ -61,12 +56,15 @@ const employeeService = {
 
     // Prepare main employee data
     const employeePayload = {
-      employee_id,
       full_name,
       father_husband_name: processedData.father_husband_name,
       relationship_type: processedData.relationship_type,
       mother_name: processedData.mother_name,
       cnic: processedData.cnic,
+      // Biometric / attendance device user id (optional, unique)
+      deviceUserId: processedData.deviceUserId
+        ? String(processedData.deviceUserId).trim()
+        : null,
       cnic_issue_date: processedData.cnic_issue_date,
       cnic_expire_date: processedData.cnic_expire_date,
       cnic_lifetime:
@@ -204,6 +202,8 @@ const employeeService = {
             year_of_completion: completionDate,
             marks_gpa: edu.marks_gpa || null,
             roll_no: edu.roll_no || null,
+            registration_number: edu.registration_number || null,
+            certificate_number: edu.certificate_number || null,
             total_marks: edu.total_marks ? parseInt(edu.total_marks) : null,
             start_date: startYear || null,
           };
@@ -335,12 +335,12 @@ const employeeService = {
     // Prepare main employee data
     const employeeUpdateData = {};
     const allowedFields = [
-      "employee_id",
       "full_name",
       "father_husband_name",
       "relationship_type",
       "mother_name",
       "cnic",
+      "deviceUserId",
       "cnic_issue_date",
       "cnic_expire_date",
       "cnic_lifetime",
@@ -384,6 +384,10 @@ const employeeService = {
           employeeUpdateData[key] = processedData[key]
             ? parseInt(processedData[key])
             : null;
+        } else if (key === "deviceUserId") {
+          // Unique field: store trimmed value or null (never empty string)
+          const v = String(processedData[key] ?? "").trim();
+          employeeUpdateData[key] = v === "" ? null : v;
         } else {
           employeeUpdateData[key] = processedData[key];
         }
@@ -805,6 +809,9 @@ const employeeService = {
               institution_name: finalInstitutionName,
               year_of_completion: completionDate,
               marks_gpa: incomingEdu.marks_gpa || "",
+              roll_no: incomingEdu.roll_no ?? undefined,
+              registration_number: incomingEdu.registration_number ?? undefined,
+              certificate_number: incomingEdu.certificate_number ?? undefined,
               start_date: startYear || null,
             };
             if (typeof levelId === "number" && !isNaN(levelId)) {
@@ -866,6 +873,9 @@ const employeeService = {
               institution_name: finalInstitutionName,
               year_of_completion: completionDate,
               marks_gpa: edu.marks_gpa || "",
+              roll_no: edu.roll_no || null,
+              registration_number: edu.registration_number || null,
+              certificate_number: edu.certificate_number || null,
               start_date: startYear || null,
             };
             if (typeof levelId === "number" && !isNaN(levelId)) {
@@ -1456,7 +1466,6 @@ const employeeService = {
         ...(search && {
           OR: [
             { full_name: { contains: search, mode: "insensitive" } },
-            { employee_id: { contains: search, mode: "insensitive" } },
             { cnic: { contains: search, mode: "insensitive" } },
             { mobile_number: { contains: search, mode: "insensitive" } },
             { email: { contains: search, mode: "insensitive" } },
@@ -1536,6 +1545,17 @@ const employeeService = {
     }
   },
 
+  // Find an active employee by CNIC (optionally excluding one id, for edit mode)
+  findByCnic: async (cnic, excludeId = null) => {
+    return prisma.employee.findFirst({
+      where: {
+        cnic: String(cnic).replace(/\D/g, ""),
+        is_deleted: false,
+        ...(excludeId ? { id: { not: parseInt(excludeId) } } : {}),
+      },
+      select: { id: true, full_name: true },
+    });
+  },
   getEmployeeById: async (id, includeDeleted = false) => {
     const emp = await prisma.employee.findUnique({
       where: {

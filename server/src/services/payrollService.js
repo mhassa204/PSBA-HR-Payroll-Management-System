@@ -396,7 +396,6 @@ const payrollService = {
             select: {
               id: true,
               full_name: true,
-              employee_id: true,
             },
           },
         },
@@ -578,7 +577,6 @@ const payrollService = {
             select: {
               id: true,
               full_name: true,
-              employee_id: true,
               cnic: true,
             },
           },
@@ -650,7 +648,6 @@ const payrollService = {
             select: {
               id: true,
               full_name: true,
-              employee_id: true,
             },
           },
         },

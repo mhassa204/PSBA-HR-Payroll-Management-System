@@ -50,7 +50,7 @@ const authController = {
       role: { id: user.role.id, name: user.role.name, type: user.role.type },
       permissions,
       employee_id: user.employee?.id || null,
-      employee_code: user.employee?.employee_id || null,
+      employee_code: user.employee?.cnic || null,
       // New: persist department linkage for department-based accounts
       department_id: user.department_id || null,
       // New: persist location linkage for location-based accounts
@@ -123,7 +123,7 @@ const authController = {
         },
         permissions,
         employee_id: dbUser.employee?.id || null,
-        employee_code: dbUser.employee?.employee_id || null,
+        employee_code: dbUser.employee?.cnic || null,
         // New: persist department linkage for department-based accounts
         department_id: dbUser.department_id || null,
         // New: persist location linkage for location-based accounts

@@ -212,7 +212,6 @@ export const searchEmployees = (searchTerm) => {
   return dummyEmployees.filter(emp => 
     emp.full_name.toLowerCase().includes(term) ||
     emp.cnic.includes(term) ||
-    emp.employee_id.toLowerCase().includes(term) ||
     emp.email?.toLowerCase().includes(term)
   );
 };

@@ -490,8 +490,8 @@ const PayrollDetail = () => {
                 <p className="font-semibold">{employee?.full_name || "-"}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Employee ID</p>
-                <p className="font-semibold">{employee?.employee_id || "-"}</p>
+                <p className="text-sm text-gray-600">Biometric ID</p>
+                <p className="font-semibold">{employee?.deviceUserId || "-"}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">CNIC</p>
@@ -753,9 +753,9 @@ const PayrollDetail = () => {
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Employee ID:</span>{" "}
+                    <span className="text-gray-600">Biometric ID:</span>{" "}
                     <span className="font-medium">
-                      {payrollData.employee?.employee_id || "-"}
+                      {payrollData.employee?.deviceUserId || "-"}
                     </span>
                   </div>
                   <div>

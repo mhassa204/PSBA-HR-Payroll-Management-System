@@ -1,4 +1,7 @@
 // Organization-specific field visibility configuration
+// NOTE: the REQUIRED-field lists below come from the single source of truth in
+// /shared/validation (also enforced by the backend) so a change is made once.
+import { ORGANIZATION_REQUIRED } from "@shared/validation";
 
 /**
  * Field visibility configuration for different organizations
@@ -236,8 +239,8 @@ export const ORGANIZATION_OPTIONS = [
  */
 export const ORGANIZATION_VALIDATION_RULES = {
   MBWO: {
-    required: ["employee_id", "organization", "designation", "effective_from"],
-    optional: ["effective_till", "remarks", "gross_salary"],
+    required: ORGANIZATION_REQUIRED.MBWO,
+    optional: ["joining_date", "effective_from", "effective_till", "remarks", "gross_salary"],
     hidden: [
       "department",
       "employment_type",
@@ -263,18 +266,15 @@ export const ORGANIZATION_VALIDATION_RULES = {
   },
 
   PMBMC: {
-    required: [
-      "employee_id",
-      "organization",
+    required: ORGANIZATION_REQUIRED.PMBMC,
+    optional: [
+      "joining_date",
+      "effective_from",
       "department",
-      "designation",
       "employment_type",
       "role_tag",
-      "effective_from",
       "filer_status",
       "is_current",
-    ],
-    optional: [
       "effective_till",
       "remarks",
       "filer_active_status",
@@ -309,15 +309,12 @@ export const ORGANIZATION_VALIDATION_RULES = {
   },
 
   PSBA: {
-    required: [
-      "employee_id",
-      "organization",
-      "designation",
+    required: ORGANIZATION_REQUIRED.PSBA,
+    optional: [
+      "joining_date",
       "effective_from",
       "filer_status",
       "is_current",
-    ],
-    optional: [
       "department",
       "employment_type",
       "role_tag",

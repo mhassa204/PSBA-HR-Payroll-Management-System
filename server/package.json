@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "seed:prod": "node prisma/seedProduction.js",
+    "etl": "python prisma/import/transform_excel.py",
+    "migrate:joining-date": "node scripts/migrate_joining_date.js",
+    "backfill:location-geo": "node scripts/backfill_location_geo.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

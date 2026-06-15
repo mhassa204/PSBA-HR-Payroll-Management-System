@@ -30,7 +30,7 @@ const PreviewModal = ({
                 Please review all information before saving
               </h3>
               <p className="text-gray-600">
-                Fields showing "N/A" indicate no value was entered. You can go
+                Fields showing "—" indicate no value was entered. You can go
                 back to edit or proceed to save.
               </p>
             </div>
@@ -122,7 +122,7 @@ const PreviewModal = ({
                   <span className="text-gray-900">
                     {previewData.medical_fitness_report_pdf
                       ? "Uploaded"
-                      : "N/A"}
+                      : "—"}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -132,7 +132,7 @@ const PreviewModal = ({
                   <span className="text-gray-900">
                     {previewData.police_character_certificate
                       ? "Uploaded"
-                      : "N/A"}
+                      : "—"}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -181,8 +181,8 @@ const PreviewModal = ({
                   </span>
                   <span className="text-gray-900">
                     {previewData.is_on_probation
-                      ? displayValue(previewData.probation_end_date) || "N/A"
-                      : "N/A"}
+                      ? displayValue(previewData.probation_end_date) || "—"
+                      : "—"}
                   </span>
                 </div>
               </div>
@@ -209,7 +209,7 @@ const PreviewModal = ({
                       Probation Start:
                     </span>
                     <span className="text-gray-900">
-                      {displayValue(previewData.probation_start) || "N/A"}
+                      {displayValue(previewData.probation_start) || "—"}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -217,7 +217,7 @@ const PreviewModal = ({
                       Probation End:
                     </span>
                     <span className="text-gray-900">
-                      {displayValue(previewData.probation_end) || "N/A"}
+                      {displayValue(previewData.probation_end) || "—"}
                     </span>
                   </div>
                 </div>

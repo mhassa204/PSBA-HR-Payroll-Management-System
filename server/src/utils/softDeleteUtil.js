@@ -101,7 +101,7 @@ function maskUniqueFieldsForSoftDelete(modelName, currentData) {
   
   // Define unique fields per model
   const uniqueFieldMap = {
-    Employee: ['employee_id', 'cnic', 'email', 'deviceUserId'],
+    Employee: ['cnic', 'email', 'deviceUserId'],
     User: ['email', 'employee_id'],
     District: ['name'],
     City: ['name'], // Note: composite with district_id, but we'll mask name
@@ -151,7 +151,7 @@ function restoreUniqueFieldsForUndelete(modelName, currentData) {
   
   // Define unique fields per model (same as mask function)
   const uniqueFieldMap = {
-    Employee: ['employee_id', 'cnic', 'email', 'deviceUserId'],
+    Employee: ['cnic', 'email', 'deviceUserId'],
     User: ['email', 'employee_id'],
     District: ['name'],
     City: ['name'],

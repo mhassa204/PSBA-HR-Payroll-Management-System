@@ -329,7 +329,7 @@ const UserManagement = () => {
                                       color: "var(--color-text-secondary)",
                                     }}
                                   >
-                                    {user.employee.employee_id}
+                                    {user.employee.cnic}
                                   </div>
                                 </div>
                               </div>

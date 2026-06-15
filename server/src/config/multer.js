@@ -146,6 +146,9 @@ const DOCUMENT_TYPES = {
   renewal_report_file: "renewal_report",
   contract_renewal_report: "renewal_report",
   contract_renewal_report_file: "renewal_report",
+  // Appointment / Employment letter (req #1)
+  appointment_letter: "appointment_letter",
+  appointment_letter_file: "appointment_letter",
 
   // Other documents
   other_documents: "other",

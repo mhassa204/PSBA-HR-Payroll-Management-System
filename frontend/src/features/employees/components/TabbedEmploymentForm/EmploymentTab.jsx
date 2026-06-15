@@ -1,6 +1,9 @@
 import { motion } from "framer-motion";
+import { Controller } from "react-hook-form";
 import LoadingSpinner from "../../../../components/ui/LoadingSpinner";
 import SearchableSelect from "../../../../components/ui/SearchableSelect";
+import SmartDateInput from "../../../../components/ui/SmartDateInput";
+import EmploymentDocumentManager from "../../../../components/ui/EmploymentDocumentManager";
 import { ORGANIZATION_OPTIONS } from "../../../../constants/organizationFieldConfig";
 
 const EmploymentTab = ({
@@ -12,6 +15,7 @@ const EmploymentTab = ({
   getValidationRules,
   handleOrganizationChange,
   onEmploymentSubmit,
+  documentManager,
   isEditMode,
   currentOrganization,
   watchedEmploymentType,
@@ -73,16 +77,11 @@ const EmploymentTab = ({
                 required={true}
                 error={employmentErrors?.organization?.message}
               />
-              {employmentErrors?.organization && (
-                <p className="text-red-600 text-sm mt-1">
-                  {employmentErrors.organization.message}
-                </p>
-              )}
             </div>
 
             <div className={getFieldClasses("employment", "department")}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Department <span className="text-red-500">*</span>
+                Department
               </label>
               {formLoading ? (
                 <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg border">
@@ -141,11 +140,6 @@ const EmploymentTab = ({
                     contact support.
                   </p>
                 )}
-              {employmentErrors?.department && (
-                <p className="text-red-600 text-sm mt-1">
-                  {employmentErrors.department.message}
-                </p>
-              )}
             </div>
 
             <div className={getFieldClasses("employment", "designation")}>
@@ -184,7 +178,7 @@ const EmploymentTab = ({
                     placeholder={
                       availableDesignations?.length > 0
                         ? "Select Designation"
-                        : "No designations available"
+                        : "Loading designations..."
                     }
                     register={register}
                     name="designation"
@@ -194,36 +188,33 @@ const EmploymentTab = ({
                       }).required
                     }
                     error={employmentErrors?.designation?.message}
-                    disabled={
-                      isEditMode
-                        ? false
-                        : !availableDesignations ||
-                          availableDesignations.length === 0
-                    }
                   />
                 </>
               )}
               {!formLoading &&
+                watch("department") &&
                 currentOrganization !== "MBWO" &&
                 currentOrganization !== "PMBMC" &&
                 (!availableDesignations ||
                   availableDesignations.length === 0) && (
                   <p className="text-yellow-600 text-sm mt-1">
-                    {currentOrganization === "MBWO"
-                      ? "⚠️ No designations available. Please check your connection or contact support."
-                      : "⚠️ No designations available. Please select a department first or check your connection."}
+                    ⚠️ No designations found for the selected department.
                   </p>
                 )}
-              {employmentErrors?.designation && (
-                <p className="text-red-600 text-sm mt-1">
-                  {employmentErrors.designation.message}
-                </p>
-              )}
+              {!formLoading &&
+                !watch("department") &&
+                currentOrganization !== "MBWO" &&
+                currentOrganization !== "PMBMC" && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    No department selected — showing general (field) designations.
+                    Select a department to see its specific designations.
+                  </p>
+                )}
             </div>
 
             <div className={getFieldClasses("employment", "employment_type")}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Employment Type <span className="text-red-500">*</span>
+                Employment Type
               </label>
               <SearchableSelect
                 options={(formOptions?.employmentTypes || []).filter(
@@ -243,11 +234,6 @@ const EmploymentTab = ({
                 }
                 error={employmentErrors?.employment_type?.message}
               />
-              {employmentErrors?.employment_type && (
-                <p className="text-red-600 text-sm mt-1">
-                  {employmentErrors.employment_type.message}
-                </p>
-              )}
             </div>
 
             {/* Conditional Probation Section */}
@@ -276,45 +262,25 @@ const EmploymentTab = ({
                     {/* Conditional Probation End Date */}
                     {watch("is_on_probation") && (
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Probation End Date{" "}
-                          <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="date"
-                          {...register("probation_end_date", {
+                        <Controller
+                          name="probation_end_date"
+                          control={employmentForm.control}
+                          rules={{
                             required: watch("is_on_probation")
                               ? "Probation end date is required when employee is on probation"
                               : false,
-                            validate: (value) => {
-                              if (watch("is_on_probation") && value) {
-                                const selectedDate = new Date(value);
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-
-                                if (selectedDate <= today) {
-                                  return "Probation end date must be in the future";
-                                }
-                              }
-                              return true;
-                            },
-                          })}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                          min={
-                            new Date(Date.now() + 24 * 60 * 60 * 1000)
-                              .toISOString()
-                              .split("T")[0]
-                          }
+                          }}
+                          render={({ field }) => (
+                            <SmartDateInput
+                              label="Probation End Date"
+                              required={!!watch("is_on_probation")}
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              error={employmentErrors?.probation_end_date?.message}
+                              helperText="Date when the probation period will end"
+                            />
+                          )}
                         />
-                        {employmentErrors?.probation_end_date && (
-                          <p className="text-red-600 text-sm mt-1">
-                            {employmentErrors.probation_end_date.message}
-                          </p>
-                        )}
-                        <p className="text-sm text-gray-500 mt-1">
-                          Select a future date when the probation period will
-                          end
-                        </p>
                       </div>
                     )}
                   </div>
@@ -323,7 +289,7 @@ const EmploymentTab = ({
 
             <div className={getFieldClasses("employment", "role_tag")}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Role Tag <span className="text-red-500">*</span>
+                Role Tag
               </label>
               <SearchableSelect
                 options={formOptions?.roleTags || []}
@@ -345,39 +311,49 @@ const EmploymentTab = ({
                       formOptions.roleTags.length === 0
                 }
               />
-              {employmentErrors?.role_tag && (
-                <p className="text-red-600 text-sm mt-1">
-                  {employmentErrors.role_tag.message}
-                </p>
-              )}
             </div>
 
+            {/* Joining Date — permanent first-joining record (req #2) */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Effective From <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                {...register("effective_from", {
-                  required: "Effective from date is required",
-                })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+              <Controller
+                name="joining_date"
+                control={employmentForm.control}
+                render={({ field }) => (
+                  <SmartDateInput
+                    label="Joining Date"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    helperText="First joining date in the Company/Authority"
+                  />
+                )}
               />
-              {employmentErrors?.effective_from && (
-                <p className="text-red-600 text-sm mt-1">
-                  {employmentErrors.effective_from.message}
-                </p>
-              )}
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Effective Till
-              </label>
-              <input
-                type="date"
-                {...register("effective_till")}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+              <Controller
+                name="effective_from"
+                control={employmentForm.control}
+                render={({ field }) => (
+                  <SmartDateInput
+                    label="Effective From"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+            </div>
+
+            <div>
+              <Controller
+                name="effective_till"
+                control={employmentForm.control}
+                render={({ field }) => (
+                  <SmartDateInput
+                    label="Effective Till"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                  />
+                )}
               />
             </div>
 
@@ -450,7 +426,7 @@ const EmploymentTab = ({
             {/* Employment Status */}
             <div className={getFieldClasses("employment", "employment_status")}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Employment Status <span className="text-red-500">*</span>
+                Employment Status
               </label>
               <SearchableSelect
                 options={[
@@ -473,11 +449,6 @@ const EmploymentTab = ({
                 }
                 error={employmentErrors?.employment_status?.message}
               />
-              {employmentErrors?.employment_status && (
-                <p className="text-red-600 text-sm mt-1">
-                  {employmentErrors.employment_status.message}
-                </p>
-              )}
             </div>
 
             {/* Is Current Employee: show only for PSBA; hidden for MBWO/PMBMC */}
@@ -498,6 +469,50 @@ const EmploymentTab = ({
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Appointment / Employment Letter (req #1) */}
+          <div className="mt-6 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+            <h4 className="text-md font-semibold text-indigo-900 mb-3">
+              <i className="fas fa-file-signature mr-2"></i>
+              Appointment / Employment Letter
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Controller
+                  name="appointment_letter_issue_date"
+                  control={employmentForm.control}
+                  render={({ field }) => (
+                    <SmartDateInput
+                      label="Letter Issuance Date"
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      helperText="Date the appointment letter was issued"
+                    />
+                  )}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Upload Appointment Letter
+                </label>
+                {documentManager && (
+                  <EmploymentDocumentManager
+                    documents={documentManager.documents}
+                    documentType="appointment_letter"
+                    title="Appointment / Employment Letter"
+                    accept="application/pdf,image/jpeg,image/jpg,image/png"
+                    maxSize={50 * 1024 * 1024}
+                    onDocumentAdd={documentManager.addDocument}
+                    onDocumentRemove={documentManager.removeDocument}
+                    isEditMode={isEditMode}
+                  />
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  PDF or JPEG. Pair with the issuance date above.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="mt-6">

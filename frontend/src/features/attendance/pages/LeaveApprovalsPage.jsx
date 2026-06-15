@@ -435,9 +435,7 @@ const LeaveApprovalsPage = () => {
                   <span className="text-gray-600">Employee:</span>{" "}
                   <span className="ml-1 font-medium">
                     {selected.employee?.full_name} (
-                    {selected.employee?.cnic ||
-                      selected.employee?.employee_id ||
-                      "-"}
+                    {selected.employee?.cnic || "-"}
                     )
                   </span>
                 </div>

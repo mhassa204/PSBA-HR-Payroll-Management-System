@@ -6,6 +6,7 @@ import {
   formatFileSize,
   getServerBaseUrl
 } from '../../utils/imageUtils';
+import ZoomablePreview from './ZoomablePreview';
 
 /**
  * Employment Document Manager Component
@@ -156,29 +157,12 @@ const EmploymentDocumentManager = ({
             ×
           </button>
 
-          {/* Document preview */}
-          <div className="relative">
-            {isImage ? (
-              <img
-                src={documentUrl}
-                alt={document.document_name || 'Document'}
-                className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => window.open(documentUrl, '_blank')}
-                onError={(e) => {
-                  console.error("Document image failed to load:", documentUrl);
-                  e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
-                }}
-              />
-            ) : (
-              <div className="h-32 flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                <i className={`${fileIcon} text-3xl text-red-500 mb-2`}></i>
-                <span className="text-xs text-gray-600 text-center px-2 truncate">
-                  {document.document_name || 'Document'}
-                </span>
-              </div>
-            )}
-          </div>
+          {/* Document preview (small thumbnail + click-to-enlarge) */}
+          <ZoomablePreview
+            src={documentUrl}
+            fileName={document.document_name || 'Document'}
+            className="w-full h-32"
+          />
 
           {/* Document info */}
           <div className="p-2 bg-gray-50">
@@ -218,22 +202,13 @@ const EmploymentDocumentManager = ({
             ×
           </button>
 
-          {/* Document preview */}
-          <div className="relative">
-            {isImage ? (
-              <img
-                src={previewUrl}
-                alt={file.name}
-                className="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => window.open(previewUrl, '_blank')}
-              />
-            ) : (
-              <div className="h-32 flex flex-col items-center justify-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                <i className="fas fa-file-pdf text-3xl text-red-500 mb-2"></i>
-                <span className="text-xs text-gray-600 text-center px-2 truncate">{file.name}</span>
-              </div>
-            )}
-          </div>
+          {/* Document preview (small thumbnail + click-to-enlarge) */}
+          <ZoomablePreview
+            src={previewUrl}
+            fileName={file.name}
+            mimeType={file.type}
+            className="w-full h-32"
+          />
 
           {/* Document info */}
           <div className="p-2 bg-gray-50">

@@ -23,7 +23,6 @@ module.exports = {
       is_deleted: true,
       ...(search && { OR: [
         { full_name: { contains: search, mode: 'insensitive' } },
-        { employee_id: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } }
       ] })
     };
@@ -33,7 +32,7 @@ module.exports = {
         skip: offset,
         take: parseInt(limit),
         orderBy: { updatedAt: 'desc' },
-        select: { id: true, employee_id: true, full_name: true, email: true, cnic: true, status: true, updatedAt: true }
+        select: { id: true, full_name: true, email: true, cnic: true, status: true, updatedAt: true }
       }),
       prisma.employee.count({ where })
     ]);

@@ -9,12 +9,12 @@ datasource db {
 
 model Employee {
   id                      Int                      @id @default(autoincrement())
-  employee_id             String?                  @unique
   full_name               String
   father_husband_name     String?
   relationship_type       String?
   mother_name             String?
-  cnic                    String?                  @unique
+  // CNIC is the single source of truth / employee identity (required, unique)
+  cnic                    String                   @unique
   cnic_issue_date         DateTime?
   cnic_expire_date        DateTime?
   cnic_lifetime           Boolean                  @default(false)
@@ -215,6 +215,9 @@ model EducationQualification {
   year_of_completion DateTime? // Changed to DateTime for date selection
   marks_gpa          String?
   roll_no            String?
+  // Academic reference details
+  registration_number String?
+  certificate_number  String?
   total_marks        Int?
   // Start year for the education record (year selection)
   start_date         String?   // Changed to String for year selection
@@ -252,8 +255,12 @@ model Employment {
   department_text      String?
   designation_text     String?
   employment_type      String               @default("Regular")
+  // Permanent first-joining date in the Company/Authority (mapped from source data)
+  joining_date         DateTime?
   effective_from       DateTime?
   effective_till       DateTime?
+  // Appointment / Employment letter issuance date (paired with an uploaded letter document)
+  appointment_letter_issue_date DateTime?
   reporting_officer_id String?
   office_location      String?
   remarks              String?

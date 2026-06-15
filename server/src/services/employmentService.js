@@ -275,8 +275,10 @@ const employmentService = {
       department_text,
       designation_text,
       employment_type = "Regular",
+      joining_date,
       effective_from,
       effective_till,
+      appointment_letter_issue_date,
       role_tag_id,
       reporting_officer_id,
       office_location,
@@ -376,8 +378,12 @@ const employmentService = {
           department_text: finalDepartmentText,
           designation_text: finalDesignationText,
           employment_type,
+          joining_date: joining_date ? new Date(joining_date) : null,
           effective_from: effective_from ? new Date(effective_from) : null,
           effective_till: effective_till ? new Date(effective_till) : null,
+          appointment_letter_issue_date: appointment_letter_issue_date
+            ? new Date(appointment_letter_issue_date)
+            : null,
           role_tag_id: role_tag_id ? parseInt(role_tag_id) : null,
           scale_grade_id: scale_grade_id ? parseInt(scale_grade_id) : null,
           reporting_officer_id: cleanValue(reporting_officer_id),
@@ -843,8 +849,10 @@ const employmentService = {
       department_text,
       designation_text,
       employment_type,
+      joining_date,
       effective_from,
       effective_till,
+      appointment_letter_issue_date,
       role_tag_id,
       reporting_officer_id,
       office_location,
@@ -957,12 +965,20 @@ const employmentService = {
           designation_text === null ? null : String(designation_text);
       if (employment_type !== undefined)
         employmentUpdateData.employment_type = employment_type;
+      if (joining_date !== undefined)
+        employmentUpdateData.joining_date =
+          joining_date && joining_date !== "null" ? new Date(joining_date) : null;
       if (effective_from !== undefined)
         employmentUpdateData.effective_from =
-          effective_from !== "null" ? new Date(effective_from) : null;
+          effective_from && effective_from !== "null" ? new Date(effective_from) : null;
       if (effective_till !== undefined)
         employmentUpdateData.effective_till =
-          effective_till !== "null" ? new Date(effective_till) : null;
+          effective_till && effective_till !== "null" ? new Date(effective_till) : null;
+      if (appointment_letter_issue_date !== undefined)
+        employmentUpdateData.appointment_letter_issue_date =
+          appointment_letter_issue_date && appointment_letter_issue_date !== "null"
+            ? new Date(appointment_letter_issue_date)
+            : null;
       if (role_tag_id !== undefined)
         employmentUpdateData.role_tag_id = role_tag_id
           ? parseInt(role_tag_id)

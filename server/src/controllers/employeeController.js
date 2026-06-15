@@ -423,6 +423,28 @@ const employeeController = {
       return res.status(400).json({ success: false, error: error.message });
     }
   },
+  // Live CNIC uniqueness check for the add/edit form
+  checkCnic: async (req, res) => {
+    try {
+      const cnic = String(req.query.cnic || "").replace(/\D/g, "");
+      const excludeId = req.query.excludeId
+        ? parseInt(req.query.excludeId, 10)
+        : null;
+      if (cnic.length !== 13) {
+        return res.status(200).json({ success: true, exists: false });
+      }
+      const existing = await employeeService.findByCnic(cnic, excludeId);
+      return res.status(200).json({
+        success: true,
+        exists: !!existing,
+        employee: existing
+          ? { id: existing.id, full_name: existing.full_name }
+          : null,
+      });
+    } catch (error) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+  },
   deleteEmployee: async (req, res) => {
     try {
       const employee = await employeeService.deleteEmployee(req.params.id);

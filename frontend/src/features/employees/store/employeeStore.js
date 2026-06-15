@@ -75,6 +75,7 @@ const useEmployeeStore = create(
               parseDate(rec.created_at),
               parseDate(rec.updatedAt),
               parseDate(rec.createdAt),
+              parseDate(rec.joining_date),
               parseDate(rec.effective_from),
               parseDate(rec.start_date),
               parseDate(rec.end_date),

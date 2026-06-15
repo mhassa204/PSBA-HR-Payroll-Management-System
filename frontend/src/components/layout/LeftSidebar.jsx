@@ -4,7 +4,6 @@ import { useAuthStore } from "../../features/auth/authStore";
 import "../../styles/sidebar.css";
 import ProfilePicture from "../ui/ProfilePicture";
 import axios from "../../lib/axios";
-import { getTravelCapabilities } from "../../services/travelService";
 
 // Simple SVG Icon Components
 const HomeIcon = () => (
@@ -197,15 +196,6 @@ const LeftSidebar = () => {
   const user = useAuthStore((s) => s.user);
   const [expandedItems, setExpandedItems] = useState(new Set());
   const STORAGE_KEY = "leftSidebar.expandedItems";
-  const [travelCaps, setTravelCaps] = useState({
-    canCreateOrOwn: false,
-    canViewAll: false,
-    isOps: false,
-    isEstablishment: false,
-    isDG: false,
-    isAccountsApprover: false,
-    isSuperAdmin: user?.role?.name === "Super Admin",
-  });
 
   // Fetch current user's employee record (for avatar)
   const [employee, setEmployee] = useState(null);
@@ -255,16 +245,6 @@ const LeftSidebar = () => {
       JSON.stringify(Array.from(expandedItems))
     );
   }, [expandedItems]);
-
-  // Fetch travel capabilities
-  useEffect(() => {
-    (async () => {
-      try {
-        const caps = await getTravelCapabilities();
-        setTravelCaps(caps || {});
-      } catch (_) {}
-    })();
-  }, []);
 
   const isLocationBasedBazaar = user?.employmentRecords?.some(
     (rec) => rec.is_current && rec.location?.type === 'BAZAAR'
@@ -407,19 +387,13 @@ const LeftSidebar = () => {
       name: "Attendance",
       href: "/attendance",
       icon: CalendarIcon,
-      description: "Device Logs",
+      description: "Attendance",
       color: "bg-sky-600",
       show: () => can("attendance.read"),
       children: [
         {
           name: "Locations",
           href: "/attendance/locations",
-          icon: ViewColumnsIcon,
-          show: () => can("attendance.read"),
-        },
-        {
-          name: "Devices",
-          href: "/attendance/devices",
           icon: ViewColumnsIcon,
           show: () => can("attendance.read"),
         },
@@ -475,109 +449,6 @@ const LeftSidebar = () => {
       show: () => can("audit.read"),
     },
     {
-      name: "Travel",
-      href: "/travel",
-      icon: PlaneIcon,
-      description: "TADA",
-      color: "bg-fuchsia-600",
-      show: () => true,
-      children: [
-        {
-          name: "My Travel Requests",
-          href: "/travel/requests",
-          icon: ViewColumnsIcon,
-          show: () =>
-            travelCaps.canCreateOrOwn ||
-            can("travel.create") ||
-            travelCaps.isAccountsApprover,
-        },
-        {
-          name: "Manage TADA Requests",
-          href: "/travel/manage",
-          icon: ViewColumnsIcon,
-          show: () => {
-            // Hide for department/location-type accounts (no employee mapping) except Operations department
-            if (!user?.employee_id && !travelCaps.isOps) return false;
-            // Otherwise apply existing capability/permission gates
-            return (
-              travelCaps.isSuperAdmin ||
-              travelCaps.isEstablishment ||
-              travelCaps.isOps ||
-              travelCaps.isAccountsApprover ||
-              !!travelCaps.canViewAll ||
-              !!travelCaps.canManageRequests ||
-              can("travel.manage") ||
-              can("travel.request.approve.dg") ||
-              can("travel.claim.verify.establishment") ||
-              can("travel.request.approve.ops") ||
-              can("travel.claim.approve.ops") ||
-              can("travel.claim.process.start")
-            );
-          },
-        },
-        {
-          name: "All Tada Requests",
-          href: "/travel/requests/all",
-          icon: ViewColumnsIcon,
-          show: () => travelCaps.isEstablishment,
-        },
-        {
-          name: "Pending TADA Requests",
-          href: "/travel/approvals",
-          icon: ViewColumnsIcon,
-          show: () => {
-            // Hide for department/location-type accounts (no employee mapping) except Operations department
-            if (!user?.employee_id && !travelCaps.isOps) return false;
-            // Otherwise visible to employee-linked users OR users with manage/approval capabilities
-            return (
-              (!!user?.employee_id && can("travel.read")) ||
-              can("travel.manage") ||
-              can("travel.request.approve.dg") ||
-              can("travel.request.approve.ops") ||
-              travelCaps.isEstablishment ||
-              travelCaps.isOps ||
-              travelCaps.isDG
-            );
-          },
-        },
-        {
-          name: "My Expense Claims",
-          href: "/travel/expense-claims",
-          icon: ViewColumnsIcon,
-          show: () => can("travel.claim.read"),
-        },
-        {
-          name: "Manage Claim Approvals",
-          href: "/travel/expense-claim-approvals",
-          icon: ViewColumnsIcon,
-          show: () => {
-            // Show for Accounts, Establishment, and Operations department users (even if no employee mapping)
-            if (
-              travelCaps.isAccountsApprover ||
-              travelCaps.isEstablishment ||
-              travelCaps.isOps
-            )
-              return true;
-            // Preserve existing behavior for normal employee-based users
-            return !!user?.employee_id && can("travel.claim.read");
-          },
-        },
-        {
-          name: "Accounts Tranches",
-          href: "/travel/accounts/tranches",
-          icon: ViewColumnsIcon,
-          show: () =>
-            travelCaps.isAccountsApprover || can("travel.claim.process.start"),
-        },
-        {
-          name: "TADA Managed Entry",
-          href: "/travel/manual",
-          icon: ViewColumnsIcon,
-          show: () => travelCaps.isSuperAdmin,
-        },
-      ],
-    },
-    {
       name: "Settings",
       href: "/settings",
       icon: CogIcon,
@@ -589,12 +460,10 @@ const LeftSidebar = () => {
         can("role-tags.read") ||
         can("scale-grades.read") ||
         can("locations.read") ||
-        can("devices.read") ||
         can("roles.read") ||
         can("districts.read") ||
         can("cities.read") ||
-        can("education-levels.read") ||
-        can("travel.rates.read"),
+        can("education-levels.read"),
       children: [
         {
           name: "Departments",
@@ -627,12 +496,6 @@ const LeftSidebar = () => {
           show: () => can("locations.read"),
         },
         {
-          name: "Devices",
-          href: "/settings/devices",
-          icon: ViewColumnsIcon,
-          show: () => can("devices.read"),
-        },
-        {
           name: "Roles",
           href: "/settings/roles",
           icon: ViewColumnsIcon,
@@ -655,12 +518,6 @@ const LeftSidebar = () => {
           href: "/settings/education-levels",
           icon: ViewColumnsIcon,
           show: () => can("education-levels.read"),
-        },
-        {
-          name: "Travel Rates",
-          href: "/settings/travel-rates",
-          icon: ViewColumnsIcon,
-          show: () => can("travel.rates.read"),
         },
       ],
     },

@@ -19,7 +19,7 @@ const EmploymentRecordActions = ({
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [reportingOfficerDisplay, setReportingOfficerDisplay] = useState("N/A");
+  const [reportingOfficerDisplay, setReportingOfficerDisplay] = useState("—");
 
   const organizationOptions = [
     {
@@ -106,23 +106,47 @@ const EmploymentRecordActions = ({
   };
 
   const formatDate = (dateString) => {
-    return formatDateDisplay(dateString) || "N/A";
+    return formatDateDisplay(dateString) || "";
   };
 
   const formatCurrency = (amount) => {
-    if (!amount || amount === 0) return "N/A";
+    if (!amount || amount === 0) return "";
     return `PKR ${Number(amount).toLocaleString()}`;
   };
+
+  // Renders a label/value pair ONLY when the value is present (no "N/A"/"—").
+  const isBlank = (v) =>
+    v === null ||
+    v === undefined ||
+    v === "" ||
+    v === "—" ||
+    v === "N/A" ||
+    (typeof v === "string" && v.trim() === "");
+  const InfoRow = ({ label, value, valueClass = "ml-2 text-gray-900" }) =>
+    isBlank(value) ? null : (
+      <div>
+        <span className="font-medium text-gray-600">{label}</span>
+        <span className={valueClass}>{value}</span>
+      </div>
+    );
+  // Same, but for the flex-between layout used in the details modal
+  const Row = ({ label, value }) =>
+    isBlank(value) ? null : (
+      <div className="flex justify-between">
+        <span className="font-medium text-gray-600">{label}</span>
+        <span className="text-gray-900">{value}</span>
+      </div>
+    );
 
   // Resolve Reporting Officer label (Name - CNIC) for details modal
   useEffect(() => {
     const roId = String(selectedRecord?.reporting_officer_id || "").trim();
     if (!showDetailsModal) {
-      setReportingOfficerDisplay(roId || "N/A");
+      setReportingOfficerDisplay(roId || "—");
       return;
     }
     if (!roId) {
-      setReportingOfficerDisplay("N/A");
+      setReportingOfficerDisplay("—");
       return;
     }
     let cancelled = false;
@@ -190,7 +214,7 @@ const EmploymentRecordActions = ({
   // New: location formatter without city/district
   const formatLocation = (rec) => {
     const loc = rec?.location;
-    if (!loc) return rec?.office_location || "N/A";
+    if (!loc) return rec?.office_location || "—";
 
     // Debug (can be removed later)
     if (process.env.NODE_ENV !== "production") {
@@ -237,7 +261,7 @@ const EmploymentRecordActions = ({
       case "SAHULAT_BAZAAR":
         return "Sahulat Bazaar";
       default:
-        return rec?.office_location || "N/A";
+        return rec?.office_location || "—";
     }
   };
 
@@ -291,7 +315,7 @@ const EmploymentRecordActions = ({
                   {record.designation?.title ||
                     record.designation_text ||
                     record.designation ||
-                    "N/A"}
+                    "Employment Record"}
                 </h3>
                 {record.is_current && (
                   <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
@@ -301,86 +325,51 @@ const EmploymentRecordActions = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="font-medium text-gray-600">
-                    Organization:
-                  </span>
-                  <span className="ml-2 text-gray-900">
-                    {organizationOptions.find(
+                <InfoRow
+                  label="Organization:"
+                  value={
+                    organizationOptions.find(
                       (opt) => opt.value === record.organization
-                    )?.label ||
-                      record.organization ||
-                      "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">Department:</span>
-                  <span className="ml-2 text-gray-900">
-                    {record.department?.name ||
-                      record.department_text ||
-                      record.department ||
-                      "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">
-                    Employment Type:
-                  </span>
-                  <span className="ml-2 text-gray-900">
-                    {record.employment_type || "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">
-                    Effective From:
-                  </span>
-                  <span className="ml-2 text-gray-900">
-                    {formatDate(record.effective_from)}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">
-                    Effective Till:
-                  </span>
-                  <span className="ml-2 text-gray-900">
-                    {record.effective_till
+                    )?.label || record.organization
+                  }
+                />
+                <InfoRow
+                  label="Department:"
+                  value={
+                    record.department?.name ||
+                    record.department_text ||
+                    record.department
+                  }
+                />
+                <InfoRow label="Employment Type:" value={record.employment_type} />
+                <InfoRow
+                  label="Joining Date:"
+                  value={formatDate(record.joining_date || record.effective_from)}
+                />
+                <InfoRow
+                  label="Effective Till:"
+                  value={
+                    record.effective_till
                       ? formatDate(record.effective_till)
-                      : "Present"}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">Status:</span>
-                  <span className="ml-2 text-gray-900">
-                    {record.employment_status || "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">
-                    On Probation:
-                  </span>
-                  <span className="ml-2 text-gray-900">
-                    {record.is_on_probation ? "Yes" : "No"}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">
-                    Probation End:
-                  </span>
-                  <span className="ml-2 text-gray-900">
-                    {record.is_on_probation && record.probation_end_date
-                      ? formatDate(record.probation_end_date)
-                      : "N/A"}
-                  </span>
-                </div>
+                      : ""
+                  }
+                />
+                <InfoRow label="Status:" value={record.employment_status} />
+                {record.is_on_probation && (
+                  <InfoRow
+                    label="Probation End:"
+                    value={formatDate(record.probation_end_date)}
+                  />
+                )}
                 {record.salary && (
-                  <div>
-                    <span className="font-medium text-gray-600">
-                      {record.organization === "MBWO"
+                  <InfoRow
+                    label={
+                      record.organization === "MBWO"
                         ? "Gross Salary:"
-                        : "Total Salary:"}
-                    </span>
-                    <span className="ml-2 text-gray-900">
-                      {record.organization === "MBWO"
+                        : "Total Salary:"
+                    }
+                    value={
+                      record.organization === "MBWO"
                         ? formatCurrency(record.salary.gross_salary)
                         : formatCurrency(
                             (record.salary.basic_salary || 0) +
@@ -388,27 +377,18 @@ const EmploymentRecordActions = ({
                               (record.salary.house_rent || 0) +
                               (record.salary.conveyance_allowance || 0) +
                               (record.salary.other_allowances || 0)
-                          )}
-                    </span>
-                  </div>
+                          )
+                    }
+                  />
                 )}
                 {record.location && (
-                  <div>
-                    <span className="font-medium text-gray-600">Location:</span>
-                    <span className="ml-2 text-gray-900">
-                      {formatLocation(record)}
-                    </span>
-                  </div>
+                  <InfoRow label="Location:" value={formatLocation(record)} />
                 )}
                 {record.contract && (
-                  <div>
-                    <span className="font-medium text-gray-600">
-                      Contract Type:
-                    </span>
-                    <span className="ml-2 text-gray-900">
-                      {record.contract.contract_type || "N/A"}
-                    </span>
-                  </div>
+                  <InfoRow
+                    label="Contract Type:"
+                    value={record.contract.contract_type}
+                  />
                 )}
               </div>
 
@@ -480,123 +460,81 @@ const EmploymentRecordActions = ({
                   Employment Information
                 </h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Organization:
-                    </span>
-                    <span className="text-gray-900">
-                      {organizationOptions.find(
+                  <Row
+                    label="Organization:"
+                    value={
+                      organizationOptions.find(
                         (opt) => opt.value === selectedRecord.organization
-                      )?.label ||
-                        selectedRecord.organization ||
-                        "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Department:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.department?.name ||
-                        selectedRecord.department_text ||
-                        selectedRecord.department ||
-                        "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Designation:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.designation?.title ||
-                        selectedRecord.designation_text ||
-                        selectedRecord.designation ||
-                        "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Employment Type:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.employment_type || "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Role Tag:</span>
-                    <span className="text-gray-900">
-                      {selectedRecord.role_tag?.name ||
-                        selectedRecord.role_tag ||
-                        "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Scale Grade:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.scale_grade?.name ||
-                        selectedRecord.scale_grade ||
-                        "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Effective From:
-                    </span>
-                    <span className="text-gray-900">
-                      {formatDate(selectedRecord.effective_from)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Effective Till:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.effective_till
+                      )?.label || selectedRecord.organization
+                    }
+                  />
+                  <Row
+                    label="Department:"
+                    value={
+                      selectedRecord.department?.name ||
+                      selectedRecord.department_text ||
+                      selectedRecord.department
+                    }
+                  />
+                  <Row
+                    label="Designation:"
+                    value={
+                      selectedRecord.designation?.title ||
+                      selectedRecord.designation_text ||
+                      selectedRecord.designation
+                    }
+                  />
+                  <Row
+                    label="Employment Type:"
+                    value={selectedRecord.employment_type}
+                  />
+                  <Row
+                    label="Role Tag:"
+                    value={
+                      selectedRecord.role_tag?.name || selectedRecord.role_tag
+                    }
+                  />
+                  <Row
+                    label="Scale Grade:"
+                    value={
+                      selectedRecord.scale_grade?.name ||
+                      selectedRecord.scale_grade
+                    }
+                  />
+                  <Row
+                    label="Joining Date:"
+                    value={formatDate(
+                      selectedRecord.joining_date ||
+                        selectedRecord.effective_from
+                    )}
+                  />
+                  <Row
+                    label="Effective Till:"
+                    value={
+                      selectedRecord.effective_till
                         ? formatDate(selectedRecord.effective_till)
-                        : "Present"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Status:</span>
-                    <span className="text-gray-900">
-                      {selectedRecord.employment_status || "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      On Probation:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.is_on_probation ? "Yes" : "No"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Probation End Date:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.is_on_probation &&
-                      selectedRecord.probation_end_date
-                        ? formatDate(selectedRecord.probation_end_date)
-                        : "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Current:</span>
-                    <span className="text-gray-900">
-                      {selectedRecord.is_current ? "Yes" : "No"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Reporting Officer (Name & CNIC):
-                    </span>
-                    <span className="text-gray-900">
-                      {reportingOfficerDisplay}
-                    </span>
-                  </div>
+                        : ""
+                    }
+                  />
+                  <Row label="Status:" value={selectedRecord.employment_status} />
+                  <Row
+                    label="On Probation:"
+                    value={selectedRecord.is_on_probation ? "Yes" : ""}
+                  />
+                  {selectedRecord.is_on_probation && (
+                    <Row
+                      label="Probation End Date:"
+                      value={formatDate(selectedRecord.probation_end_date)}
+                    />
+                  )}
+                  <Row
+                    label="Current:"
+                    value={selectedRecord.is_current ? "Yes" : ""}
+                  />
+                  <Row
+                    label="Reporting Officer (Name & CNIC):"
+                    value={reportingOfficerDisplay}
+                  />
                 </div>
               </div>
 
@@ -607,87 +545,54 @@ const EmploymentRecordActions = ({
                   </h3>
                   <div className="space-y-2">
                     {selectedRecord.organization === "MBWO" ? (
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">
-                          Gross Salary:
-                        </span>
-                        <span className="text-gray-900">
-                          {formatCurrency(selectedRecord.salary.gross_salary)}
-                        </span>
-                      </div>
+                      <Row
+                        label="Gross Salary:"
+                        value={formatCurrency(selectedRecord.salary.gross_salary)}
+                      />
                     ) : (
                       <>
-                        <div className="flex justify-between">
-                          <span className="font-medium text-gray-600">
-                            Basic Salary:
-                          </span>
-                          <span className="text-gray-900">
-                            {formatCurrency(selectedRecord.salary.basic_salary)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="font-medium text-gray-600">
-                            Medical Allowance:
-                          </span>
-                          <span className="text-gray-900">
-                            {formatCurrency(
-                              selectedRecord.salary.medical_allowance
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="font-medium text-gray-600">
-                            House Rent:
-                          </span>
-                          <span className="text-gray-900">
-                            {formatCurrency(selectedRecord.salary.house_rent)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="font-medium text-gray-600">
-                            Conveyance:
-                          </span>
-                          <span className="text-gray-900">
-                            {formatCurrency(
-                              selectedRecord.salary.conveyance_allowance
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="font-medium text-gray-600">
-                            Other Allowances:
-                          </span>
-                          <span className="text-gray-900">
-                            {formatCurrency(
-                              selectedRecord.salary.other_allowances
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-t pt-2">
-                          <span className="font-medium text-gray-600">
-                            Total Salary:
-                          </span>
-                          <span className="text-gray-900 font-semibold">
-                            {formatCurrency(
-                              (selectedRecord.salary.basic_salary || 0) +
-                                (selectedRecord.salary.medical_allowance || 0) +
-                                (selectedRecord.salary.house_rent || 0) +
-                                (selectedRecord.salary.conveyance_allowance ||
-                                  0) +
-                                (selectedRecord.salary.other_allowances || 0)
-                            )}
-                          </span>
-                        </div>
+                        <Row
+                          label="Basic Salary:"
+                          value={formatCurrency(selectedRecord.salary.basic_salary)}
+                        />
+                        <Row
+                          label="Medical Allowance:"
+                          value={formatCurrency(
+                            selectedRecord.salary.medical_allowance
+                          )}
+                        />
+                        <Row
+                          label="House Rent:"
+                          value={formatCurrency(selectedRecord.salary.house_rent)}
+                        />
+                        <Row
+                          label="Conveyance:"
+                          value={formatCurrency(
+                            selectedRecord.salary.conveyance_allowance
+                          )}
+                        />
+                        <Row
+                          label="Other Allowances:"
+                          value={formatCurrency(
+                            selectedRecord.salary.other_allowances
+                          )}
+                        />
+                        <Row
+                          label="Total Salary:"
+                          value={formatCurrency(
+                            (selectedRecord.salary.basic_salary || 0) +
+                              (selectedRecord.salary.medical_allowance || 0) +
+                              (selectedRecord.salary.house_rent || 0) +
+                              (selectedRecord.salary.conveyance_allowance || 0) +
+                              (selectedRecord.salary.other_allowances || 0)
+                          )}
+                        />
                       </>
                     )}
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">
-                        Payment Mode:
-                      </span>
-                      <span className="text-gray-900">
-                        {selectedRecord.salary.payment_mode || "N/A"}
-                      </span>
-                    </div>
+                    <Row
+                      label="Payment Mode:"
+                      value={selectedRecord.salary.payment_mode}
+                    />
                   </div>
                 </div>
               )}
@@ -699,12 +604,7 @@ const EmploymentRecordActions = ({
                   Location Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">Location:</span>
-                    <span className="text-gray-900">
-                      {formatLocation(selectedRecord)}
-                    </span>
-                  </div>
+                  <Row label="Location:" value={formatLocation(selectedRecord)} />
                   {selectedRecord.location?.full_address && (
                     <div className="col-span-2">
                       <span className="font-medium text-gray-600">
@@ -725,64 +625,34 @@ const EmploymentRecordActions = ({
                   Contract Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Contract Type:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.contract.contract_type || "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Contract Number:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.contract.contract_number || "N/A"}
-                    </span>
-                  </div>
-                  {selectedRecord.contract.probation_start && (
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">
-                        Probation Start:
-                      </span>
-                      <span className="text-gray-900">
-                        {formatDate(selectedRecord.contract.probation_start)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Start Date:
-                    </span>
-                    <span className="text-gray-900">
-                      {formatDate(selectedRecord.contract.start_date)}
-                    </span>
-                  </div>
-                  {selectedRecord.contract.probation_end && (
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-600">
-                        Probation End:
-                      </span>
-                      <span className="text-gray-900">
-                        {formatDate(selectedRecord.contract.probation_end)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">End Date:</span>
-                    <span className="text-gray-900">
-                      {formatDate(selectedRecord.contract.end_date)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-600">
-                      Confirmation Status:
-                    </span>
-                    <span className="text-gray-900">
-                      {selectedRecord.contract.confirmation_status || "N/A"}
-                    </span>
-                  </div>
+                  <Row
+                    label="Contract Type:"
+                    value={selectedRecord.contract.contract_type}
+                  />
+                  <Row
+                    label="Contract Number:"
+                    value={selectedRecord.contract.contract_number}
+                  />
+                  <Row
+                    label="Probation Start:"
+                    value={formatDate(selectedRecord.contract.probation_start)}
+                  />
+                  <Row
+                    label="Start Date:"
+                    value={formatDate(selectedRecord.contract.start_date)}
+                  />
+                  <Row
+                    label="Probation End:"
+                    value={formatDate(selectedRecord.contract.probation_end)}
+                  />
+                  <Row
+                    label="End Date:"
+                    value={formatDate(selectedRecord.contract.end_date)}
+                  />
+                  <Row
+                    label="Confirmation Status:"
+                    value={selectedRecord.contract.confirmation_status}
+                  />
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-600">Renewed:</span>
                     <span className="text-gray-900">

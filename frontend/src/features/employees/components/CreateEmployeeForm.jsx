@@ -1,4 +1,4 @@
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useEmployeeStore } from "../store/employeeStore";
@@ -11,13 +11,17 @@ import { useAuditLog } from "../../../hooks/useAuditLog";
 import { forceRestoreScroll } from "../../../utils/scrollUtils";
 import ProfilePicture from "../../../components/ui/ProfilePicture";
 import CNICInput from "../../../components/ui/CNICInput";
+import { employeeService } from "../services/employeeService";
 import PhoneInput from "../../../components/ui/PhoneInput";
 import PDFPreview from "../../../components/ui/PDFPreview";
+import ZoomablePreview from "../../../components/ui/ZoomablePreview";
+import SmartDateInput from "../../../components/ui/SmartDateInput";
 import { districtService } from "../../settings/services/districtService";
 import { cityService } from "../../settings/services/cityService";
 import { educationLevelService } from "../../settings/services/educationLevelService";
 import { useFormPersistence } from "../../../hooks/useFormPersistence";
-import { toTitleCase } from "../../../utils/formatters";
+import { toTitleCase, formatDatabaseDateForInput } from "../../../utils/formatters";
+import { getImageUrl } from "../../../utils/imageUtils";
 import {
   RELIGION_OPTIONS,
   DISABILITY_TYPES,
@@ -56,20 +60,40 @@ const getInitialArrayState = (storageKey, arrayKey) => {
   return [];
 };
 
-const CreateEmployeeForm = () => {
+// Single form for BOTH add and edit. Pass `employee` to edit; omit to create.
+const CreateEmployeeForm = ({ employee = null }) => {
   const navigate = useNavigate();
-  const { createEmployee } = useEmployeeStore();
+  const isEditMode = !!employee;
+  const { createEmployee, updateEmployee } = useEmployeeStore();
   const { error, isLoading, clearError, withErrorHandling } = useErrorHandler();
   const { logPageView, logFormSubmission, logError } = useAuditLog();
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  // Live CNIC duplicate check
+  const [cnicTakenMessage, setCnicTakenMessage] = useState("");
 
-  // Initialize experiences and educations from localStorage to prevent empty state flash
+  // Initialize experiences/educations from the edited employee, else localStorage
   const [experiences, setExperiences] = useState(() =>
-    getInitialArrayState("createEmployeeForm", "experiences")
+    isEditMode
+      ? (employee?.pastExperiences || []).map((ex) => ({ ...ex }))
+      : getInitialArrayState("createEmployeeForm", "experiences")
   );
   const [educations, setEducations] = useState(() =>
-    getInitialArrayState("createEmployeeForm", "educations")
+    isEditMode
+      ? (employee?.educationQualifications || []).map((eq) => ({
+          id: eq.id,
+          education_level_id: eq.education_level_id || eq.level?.id || "",
+          education_level: eq.level?.name || eq.education_level || "",
+          institution_name: eq.institution_name || "",
+          year_of_completion:
+            formatDatabaseDateForInput(eq.year_of_completion) || "",
+          marks_gpa: eq.marks_gpa || "",
+          roll_no: eq.roll_no || "",
+          registration_number: eq.registration_number || "",
+          certificate_number: eq.certificate_number || "",
+          start_date: eq.start_date || "",
+        }))
+      : getInitialArrayState("createEmployeeForm", "educations")
   );
 
   // Master data options (API-driven)
@@ -82,7 +106,16 @@ const CreateEmployeeForm = () => {
   const [cityMap, setCityMap] = useState({});
   const [levelMap, setLevelMap] = useState({});
 
-  const [profilePicturePreview, setProfilePicturePreview] = useState(null);
+  const [profilePicturePreview, setProfilePicturePreview] = useState(() => {
+    if (employee?.profile_picture_url) {
+      return `${
+        import.meta.env.VITE_API_URL?.replace("/api", "") ||
+        "http://localhost:3000"
+      }${employee.profile_picture_url}`;
+    }
+    if (employee?.profile_picture) return getImageUrl(employee.profile_picture);
+    return null;
+  });
   const [uploadedFiles, setUploadedFiles] = useState({
     cnic_front: null,
     cnic_back: null,
@@ -109,6 +142,7 @@ const CreateEmployeeForm = () => {
       relationship_type: "father",
       mother_name: "",
       cnic: "",
+      deviceUserId: "",
       cnic_issue_date: "",
       cnic_expire_date: "",
       cnic_lifetime: false,
@@ -170,8 +204,89 @@ const CreateEmployeeForm = () => {
       setCityMap,
       setLevelMap,
     },
-    enabled: true,
+    // No draft persistence/restore while editing an existing employee
+    enabled: !isEditMode,
   });
+
+  // Prefill all scalar fields when editing an existing employee
+  useEffect(() => {
+    if (!isEditMode || !employee) return;
+    form.reset({
+      full_name: employee.full_name || "",
+      father_husband_name: employee.father_husband_name || "",
+      relationship_type: employee.relationship_type || "father",
+      mother_name: employee.mother_name || "",
+      cnic: employee.cnic || "",
+      deviceUserId: employee.deviceUserId || "",
+      cnic_issue_date: formatDatabaseDateForInput(employee.cnic_issue_date) || "",
+      cnic_expire_date:
+        formatDatabaseDateForInput(employee.cnic_expire_date) || "",
+      cnic_lifetime: !!employee.cnic_lifetime,
+      date_of_birth: formatDatabaseDateForInput(employee.date_of_birth) || "",
+      gender: employee.gender || "",
+      marital_status: employee.marital_status || "",
+      nationality: employee.nationality || "Pakistani",
+      religion: employee.religion || "",
+      blood_group: employee.blood_group || "",
+      domicile_district: employee.domicile_district || "",
+      mobile_number: employee.mobile_number || "",
+      whatsapp_number: employee.whatsapp_number || "",
+      email: employee.email || "",
+      present_address: employee.present_address || "",
+      permanent_address: employee.permanent_address || "",
+      same_address: !!employee.same_address,
+      district_id: employee.district_id ? String(employee.district_id) : "",
+      city_id: employee.city_id ? String(employee.city_id) : "",
+      has_disability: !!employee.has_disability,
+      disability_type: employee.disability_type || "",
+      disability_description: employee.disability_description || "",
+      missing_note: employee.missing_note || "",
+      has_past_experience: (employee.pastExperiences || []).length > 0,
+      profile_picture_file: null,
+      cnic_front_file: null,
+      cnic_back_file: null,
+      domicile_certificate_file: null,
+      disability_document_file: null,
+      medical_fitness_file: null,
+      police_character_certificate_file: null,
+      experience_documents_files: {},
+      education_documents_files: {},
+      other_documents_files: [],
+      past_experiences: employee.pastExperiences || [],
+      educations: employee.educationQualifications || [],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employee?.id]);
+
+  // Live CNIC duplicate check (debounced) — warns as soon as 13 digits are entered
+  const watchedCnic = form.watch("cnic");
+  useEffect(() => {
+    const digits = String(watchedCnic || "").replace(/\D/g, "");
+    if (digits.length !== 13) {
+      setCnicTakenMessage("");
+      return;
+    }
+    let active = true;
+    const t = setTimeout(async () => {
+      const res = await employeeService.checkCnic(
+        digits,
+        isEditMode ? employee?.id : null
+      );
+      if (!active) return;
+      setCnicTakenMessage(
+        res?.exists
+          ? `This CNIC already belongs to ${
+              res.employee?.full_name || "another employee"
+            }.`
+          : ""
+      );
+    }, 400);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedCnic, isEditMode, employee?.id]);
 
   // Create blob URLs for files that don't have them yet (e.g., after restoration)
   useEffect(() => {
@@ -683,32 +798,25 @@ const CreateEmployeeForm = () => {
         }`}
         className="relative inline-block mr-2 mb-2"
       >
-        <div
-          className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm"
-          style={{ width: "120px", height: "80px" }}
-        >
-          {isImage && previewUrl ? (
-            <img
-              src={previewUrl}
-              alt={fileObj.name}
-              className="w-full h-full object-cover"
-            />
-          ) : isPDF && previewUrl ? (
-            <PDFPreview
-              url={previewUrl}
-              fileName={fileObj.name}
-              height="80px"
-              showControls={false}
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
-              <i className="fas fa-file-pdf text-2xl text-red-500 mb-1"></i>
-              <span className="text-xs text-gray-600 text-center px-1 truncate">
-                {fileObj.name}
-              </span>
-            </div>
-          )}
-        </div>
+        {previewUrl ? (
+          // Click the thumbnail to open a large, readable preview (req #8)
+          <ZoomablePreview
+            src={previewUrl}
+            fileName={fileObj.name}
+            mimeType={fileObj.type}
+            className="w-[120px] h-20"
+          />
+        ) : (
+          <div
+            className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col items-center justify-center bg-gray-50"
+            style={{ width: "120px", height: "80px" }}
+          >
+            <i className="fas fa-file text-2xl text-gray-400 mb-1"></i>
+            <span className="text-xs text-gray-600 text-center px-1 truncate">
+              {fileObj.name}
+            </span>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => handleFileRemove(fileType, fileIndex)}
@@ -887,6 +995,9 @@ const CreateEmployeeForm = () => {
       institution_name: "",
       year_of_completion: "",
       marks_gpa: "",
+      roll_no: "",
+      registration_number: "",
+      certificate_number: "",
       start_date: "", // new field
     };
     setEducations([...educations, newEducation]);
@@ -931,6 +1042,11 @@ const CreateEmployeeForm = () => {
 
   const onSubmit = (data) => {
     clearError();
+    // Block submission if the CNIC is already taken
+    if (cnicTakenMessage) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     // Include experiences, educations, and ALL uploaded files in the data
     // Ensure arrays are always included, even if empty
     const formDataWithExperiences = {
@@ -984,17 +1100,25 @@ const CreateEmployeeForm = () => {
     if (!previewData) return;
 
     try {
-      await withErrorHandling(() => createEmployee(previewData), {
-        showAlert: true,
-        customMessage: "Employee created successfully!",
-      });
+      await withErrorHandling(
+        () =>
+          isEditMode
+            ? updateEmployee(employee.id, previewData)
+            : createEmployee(previewData),
+        {
+          showAlert: true,
+          customMessage: isEditMode
+            ? "Employee updated successfully!"
+            : "Employee created successfully!",
+        }
+      );
 
       // Clear saved form data on successful submission
       clearSavedData();
 
-      // Close modal and navigate to employees list
+      // Close modal and navigate
       setShowPreviewModal(false);
-      navigate("/employees");
+      navigate(isEditMode ? `/employees/${employee.id}` : "/employees");
     } catch (error) {
       // Log error for audit trail
       // Note: Form data is preserved automatically by the persistence hook
@@ -1024,6 +1148,7 @@ const CreateEmployeeForm = () => {
         relationship_type: "father",
         mother_name: "",
         cnic: "",
+        deviceUserId: "",
         cnic_issue_date: "",
         cnic_expire_date: "",
         date_of_birth: "",
@@ -1086,7 +1211,7 @@ const CreateEmployeeForm = () => {
     }
   };
 
-  // Helper function to display field values with N/A fallback
+  // Helper function to display field values; empty values render as a neutral dash
   const displayValue = (value, type = "text") => {
     if (
       value === null ||
@@ -1094,7 +1219,7 @@ const CreateEmployeeForm = () => {
       value === "" ||
       (typeof value === "number" && isNaN(value))
     ) {
-      return "N/A";
+      return "—";
     }
 
     if (type === "boolean") {
@@ -1102,7 +1227,7 @@ const CreateEmployeeForm = () => {
     }
 
     if (type === "array" && Array.isArray(value)) {
-      return value.length > 0 ? value.join(", ") : "N/A";
+      return value.length > 0 ? value.join(", ") : "—";
     }
 
     if (type === "experiences" && Array.isArray(value)) {
@@ -1196,14 +1321,15 @@ const CreateEmployeeForm = () => {
                   className="text-3xl font-bold"
                   style={{ color: "var(--color-text-primary)" }}
                 >
-                  Create New Employee
+                  {isEditMode ? "Edit Employee" : "Create New Employee"}
                 </h1>
                 <p
                   className="text-lg"
                   style={{ color: "var(--color-text-secondary)" }}
                 >
-                  Add basic employee information first, then add employment
-                  records
+                  {isEditMode
+                    ? "Update the employee's information below"
+                    : "Add basic employee information first, then add employment records"}
                 </p>
               </div>
             </div>
@@ -1327,9 +1453,23 @@ const CreateEmployeeForm = () => {
                     label="CNIC"
                     required={true}
                     placeholder="1234567890123"
-                    error={form.formState.errors.cnic?.message}
+                    error={
+                      cnicTakenMessage || form.formState.errors.cnic?.message
+                    }
                     name="cnic"
                     showValidation={true}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Biometric ID
+                  </label>
+                  <input
+                    type="text"
+                    {...form.register("deviceUserId")}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Attendance device / biometric ID (optional)"
                   />
                 </div>
 
@@ -1340,11 +1480,10 @@ const CreateEmployeeForm = () => {
                       form.setValue("mobile_number", e.target.value)
                     }
                     label="Mobile Number"
-                    required={true}
+                    required={false}
                     placeholder="xxxx-xxxxxxx"
-                    error={form.formState.errors.mobile_number?.message}
                     name="mobile_number"
-                    showValidation={true}
+                    showValidation={false}
                   />
                 </div>
 
@@ -1388,9 +1527,7 @@ const CreateEmployeeForm = () => {
                       </label>
                       <input
                         type="text"
-                        {...form.register("father_husband_name", {
-                          required: "Father/Husband name is required",
-                        })}
+                        {...form.register("father_husband_name")}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder={`Enter ${
                           form.watch("relationship_type") === "father"
@@ -1425,22 +1562,24 @@ const CreateEmployeeForm = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     CNIC Issue Date
                   </label>
-                  <input
-                    type="date"
-                    {...form.register("cnic_issue_date", {
+                  <Controller
+                    name="cnic_issue_date"
+                    control={form.control}
+                    rules={{
                       validate: (value) => {
                         const expiryDate = form.getValues("cnic_expire_date");
                         const validation = validateCNICDates(value, expiryDate);
                         return validation.isValid || validation.message;
                       },
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    }}
+                    render={({ field }) => (
+                      <SmartDateInput
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        error={form.formState.errors.cnic_issue_date?.message}
+                      />
+                    )}
                   />
-                  {form.formState.errors.cnic_issue_date && (
-                    <p className="text-red-600 text-sm mt-1">
-                      {form.formState.errors.cnic_issue_date.message}
-                    </p>
-                  )}
                 </div>
 
                 {/* CNIC Expiry / Lifetime */}
@@ -1468,11 +1607,10 @@ const CreateEmployeeForm = () => {
                       Lifetime CNIC (no expiry)
                     </label>
                   </label>
-                  <input
-                    type="date"
-                    min={getTodayDateString()}
-                    disabled={form.watch("cnic_lifetime")}
-                    {...form.register("cnic_expire_date", {
+                  <Controller
+                    name="cnic_expire_date"
+                    control={form.control}
+                    rules={{
                       validate: (value) => {
                         const isLifetime = form.getValues("cnic_lifetime");
                         const expiryValidation = validateCNICExpiryDate(
@@ -1492,14 +1630,17 @@ const CreateEmployeeForm = () => {
                           datesValidation.isValid || datesValidation.message
                         );
                       },
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                    }}
+                    render={({ field }) => (
+                      <SmartDateInput
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        min={getTodayDateString()}
+                        disabled={form.watch("cnic_lifetime")}
+                        error={form.formState.errors.cnic_expire_date?.message}
+                      />
+                    )}
                   />
-                  {form.formState.errors.cnic_expire_date && (
-                    <p className="text-red-600 text-sm mt-1">
-                      {form.formState.errors.cnic_expire_date.message}
-                    </p>
-                  )}
                   {!form.watch("cnic_lifetime") && (
                     <p className="text-sm text-gray-500 mt-1">
                       Select today's date or a future date
@@ -1530,10 +1671,16 @@ const CreateEmployeeForm = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Date of Birth
                   </label>
-                  <input
-                    type="date"
-                    {...form.register("date_of_birth")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  <Controller
+                    name="date_of_birth"
+                    control={form.control}
+                    render={({ field }) => (
+                      <SmartDateInput
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        max={getTodayDateString()}
+                      />
+                    )}
                   />
                 </div>
 
@@ -1701,17 +1848,18 @@ const CreateEmployeeForm = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Domicile District
                   </label>
-                  <select
-                    {...form.register("domicile_district")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select Domicile District</option>
-                    {districtOptions.map((district) => (
-                      <option key={district.value} value={district.value}>
-                        {district.label}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={districtOptions}
+                    value={form.watch("domicile_district")}
+                    onChange={(value) =>
+                      form.setValue("domicile_district", value)
+                    }
+                    placeholder="Select Domicile District"
+                    register={form.register}
+                    name="domicile_district"
+                    required={false}
+                    error={form.formState.errors.domicile_district?.message}
+                  />
                 </div>
 
                 {/* District */}
@@ -1896,17 +2044,15 @@ const CreateEmployeeForm = () => {
                                 Start Date{" "}
                                 <span className="text-red-500">*</span>
                               </label>
-                              <input
-                                type="date"
-                                value={experience.start_date}
-                                onChange={(e) =>
+                              <SmartDateInput
+                                value={experience.start_date || ""}
+                                onChange={(iso) =>
                                   updateExperience(
                                     experience.id,
                                     "start_date",
-                                    e.target.value
+                                    iso
                                   )
                                 }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                             </div>
 
@@ -1915,17 +2061,15 @@ const CreateEmployeeForm = () => {
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                 End Date
                               </label>
-                              <input
-                                type="date"
-                                value={experience.end_date}
-                                onChange={(e) =>
+                              <SmartDateInput
+                                value={experience.end_date || ""}
+                                onChange={(iso) =>
                                   updateExperience(
                                     experience.id,
                                     "end_date",
-                                    e.target.value
+                                    iso
                                   )
                                 }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
                               <p className="text-xs text-gray-500 mt-1">
                                 Leave empty if currently working
@@ -2103,20 +2247,17 @@ const CreateEmployeeForm = () => {
                             {/* Date of Completion */}
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Date of Completion{" "}
-                                <span className="text-red-500">*</span>
+                                Date of Completion
                               </label>
-                              <input
-                                type="date"
+                              <SmartDateInput
                                 value={education.year_of_completion || ""}
-                                onChange={(e) =>
+                                onChange={(iso) =>
                                   updateEducation(
                                     education.id,
                                     "year_of_completion",
-                                    e.target.value
+                                    iso
                                   )
                                 }
-                                className="form-input w-full"
                               />
                             </div>
 
@@ -2178,6 +2319,46 @@ const CreateEmployeeForm = () => {
                                 }
                                 className="form-input w-full"
                                 placeholder="Enter exam roll number"
+                              />
+                            </div>
+
+                            {/* Registration No */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Registration No
+                              </label>
+                              <input
+                                type="text"
+                                value={education.registration_number || ""}
+                                onChange={(e) =>
+                                  updateEducation(
+                                    education.id,
+                                    "registration_number",
+                                    e.target.value
+                                  )
+                                }
+                                className="form-input w-full"
+                                placeholder="Enter registration number"
+                              />
+                            </div>
+
+                            {/* Certificate No */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Certificate No
+                              </label>
+                              <input
+                                type="text"
+                                value={education.certificate_number || ""}
+                                onChange={(e) =>
+                                  updateEducation(
+                                    education.id,
+                                    "certificate_number",
+                                    e.target.value
+                                  )
+                                }
+                                className="form-input w-full"
+                                placeholder="Enter certificate number"
                               />
                             </div>
 
@@ -2845,7 +3026,7 @@ const CreateEmployeeForm = () => {
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <i className="fas fa-eye mr-2"></i>
-                  Review & Create Employee
+                  {isEditMode ? "Review & Update Employee" : "Review & Create Employee"}
                 </button>
               </div>
             </form>
@@ -2869,8 +3050,8 @@ const CreateEmployeeForm = () => {
                   Please review all employee information before creating
                 </h3>
                 <p className="text-gray-600">
-                  Fields showing "N/A" indicate no value was entered. You can go
-                  back to edit or proceed to create the employee.
+                  Fields showing "—" were left empty. You can go back to edit or
+                  proceed to create the employee.
                 </p>
               </div>
 
@@ -3344,7 +3525,7 @@ const CreateEmployeeForm = () => {
                   ) : (
                     <>
                       <i className="fas fa-check mr-2"></i>
-                      Confirm & Create Employee
+                      {isEditMode ? "Confirm & Update" : "Confirm & Create Employee"}
                     </>
                   )}
                 </button>

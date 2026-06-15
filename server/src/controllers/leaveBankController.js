@@ -176,8 +176,8 @@ module.exports = {
       const { search = '' } = req.query;
       const term = String(search).trim();
       const employees = await prisma.employee.findMany({
-        where: { is_deleted: false, ...(term ? { OR: [ { full_name: { contains: term, mode: 'insensitive' } }, { employee_id: { contains: term, mode: 'insensitive' } }, { cnic: { contains: term, mode: 'insensitive' } } ] } : {}) },
-        select: { id: true, employee_id: true, full_name: true, cnic: true }
+        where: { is_deleted: false, ...(term ? { OR: [ { full_name: { contains: term, mode: 'insensitive' } }, { cnic: { contains: term, mode: 'insensitive' } } ] } : {}) },
+        select: { id: true, full_name: true, cnic: true }
       });
       const allocs = await prisma.leaveBankAllocation.findMany({ where: { leave_bank_id: id }, include: { leaveType: true } });
       res.json({ success: true, employees, allocations: allocs });

@@ -88,15 +88,6 @@ const SettingsDashboard = () => {
           required: ["locations.read"],
         },
         {
-          name: "Devices",
-          description:
-            "Manage attendance devices (IP/Port) and their locations",
-          path: "/settings/devices",
-          icon: Users,
-          color: "indigo",
-          required: ["devices.read"],
-        },
-        {
           name: "Roles",
           description: "Manage system roles and permissions",
           path: "/settings/roles",
@@ -128,14 +119,6 @@ const SettingsDashboard = () => {
           icon: Users,
           color: "indigo",
           required: ["education-levels.read"],
-        },
-        {
-          name: "Travel Rates",
-          description: "Manage per-km and per-diem rates by grade",
-          path: "/settings/travel-rates",
-          icon: Users,
-          color: "red",
-          required: ["travel.rates.read"],
         },
       ],
     },

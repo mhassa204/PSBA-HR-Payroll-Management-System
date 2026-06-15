@@ -66,6 +66,7 @@ const {
   authorize,
   authorizeOwnEmployeeOrEmployeesRead,
 } = require("../middleware/auth");
+const { validateBody } = require("../middleware/sharedValidate");
 
 // Routes
 router.post(
@@ -73,6 +74,7 @@ router.post(
   isAuthenticated,
   authorize("employees.create"),
   upload.any(), // Accept files with allowed types; no strict field-name filter
+  validateBody("employee"),
   employeeController.createEmployee
 );
 
@@ -81,6 +83,14 @@ router.get(
   isAuthenticated,
   authorize("employees.read"),
   employeeController.getAllEmployees
+);
+
+// Live CNIC uniqueness check (used by the add/edit form). Must be before "/:id".
+router.get(
+  "/check-cnic",
+  isAuthenticated,
+  authorize("employees.read"),
+  employeeController.checkCnic
 );
 
 router.get(
@@ -95,6 +105,7 @@ router.put(
   isAuthenticated,
   authorize("employees.update"),
   upload.any(), // Accept files with allowed types; no strict field-name filter
+  validateBody("employee", { partial: true }),
   employeeController.updateEmployee
 );
 

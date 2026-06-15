@@ -160,7 +160,7 @@ class UserController {
       // Get all employees
       const allEmployees = await prisma.employee.findMany({
         where: { is_deleted: false },
-        select: { id: true, full_name: true, employee_id: true, cnic: true },
+        select: { id: true, full_name: true, cnic: true },
       });
 
       // Get all users with employee assignments
@@ -184,7 +184,6 @@ class UserController {
         employeesWithUsers: employeesWithUsers.map((emp) => ({
           id: emp.id,
           full_name: emp.full_name,
-          employee_id: emp.employee_id,
           cnic: emp.cnic,
           hasUser: !!emp.user,
         })),
@@ -215,7 +214,6 @@ class UserController {
         select: {
           id: true,
           full_name: true,
-          employee_id: true,
           email: true,
           cnic: true,
         },
