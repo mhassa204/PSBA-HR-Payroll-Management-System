@@ -340,8 +340,16 @@ def main():
             continue
 
         # --- employment type ---
+        # "Payroll/DailyWages" column: "Payroll" -> Regular; "Daily Wages/Stopgap"
+        # (or any daily-wage / stopgap variant) -> "Daily Wager" (the value the HR
+        # system's employment-type dropdown actually uses — see getFormOptions).
         ptype = s(col(r, "Payroll/DailyWages"))
-        employment_type = "Daily Wages" if "daily" in ptype.lower() else "Regular"
+        _pl = ptype.lower()
+        employment_type = (
+            "Daily Wager"
+            if ("daily" in _pl or "wage" in _pl or "stopgap" in _pl)
+            else "Regular"
+        )
 
         # --- salary / bank ---
         bank_acct = s(col(r, "Bank Account Number")) or None
