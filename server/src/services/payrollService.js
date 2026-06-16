@@ -152,16 +152,16 @@ const payrollService = {
         approvedLeaves.map((l) => formatYMD(l.date))
       );
 
-      // Get attendance records for this employee
-      const attendanceRecords = employee.deviceUserId
+      // Get attendance records for this employee (face system, keyed by cnic)
+      const empCnic = String(employee.cnic || "").replace(/\D/g, "");
+      const attendanceRecords = empCnic
         ? await prisma.attendance.findMany({
             where: {
-              deviceUserId: employee.deviceUserId,
+              cnic: empCnic,
               attendanceDate: { gte: start, lte: end },
-              device: { location_id: locationId },
             },
             select: {
-              deviceUserId: true,
+              cnic: true,
               attendanceDate: true,
               type: true,
               timestamp: true,
@@ -170,11 +170,10 @@ const payrollService = {
           })
         : [];
 
-      // Group attendance by date (presence = has at least IN or OUT)
-      // Use same key format as attendanceController: deviceUserId|YMD
+      // Group attendance by date (presence = has at least IN or OUT). Key: cnic|YMD
       const presentSet = new Set();
       for (const att of attendanceRecords) {
-        const key = `${att.deviceUserId}|${formatYMD(att.attendanceDate)}`;
+        const key = `${String(att.cnic || "").replace(/\D/g, "")}|${formatYMD(att.attendanceDate)}`;
         presentSet.add(key);
       }
 
@@ -215,10 +214,7 @@ const payrollService = {
       for (const date of rosterCoveredDates) {
         const ymdDate = formatYMD(date);
         if (weeklyOffSet.has(ymdDate)) continue;
-        if (
-          employee.deviceUserId &&
-          presentSet.has(`${employee.deviceUserId}|${ymdDate}`)
-        ) {
+        if (empCnic && presentSet.has(`${empCnic}|${ymdDate}`)) {
           presentDays++;
         }
       }

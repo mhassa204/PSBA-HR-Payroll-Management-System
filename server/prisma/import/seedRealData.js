@@ -193,7 +193,6 @@ async function seedRealData(prisma) {
         relationship_type: orNull(emp.relationship_type),
         mother_name: orNull(emp.mother_name),
         cnic: emp.cnic, // required, unique — single source of truth
-        deviceUserId: uniqueOrNull(emp.device_user_id),
         cnic_issue_date: toDate(emp.cnic_issue_date),
         cnic_expire_date: toDate(emp.cnic_expire_date),
         cnic_lifetime: !!emp.cnic_lifetime,

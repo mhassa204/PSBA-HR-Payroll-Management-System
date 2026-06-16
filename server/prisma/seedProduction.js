@@ -100,13 +100,6 @@ async function main() {
   if (fixedEmails.count) {
     console.log(`🔧 Normalized ${fixedEmails.count} empty employee email(s) to NULL`);
   }
-  const fixedDeviceIds = await prisma.employee.updateMany({
-    where: { deviceUserId: "" },
-    data: { deviceUserId: null },
-  });
-  if (fixedDeviceIds.count) {
-    console.log(`🔧 Normalized ${fixedDeviceIds.count} empty deviceUserId(s) to NULL`);
-  }
 
   // --- Districts + Cities (full Punjab) ---
   const districtByName = {};
@@ -167,7 +160,6 @@ async function main() {
       father_husband_name: orNull(emp.father_husband_name),
       relationship_type: orNull(emp.relationship_type),
       mother_name: orNull(emp.mother_name),
-      deviceUserId: uniqueOrNull(emp.device_user_id),
       cnic_issue_date: toDate(emp.cnic_issue_date),
       cnic_expire_date: toDate(emp.cnic_expire_date),
       cnic_lifetime: !!emp.cnic_lifetime,

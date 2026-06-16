@@ -1,7 +1,12 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-const ZKLib = require("node-zklib");
-const { reduceFirstLastByDay, upsertAttendanceForDevice } = require("../services/attendanceService");
+
+// Attendance now comes from the face-recognition Attendance System (droplet),
+// mirrored locally into the `Attendance` table and joined to employees by `cnic`.
+// Location is derived from the employee's assignment (roster / current employment),
+// not from a biometric device.
+
+const norm = (c) => String(c || "").replace(/\D/g, "");
 
 function toDateOnly(d) {
   const dt = new Date(d);
@@ -14,151 +19,15 @@ function dayName(d){ return ['Sunday','Monday','Tuesday','Wednesday','Thursday',
 function dayShort(d){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()]; }
 function formatHHmmFromUTCDate(d){ if(!d) return null; const h=String(d.getUTCHours()).padStart(2,'0'); const m=String(d.getUTCMinutes()).padStart(2,'0'); return `${h}:${m}`; }
 function parseHHmmToMinutes(s){ if(!s) return null; const m=s.match(/^(\d{1,2}):(\d{2})$/); if(!m) return null; return parseInt(m[1],10)*60+parseInt(m[2],10); }
-function diffMinutes(a,b){ return a!=null && b!=null ? (b-a) : null; }
 
-async function listDevices(req, res) {
-  try {
-    const devices = await prisma.device.findMany({ 
-      where: { is_deleted: false }, 
-      include: { location: true },
-      orderBy: { createdAt: 'desc' } 
-    });
-    res.json({ success: true, devices });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-}
-
-async function fetchAndSaveForDevice(req, res) {
-  const id = Number(req.params.id);
-  try {
-    const device = await prisma.device.findFirst({ where: { id, is_deleted: false } });
-    if (!device) return res.status(404).json({ success: false, error: 'Device not found' });
-
-    const zk = new ZKLib(device.ip_address, device.port_number, 10000, { ip: device.ip_address });
-    await zk.createSocket();
-    const raw = await zk.getAttendances();
-    await zk.disconnect();
-
-    const rows = Array.isArray(raw?.data) ? raw.data : [];
-
-    // Map to a minimal structure and process
-    const normalized = rows
-      .filter(r => r.deviceUserId && r.recordTime)
-      .map(r => ({ deviceUserId: String(r.deviceUserId), recordTime: new Date(r.recordTime), ip: device.ip_address }));
-
-    const reduced = reduceFirstLastByDay(normalized);
-    const inserted = await upsertAttendanceForDevice(device.ip_address, device.port_number, reduced, device.id);
-
-    res.json({ success: true, fetched: rows.length, saved: inserted });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ success: false, error: e.message });
-  }
-}
-
-// Optional: fetch & save for all devices at once
-async function fetchAndSaveForAll(req, res) {
-  try {
-    const devices = await prisma.device.findMany({ where: { is_deleted: false } });
-    let totalFetched = 0; let totalSaved = 0;
-
-    for (const device of devices) {
-      try {
-        const zk = new ZKLib(device.ip_address, device.port_number, 10000, { ip: device.ip_address });
-        await zk.createSocket();
-        const raw = await zk.getAttendances();
-        await zk.disconnect();
-
-        const rows = Array.isArray(raw?.data) ? raw.data : [];
-        totalFetched += rows.length;
-
-        const normalized = rows
-          .filter(r => r.deviceUserId && r.recordTime)
-          .map(r => ({ deviceUserId: String(r.deviceUserId), recordTime: new Date(r.recordTime), ip: device.ip_address }));
-
-        const reduced = reduceFirstLastByDay(normalized);
-        const inserted = await upsertAttendanceForDevice(device.ip_address, device.port_number, reduced, device.id);
-        totalSaved += inserted;
-      } catch (inner) {
-        console.error(`Failed device ${device.ip_address}:${device.port_number}`, inner.message);
-      }
-    }
-
-    res.json({ success: true, totalFetched, totalSaved });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-}
-
-// New: list employees with their deviceUserId (for assignment UI)
-async function listEmployeesForDeviceUsers(req, res) {
-  try {
-    const search = String(req.query.search || '').trim();
-    const where = {
-      is_deleted: false,
-      ...(search ? {
-        OR: [
-          { full_name: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-          { cnic: { contains: search, mode: 'insensitive' } },
-        ]
-      } : {})
-    };
-    const employees = await prisma.employee.findMany({
-      where,
-      select: { id: true, full_name: true, cnic: true, deviceUserId: true },
-      orderBy: [
-        { full_name: 'asc' },
-        { id: 'asc' }
-      ]
-    });
-    res.json({ success: true, employees });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-}
-
-// New: set/update a specific employee's deviceUserId (unique)
-async function setEmployeeDeviceUserId(req, res) {
-  try {
-    const employeeId = Number(req.params.employeeId);
-    const { deviceUserId } = req.body || {};
-
-    if (!employeeId || Number.isNaN(employeeId)) {
-      return res.status(400).json({ success: false, error: 'Invalid employee id' });
-    }
-
-    const employee = await prisma.employee.findFirst({ where: { id: employeeId, is_deleted: false } });
-    if (!employee) return res.status(404).json({ success: false, error: 'Employee not found' });
-
-    const trimmed = (deviceUserId ?? '').toString().trim();
-    if (!trimmed) {
-      // Allow clearing the mapping
-      const updated = await prisma.employee.update({ where: { id: employeeId }, data: { deviceUserId: null } });
-      return res.json({ success: true, employee: { id: updated.id, deviceUserId: updated.deviceUserId } });
-    }
-
-    // Check uniqueness: if some other employee already has this deviceUserId
-    const exists = await prisma.employee.findFirst({
-      where: {
-        is_deleted: false,
-        deviceUserId: trimmed,
-        NOT: { id: employeeId }
-      },
-      select: { id: true, full_name: true }
-    });
-    if (exists) {
-      return res.status(400).json({ success: false, error: `Device User ID already assigned to ${exists.full_name} (ID: ${exists.id})` });
-    }
-
-    const updated = await prisma.employee.update({ where: { id: employeeId }, data: { deviceUserId: trimmed } });
-    res.json({ success: true, employee: { id: updated.id, deviceUserId: updated.deviceUserId } });
-  } catch (e) {
-    // Handle unique constraint error from DB as well
-    const message = e?.meta?.target?.includes('deviceUserId') ? 'Device User ID must be unique' : e.message;
-    res.status(400).json({ success: false, error: message });
-  }
+// Fetch face-attendance rows for a set of cnics in a date range.
+async function fetchAttendanceByCnics(cnics, start, end) {
+  const list = cnics.filter(Boolean);
+  if (!list.length) return [];
+  return prisma.attendance.findMany({
+    where: { cnic: { in: list }, attendanceDate: { gte: start, lte: end } },
+    select: { cnic: true, attendanceDate: true, type: true, timestamp: true },
+  });
 }
 
 // Helpers to fetch active rosters overlapping range for a location
@@ -213,45 +82,36 @@ async function locationFMO(req, res) {
     // Build calendar days for header
     const days = []; let d = start; while (d <= end) { days.push({ date: new Date(d), label: String(d.getUTCDate()).padStart(2,'0'), dow: dayShort(d) }); d = addDays(d,1); }
 
-    // Fetch attendance for this location & range (across all its devices)
-    const att = await prisma.attendance.findMany({
+    // Employees assigned to this location (via current employment)
+    const employees = await prisma.employee.findMany({
       where: {
-        attendanceDate: { gte: start, lte: end },
-        device: { location_id: locationId }
+        is_deleted: false,
+        employmentRecords: { some: { is_current: true, is_deleted: false, location_id: locationId } },
       },
-      select: { deviceUserId: true, attendanceDate: true }
+      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
     });
 
-    // Map deviceUserIds to employees
-    const duids = Array.from(new Set(att.map(a => a.deviceUserId).filter(Boolean)));
-    const employees = duids.length ? await prisma.employee.findMany({
-      where: { is_deleted: false, deviceUserId: { in: duids } },
-      select: { id: true, full_name: true, cnic: true, deviceUserId: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
-    }) : [];
-
-    // attendance set for quick presence check
-    const attMap = new Map(); // key: deviceUserId|date -> true
+    // Attendance for these employees in range, presence keyed by cnic|date
+    const cnics = employees.map(e => norm(e.cnic)).filter(Boolean);
+    const att = await fetchAttendanceByCnics(cnics, start, end);
+    const attMap = new Map(); // key: cnic|date -> true
     for (const a of att) {
-      if (!a.deviceUserId) continue;
-      const key = `${a.deviceUserId}|${formatYMD(a.attendanceDate)}`;
-      attMap.set(key, true);
+      if (!a.cnic) continue;
+      attMap.set(`${norm(a.cnic)}|${formatYMD(a.attendanceDate)}`, true);
     }
 
-    // Build rows: P if any mark exists that day for the employee's device user id, else A
     const rows = employees.map((e, idx) => {
       const designation = e.employmentRecords?.[0]?.designation?.title || null;
       const roleTag = e.employmentRecords?.[0]?.role_tag?.name || null;
-      let present = 0; let absent = 0; let notMark = 0; // notMark reserved for future
+      const ecnic = norm(e.cnic);
+      let present = 0; let absent = 0; let notMark = 0;
       const marks = days.map(({ date }) => {
-        const dm = formatYMD(date);
-        const key = `${e.deviceUserId || ''}|${dm}`;
-        const isP = e.deviceUserId && attMap.get(key);
+        const isP = ecnic && attMap.get(`${ecnic}|${formatYMD(date)}`);
         if (isP) present++; else absent++;
         return isP ? 'P' : 'A';
       });
       return {
         sr: idx+1,
-        biometricId: e.deviceUserId || null,
         cnic: e.cnic || null,
         name: e.full_name,
         designation,
@@ -300,25 +160,18 @@ async function locationAgainstRoster(req, res) {
 
     const employees = await prisma.employee.findMany({
       where: { id: { in: empIds }, is_deleted: false },
-      select: { id: true, full_name: true, cnic: true, deviceUserId: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
+      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
     });
 
-    const deviceUserIds = employees.map(e => e.deviceUserId).filter(Boolean);
+    const cnics = employees.map(e => norm(e.cnic)).filter(Boolean);
 
-    // Attendance logs (all types) for range & location
-    const att = deviceUserIds.length ? await prisma.attendance.findMany({
-      where: {
-        deviceUserId: { in: deviceUserIds },
-        attendanceDate: { gte: start, lte: end },
-        device: { location_id: locationId }
-      },
-      select: { deviceUserId: true, attendanceDate: true, type: true, timestamp: true }
-    }) : [];
+    // Attendance logs (all types) for range, by cnic
+    const att = await fetchAttendanceByCnics(cnics, start, end);
 
-    // Group attendance by user+date, reduce to earliest IN and latest OUT across devices
-    const attByUserDate = new Map(); // key: duid|ymd -> { in: Date|null, out: Date|null }
+    // Group attendance by cnic+date, reduce to earliest IN and latest OUT
+    const attByUserDate = new Map(); // key: cnic|ymd -> { in: Date|null, out: Date|null }
     for (const a of att) {
-      const key = `${a.deviceUserId}|${formatYMD(a.attendanceDate)}`;
+      const key = `${norm(a.cnic)}|${formatYMD(a.attendanceDate)}`;
       const curr = attByUserDate.get(key) || { in: null, out: null };
       if (a.type === 'IN') {
         if (!curr.in || a.timestamp < curr.in) curr.in = a.timestamp;
@@ -333,6 +186,7 @@ async function locationAgainstRoster(req, res) {
     for (const emp of employees) {
       const designation = emp.employmentRecords?.[0]?.designation?.title || null;
       const roleTag = emp.employmentRecords?.[0]?.role_tag?.name || null;
+      const ecnic = norm(emp.cnic);
       const entries = entryByEmp.get(emp.id) || [];
 
       for (const date of days) {
@@ -371,8 +225,7 @@ async function locationAgainstRoster(req, res) {
           dutyOut = dayInfo.time_to || null;
         }
 
-        const key = `${emp.deviceUserId || ''}|${formatYMD(date)}`;
-        const inOut = attByUserDate.get(key) || { in: null, out: null };
+        const inOut = attByUserDate.get(`${ecnic}|${formatYMD(date)}`) || { in: null, out: null };
         const time1 = formatHHmmFromUTCDate(inOut.in) || '';
         const time2 = formatHHmmFromUTCDate(inOut.out) || '';
 
@@ -404,7 +257,6 @@ async function locationAgainstRoster(req, res) {
 
         rows.push({
           employeeId: emp.id,
-          biometricId: emp.deviceUserId || null,
           cnic: emp.cnic || null,
           name: emp.full_name,
           designation,
@@ -505,16 +357,13 @@ async function locationLSR(req, res) {
     // Load basic employee info + current employment (for designation if not in employmentAtLocation list)
     const employees = await prisma.employee.findMany({
       where: { id: { in: allEmpIds }, is_deleted: false },
-      select: { id: true, full_name: true, cnic: true, deviceUserId: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true, salary: true } } }
+      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true, salary: true } } }
     });
 
-    // Attendance for present calculation
-    const deviceUserIds = employees.map(e => e.deviceUserId).filter(Boolean);
-    const attendanceRows = deviceUserIds.length ? await prisma.attendance.findMany({
-      where: { deviceUserId: { in: deviceUserIds }, attendanceDate: { gte: cycleStart, lte: cycleEnd }, device: { location_id: locationId } },
-      select: { deviceUserId: true, attendanceDate: true }
-    }) : [];
-    const presentSet = new Set(attendanceRows.map(a => `${a.deviceUserId}|${formatYMD(a.attendanceDate)}`));
+    // Attendance for present calculation (by cnic)
+    const cnics = employees.map(e => norm(e.cnic)).filter(Boolean);
+    const attendanceRows = await fetchAttendanceByCnics(cnics, cycleStart, cycleEnd);
+    const presentSet = new Set(attendanceRows.map(a => `${norm(a.cnic)}|${formatYMD(a.attendanceDate)}`));
 
     // Leaves in range (all statuses)
     const leaveRows = await prisma.leave.findMany({
@@ -585,6 +434,7 @@ async function locationLSR(req, res) {
       const accountHolderName = emp.full_name || null; // no separate holder name in schema
       const branchCode = salary?.bank_branch_code || null;
       const accountNumber = salary?.bank_account_primary || null;
+      const ecnic = norm(emp.cnic);
 
       const rosterEntries = rosterEntriesByEmp.get(emp.id) || [];
       if (!rosterEntries.length) {
@@ -619,7 +469,7 @@ async function locationLSR(req, res) {
       for (const date of rosterCoveredDates) {
         const ymdDate = formatYMD(date);
         if (weeklyOffSet.has(ymdDate)) continue;
-        if (emp.deviceUserId && presentSet.has(`${emp.deviceUserId}|${ymdDate}`)) presentDays++;
+        if (ecnic && presentSet.has(`${ecnic}|${ymdDate}`)) presentDays++;
       }
 
       const workingDays = rosterCoveredDates.length; // includes weekly offs
@@ -680,4 +530,4 @@ async function locationLSR(req, res) {
   }
 }
 
-module.exports = { listDevices, fetchAndSaveForDevice, fetchAndSaveForAll, listEmployeesForDeviceUsers, setEmployeeDeviceUserId, locationFMO, locationAgainstRoster, listLocations, locationLSR };
+module.exports = { locationFMO, locationAgainstRoster, listLocations, locationLSR };

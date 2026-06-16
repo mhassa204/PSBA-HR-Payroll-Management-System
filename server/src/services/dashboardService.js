@@ -150,7 +150,7 @@ async function getAttendanceStatistics() {
     }),
     getWeeklyAttendanceStats(),
     prisma.attendance.groupBy({
-      by: ["deviceUserId"],
+      by: ["cnic"],
       _count: { id: true },
       where: {
         attendanceDate: { gte: today, lt: tomorrow },

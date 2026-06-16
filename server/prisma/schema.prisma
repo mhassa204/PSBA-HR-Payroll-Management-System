@@ -46,7 +46,6 @@ model Employee {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   is_deleted              Boolean                  @default(false)
-  deviceUserId            String?                  @unique
   educationQualifications EducationQualification[]
   documents               EmployeeDocument[]
   employmentRecords       Employment[]
@@ -490,8 +489,6 @@ model Location {
   is_deleted      Boolean   @default(false)
   // new: rosters assigned to this location
   rosters         DutyRoster[]
-  // back relation: devices installed at this location
-  devices         Device[]
   // back relation: employments assigned to this location
   employments     Employment[]
   // back relation: users optionally linked to this location (distinct from manager)
@@ -546,38 +543,30 @@ enum DutyRosterStatus {
   REJECTED
 }
 
-model Device {
-  id           Int       @id @default(autoincrement())
-  ip_address   String
-  port_number  Int
-  location_id  Int?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  is_deleted   Boolean   @default(false)
-  location     Location? @relation(fields: [location_id], references: [id])
-  // back relation: attendance records captured via this device
-  attendances  Attendance[]
-
-  @@unique([ip_address, port_number], name: "ip_port_unique")
-  @@index([location_id])
-}
-
+// Attendance mirrored from the face-recognition Attendance System (droplet),
+// which is the source of truth. This is a rolling backup (last ~3 months) so HR
+// reporting/payroll work fast and survive a brief droplet outage. Keyed by `cnic`.
 model Attendance {
-  id              Int       @id @default(autoincrement())
-  deviceUserId    String
-  timestamp       DateTime
-  type            String    // IN | OUT
-  device_ip       String
-  device_port     Int
-  attendanceDate  DateTime  // normalized day (UTC midnight)
-  device_id       Int?
-  device          Device?   @relation(fields: [device_id], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id               Int       @id @default(autoincrement())
+  cnic             String?   // join key to Employee.cnic
+  name             String?
+  timestamp        DateTime
+  type             String    // IN | OUT
+  attendanceDate   DateTime  // normalized day (UTC midnight of the PK calendar date)
+  // Mirror metadata from the droplet
+  source_id        Int?      @unique // droplet Attendance.id; makes the pull idempotent
+  source_device_id Int?              // droplet device id (no FK)
+  verify_mode      String?
+  auth_method      String?
+  score            Float?
+  punch_source     String?           // droplet "source" e.g. mobile | device
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  @@index([deviceUserId])
+  @@index([cnic])
   @@index([attendanceDate])
-  @@unique([deviceUserId, device_ip, device_port, type, attendanceDate], name: "unique_daily_type_per_device_user")
+  @@index([timestamp])
+  @@index([cnic, attendanceDate])
 }
 
 // New: Leave module
@@ -1044,33 +1033,5 @@ model PayrollTranch {
 
   @@index([created_by_user_id])
   @@index([is_deleted])
-}
-
-/// Local mirror of attendance punches pulled from the face-recognition Attendance
-/// System (DigitalOcean droplet). That system is the source of truth for attendance;
-/// this is a rolling backup (last ~3 months) so HR reporting works fast and even
-/// when the droplet is briefly unreachable. Joined to Employee by `cnic`.
-/// Distinct from the ZKTeco `Attendance` model, which has its own device-based flow.
-model FaceAttendance {
-  id         Int      @id @default(autoincrement())
-  /// Attendance.id on the source droplet — unique key for idempotent upserts.
-  sourceId   Int      @unique
-  cnic       String
-  name       String?
-  timestamp  DateTime
-  punchType  String?
-  verifyMode String?
-  authMethod String?
-  score      Float?
-  source     String?
-  deviceId   Int?
-  /// Original creation time on the droplet.
-  sourceCreatedAt DateTime?
-  /// When this row was pulled into HR.
-  syncedAt   DateTime @default(now())
-
-  @@index([cnic])
-  @@index([timestamp])
-  @@index([cnic, timestamp])
 }
 

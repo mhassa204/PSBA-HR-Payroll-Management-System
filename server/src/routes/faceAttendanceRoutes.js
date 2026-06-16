@@ -8,28 +8,29 @@ const { isAuthenticated, authorize } = require("../middleware/auth");
 const prisma = require("../utils/prisma");
 const { pushEmployees, pullAttendance, pruneBackup } = require("../jobs/attendanceSync");
 
-// GET /api/face-attendance?cnic=&from=&to=&punchType=&limit=&offset=
+// GET /api/face-attendance?cnic=&from=&to=&type=&limit=&offset=
+// Reads the face-sourced rows from the shared Attendance table.
 router.get("/", isAuthenticated, authorize("attendance.read"), async (req, res) => {
   try {
-    const { cnic, from, to, punchType } = req.query;
+    const { cnic, from, to, type } = req.query;
     const limit = Math.min(Number(req.query.limit) || 200, 2000);
     const offset = Number(req.query.offset) || 0;
     const where = {};
     if (cnic) where.cnic = String(cnic).replace(/\D/g, "");
-    if (punchType) where.punchType = String(punchType);
+    if (type) where.type = String(type).toUpperCase(); // IN | OUT
     if (from || to) {
       where.timestamp = {};
       if (from) where.timestamp.gte = new Date(from);
       if (to) where.timestamp.lte = new Date(to);
     }
     const [records, total] = await Promise.all([
-      prisma.faceAttendance.findMany({
+      prisma.attendance.findMany({
         where,
         orderBy: { timestamp: "desc" },
         take: limit,
         skip: offset,
       }),
-      prisma.faceAttendance.count({ where }),
+      prisma.attendance.count({ where }),
     ]);
     res.json({ success: true, total, count: records.length, records });
   } catch (e) {
@@ -42,8 +43,8 @@ router.get("/", isAuthenticated, authorize("attendance.read"), async (req, res) 
 router.get("/status", isAuthenticated, authorize("attendance.read"), async (_req, res) => {
   try {
     const [count, latest, cursor, pushAt] = await Promise.all([
-      prisma.faceAttendance.count(),
-      prisma.faceAttendance.findFirst({ orderBy: { timestamp: "desc" }, select: { timestamp: true } }),
+      prisma.attendance.count(),
+      prisma.attendance.findFirst({ orderBy: { timestamp: "desc" }, select: { timestamp: true } }),
       prisma.systemSetting.findUnique({ where: { key: "attendance_sync.cursor" } }),
       prisma.systemSetting.findUnique({ where: { key: "attendance_sync.employee_push_at" } }),
     ]);

@@ -61,11 +61,6 @@ const employeeService = {
       relationship_type: processedData.relationship_type,
       mother_name: processedData.mother_name,
       cnic: processedData.cnic,
-      // Biometric / attendance device user id (optional, unique)
-      deviceUserId: (() => {
-        const v = String(processedData.deviceUserId ?? "").trim();
-        return v === "" ? null : v;
-      })(),
       cnic_issue_date: processedData.cnic_issue_date,
       cnic_expire_date: processedData.cnic_expire_date,
       cnic_lifetime:
@@ -344,7 +339,6 @@ const employeeService = {
       "relationship_type",
       "mother_name",
       "cnic",
-      "deviceUserId",
       "cnic_issue_date",
       "cnic_expire_date",
       "cnic_lifetime",
@@ -388,8 +382,8 @@ const employeeService = {
           employeeUpdateData[key] = processedData[key]
             ? parseInt(processedData[key])
             : null;
-        } else if (key === "deviceUserId" || key === "email") {
-          // Unique fields: store trimmed value or null (never empty string)
+        } else if (key === "email") {
+          // Unique field: store trimmed value or null (never empty string)
           const v = String(processedData[key] ?? "").trim();
           employeeUpdateData[key] = v === "" ? null : v;
         } else {

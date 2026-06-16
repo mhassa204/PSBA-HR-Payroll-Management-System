@@ -52,8 +52,12 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// ✅ Ensure body parsing is before routes
-app.use(express.json());
+// ✅ Ensure body parsing is before routes.
+// Raised from the 100KB default so large JSON updates (e.g. base64 images,
+// big education/experience arrays) don't fail with a 413 HTML page that the
+// frontend can't parse. File uploads still go through multer (multipart).
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // ✅ Handle uploads
 const projectRoot = path.resolve(__dirname, "..");

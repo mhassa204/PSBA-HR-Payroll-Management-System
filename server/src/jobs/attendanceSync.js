@@ -39,6 +39,15 @@ const SETTING = {
 
 let running = { push: false, pull: false }; // simple in-process locks
 
+const PK_OFFSET_MS = 5 * 3600 * 1000; // Pakistan is UTC+5
+
+// Normalized attendance day (UTC midnight of the punch's PK-local calendar date),
+// matching how existing ZKTeco rows store attendanceDate.
+function pkAttendanceDate(ts) {
+  const pk = new Date(ts.getTime() + PK_OFFSET_MS);
+  return new Date(Date.UTC(pk.getUTCFullYear(), pk.getUTCMonth(), pk.getUTCDate()));
+}
+
 // ---------- SystemSetting helpers (watermark storage) ----------
 async function getSetting(key) {
   const row = await prisma.systemSetting.findUnique({ where: { key } });
@@ -87,7 +96,10 @@ async function apiFetch(path, options = {}) {
 
 // ---------- Map an HR employee (+ current employment) to droplet payload ----------
 function mapEmployee(emp) {
-  const cnic = String(emp.cnic || "").replace(/\D/g, "");
+  // Soft-deleted employees have their cnic masked as "<cnic>__DEL__<suffix>"
+  // (see utils/softDeleteUtil). Unmask before normalizing so a deleted employee
+  // deactivates the REAL droplet record instead of creating a junk long-cnic row.
+  const cnic = String(emp.cnic || "").split("__DEL__")[0].replace(/\D/g, "");
   const job = emp.employmentRecords && emp.employmentRecords[0]; // current employment
   const departmentName = job?.department?.name || job?.department_text || null;
   const designationName = job?.designation?.title || job?.designation_text || null;
@@ -140,7 +152,18 @@ async function pushEmployees({ full = false } = {}) {
 
     const startedAt = new Date();
     const employees = await prisma.employee.findMany({ where, include: EMPLOYEE_INCLUDE });
-    const payload = employees.map(mapEmployee).filter((e) => e.cnic);
+    // Dedupe by cnic — if a cnic appears both Active and Inactive (e.g. a rehire
+    // after a soft-deleted record), the Active one wins so we never wrongly
+    // deactivate a current employee.
+    const byCnic = new Map();
+    for (const e of employees.map(mapEmployee)) {
+      if (!e.cnic) continue;
+      const prev = byCnic.get(e.cnic);
+      if (!prev || (prev.status === "Inactive" && e.status === "Active")) {
+        byCnic.set(e.cnic, e);
+      }
+    }
+    const payload = Array.from(byCnic.values());
 
     if (!payload.length) {
       if (full) console.log("[attendanceSync] full reconcile: no employees to push");
@@ -206,21 +229,23 @@ async function pullAttendance() {
       for (const r of records) {
         const cnic = String(r.cnic || "").replace(/\D/g, "");
         if (!cnic || r.sourceId == null) continue;
+        const ts = r.timestamp ? new Date(r.timestamp) : new Date();
         const data = {
-          sourceId: r.sourceId,
+          source_id: r.sourceId,
           cnic,
           name: r.name ?? null,
-          timestamp: r.timestamp ? new Date(r.timestamp) : new Date(),
-          punchType: r.punchType ?? null,
-          verifyMode: r.verifyMode ?? null,
-          authMethod: r.authMethod ?? null,
+          timestamp: ts,
+          attendanceDate: pkAttendanceDate(ts),
+          type: r.punchType === "CHECK_OUT" ? "OUT" : "IN",
+          verify_mode: r.verifyMode ?? null,
+          auth_method: r.authMethod ?? null,
           score: r.score ?? null,
-          source: r.source ?? null,
-          deviceId: r.deviceId ?? null,
-          sourceCreatedAt: r.createdAt ? new Date(r.createdAt) : null,
+          punch_source: r.source ?? null,
+          source_device_id: r.deviceId ?? null,
         };
-        await prisma.faceAttendance.upsert({
-          where: { sourceId: r.sourceId },
+        // Idempotent on the droplet's row id (source_id @unique).
+        await prisma.attendance.upsert({
+          where: { source_id: r.sourceId },
           create: data,
           update: data,
         });
@@ -250,7 +275,8 @@ async function pruneBackup() {
   try {
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - CONFIG.backupMonths);
-    const { count } = await prisma.faceAttendance.deleteMany({
+    // Rolling backup: drop attendance older than the retention window.
+    const { count } = await prisma.attendance.deleteMany({
       where: { timestamp: { lt: cutoff } },
     });
     if (count) console.log(`[attendanceSync] pruned ${count} record(s) older than ${CONFIG.backupMonths} months`);
