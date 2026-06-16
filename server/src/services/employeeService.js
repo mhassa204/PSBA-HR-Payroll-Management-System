@@ -60,7 +60,11 @@ const employeeService = {
       father_husband_name: processedData.father_husband_name,
       relationship_type: processedData.relationship_type,
       mother_name: processedData.mother_name,
-      cnic: processedData.cnic,
+      // Normalize CNIC to 13 digits so storage/matching is consistent regardless
+      // of input format (with/without dashes).
+      cnic: processedData.cnic
+        ? String(processedData.cnic).replace(/\D/g, "")
+        : processedData.cnic,
       cnic_issue_date: processedData.cnic_issue_date,
       cnic_expire_date: processedData.cnic_expire_date,
       cnic_lifetime:
@@ -382,6 +386,10 @@ const employeeService = {
           employeeUpdateData[key] = processedData[key]
             ? parseInt(processedData[key])
             : null;
+        } else if (key === "cnic") {
+          // Normalize to 13 digits; ignore empty (cnic is required & unique).
+          const d = String(processedData[key] ?? "").replace(/\D/g, "");
+          if (d) employeeUpdateData[key] = d;
         } else if (key === "email") {
           // Unique field: store trimmed value or null (never empty string)
           const v = String(processedData[key] ?? "").trim();

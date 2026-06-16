@@ -795,30 +795,14 @@ const employmentController = {
       } = req.body;
       const actualEmployeeId = employee_id || user_id;
 
-      // Basic required field validation
-      const missingFields = [];
-      if (!actualEmployeeId) missingFields.push("employee_id");
-      if (!organization) missingFields.push("organization");
-      if (!effective_from) missingFields.push("effective_from");
-
-      if (missingFields.length > 0) {
-        console.error(`❌ Missing fields: ${missingFields.join(", ")}`);
+      // employee_id is required to create an employment and is NOT part of the
+      // shared employment schema (which validates org/designation/dates), so we
+      // keep this single essential guard. All other rules come from the shared
+      // validateBody("employment") route middleware — the single source of truth.
+      if (!actualEmployeeId) {
         return res.status(400).json({
           success: false,
-          error: `Missing required fields: ${missingFields.join(", ")}`,
-        });
-      }
-
-      // Organization-specific validation
-      const validation = await employmentController.validateEmploymentData(
-        req.body,
-        req.files || []
-      );
-      if (!validation.isValid) {
-        console.error(`❌ Validation errors: ${validation.errors.join(", ")}`);
-        return res.status(400).json({
-          success: false,
-          error: `Validation failed: ${validation.errors.join(", ")}`,
+          error: "Missing required field: employee_id",
         });
       }
 
@@ -1112,19 +1096,9 @@ const employmentController = {
         documentsToRemove = [];
       }
 
-      // Organization-specific validation
-      const validation = await employmentController.validateEmploymentData(
-        req.body,
-        req.files || [],
-        req.params.id
-      );
-      if (!validation.isValid) {
-        console.error(`❌ Validation errors: ${validation.errors.join(", ")}`);
-        return res.status(400).json({
-          success: false,
-          error: `Validation failed: ${validation.errors.join(", ")}`,
-        });
-      }
+      // Validation is enforced by the shared validateBody("employment") route
+      // middleware (single source of truth). The old controller-level
+      // validateEmploymentData was stricter/conflicting and has been removed.
 
       // Process uploaded files
       const { processedFiles, documentRecords } = processEmploymentFiles(

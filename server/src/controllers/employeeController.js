@@ -2,8 +2,6 @@ const employeeService = require("../services/employeeService");
 const path = require("path");
 const { DOCUMENT_TYPES } = require("../config/multer");
 
-const validateCNIC = (cnic) => /^\d{13}$/.test(cnic);
-
 // Helper function to process uploaded files
 const processUploadedFiles = (files, req) => {
   const processedFiles = {};
@@ -123,25 +121,10 @@ const employeeController = {
 
       const { full_name, cnic, password } = req.body;
 
-      // Validate required fields
-      const missingFields = [];
-      if (!full_name) missingFields.push("full_name");
-
-      if (missingFields.length > 0) {
-        console.error(`❌ Missing fields: ${missingFields.join(", ")}`);
-        return res.status(400).json({
-          success: false,
-          error: `Missing required fields: ${missingFields.join(", ")}`,
-        });
-      }
-
-      if (cnic && !validateCNIC(cnic)) {
-        console.error(`❌ Invalid CNIC format`);
-        return res.status(400).json({
-          success: false,
-          error: "Invalid CNIC format. Must be 13 digits without dashes",
-        });
-      }
+      // Field validation (full_name required, CNIC format) is enforced by the
+      // shared validateBody("employee") route middleware — single source of truth.
+      // The old inline check rejected dashed CNICs that the shared (dash-tolerant)
+      // validator accepts, causing a conflict.
 
       // Process uploaded files
       console.log("📁 Processing uploaded files");
@@ -223,24 +206,10 @@ const employeeController = {
 
       const { cnic, full_name, documents_to_remove } = req.body;
 
-      const missingFields = [];
-      if (!full_name) missingFields.push("full_name");
-
-      if (missingFields.length > 0) {
-        console.error(`❌ Missing fields: ${missingFields.join(", ")}`);
-        return res.status(400).json({
-          success: false,
-          error: `Missing required fields: ${missingFields.join(", ")}`,
-        });
-      }
-
-      if (cnic && !validateCNIC(cnic)) {
-        console.error("❌ Invalid CNIC format");
-        return res.status(400).json({
-          success: false,
-          error: "Invalid CNIC format. Must be 13 digits without dashes",
-        });
-      }
+      // Validation is enforced by the shared validateBody("employee", { partial })
+      // route middleware (single source of truth). The old inline checks here
+      // forced full_name on every partial update and rejected dashed CNICs that
+      // the shared validator accepts — both removed to avoid conflicts.
 
       console.log("📁 Processing uploaded files");
       const { processedFiles, documentRecords } = processUploadedFiles(
