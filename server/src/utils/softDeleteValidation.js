@@ -112,7 +112,7 @@ const CHILD_CHECKS = {
     { model: 'travelRequest', foreignKey: 'applicant_id', label: 'travel request', optional: true },
     { model: 'travelClaim', foreignKey: 'employee_id', label: 'travel claim', optional: true },
     { model: 'payroll', foreignKey: 'employee_id', label: 'payroll record', optional: true },
-    { model: 'leaveBankAllocation', foreignKey: 'employee_id', label: 'leave bank allocation', optional: true },
+    { model: 'leaveBankAllocation', foreignKey: 'employee_id', label: 'leave bank allocation', optional: true, hasIsDeleted: false },
   ],
   Role: [
     { model: 'user', foreignKey: 'role_id', label: 'user' },
@@ -128,12 +128,12 @@ const CHILD_CHECKS = {
     { model: 'educationQualification', foreignKey: 'education_level_id', label: 'education qualification', optional: true },
   ],
   LeaveType: [
-    { model: 'leaveBankDefault', foreignKey: 'leave_type_id', label: 'leave bank default' },
-    { model: 'leaveBankAllocation', foreignKey: 'leave_type_id', label: 'leave bank allocation' },
+    { model: 'leaveBankDefault', foreignKey: 'leave_type_id', label: 'leave bank default', hasIsDeleted: false },
+    { model: 'leaveBankAllocation', foreignKey: 'leave_type_id', label: 'leave bank allocation', hasIsDeleted: false },
   ],
   LeaveBank: [
-    { model: 'leaveBankDefault', foreignKey: 'leave_bank_id', label: 'leave bank default' },
-    { model: 'leaveBankAllocation', foreignKey: 'leave_bank_id', label: 'leave bank allocation' },
+    { model: 'leaveBankDefault', foreignKey: 'leave_bank_id', label: 'leave bank default', hasIsDeleted: false },
+    { model: 'leaveBankAllocation', foreignKey: 'leave_bank_id', label: 'leave bank allocation', hasIsDeleted: false },
   ],
   TravelRequest: [
     { model: 'travelClaim', foreignKey: 'travel_request_id', label: 'travel claim', optional: true },

@@ -28,6 +28,12 @@ function loadData() {
 
 const toDate = (v) => (v ? new Date(v) : null);
 const orNull = (v) => (v === undefined || v === "" ? null : v);
+/** Unique nullable fields: never persist empty/whitespace strings (PostgreSQL @unique treats "" as a value). */
+const uniqueOrNull = (v) => {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+};
 
 async function seedRealData(prisma) {
   const data = loadData();
@@ -187,7 +193,7 @@ async function seedRealData(prisma) {
         relationship_type: orNull(emp.relationship_type),
         mother_name: orNull(emp.mother_name),
         cnic: emp.cnic, // required, unique — single source of truth
-        deviceUserId: emp.device_user_id || null, // biometric (unique, nullable)
+        deviceUserId: uniqueOrNull(emp.device_user_id),
         cnic_issue_date: toDate(emp.cnic_issue_date),
         cnic_expire_date: toDate(emp.cnic_expire_date),
         cnic_lifetime: !!emp.cnic_lifetime,
@@ -200,7 +206,7 @@ async function seedRealData(prisma) {
         domicile_district: orNull(emp.domicile_district),
         mobile_number: orNull(emp.mobile_number),
         whatsapp_number: orNull(emp.whatsapp_number),
-        email: emp.email || null, // unique, nullable
+        email: uniqueOrNull(emp.email),
         present_address: orNull(emp.present_address),
         permanent_address: orNull(emp.permanent_address),
         same_address: !!emp.same_address,

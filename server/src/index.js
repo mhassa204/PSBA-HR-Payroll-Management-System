@@ -24,6 +24,7 @@ const systemSettingsRoutes = require("./routes/systemSettingsRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const rosterRoutes = require("./routes/rosterRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
+const faceAttendanceRoutes = require("./routes/faceAttendanceRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const leaveBankRoutes = require("./routes/leaveBankRoutes");
 const districtRoutes = require("./routes/districtRoutes");
@@ -101,6 +102,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/rosters", rosterRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/face-attendance", faceAttendanceRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/leave-banks", leaveBankRoutes);
 app.use("/api/districts", districtRoutes);
@@ -125,6 +127,15 @@ const server = app.listen(PORT, '0.0.0.0',  () => {
   console.log(`✅ Server running on:`);
   console.log(`   http://localhost:${PORT}`);
   console.log(`   http://192.168.1.115:${PORT}`);
+
+  // Two-way sync with the face-recognition Attendance System (droplet).
+  // No-op unless ATTENDANCE_SYNC_ENABLED=true in .env.
+  try {
+    const { startAttendanceSync } = require("./jobs/attendanceSync");
+    startAttendanceSync();
+  } catch (e) {
+    console.error("Failed to start attendance sync:", e.message);
+  }
 });
 
 server.on("error", (err) =>

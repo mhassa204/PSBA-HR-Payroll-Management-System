@@ -1041,8 +1041,36 @@ model PayrollTranch {
   is_deleted  Boolean      @default(false)
   
   payrolls    Payroll[]
-  
+
   @@index([created_by_user_id])
   @@index([is_deleted])
+}
+
+/// Local mirror of attendance punches pulled from the face-recognition Attendance
+/// System (DigitalOcean droplet). That system is the source of truth for attendance;
+/// this is a rolling backup (last ~3 months) so HR reporting works fast and even
+/// when the droplet is briefly unreachable. Joined to Employee by `cnic`.
+/// Distinct from the ZKTeco `Attendance` model, which has its own device-based flow.
+model FaceAttendance {
+  id         Int      @id @default(autoincrement())
+  /// Attendance.id on the source droplet — unique key for idempotent upserts.
+  sourceId   Int      @unique
+  cnic       String
+  name       String?
+  timestamp  DateTime
+  punchType  String?
+  verifyMode String?
+  authMethod String?
+  score      Float?
+  source     String?
+  deviceId   Int?
+  /// Original creation time on the droplet.
+  sourceCreatedAt DateTime?
+  /// When this row was pulled into HR.
+  syncedAt   DateTime @default(now())
+
+  @@index([cnic])
+  @@index([timestamp])
+  @@index([cnic, timestamp])
 }
 

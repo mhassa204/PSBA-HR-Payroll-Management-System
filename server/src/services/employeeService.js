@@ -62,9 +62,10 @@ const employeeService = {
       mother_name: processedData.mother_name,
       cnic: processedData.cnic,
       // Biometric / attendance device user id (optional, unique)
-      deviceUserId: processedData.deviceUserId
-        ? String(processedData.deviceUserId).trim()
-        : null,
+      deviceUserId: (() => {
+        const v = String(processedData.deviceUserId ?? "").trim();
+        return v === "" ? null : v;
+      })(),
       cnic_issue_date: processedData.cnic_issue_date,
       cnic_expire_date: processedData.cnic_expire_date,
       cnic_lifetime:
@@ -79,7 +80,10 @@ const employeeService = {
       domicile_district: processedData.domicile_district,
       mobile_number: processedData.mobile_number,
       whatsapp_number: processedData.whatsapp_number,
-      email: processedData.email,
+      email: (() => {
+        const v = String(processedData.email ?? "").trim();
+        return v === "" ? null : v;
+      })(),
       present_address: processedData.present_address,
       permanent_address: processedData.permanent_address,
       same_address:
@@ -384,8 +388,8 @@ const employeeService = {
           employeeUpdateData[key] = processedData[key]
             ? parseInt(processedData[key])
             : null;
-        } else if (key === "deviceUserId") {
-          // Unique field: store trimmed value or null (never empty string)
+        } else if (key === "deviceUserId" || key === "email") {
+          // Unique fields: store trimmed value or null (never empty string)
           const v = String(processedData[key] ?? "").trim();
           employeeUpdateData[key] = v === "" ? null : v;
         } else {
