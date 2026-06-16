@@ -15,8 +15,15 @@
 // ---------------------------------------------------------------------------
 // Primitive helpers
 // ---------------------------------------------------------------------------
-export const isEmpty = (v) =>
-  v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+// Treat the literal strings "null"/"undefined" as empty too: the frontend's
+// FormData flattener serializes null values to the string "null", which would
+// otherwise fail format validators (e.g. dates) and cause spurious 422s.
+export const isEmpty = (v) => {
+  if (v === undefined || v === null) return true;
+  if (typeof v !== "string") return false;
+  const t = v.trim();
+  return t === "" || t === "null" || t === "undefined";
+};
 
 const onlyDigits = (v) => String(v == null ? "" : v).replace(/\D/g, "");
 
