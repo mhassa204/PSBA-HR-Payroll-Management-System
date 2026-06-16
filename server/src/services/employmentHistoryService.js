@@ -223,16 +223,35 @@ const employmentHistoryService = {
   ) {
     const changes = [];
 
-    // Helper function to normalize values for comparison
+    // "Empty-ish": treat null/undefined/""/"null"/"undefined" all as no value.
+    const isEmptyish = (v) =>
+      v === null ||
+      v === undefined ||
+      (typeof v === "string" && ["", "null", "undefined"].includes(v.trim()));
+
+    // Normalize for comparison: empties -> null, dates -> ISO, numeric strings ->
+    // numbers, so "0"==0 and "2025-01-01"==Date don't look like changes.
     const normalizeForComparison = (value) => {
-      if (value === null || value === undefined) return null;
-      if (value instanceof Date) {
-        return value.toISOString();
-      }
-      if (typeof value === "boolean") {
-        return value ? true : false;
-      }
-      return value;
+      if (isEmptyish(value)) return null;
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value === "boolean") return value;
+      if (typeof value === "number") return value;
+      const s = String(value).trim();
+      if (s !== "" && !Number.isNaN(Number(s))) return Number(s);
+      return s;
+    };
+
+    // A change is a no-op (don't log) when the value is unchanged, OR when it goes
+    // from empty to an empty/zero/false default — which is exactly what happens
+    // when the form posts untouched fields as null/0/false on every save.
+    const isNoOpChange = (oldVal, newVal) => {
+      // Field absent from the update payload = not touched, never a change.
+      if (newVal === undefined) return true;
+      const o = normalizeForComparison(oldVal);
+      const n = normalizeForComparison(newVal);
+      if (o === n) return true;
+      if (o === null && (n === null || n === 0 || n === false)) return true;
+      return false;
     };
 
     // Compare basic employment fields
@@ -257,24 +276,8 @@ const employmentHistoryService = {
     ];
 
     for (const field of employmentFields) {
-      const oldVal = oldData[field];
-      const newVal = newData[field];
-
-      const normalizedOldVal = normalizeForComparison(oldVal);
-      const normalizedNewVal = normalizeForComparison(newVal);
-
-      // Skip if values are the same or both undefined/null
-      if (
-        normalizedOldVal === normalizedNewVal ||
-        (oldVal === undefined && newVal === undefined)
-      ) {
-        continue;
-      }
-
-      // Only track if value actually changed
-      if (normalizedOldVal !== normalizedNewVal) {
-        changes.push({ field, oldVal, newVal });
-      }
+      if (isNoOpChange(oldData[field], newData[field])) continue;
+      changes.push({ field, oldVal: oldData[field], newVal: newData[field] });
     }
 
     // Compare salary fields if salary data is present
@@ -299,15 +302,8 @@ const employmentHistoryService = {
       ];
 
       for (const field of salaryFields) {
-        const oldVal = oldSalary[field];
-        const newVal = newSalary[field];
-
-        if (
-          oldVal !== newVal &&
-          (oldVal !== undefined || newVal !== undefined)
-        ) {
-          changes.push({ field, oldVal, newVal });
-        }
+        if (isNoOpChange(oldSalary[field], newSalary[field])) continue;
+        changes.push({ field, oldVal: oldSalary[field], newVal: newSalary[field] });
       }
     }
 
@@ -328,15 +324,8 @@ const employmentHistoryService = {
       ];
 
       for (const field of contractFields) {
-        const oldVal = oldContract[field];
-        const newVal = newContract[field];
-
-        if (
-          oldVal !== newVal &&
-          (oldVal !== undefined || newVal !== undefined)
-        ) {
-          changes.push({ field, oldVal, newVal });
-        }
+        if (isNoOpChange(oldContract[field], newContract[field])) continue;
+        changes.push({ field, oldVal: oldContract[field], newVal: newContract[field] });
       }
     }
 

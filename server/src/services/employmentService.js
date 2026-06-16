@@ -939,6 +939,13 @@ const employmentService = {
     };
     const cleanValue = (value) =>
       value === undefined || value === "undefined" ? null : value;
+    // "Blank" = no real value provided. The form posts untouched fields as null /
+    // "null" / "" on every save; treating those as blank lets us PRESERVE existing
+    // values instead of wiping them (and avoids spurious history entries).
+    const isBlank = (v) =>
+      v === undefined ||
+      v === null ||
+      (typeof v === "string" && ["", "null", "undefined"].includes(v.trim()));
 
     // Get user ID from data if provided (ensure it's an integer)
     const changedBy = data.user_id || data.changed_by || null;
@@ -968,49 +975,42 @@ const employmentService = {
           designation_text === null ? null : String(designation_text);
       if (employment_type !== undefined)
         employmentUpdateData.employment_type = employment_type;
-      if (joining_date !== undefined)
-        employmentUpdateData.joining_date =
-          joining_date && joining_date !== "null" ? new Date(joining_date) : null;
-      if (effective_from !== undefined)
-        employmentUpdateData.effective_from =
-          effective_from && effective_from !== "null" ? new Date(effective_from) : null;
-      if (effective_till !== undefined)
-        employmentUpdateData.effective_till =
-          effective_till && effective_till !== "null" ? new Date(effective_till) : null;
-      if (appointment_letter_issue_date !== undefined)
-        employmentUpdateData.appointment_letter_issue_date =
-          appointment_letter_issue_date && appointment_letter_issue_date !== "null"
-            ? new Date(appointment_letter_issue_date)
-            : null;
-      if (role_tag_id !== undefined)
-        employmentUpdateData.role_tag_id = role_tag_id
-          ? parseInt(role_tag_id)
-          : null;
-      if (scale_grade_id !== undefined)
-        employmentUpdateData.scale_grade_id = scale_grade_id
-          ? parseInt(scale_grade_id)
-          : null;
-      if (reporting_officer_id !== undefined)
-        employmentUpdateData.reporting_officer_id =
-          cleanValue(reporting_officer_id);
-      if (office_location !== undefined)
-        employmentUpdateData.office_location = cleanValue(office_location);
-      if (remarks !== undefined)
-        employmentUpdateData.remarks = cleanValue(remarks);
+      // Optional fields: only overwrite when a real value is provided, so saving
+      // the form with untouched/empty fields never wipes existing data.
+      if (!isBlank(joining_date))
+        employmentUpdateData.joining_date = new Date(joining_date);
+      if (!isBlank(effective_from))
+        employmentUpdateData.effective_from = new Date(effective_from);
+      if (!isBlank(effective_till))
+        employmentUpdateData.effective_till = new Date(effective_till);
+      if (!isBlank(appointment_letter_issue_date))
+        employmentUpdateData.appointment_letter_issue_date = new Date(
+          appointment_letter_issue_date
+        );
+      if (!isBlank(role_tag_id))
+        employmentUpdateData.role_tag_id = parseInt(role_tag_id);
+      if (!isBlank(scale_grade_id))
+        employmentUpdateData.scale_grade_id = parseInt(scale_grade_id);
+      if (!isBlank(reporting_officer_id))
+        employmentUpdateData.reporting_officer_id = String(
+          reporting_officer_id
+        ).trim();
+      if (!isBlank(office_location))
+        employmentUpdateData.office_location = String(office_location).trim();
+      if (!isBlank(remarks))
+        employmentUpdateData.remarks = String(remarks).trim();
       if (employment_status !== undefined)
         employmentUpdateData.employment_status = employment_status;
       if (is_current !== undefined)
         employmentUpdateData.is_current = toBoolean(is_current);
       if (filer_status !== undefined)
         employmentUpdateData.filer_status = filer_status;
-      if (filer_active_status !== undefined)
-        employmentUpdateData.filer_active_status =
-          cleanValue(filer_active_status);
+      if (!isBlank(filer_active_status))
+        employmentUpdateData.filer_active_status = filer_active_status;
       if (is_on_probation !== undefined)
         employmentUpdateData.is_on_probation = toBoolean(is_on_probation);
-      if (probation_end_date !== undefined)
-        employmentUpdateData.probation_end_date =
-          probation_end_date !== "null" ? new Date(probation_end_date) : null;
+      if (!isBlank(probation_end_date))
+        employmentUpdateData.probation_end_date = new Date(probation_end_date);
       if (resolvedLocId !== null)
         employmentUpdateData.location_id = resolvedLocId;
 
@@ -1060,37 +1060,30 @@ const employmentService = {
       }
 
       if (salary) {
+        // Merge with the existing salary: a blank incoming field keeps the
+        // current value (and its default on first create), so saving the form
+        // without re-entering salary never zeroes it out.
+        const ex = currentEmployment.salary || {};
+        const numOr = (v, fallback) =>
+          !isBlank(v) ? parseFloat(v) : fallback;
+        const strOr = (v, fallback) => (!isBlank(v) ? v : fallback);
+        const dateOr = (v, fallback) =>
+          !isBlank(v) ? new Date(v) : fallback ?? null;
         const salaryData = {
-          basic_salary: salary.basic_salary
-            ? parseFloat(salary.basic_salary)
-            : 0,
-          gross_salary: salary.gross_salary
-            ? parseFloat(salary.gross_salary)
-            : null,
-          medical_allowance: salary.medical_allowance
-            ? parseFloat(salary.medical_allowance)
-            : 0,
-          house_rent: salary.house_rent ? parseFloat(salary.house_rent) : 0,
-          conveyance_allowance: salary.conveyance_allowance
-            ? parseFloat(salary.conveyance_allowance)
-            : 0,
-          other_allowances: salary.other_allowances
-            ? parseFloat(salary.other_allowances)
-            : 0,
-          daily_wage_rate: salary.daily_wage_rate
-            ? parseFloat(salary.daily_wage_rate)
-            : null,
-          bank_account_primary: salary.bank_account_primary || null,
-          bank_name_primary: salary.bank_name_primary || null,
-          bank_branch_code: salary.bank_branch_code || null,
-          payment_mode: salary.payment_mode || "Bank Transfer",
-          salary_effective_from: salary.salary_effective_from
-            ? new Date(salary.salary_effective_from)
-            : null,
-          salary_effective_till: salary.salary_effective_till
-            ? new Date(salary.salary_effective_till)
-            : null,
-          payroll_status: salary.payroll_status || "Active",
+          basic_salary: numOr(salary.basic_salary, ex.basic_salary ?? 0),
+          gross_salary: numOr(salary.gross_salary, ex.gross_salary ?? null),
+          medical_allowance: numOr(salary.medical_allowance, ex.medical_allowance ?? 0),
+          house_rent: numOr(salary.house_rent, ex.house_rent ?? 0),
+          conveyance_allowance: numOr(salary.conveyance_allowance, ex.conveyance_allowance ?? 0),
+          other_allowances: numOr(salary.other_allowances, ex.other_allowances ?? 0),
+          daily_wage_rate: numOr(salary.daily_wage_rate, ex.daily_wage_rate ?? null),
+          bank_account_primary: strOr(salary.bank_account_primary, ex.bank_account_primary ?? null),
+          bank_name_primary: strOr(salary.bank_name_primary, ex.bank_name_primary ?? null),
+          bank_branch_code: strOr(salary.bank_branch_code, ex.bank_branch_code ?? null),
+          payment_mode: strOr(salary.payment_mode, ex.payment_mode ?? "Bank Transfer"),
+          salary_effective_from: dateOr(salary.salary_effective_from, ex.salary_effective_from),
+          salary_effective_till: dateOr(salary.salary_effective_till, ex.salary_effective_till),
+          payroll_status: strOr(salary.payroll_status, ex.payroll_status ?? "Active"),
         };
         await tx.employmentSalary.upsert({
           where: { employment_id: employment.id },
@@ -1100,27 +1093,26 @@ const employmentService = {
       }
 
       if (contract) {
+        // Same merge-with-existing approach so unedited contract fields are kept.
+        const ec = currentEmployment.contract || {};
+        const strOrC = (v, fallback) => (!isBlank(v) ? v : fallback);
+        const dateOrC = (v, fallback) =>
+          !isBlank(v) ? new Date(v) : fallback ?? null;
         const contractData = {
-          contract_type: cleanValue(contract.contract_type),
-          contract_number: cleanValue(contract.contract_number),
-          start_date: contract.start_date
-            ? new Date(contract.start_date)
-            : null,
-          end_date: contract.end_date ? new Date(contract.end_date) : null,
-          renewal_count: contract.renewal_count
+          contract_type: strOrC(contract.contract_type, ec.contract_type ?? null),
+          contract_number: strOrC(contract.contract_number, ec.contract_number ?? null),
+          start_date: dateOrC(contract.start_date, ec.start_date),
+          end_date: dateOrC(contract.end_date, ec.end_date),
+          renewal_count: !isBlank(contract.renewal_count)
             ? parseInt(contract.renewal_count)
-            : 0,
-          probation_start: contract.probation_start
-            ? new Date(contract.probation_start)
-            : null,
-          probation_end: contract.probation_end
-            ? new Date(contract.probation_end)
-            : null,
-          confirmation_status: cleanValue(contract.confirmation_status),
-          confirmation_date: contract.confirmation_date
-            ? new Date(contract.confirmation_date)
-            : null,
-          is_renewed: toBoolean(contract.is_renewed),
+            : ec.renewal_count ?? 0,
+          probation_start: dateOrC(contract.probation_start, ec.probation_start),
+          probation_end: dateOrC(contract.probation_end, ec.probation_end),
+          confirmation_status: strOrC(contract.confirmation_status, ec.confirmation_status ?? null),
+          confirmation_date: dateOrC(contract.confirmation_date, ec.confirmation_date),
+          is_renewed: !isBlank(contract.is_renewed)
+            ? toBoolean(contract.is_renewed)
+            : ec.is_renewed ?? false,
         };
         await tx.employmentContract.upsert({
           where: { employment_id: employment.id },

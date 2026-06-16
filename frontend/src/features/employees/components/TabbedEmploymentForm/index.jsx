@@ -1586,35 +1586,6 @@ const TabbedEmploymentForm = forwardRef(
               </nav>
             </div>
 
-            {/* Completion Status */}
-            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                Completion Status
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {tabsConfig.map((tab) => (
-                  <div key={tab.id} className="flex items-center">
-                    <i
-                      className={`fas ${
-                        tab.completed
-                          ? "fa-check-circle text-green-500"
-                          : "fa-clock text-gray-400"
-                      } mr-2`}
-                    ></i>
-                    <span
-                      className={`text-sm ${
-                        tab.completed
-                          ? "text-green-700 font-medium"
-                          : "text-gray-600"
-                      }`}
-                    >
-                      {tab.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Tab Content */}
             <div className="tab-content">
               {activeTab === "employment" && (
