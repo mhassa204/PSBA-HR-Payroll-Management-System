@@ -226,35 +226,37 @@ const PreviewModal = ({
 
             {/* Action Buttons */}
             <div className="flex justify-between gap-4 pt-6 border-t border-gray-200">
-              <button
-                onClick={onClose}
-                className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-              >
-                <i className="fas fa-arrow-left mr-2"></i>
-                Go Back to Edit
-              </button>
-              <div className="flex gap-3">
+              <div className="flex gap-3 items-center">
                 <button
-                  onClick={handleFinalSubmit}
-                  className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                  onClick={onClose}
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                 >
-                  <i className="fas fa-check mr-2"></i>
-                  {isEditMode
-                    ? "Update Employment Record"
-                    : "Confirm & Save Employment Record"}
+                  <i className="fas fa-arrow-left mr-2"></i>
+                  Go Back to Edit
                 </button>
+                {/* Secondary/alternate action — de-emphasized and kept away from
+                    the primary "Update" button so it isn't clicked by mistake. */}
                 {isEditMode && savedEmploymentId && (
                   <button
                     type="button"
                     onClick={handleCloneEmployment}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    title="Clone this employment as a new current record"
+                    className="px-4 py-2 bg-transparent border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 hover:text-gray-700 transition-colors text-sm"
+                    title="Clone this employment as a NEW current record (keeps the original as history)"
                   >
                     <i className="fas fa-clone mr-2"></i>
-                    Save as new
+                    Save as new record
                   </button>
                 )}
               </div>
+              <button
+                onClick={handleFinalSubmit}
+                className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              >
+                <i className="fas fa-check mr-2"></i>
+                {isEditMode
+                  ? "Update Employment Record"
+                  : "Confirm & Save Employment Record"}
+              </button>
             </div>
           </>
         )}

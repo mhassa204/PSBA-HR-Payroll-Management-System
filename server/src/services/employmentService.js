@@ -878,6 +878,18 @@ const employmentService = {
       is_current = organization === "MBWO" ? false : true;
     }
 
+    // Load the existing record up front — the org/department/designation
+    // validation below depends on it. (Previously declared further down, which
+    // crashed with a TDZ error whenever the payload omitted `organization`.)
+    const currentEmployment = await prisma.employment.findFirst({
+      where: { id: parseInt(id), is_deleted: false },
+      include: {
+        salary: true,
+        contract: true,
+      },
+    });
+    if (!currentEmployment) throw new Error("Employment record not found");
+
     // Validate or gracefully fallback based on organization for updates
     const orgForUpdate = organization || currentEmployment.organization;
     let updFinalDepartmentId = null;
@@ -917,15 +929,6 @@ const employmentService = {
         }
       }
     }
-
-    const currentEmployment = await prisma.employment.findFirst({
-      where: { id: parseInt(id), is_deleted: false },
-      include: {
-        salary: true,
-        contract: true,
-      },
-    });
-    if (!currentEmployment) throw new Error("Employment record not found");
 
     const toBoolean = (value) => {
       if (typeof value === "boolean") return value;
