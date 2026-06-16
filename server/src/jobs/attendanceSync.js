@@ -148,8 +148,8 @@ async function pushEmployees({ full = false } = {}) {
       return { pushed: 0, full };
     }
 
-    // Chunk to keep request bodies reasonable.
-    const CHUNK = 500;
+    // Chunk small enough to stay under the droplet's default 100KB JSON body limit.
+    const CHUNK = 150;
     let created = 0;
     let updated = 0;
     let failed = 0;
