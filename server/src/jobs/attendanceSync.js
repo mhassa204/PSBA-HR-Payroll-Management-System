@@ -104,6 +104,13 @@ function mapEmployee(emp) {
   const departmentName = job?.department?.name || job?.department_text || null;
   const designationName = job?.designation?.title || job?.designation_text || null;
   const inactive = emp.is_deleted || (emp.status && emp.status !== "Active");
+  // Org hierarchy (District -> City -> Location). Prefer the workplace location's city/district;
+  // fall back to the employee's own linked refs, then the legacy string columns.
+  const loc = job?.location;
+  const cityName = loc?.city?.name || emp.cityRef?.name || emp.city || null;
+  const districtName = loc?.district?.name || emp.districtRef?.name || emp.district || null;
+  const cityIdRaw = loc?.city_id ?? emp.city_id;
+  const districtIdRaw = loc?.district_id ?? emp.district_id;
   return {
     cnic,
     employeeId: `emp_${cnic}`,
@@ -117,14 +124,25 @@ function mapEmployee(emp) {
     locationType: job?.location?.type ? String(job.location.type).toLowerCase() : null,
     workplaceName: job?.location?.name || job?.office_location || null,
     locationId: job?.location_id != null ? String(job.location_id) : null,
+    cityId: cityIdRaw != null ? String(cityIdRaw) : null,
+    cityName,
+    districtId: districtIdRaw != null ? String(districtIdRaw) : null,
+    districtName,
   };
 }
 
 const EMPLOYEE_INCLUDE = {
+  cityRef: true,
+  districtRef: true,
   employmentRecords: {
     where: { is_current: true, is_deleted: false },
     take: 1,
-    include: { department: true, designation: true, scale_grade: true, location: true },
+    include: {
+      department: true,
+      designation: true,
+      scale_grade: true,
+      location: { include: { city: true, district: true } },
+    },
   },
 };
 
