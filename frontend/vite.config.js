@@ -92,6 +92,11 @@ export default defineConfig(({ mode }) => {
         "@shared": path.resolve(__dirname, "../shared"),
       },
     },
+    build: {
+      outDir: "./dist",
+      emptyOutDir: true,
+      sourcemap: false,
+    },
     server: {
       port: 5176,
       strictPort: true,
