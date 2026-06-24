@@ -24,3 +24,6 @@ Thumbs.db
 # Uploads (user-generated content)
 server/uploads/
 server/Uploads/
+
+# Vendor SDK (SecuGen FDx SDK Pro — large, not part of the source tree)
+FDX_SDK_PRO_FD_Android_Studio_4_22/
