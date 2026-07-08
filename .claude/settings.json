@@ -28,6 +28,9 @@
       "PowerShell(& \"c:/Users/PSBA/Desktop/PSBA-HR-Payroll-Management-System/PSBA-Attendance-System/scripts/android/build-release-apk.ps1\" -AutoIncrement 2>&1 | Tee-Object -FilePath \"$env:TEMP/psba-prod-apk-build.log\")",
       "PowerShell(& \"c:/Users/PSBA/Desktop/PSBA-HR-Payroll-Management-System/PSBA-Attendance-System/scripts/android/build-release-apk.ps1\" -AutoIncrement 2>&1 | Tee-Object -FilePath \"$env:TEMP/psba-apk-v13.log\")",
       "PowerShell(& \"c:/Users/PSBA/Desktop/PSBA-HR-Payroll-Management-System/PSBA-Attendance-System/scripts/android/build-release-apk.ps1\" -AutoIncrement 2>&1 | Tee-Object -FilePath \"$env:TEMP/psba-apk-v16.log\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\PSBA\\.claude\\projects\\c--Users-PSBA-Desktop-PSBA-HR-Payroll-Management-System\\memory"
     ]
   }
 }
