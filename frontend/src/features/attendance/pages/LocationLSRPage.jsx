@@ -30,16 +30,30 @@ const LocationLSRPage = () => {
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ name:'', designation:'', cnic:'', account:'', remarks:'' });
+  const [filters, setFilters] = useState(() => ({
+    name: searchParams.get('fname') || '',
+    designation: searchParams.get('fdesig') || '',
+    cnic: searchParams.get('fcnic') || '',
+    account: searchParams.get('facct') || '',
+    remarks: searchParams.get('frem') || '',
+  }));
   const exportRef = useRef(null);
   const [exportOpen, setExportOpen] = useState(false);
 
-  // keep month in URL
+  // keep month + filters in URL (parity with FMO/Roster pages)
   useEffect(()=>{
     const np = new URLSearchParams(searchParams);
-    if (np.get('month') !== monthParam) { np.set('month', monthParam); setSearchParams(np, { replace: true }); }
+    const before = np.toString();
+    if (np.get('month') !== monthParam) np.set('month', monthParam);
+    const setOrDelete = (k, v) => { if (v && String(v).length) np.set(k, v); else np.delete(k); };
+    setOrDelete('fname', filters.name);
+    setOrDelete('fdesig', filters.designation);
+    setOrDelete('fcnic', filters.cnic);
+    setOrDelete('facct', filters.account);
+    setOrDelete('frem', filters.remarks);
+    if (np.toString() !== before) setSearchParams(np, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthParam]);
+  }, [monthParam, filters]);
 
   // Load data when month changes
   useEffect(()=>{

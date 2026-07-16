@@ -16,7 +16,7 @@ const AttendanceLocationDetailHome = () => {
         <h1 className="text-2xl font-bold tracking-tight text-primary" style={{ color: 'var(--color-primary-700)' }}>Location Attendance</h1>
         <p className="text-sm text-gray-600">Choose a view:</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Link to={`${base}/fmo${q}`} className="group card-soft hover:shadow-md transition-all duration-200 overflow-hidden">
           <div className="card-soft-header flex items-center justify-between">
             <h2 className="text-sm font-semibold tracking-wide text-gray-700 group-hover:text-primary">Attendance FMO</h2>
@@ -42,6 +42,15 @@ const AttendanceLocationDetailHome = () => {
           </div>
           <div className="p-4 text-sm text-gray-600 leading-relaxed">
             Leave status report integrating attendance, roster weekly offs & leave bank.
+          </div>
+        </Link>
+        <Link to={`${base}/timesheet${q}`} className="group card-soft hover:shadow-md transition-all duration-200 overflow-hidden">
+          <div className="card-soft-header flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-wide text-gray-700 group-hover:text-primary">Biometric Timesheet</h2>
+            <span className="badge badge-red">Late Report</span>
+          </div>
+          <div className="p-4 text-sm text-gray-600 leading-relaxed">
+            Late check-in detail and per-employee late-day counts, exportable in the official format.
           </div>
         </Link>
       </div>

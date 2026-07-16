@@ -36,6 +36,7 @@ const LocationRosterPage = () => {
   const [fTimeInStatus, setFTimeInStatus] = useState(() => searchParams.get('ftin') || '');
   const [fSingleMark, setFSingleMark] = useState(() => searchParams.get('fsingle') || ''); // '', 'Yes', 'No'
   const [fTimeOutStatus, setFTimeOutStatus] = useState(() => searchParams.get('ftout') || '');
+  const [fSource, setFSource] = useState(() => searchParams.get('fsrc') || ''); // '', 'ROSTER', 'HQ_DEFAULT'
 
   const start = searchParams.get('start') || '';
   const end = searchParams.get('end') || '';
@@ -77,10 +78,11 @@ const LocationRosterPage = () => {
     setOrDelete('ftin', fTimeInStatus);
     setOrDelete('fsingle', fSingleMark);
     setOrDelete('ftout', fTimeOutStatus);
+    setOrDelete('fsrc', fSource);
     const after = np.toString();
     if (after !== before) setSearchParams(np, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fBiometricId, fCnic, fName, fDesignation, fActualCC, fBioCC, fDate, fPerformedStatus, fTimeInStatus, fSingleMark, fTimeOutStatus]);
+  }, [fBiometricId, fCnic, fName, fDesignation, fActualCC, fBioCC, fDate, fPerformedStatus, fTimeInStatus, fSingleMark, fTimeOutStatus, fSource]);
 
   const load = async () => {
     try {
@@ -110,9 +112,10 @@ const LocationRosterPage = () => {
       inc(r.performedStatus, fPerformedStatus) &&
       inc(r.timeInStatus, fTimeInStatus) &&
       (fSingleMark === '' || (fSingleMark === 'Yes' ? !!r.singleMark : !r.singleMark)) &&
-      inc(r.timeOutStatus, fTimeOutStatus)
+      inc(r.timeOutStatus, fTimeOutStatus) &&
+      (fSource === '' || r.scheduleSource === fSource)
     );
-  }, [rows, fBiometricId, fCnic, fName, fDesignation, fActualCC, fBioCC, fDate, fPerformedStatus, fTimeInStatus, fSingleMark, fTimeOutStatus]);
+  }, [rows, fBiometricId, fCnic, fName, fDesignation, fActualCC, fBioCC, fDate, fPerformedStatus, fTimeInStatus, fSingleMark, fTimeOutStatus, fSource]);
 
   const monthOptions = [];
   const now = new Date();
@@ -141,6 +144,7 @@ const LocationRosterPage = () => {
       DutyIn: r.dutyIn ?? '',
       DutyOut: r.dutyOut ?? '',
       DutyTimings: r.dutyTimings ?? '',
+      Source: r.scheduleSource === 'HQ_DEFAULT' ? 'HQ Default' : r.scheduleSource === 'ROSTER' ? 'Roster' : '',
       ActualPerformed: r.actualPerformed ?? '',
       PerformedStatus: r.performedStatus ?? '',
       TimeInLate: r.timeInLate ?? '',
@@ -156,7 +160,7 @@ const LocationRosterPage = () => {
     if (!rowsSrc?.length) return;
     const payload = mapRosterForExport(rowsSrc);
     const headers = [
-      'EmployeeID','BiometricID','CNIC','Name','Designation','ActualCostCenter','BiometricCostCenter','Date','DateLabel','Time1','Time2','DutyIn','DutyOut','DutyTimings','ActualPerformed','PerformedStatus','TimeInLate','TimeInStatus','SingleMark','TimeOutEarlyLate','TimeOutStatus'
+      'EmployeeID','BiometricID','CNIC','Name','Designation','ActualCostCenter','BiometricCostCenter','Date','DateLabel','Time1','Time2','DutyIn','DutyOut','DutyTimings','Source','ActualPerformed','PerformedStatus','TimeInLate','TimeInStatus','SingleMark','TimeOutEarlyLate','TimeOutStatus'
     ];
     const filename = `Roster_${data?.location?.name || 'Location'}_${data?.range?.start}_to_${data?.range?.end}.${type==='csv'?'csv':'xlsx'}`;
     if (type === 'csv') exportToCSV(filename, payload, headers, titleText);
@@ -219,6 +223,11 @@ const LocationRosterPage = () => {
             <option value="No">No</option>
           </select>
           <input className="form-input" placeholder="Time Out Status" value={fTimeOutStatus} onChange={e=>setFTimeOutStatus(e.target.value)} />
+          <select className="form-input" value={fSource} onChange={e=>setFSource(e.target.value)}>
+            <option value="">Schedule Source (Any)</option>
+            <option value="ROSTER">Duty Roster</option>
+            <option value="HQ_DEFAULT">HQ Default (09:15–17:00)</option>
+          </select>
         </div>
       </div>
 
@@ -240,6 +249,7 @@ const LocationRosterPage = () => {
               <th>Duty In</th>
               <th>Duty Out</th>
               <th>Duty Timings</th>
+              <th>Source</th>
               <th>Actual Performed</th>
               <th>Performed Status</th>
               <th>Time In Late</th>
@@ -266,6 +276,13 @@ const LocationRosterPage = () => {
                 <td>{r.dutyIn}</td>
                 <td>{r.dutyOut}</td>
                 <td>{r.dutyTimings}</td>
+                <td>
+                  {r.scheduleSource === 'HQ_DEFAULT'
+                    ? <span className="badge badge-gray">HQ Default</span>
+                    : r.scheduleSource === 'ROSTER'
+                      ? <span className="badge badge-blue">Roster</span>
+                      : ''}
+                </td>
                 <td>{r.actualPerformed}</td>
                 <td>{r.performedStatus}</td>
                 <td>{r.timeInLate}</td>
@@ -275,7 +292,16 @@ const LocationRosterPage = () => {
                 <td>{r.timeOutStatus}</td>
               </tr>
             ))}
-            {!filteredRows.length && <tr><td colSpan={21} className="text-center py-6 text-gray-500 text-xs">No records</td></tr>}
+            {!filteredRows.length && (
+              <tr>
+                <td colSpan={22} className="text-center py-6 text-gray-500 text-xs">
+                  {rows.length ? 'No records match the filters' : (
+                    <>No schedule data for this period — no approved duty roster covers it.{' '}
+                    <Link to="/rosters" className="text-primary underline">Manage duty rosters</Link></>
+                  )}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

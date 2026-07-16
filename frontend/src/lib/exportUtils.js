@@ -67,4 +67,30 @@ export function exportToExcel(filename, rows, sheetName = 'Sheet1', headerOrder,
   downloadBlob(blob, sanitizeFilename(filename));
 }
 
+// Multi-sheet Excel export: sheets = [{ name, rows, headerOrder?, title? }]
+export function exportToExcelMultiSheet(filename, sheets) {
+  const usable = (sheets || []).filter(s => s?.rows?.length);
+  if (!usable.length) return;
+  const wb = XLSX.utils.book_new();
+  for (const sheet of usable) {
+    const headers = sheet.headerOrder && sheet.headerOrder.length ? sheet.headerOrder : Object.keys(sheet.rows[0]);
+    const normalized = sheet.rows.map(r => {
+      const o = {};
+      headers.forEach(h => { o[h] = r[h]; });
+      return o;
+    });
+    const ws = XLSX.utils.aoa_to_sheet([]);
+    if (sheet.title) {
+      XLSX.utils.sheet_add_aoa(ws, [[sheet.title]], { origin: { r: 0, c: 0 } });
+      ws['!merges'] = ws['!merges'] || [];
+      ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(0, headers.length - 1) } });
+    }
+    XLSX.utils.sheet_add_json(ws, normalized, { header: headers, origin: { r: sheet.title ? 2 : 0, c: 0 } });
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name || 'Sheet');
+  }
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  downloadBlob(blob, sanitizeFilename(filename));
+}
+
 export { sanitizeFilename };

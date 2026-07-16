@@ -38,6 +38,22 @@ const UsersIcon = () => (
   </svg>
 );
 
+const CheckCircleIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+);
+
 const ChartBarIcon = () => (
   <svg
     className="w-5 h-5"
@@ -246,15 +262,11 @@ const LeftSidebar = () => {
     );
   }, [expandedItems]);
 
-  const isLocationBasedBazaar = user?.employmentRecords?.some(
-    (rec) => rec.is_current && rec.location?.type === 'BAZAAR'
+  // Roster creation: location accounts (non-HQ) or HQ department accounts
+  const canCreateRoster = !!(
+    can("roster.create") &&
+    (user?.location_id || user?.department_id)
   );
-  const isHodOfHQ = user?.employmentRecords?.some(
-    (rec) => rec.is_current && rec.is_hod && rec.location?.type === 'HEAD_QUARTER'
-  );
-
-  // Eligibility: either bazaar/location account (location_id) or HOD/employee account (employee_id), and has explicit permission
-  const canCreateRoster = !!(can("roster.create") && (user?.location_id || user?.employee_id));
 
   const navigation = [
     {
@@ -292,7 +304,7 @@ const LeftSidebar = () => {
       href: "/rosters",
       icon: CalendarIcon,
       description: "Shifts & Schedules",
-      color: "bg-teal-600",
+      color: "bg-blue-600",
       show: () => can("roster.read"),
       children: [
         {
@@ -306,6 +318,12 @@ const LeftSidebar = () => {
           href: "/rosters/create",
           icon: PlusIcon,
           show: () => canCreateRoster,
+        },
+        {
+          name: "Approvals",
+          href: "/rosters/approvals",
+          icon: CheckCircleIcon,
+          show: () => can("roster.approve"),
         },
       ],
     },

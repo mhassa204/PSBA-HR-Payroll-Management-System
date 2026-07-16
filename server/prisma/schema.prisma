@@ -92,6 +92,8 @@ model Department {
   users             User[]
   // Back-relation: travel claims submitted by this department account or HQ-origin
   createdClaims     TravelClaim[]
+  // Back-relation: HQ department duty rosters
+  rosters           DutyRoster[]
 
   @@index([head_employee_id])
 }
@@ -409,6 +411,11 @@ model User {
   managedLocations Location[] @relation(name: "UserManagedLocations")
   // new: rosters created by this user
   createdRosters DutyRoster[]
+  // Back-relations: roster approval routing/audit
+  assignedRosterApprovals DutyRoster[] @relation(name: "RosterApprover")
+  approvedRosters         DutyRoster[] @relation(name: "RosterApprovedBy")
+  rejectedRosters         DutyRoster[] @relation(name: "RosterRejectedBy")
+  rosterStatusEntries     DutyRosterStatusHistory[]
   // Back-relation: leave banks created by this user
   createdLeaveBanks LeaveBank[]
   // Back-relation: accounts tranches created by this user
@@ -505,7 +512,8 @@ model DutyRoster {
   bazaar_id          Int?
   location           Location?         @relation(fields: [bazaar_id], references: [id])
   valid_from         DateTime
-  valid_to           DateTime
+  // Nullable: PERMANENT rosters have no end date
+  valid_to           DateTime?
   created_by_user_id Int
   createdBy          User              @relation(fields: [created_by_user_id], references: [id])
   entries            DutyRosterEntry[]
@@ -515,8 +523,46 @@ model DutyRoster {
   // New: approval status with default pending
   status             DutyRosterStatus  @default(PENDING)
 
+  // Scope of the roster: LOCATION (bazaar/mobile bazaar/special unit) or HQ_DEPARTMENT
+  scope              String            @default("LOCATION")
+  // MONTHLY (21st -> 20th payroll cycle) or PERMANENT (no end date)
+  roster_type        String            @default("MONTHLY")
+  department_id      Int?
+  department         Department?       @relation(fields: [department_id], references: [id])
+  // Assigned approver (HQ_DEPARTMENT scope). NULL for LOCATION scope: any Operations-role user approves.
+  approver_user_id   Int?
+  approver           User?             @relation(name: "RosterApprover", fields: [approver_user_id], references: [id])
+  submitted_at       DateTime?
+  approved_by_user_id Int?
+  approvedBy         User?             @relation(name: "RosterApprovedBy", fields: [approved_by_user_id], references: [id])
+  approved_at        DateTime?
+  rejected_by_user_id Int?
+  rejectedBy         User?             @relation(name: "RosterRejectedBy", fields: [rejected_by_user_id], references: [id])
+  rejected_at        DateTime?
+  rejection_reason   String?
+  statusHistory      DutyRosterStatusHistory[]
+
   @@index([bazaar_id])
   @@index([created_by_user_id])
+  @@index([department_id])
+  @@index([approver_user_id])
+  @@index([status, approved_at])
+}
+
+// Audit trail for roster submission/approval actions
+model DutyRosterStatusHistory {
+  id        Int        @id @default(autoincrement())
+  roster_id Int
+  action    String // SUBMITTED | RESUBMITTED | APPROVED | REJECTED
+  user_id   Int
+  reason    String?
+  createdAt DateTime   @default(now())
+
+  roster    DutyRoster @relation(fields: [roster_id], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [user_id], references: [id])
+
+  @@index([roster_id])
+  @@index([user_id])
 }
 
 // New: Duty Roster entries per employee

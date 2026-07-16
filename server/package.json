@@ -8,6 +8,10 @@
     "seed": "node prisma/seed.js",
     "seed:prod": "node prisma/seedProduction.js",
     "etl": "python prisma/import/transform_excel.py",
+    "etl:reporting": "python prisma/import/transform_reporting_update.py",
+    "update:reporting": "node scripts/apply_reporting_line_update.js",
+    "update:roster-rbac": "node scripts/update-roster-permissions.js",
+    "backfill:roster": "node scripts/backfill_roster_fields.js",
     "migrate:joining-date": "node scripts/migrate_joining_date.js",
     "backfill:location-geo": "node scripts/backfill_location_geo.js"
   },

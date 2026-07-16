@@ -30,22 +30,8 @@ async function fetchAttendanceByCnics(cnics, start, end) {
   });
 }
 
-// Helpers to fetch active rosters overlapping range for a location
-async function getRostersForLocation(locationId, start, end) {
-  return prisma.dutyRoster.findMany({
-    where: {
-      is_deleted: false,
-      bazaar_id: Number(locationId),
-      valid_to: { gte: start },
-      valid_from: { lte: end },
-      // Only include APPROVED rosters
-      status: 'APPROVED',
-    },
-    include: {
-      entries: { include: { employee: true } },
-    }
-  });
-}
+// Shared duty-schedule resolution (approved rosters + supersede rule + HQ defaults)
+const { buildScheduleResolver, tallySchedule } = require("../services/rosterScheduleService");
 
 // Helpers to get payroll cycle (21st to 20th next month)
 function getDefaultPayrollRangeUTC(today=new Date()) {
@@ -147,21 +133,17 @@ async function locationAgainstRoster(req, res) {
     // Build calendar days
     const days = []; let d = start; while (d <= end) { days.push(new Date(d)); d = addDays(d,1); }
 
-    // Rosters and employees (only APPROVED via helper)
-    const rosters = await getRostersForLocation(locationId, start, end);
-    const entryByEmp = new Map(); // employee_id -> array of { roster, entry }
-    for (const r of rosters) {
-      for (const e of r.entries) {
-        if (!entryByEmp.has(e.employee_id)) entryByEmp.set(e.employee_id, []);
-        entryByEmp.get(e.employee_id).push({ roster: r, entry: e });
-      }
-    }
-    const empIds = Array.from(entryByEmp.keys());
-
+    // Current employees at this location; schedules come from the shared
+    // resolver (approved rosters via entries + HQ default hours)
     const employees = await prisma.employee.findMany({
-      where: { id: { in: empIds }, is_deleted: false },
+      where: {
+        is_deleted: false,
+        employmentRecords: { some: { is_current: true, is_deleted: false, location_id: locationId } },
+      },
       select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
     });
+
+    const resolver = await buildScheduleResolver(employees.map(e => e.id), start, end);
 
     const cnics = employees.map(e => norm(e.cnic)).filter(Boolean);
 
@@ -187,43 +169,18 @@ async function locationAgainstRoster(req, res) {
       const designation = emp.employmentRecords?.[0]?.designation?.title || null;
       const roleTag = emp.employmentRecords?.[0]?.role_tag?.name || null;
       const ecnic = norm(emp.cnic);
-      const entries = entryByEmp.get(emp.id) || [];
 
       for (const date of days) {
-        // Choose an APPROVED roster entry applicable to this date. If multiple overlap, pick the one with latest valid_from (tie-breaker: latest updatedAt)
-        const applicableList = entries.filter(x => x.roster.valid_from <= date && x.roster.valid_to >= date);
-        if (!applicableList.length) continue; // Skip this date entirely when no approved roster exists
-        const applicable = applicableList.reduce((best, curr) => {
-          if (!best) return curr;
-          if (curr.roster.valid_from > best.roster.valid_from) return curr;
-          if (curr.roster.valid_from.getTime() === best.roster.valid_from.getTime()) {
-            return (curr.roster.updatedAt > best.roster.updatedAt) ? curr : best;
-          }
-          return best;
-        }, null);
+        // Shared resolution: latest-approved roster entry wins; HQ employees
+        // fall back to the default 09:15-17:00 Mon-Fri schedule
+        const day = resolver.resolveDay(emp.id, date);
+        if (day.source === 'NONE') continue; // Skip dates with no applicable schedule
 
-        const sched = applicable?.entry?.day_schedules || {};
-        const dayKey = dayName(date); // 'Monday', etc.
-        const dayInfo = sched[dayKey] || { type: 'time', time_from: null, time_to: null };
-
-        // Handle collective weekly off range if set
-        const cwo = sched._collective_weekly_off || { enabled: false, from: null, to: null };
-        const withinCwo = cwo.enabled && cwo.from && cwo.to && (new Date(cwo.from) <= date && new Date(cwo.to) >= date);
-
-        let dutyIn = null, dutyOut = null, weeklyOff = false, offsite = false;
-        let offsiteLocationName = null;
-        if (withinCwo) {
-          weeklyOff = true;
-        } else if (dayInfo?.type === 'weekly_off') {
-          weeklyOff = true;
-        } else if (dayInfo?.type === 'offsite') {
-          offsite = true; // treat separately if needed
-          // Try to read a friendly location name from the roster day schedule
-          offsiteLocationName = dayInfo.location_name || dayInfo.location || dayInfo.offsite_location || dayInfo.site || dayInfo.place || dayInfo.name || null;
-        } else if (dayInfo?.type === 'time') {
-          dutyIn = dayInfo.time_from || null;
-          dutyOut = dayInfo.time_to || null;
-        }
+        const weeklyOff = day.kind === 'weekly_off';
+        const offsite = day.kind === 'offsite';
+        const offsiteLocationName = day.offsite_location;
+        const dutyIn = day.kind === 'time' ? day.time_from : null;
+        const dutyOut = day.kind === 'time' ? day.time_to : null;
 
         const inOut = attByUserDate.get(`${ecnic}|${formatYMD(date)}`) || { in: null, out: null };
         const time1 = formatHHmmFromUTCDate(inOut.in) || '';
@@ -278,7 +235,8 @@ async function locationAgainstRoster(req, res) {
           timeOutStatus,
           weeklyOff,
           offsite,
-          offsiteLocation: offsiteLocationName || ''
+          offsiteLocation: offsiteLocationName || '',
+          scheduleSource: day.source // ROSTER | HQ_DEFAULT
         });
       }
     }
@@ -290,11 +248,27 @@ async function locationAgainstRoster(req, res) {
   }
 }
 
-// New: list active non-deleted locations
+// New: list active non-deleted locations (with district/city names and
+// current active-employee counts for the landing page)
 async function listLocations(req, res) {
   try {
-    const locations = await prisma.location.findMany({ where: { is_deleted: false, is_active: true }, orderBy: [{ type: 'asc' }, { name: 'asc' }] });
-    res.json({ success: true, locations });
+    const [locations, counts] = await Promise.all([
+      prisma.location.findMany({
+        where: { is_deleted: false, is_active: true },
+        include: { district: { select: { name: true } }, city: { select: { name: true } } },
+        orderBy: [{ type: 'asc' }, { name: 'asc' }],
+      }),
+      prisma.employment.groupBy({
+        by: ['location_id'],
+        where: { is_current: true, is_deleted: false, employee: { is_deleted: false, status: 'Active' } },
+        _count: { _all: true },
+      }),
+    ]);
+    const countByLoc = new Map(counts.map((c) => [c.location_id, c._count._all]));
+    res.json({
+      success: true,
+      locations: locations.map((l) => ({ ...l, active_employees: countByLoc.get(l.id) || 0 })),
+    });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -327,28 +301,13 @@ async function locationLSR(req, res) {
       cycleLabel = `${endMonthName} ${cycleEnd.getUTCFullYear()}`;
     }
 
-    // Fetch rosters & map entries by employee
-    const rosters = await getRostersForLocation(locationId, cycleStart, cycleEnd);
-    const rosterEntriesByEmp = new Map();
-    for (const r of rosters) {
-      for (const e of r.entries) {
-        if (!rosterEntriesByEmp.has(e.employee_id)) rosterEntriesByEmp.set(e.employee_id, []);
-        rosterEntriesByEmp.get(e.employee_id).push({ roster: r, entry: e });
-      }
-    }
-
-    // Employees via roster
-    const rosterEmpIds = Array.from(rosterEntriesByEmp.keys());
-
-    // Also current employments at this location
+    // Current employments at this location; schedules resolved via the shared
+    // resolver (approved rosters + HQ default hours)
     const employmentsAtLocation = await prisma.employment.findMany({
       where: { is_deleted: false, is_current: true, location_id: locationId, employee: { is_deleted: false } },
       include: { designation: true, role_tag: true, salary: true, employee: true }
     });
-    const employmentEmpIds = employmentsAtLocation.map(e => e.employee_id);
-
-    const allEmpIdsSet = new Set([...rosterEmpIds, ...employmentEmpIds]);
-    const allEmpIds = Array.from(allEmpIdsSet);
+    const allEmpIds = employmentsAtLocation.map(e => e.employee_id);
 
     if (!allEmpIds.length) {
       return res.json({ success: true, location: { id: loc.id, name: loc.name }, cycle: { start: formatYMD(cycleStart), end: formatYMD(cycleEnd), label: cycleLabel }, employees: [] });
@@ -425,6 +384,8 @@ async function locationLSR(req, res) {
     // Build date array for cycle (for presence & weekly off detection)
     const dayList = []; let d = cycleStart; while (d <= cycleEnd) { dayList.push(new Date(d)); d = addDays(d,1); }
 
+    const resolver = await buildScheduleResolver(allEmpIds, cycleStart, cycleEnd);
+
     const employeesOutput = [];
     let sr = 1;
     for (const emp of employees) {
@@ -436,45 +397,26 @@ async function locationLSR(req, res) {
       const accountNumber = salary?.bank_account_primary || null;
       const ecnic = norm(emp.cnic);
 
-      const rosterEntries = rosterEntriesByEmp.get(emp.id) || [];
-      if (!rosterEntries.length) {
-        // If not rostered at all during cycle, skip (not part of LSR) per requirement to compare roster & leave bank
+      // Schedule-covered dates via the shared resolver (rosters + HQ defaults)
+      const { coveredDates, weeklyOffDates, dutyDates } = tallySchedule(resolver, emp.id, dayList);
+      if (!coveredDates.length) {
+        // No schedule at all during cycle: skip (not part of LSR)
         continue;
       }
 
-      // Build a fast list of dates where roster covers employee
-      // Determine for each date if covered and if weekly off
-      const weeklyOffDates = [];
-      const rosterCoveredDates = [];
+      const dutyDateSet = new Set(dutyDates.map(dt => formatYMD(dt)));
 
-      for (const date of dayList) {
-        // determine if any roster entry valid for date
-        const applicable = rosterEntries.find(re => re.roster.valid_from <= date && re.roster.valid_to >= date);
-        if (!applicable) continue; // not rostered that date
-        rosterCoveredDates.push(date);
-        const sched = applicable.entry.day_schedules || {};
-        const dayKey = dayName(date);
-        const dayInfo = sched[dayKey] || null;
-        const cwo = sched._collective_weekly_off || { enabled:false };
-        const withinCwo = cwo.enabled && cwo.from && cwo.to && (new Date(cwo.from) <= date && new Date(cwo.to) >= date);
-        if (withinCwo || dayInfo?.type === 'weekly_off') {
-          weeklyOffDates.push(date);
-        }
-      }
-
-      const weeklyOffSet = new Set(weeklyOffDates.map(dt => formatYMD(dt)));
-
-      // Present days (attendance mark on roster-covered date excluding weekly offs)
+      // Present days (attendance mark on covered non-weekly-off dates)
       let presentDays = 0;
-      for (const date of rosterCoveredDates) {
-        const ymdDate = formatYMD(date);
-        if (weeklyOffSet.has(ymdDate)) continue;
+      for (const ymdDate of dutyDateSet) {
         if (ecnic && presentSet.has(`${ecnic}|${ymdDate}`)) presentDays++;
       }
 
-      const workingDays = rosterCoveredDates.length; // includes weekly offs
+      const workingDays = coveredDates.length; // includes weekly offs
 
-      const approvedLeaveDates = (approvedLeaveByEmp.get(emp.id) || []).filter(dt => rosterCoveredDates.some(rc => formatYMD(rc) === formatYMD(dt)));
+      // Approved leaves count only on duty dates (leave on a weekly off must
+      // not be subtracted twice in the absents formula)
+      const approvedLeaveDates = (approvedLeaveByEmp.get(emp.id) || []).filter(dt => dutyDateSet.has(formatYMD(dt)));
       const approvedFullDayLeaves = approvedLeaveDates.length; // short leave skipped per instruction
 
       const weeklyOffCount = weeklyOffDates.length;

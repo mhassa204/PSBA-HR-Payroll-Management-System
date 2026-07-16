@@ -2,12 +2,6 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 // Helper functions for date operations
-function toDateOnly(d) {
-  const dt = new Date(d);
-  dt.setUTCHours(0, 0, 0, 0);
-  return dt;
-}
-
 function addDays(d, n) {
   const dt = new Date(d);
   dt.setUTCDate(dt.getUTCDate() + n);
@@ -19,18 +13,6 @@ function formatYMD(d) {
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
-}
-
-function dayName(d) {
-  return [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ][d.getUTCDay()];
 }
 
 // Get payroll range for a given month (21st of previous month to 20th of current month)
@@ -54,24 +36,10 @@ function getPayrollRangeForMonth(year, month) {
   return { start, end };
 }
 
-// Get rosters for location
-async function getRostersForLocation(locationId, start, end) {
-  return prisma.dutyRoster.findMany({
-    where: {
-      is_deleted: false,
-      bazaar_id: Number(locationId),
-      status: "APPROVED",
-      valid_to: { gte: start },
-      valid_from: { lte: end },
-    },
-    include: {
-      entries: {
-        include: { employee: true },
-      },
-    },
-    orderBy: { valid_from: "asc" },
-  });
-}
+const {
+  buildScheduleResolver,
+  tallySchedule,
+} = require("./rosterScheduleService");
 
 const payrollService = {
   // Get employee payroll details for a specific month
@@ -109,11 +77,6 @@ const payrollService = {
         throw new Error("No current employment record found");
       }
 
-      const locationId = currentEmployment.location_id;
-      if (!locationId) {
-        throw new Error("Employee location not assigned");
-      }
-
       // Get payroll range for the selected month
       const { start, end } = getPayrollRangeForMonth(year, month);
 
@@ -125,17 +88,9 @@ const payrollService = {
         d = addDays(d, 1);
       }
 
-      // Get roster entries for this employee at the location
-      const rosters = await getRostersForLocation(locationId, start, end);
-      const rosterEntries = [];
-
-      for (const roster of rosters) {
-        for (const entry of roster.entries || []) {
-          if (entry.employee_id === employee.id) {
-            rosterEntries.push({ roster, entry });
-          }
-        }
-      }
+      // Resolve the employee's schedule (approved rosters via entries; HQ
+      // employees default to 09:15-17:00 Mon-Fri when uncovered)
+      const resolver = await buildScheduleResolver([employee.id], start, end);
 
       // Get approved leaves for the employee in this period
       const approvedLeaves = await prisma.leave.findMany({
@@ -146,11 +101,6 @@ const payrollService = {
           is_deleted: false,
         },
       });
-
-      // Build sets for quick lookup
-      const approvedLeaveSet = new Set(
-        approvedLeaves.map((l) => formatYMD(l.date))
-      );
 
       // Get attendance records for this employee (face system, keyed by cnic)
       const empCnic = String(employee.cnic || "").replace(/\D/g, "");
@@ -177,54 +127,29 @@ const payrollService = {
         presentSet.add(key);
       }
 
-      // Calculate roster-covered dates and weekly offs
-      const rosterCoveredDates = [];
-      const weeklyOffDates = [];
+      // Schedule-covered dates, weekly offs and duty dates via the shared resolver
+      const { coveredDates, weeklyOffDates, dutyDates } = tallySchedule(
+        resolver,
+        employee.id,
+        dayList
+      );
 
-      for (const date of dayList) {
-        // Find applicable roster entry for this date
-        const applicable = rosterEntries.find(
-          (re) => re.roster.valid_from <= date && re.roster.valid_to >= date
-        );
-
-        if (!applicable) continue;
-
-        rosterCoveredDates.push(date);
-        const sched = applicable.entry.day_schedules || {};
-        const dayKey = dayName(date);
-        const dayInfo = sched[dayKey] || null;
-        const cwo = sched._collective_weekly_off || { enabled: false };
-
-        const withinCwo =
-          cwo.enabled &&
-          cwo.from &&
-          cwo.to &&
-          new Date(cwo.from) <= date &&
-          new Date(cwo.to) >= date;
-
-        if (withinCwo || dayInfo?.type === "weekly_off") {
-          weeklyOffDates.push(date);
-        }
-      }
-
-      const weeklyOffSet = new Set(weeklyOffDates.map((dt) => formatYMD(dt)));
-
-      // Calculate present days (attendance mark on roster-covered date excluding weekly offs)
+      // Calculate present days (attendance mark on covered non-weekly-off dates)
       let presentDays = 0;
-      for (const date of rosterCoveredDates) {
-        const ymdDate = formatYMD(date);
-        if (weeklyOffSet.has(ymdDate)) continue;
+      const dutyDateSet = new Set(dutyDates.map((dt) => formatYMD(dt)));
+      for (const ymdDate of dutyDateSet) {
         if (empCnic && presentSet.has(`${empCnic}|${ymdDate}`)) {
           presentDays++;
         }
       }
 
-      const workingDays = rosterCoveredDates.length; // includes weekly offs
+      const workingDays = coveredDates.length; // includes weekly offs
       const weeklyOffCount = weeklyOffDates.length;
-      const approvedFullDayLeaves = approvedLeaves.filter((l) => {
-        const leaveDate = formatYMD(l.date);
-        return rosterCoveredDates.some((rc) => formatYMD(rc) === leaveDate);
-      }).length;
+      // Approved leaves count only on duty dates (a leave falling on a weekly
+      // off must not be subtracted twice from the absents formula)
+      const approvedFullDayLeaves = approvedLeaves.filter((l) =>
+        dutyDateSet.has(formatYMD(l.date))
+      ).length;
 
       // Calculate absents
       const absents = Math.max(

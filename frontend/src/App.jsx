@@ -37,6 +37,7 @@ import RosterList from "./features/roster/pages/RosterList";
 import CreateRoster from "./features/roster/pages/CreateRoster";
 import EditRoster from "./features/roster/pages/EditRoster";
 import ViewRoster from "./features/roster/pages/ViewRoster";
+import RosterApprovalsPage from "./features/roster/pages/RosterApprovalsPage";
 import AttendanceDashboard from "./features/attendance/pages/AttendanceDashboard";
 import AttendanceLocations from "./features/attendance/pages/AttendanceLocations";
 import AttendanceLocationDetail from "./features/attendance/pages/AttendanceLocationDetail";
@@ -46,6 +47,7 @@ import LocationRosterPage from "./features/attendance/pages/LocationRosterPage";
 import LeaveManagement from "./features/attendance/pages/LeaveManagement";
 import LeaveBankPage from "./features/attendance/pages/LeaveBankPage";
 import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
+import LocationTimesheetPage from "./features/attendance/pages/LocationTimesheetPage";
 import LeaveApply from "./features/attendance/pages/LeaveApply";
 import LeaveApprovalsPage from "./features/attendance/pages/LeaveApprovalsPage";
 import AllLeavesPage from "./features/attendance/pages/AllLeavesPage";
@@ -234,6 +236,14 @@ function App() {
               }
             />
             <Route
+              path="rosters/approvals"
+              element={
+                <PrivateRoute permissions={["roster.approve"]}>
+                  <RosterApprovalsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
               path="rosters/:id"
               element={
                 <PrivateRoute permissions={["roster.read"]}>
@@ -244,7 +254,7 @@ function App() {
             <Route
               path="rosters/:id/edit"
               element={
-                <PrivateRoute permissions={["roster.update"]}>
+                <PrivateRoute permissions={["roster.create"]}>
                   <EditRoster />
                 </PrivateRoute>
               }
@@ -546,6 +556,14 @@ function App() {
               element={
                 <PrivateRoute permissions={["attendance.read"]}>
                   <LocationLSRPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations/:id/timesheet"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <LocationTimesheetPage />
                 </PrivateRoute>
               }
             />

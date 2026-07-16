@@ -35,9 +35,10 @@ const CONFIG = {
 const SETTING = {
   cursor: "attendance_sync.cursor", // last Attendance.id pulled from droplet
   employeePushAt: "attendance_sync.employee_push_at", // last successful incremental push (ISO)
+  rosterPush: "attendance_sync.roster_push", // { watermark } of last pushed approved-roster state
 };
 
-let running = { push: false, pull: false }; // simple in-process locks
+let running = { push: false, pull: false, rosters: false }; // simple in-process locks
 
 const PK_OFFSET_MS = 5 * 3600 * 1000; // Pakistan is UTC+5
 
@@ -288,7 +289,106 @@ async function pullAttendance() {
   }
 }
 
-// ---------- 3. Retention: keep a rolling N-month backup ----------
+// ---------- 3. Push duty rosters HR -> droplet ----------
+// Materializes approved duty rosters into per-employee per-date schedule rows
+// over a rolling window (today-7 .. today+35) and pushes them so the attendance
+// dashboard judges late/absent against real rosters. Only ROSTER-covered days
+// are sent — the droplet applies the 09:15-17:00 default for everything else.
+// The window is pushed in self-contained 7-day sub-windows (the endpoint has
+// replace-window semantics, so each call fully owns its date range).
+async function pushRosters({ force = false } = {}) {
+  if (running.rosters) {
+    console.log("[attendanceSync] roster push already running, skipping");
+    return { skipped: true };
+  }
+  running.rosters = true;
+  try {
+    const {
+      buildScheduleResolver,
+      toDateOnly,
+      addDays,
+      formatYMD,
+    } = require("../services/rosterScheduleService");
+
+    // Cheap change detection: skip when no approved roster changed since last push.
+    const latest = await prisma.dutyRoster.findFirst({
+      where: { is_deleted: false, status: "APPROVED" },
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    });
+    const watermark = latest?.updatedAt ? latest.updatedAt.toISOString() : "none";
+    const last = await getSetting(SETTING.rosterPush);
+    if (!force && last?.watermark === watermark) {
+      return { skipped: "unchanged" };
+    }
+
+    const today = toDateOnly(new Date());
+    const windowStart = addDays(today, -7);
+    const windowEnd = addDays(today, 35);
+
+    const employments = await prisma.employment.findMany({
+      where: {
+        is_current: true,
+        is_deleted: false,
+        employee: { is_deleted: false, status: "Active" },
+      },
+      select: { employee: { select: { id: true, cnic: true } } },
+    });
+    const emps = employments
+      .map((r) => ({ id: r.employee.id, cnic: String(r.employee.cnic || "").replace(/\D/g, "") }))
+      .filter((e) => e.cnic);
+
+    const resolver = await buildScheduleResolver(
+      emps.map((e) => e.id),
+      windowStart,
+      windowEnd
+    );
+
+    let totalRows = 0;
+    for (let subStart = new Date(windowStart); subStart <= windowEnd; subStart = addDays(subStart, 7)) {
+      let subEnd = addDays(subStart, 6);
+      if (subEnd > windowEnd) subEnd = new Date(windowEnd);
+
+      const schedules = [];
+      for (const emp of emps) {
+        for (let d = new Date(subStart); d <= subEnd; d = addDays(d, 1)) {
+          const day = resolver.resolveDay(emp.id, d);
+          if (day.source !== "ROSTER") continue;
+          schedules.push({
+            cnic: emp.cnic,
+            date: formatYMD(d),
+            start: day.kind === "time" ? day.time_from : null,
+            end: day.kind === "time" ? day.time_to : null,
+            off: day.kind === "weekly_off",
+            source: "ROSTER",
+          });
+        }
+      }
+
+      await apiFetch("/admin/rosters/sync", {
+        method: "POST",
+        body: JSON.stringify({
+          window: { start: formatYMD(subStart), end: formatYMD(subEnd) },
+          schedules,
+        }),
+      });
+      totalRows += schedules.length;
+    }
+
+    await setSetting(SETTING.rosterPush, { watermark, at: new Date().toISOString() });
+    console.log(
+      `[attendanceSync] pushed rosters: ${totalRows} schedule row(s) over ${formatYMD(windowStart)}..${formatYMD(windowEnd)}`
+    );
+    return { pushed: totalRows };
+  } catch (e) {
+    console.error("[attendanceSync] pushRosters failed:", e.message);
+    return { error: e.message };
+  } finally {
+    running.rosters = false;
+  }
+}
+
+// ---------- 4. Retention: keep a rolling N-month backup ----------
 async function pruneBackup() {
   try {
     const cutoff = new Date();
@@ -317,7 +417,9 @@ function startAttendanceSync() {
   }
 
   cron.schedule(CONFIG.pushCron, () => pushEmployees({ full: false }));
+  cron.schedule(CONFIG.pushCron, () => pushRosters()); // watermark-gated: cheap no-op when rosters unchanged
   cron.schedule(CONFIG.reconcileCron, () => pushEmployees({ full: true }));
+  cron.schedule(CONFIG.reconcileCron, () => pushRosters({ force: true })); // nightly full refresh (rolls the window)
   cron.schedule(CONFIG.pullCron, () => pullAttendance());
   cron.schedule(CONFIG.pruneCron, () => pruneBackup());
 
@@ -327,7 +429,9 @@ function startAttendanceSync() {
 
   // Initial catch-up shortly after boot (covers any downtime while HR was off).
   setTimeout(() => {
-    pushEmployees({ full: true }).then(() => pullAttendance());
+    pushEmployees({ full: true })
+      .then(() => pullAttendance())
+      .then(() => pushRosters({ force: true }));
   }, 8000);
 }
 
@@ -335,6 +439,7 @@ module.exports = {
   startAttendanceSync,
   pushEmployees,
   pullAttendance,
+  pushRosters,
   pruneBackup,
   CONFIG,
 };

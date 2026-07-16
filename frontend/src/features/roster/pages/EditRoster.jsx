@@ -1,272 +1,229 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import rosterService from '../../roster/services/rosterService';
-import { useAuthStore } from '../../auth/authStore';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import rosterService from "../services/rosterService";
+import RosterEntriesEditor from "../components/RosterEntriesEditor";
+import LoadingSpinner from "../../../components/ui/LoadingSpinner";
+import { toastBus } from "../../../utils/toastBus";
+import { useAuthStore } from "../../auth/authStore";
+import { blankDaySchedules, statusBadgeClass } from "../rosterUtils";
 
-const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-const STATUSES = ['PENDING','APPROVED','REJECTED'];
-
+// Creator-only editing of PENDING / REJECTED rosters. Saving resubmits the
+// roster for approval (approver is re-resolved server-side).
 const EditRoster = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [roster, setRoster] = useState(null);
-  const can = useAuthStore((s) => s.can);
   const user = useAuthStore((s) => s.user);
-  const isSuperAdmin = user?.role?.name === 'Super Admin';
-  const isSystem = user?.role?.type === 'system';
+
+  const [roster, setRoster] = useState(null);
+  const [ctx, setCtx] = useState(null);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const [title, setTitle] = useState("");
+  const [rosterType, setRosterType] = useState("MONTHLY");
+  const [customRange, setCustomRange] = useState(true);
+  const [month, setMonth] = useState("");
+  const [validFrom, setValidFrom] = useState("");
+  const [validTo, setValidTo] = useState("");
+  const [entries, setEntries] = useState([]);
 
   useEffect(() => {
-    rosterService.get(id).then((res) => setRoster(res.roster));
+    (async () => {
+      try {
+        const [r, c] = await Promise.all([rosterService.get(id), rosterService.context()]);
+        const ro = r.roster;
+        setRoster(ro);
+        setCtx(c);
+        setTitle(ro.title || "");
+        setRosterType(ro.roster_type || "MONTHLY");
+        setValidFrom(ro.valid_from?.slice(0, 10) || "");
+        setValidTo(ro.valid_to?.slice(0, 10) || "");
+        setMonth(c.cycle?.month || "");
+
+        // Entries: every currently-eligible employee, prefilled from the roster
+        const byEmp = new Map((ro.entries || []).map((en) => [en.employee_id, en]));
+        setEntries(
+          (c.employees || []).map((e) => {
+            const old = byEmp.get(e.id);
+            return {
+              employee_id: e.id,
+              day_schedules: old?.day_schedules || blankDaySchedules(),
+              remarks: old?.remarks || "",
+            };
+          })
+        );
+      } catch (e) {
+        setError(e?.response?.data?.error || "Failed to load roster");
+      }
+    })();
   }, [id]);
 
-  const updateEntry = (entryId, updater) => {
-    setRoster((r) => ({
-      ...r,
-      entries: r.entries.map((e) => e.id === entryId ? updater({ ...e }) : e)
-    }));
-  };
+  const isCreator = useMemo(
+    () => roster && (roster.created_by_user_id ?? roster.createdBy?.id) === user?.id,
+    [roster, user]
+  );
+
+  if (error) return <div className="p-6 text-red-600">{error}</div>;
+  if (!roster || !ctx) return <LoadingSpinner text="Loading roster..." />;
+
+  if (roster.status === "APPROVED") {
+    return (
+      <div className="p-6 card-soft m-6 text-sm text-gray-600">
+        Approved rosters cannot be edited. Create a new roster for the same period to supersede this
+        one.
+      </div>
+    );
+  }
+  if (!isCreator) {
+    return <div className="p-6 text-red-600">Only the creator can edit this roster.</div>;
+  }
+
+  const isHq = ctx.scope === "HQ_DEPARTMENT";
+  const scopeName = isHq ? ctx.department?.name : ctx.location?.name;
 
   const submit = async () => {
-    const payload = {
-      title: roster.title,
-      bazaar_id: roster.bazaar_id,
-      valid_from: roster.valid_from,
-      valid_to: roster.valid_to,
-      entries: roster.entries.map((e) => ({
-        employee_id: e.employee_id,
-        day_schedules: e.day_schedules,
-        remarks: e.remarks,
-      })),
-    };
-    await rosterService.update(roster.id, payload);
-    navigate('/rosters');
-  };
-
-  const cloneAsNew = async () => {
-    const payload = {
-      title: `${roster.title || 'Roster'} (Copy)`,
-      valid_from: roster.valid_from?.slice(0,10),
-      valid_to: roster.valid_to?.slice(0,10),
-      entries: roster.entries.map((e) => ({
-        employee_id: e.employee_id,
-        day_schedules: e.day_schedules,
-        remarks: e.remarks,
-      })),
-    };
-    await rosterService.create(payload);
-    navigate('/rosters');
-  };
-
-  const changeStatus = async (status) => {
-    await rosterService.setStatus(id, status);
-    const res = await rosterService.get(id);
-    setRoster(res.roster);
-  };
-
-  // Group by role tag of current employment
-  const grouped = useMemo(() => {
-    if (!roster) return [];
-    const map = new Map();
-    for (const en of roster.entries) {
-      const emp = en.employee;
-      const currEmp = emp?.employmentRecords?.[0];
-      const key = currEmp?.role_tag?.name || 'Unassigned';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(en);
+    const payload = { title: title || null, roster_type: rosterType, entries };
+    if (rosterType === "PERMANENT") {
+      payload.valid_from = validFrom;
+    } else if (isHq && customRange) {
+      payload.valid_from = validFrom;
+      payload.valid_to = validTo;
+    } else {
+      payload.month = month;
     }
-    return Array.from(map.entries()).map(([name, list]) => ({ name, list }));
-  }, [roster]);
-
-  if (!roster) return <div className="p-6">Loading...</div>;
-
-  const canStatus = (isSystem || isSuperAdmin) && can('roster.status');
-  const isCreator = roster.created_by_user_id === user?.id;
-  const canModifyApproved = roster.status === 'APPROVED'
-    ? (isSuperAdmin || (isSystem && can('roster.status') && !isCreator))
-    : true;
-  const canUpdate = can('roster.update') && canModifyApproved;
+    setSaving(true);
+    try {
+      await rosterService.update(roster.id, payload);
+      toastBus.emit({ type: "success", message: "Roster resubmitted for approval" });
+      navigate("/rosters");
+    } catch (e) {
+      toastBus.emit({ type: "error", message: e?.response?.data?.error || "Failed to update roster" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-slate-800">Edit Duty Roster</h2>
-        <div className="flex gap-2">
-          <button onClick={cloneAsNew} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded">Clone as New</button>
-          <button onClick={() => navigate('/rosters')} className="px-4 py-2 bg-slate-600 text-white rounded">Cancel</button>
-          {canUpdate && (
-            <button onClick={submit} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Update</button>
-          )}
+    <div className="p-4 md:p-6 space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-primary">
+            Edit Duty Roster #{roster.id}
+          </h1>
+          <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
+            {isHq ? "HQ Department" : "Location"}: <span className="font-medium">{scopeName}</span>
+            <span className={statusBadgeClass(roster.status)}>{roster.status}</span>
+          </p>
+        </div>
+        <div className="actions-inline flex gap-2">
+          <button onClick={() => navigate("/rosters")} className="btn btn-secondary">
+            Cancel
+          </button>
+          <button onClick={submit} disabled={saving} className="btn btn-primary">
+            {saving ? "Saving..." : "Resubmit for Approval"}
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded shadow">
-        <div>
-          <label className="block text-sm text-slate-600 mb-1">Title</label>
-          <input className="w-full border rounded px-3 py-2" value={roster.title || ''} onChange={(e)=>setRoster({...roster, title: e.target.value})} />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-600 mb-1">Valid From</label>
-          <input type="date" className="w-full border rounded px-3 py-2" value={roster.valid_from?.slice(0,10)} onChange={(e)=>setRoster({...roster, valid_from: e.target.value})} />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-600 mb-1">Valid To</label>
-          <input type="date" className="w-full border rounded px-3 py-2" value={roster.valid_to?.slice(0,10)} onChange={(e)=>setRoster({...roster, valid_to: e.target.value})} />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-600 mb-1">Status</label>
-          <div className="flex items-center gap-2">
-            <span className={`px-2 py-1 rounded text-xs font-medium ${roster.status === 'APPROVED' ? 'bg-green-100 text-green-700' : roster.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{roster.status}</span>
-            {canStatus && (
-              <select
-                value={roster.status}
-                onChange={(e) => changeStatus(e.target.value)}
-                className="border rounded px-2 py-1"
-              >
-                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+      {roster.status === "REJECTED" && (
+        <div className="card-soft p-4 border-l-4 border-red-400">
+          <div className="text-sm font-medium text-red-700">Rejected</div>
+          <div className="text-sm text-gray-600 mt-1">
+            {roster.rejection_reason || "No reason recorded"}
+            {roster.rejectedBy && (
+              <span className="text-gray-400">
+                {" "}
+                — {roster.rejectedBy.employee?.full_name || roster.rejectedBy.email}
+                {roster.rejected_at ? `, ${new Date(roster.rejected_at).toLocaleString()}` : ""}
+              </span>
             )}
           </div>
-        </div>
-      </div>
-
-      {grouped.map(group => (
-        <div key={group.name} className="space-y-2">
-          <h3 className="text-lg font-semibold text-slate-700">{group.name}</h3>
-          <div className="overflow-x-auto bg-white rounded shadow">
-            <table className="min-w-full">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Name</th>
-                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Designation</th>
-                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">CNIC</th>
-                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Contact</th>
-                  {days.map((d) => (
-                    <th key={d} className="px-3 py-2 text-left text-xs uppercase text-slate-500">{d}</th>
-                  ))}
-                  {/* Far right: Collective Weekly Off */}
-                  <th className="px-3 py-2 text-left text-xs uppercase text-slate-500">Collective Weekly Off</th>
-                </tr>
-              </thead>
-              <tbody>
-                {group.list.map((en) => {
-                  const emp = en.employee;
-                  const currEmp = emp?.employmentRecords?.[0];
-                  const designation = currEmp?.designation?.title || '';
-                  const cwo = en.day_schedules?._collective_weekly_off || { enabled: false, from: '', to: '' };
-                  return (
-                    <tr key={en.id} className="border-t">
-                      <td className="px-3 py-2 whitespace-nowrap">{emp?.full_name}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{designation || '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{emp?.cnic || '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{emp?.mobile_number || '—'}</td>
-                      {days.map((d) => {
-                        const day = en.day_schedules?.[d] || { type: 'time', time_from: '', time_to: '' };
-                        return (
-                          <td key={d} className="px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <select className="border rounded px-2 py-1"
-                                value={day.type}
-                                onChange={(e)=>{
-                                  const type = e.target.value;
-                                  updateEntry(en.id, (curr) => ({
-                                    ...curr,
-                                    day_schedules: { ...curr.day_schedules, [d]: type === 'time' ? { type, time_from: '', time_to: '', location: '' } : (type === 'offsite' ? { type, location: '' } : { type }) }
-                                  }));
-                                }}
-                              >
-                                <option value="time">Time</option>
-                                <option value="offsite">Offsite</option>
-                                <option value="weekly_off">Weekly off</option>
-                              </select>
-                              {day.type === 'time' && (
-                                <>
-                                  <input type="time" className="border rounded px-2 py-1 w-28"
-                                    value={day.time_from}
-                                    onChange={(e)=>updateEntry(en.id, (curr) => ({
-                                      ...curr,
-                                      day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], time_from: e.target.value } }
-                                    }))}
-                                  />
-                                  <span className="text-slate-500">to</span>
-                                  <input type="time" className="border rounded px-2 py-1 w-28"
-                                    value={day.time_to}
-                                    onChange={(e)=>updateEntry(en.id, (curr) => ({
-                                      ...curr,
-                                      day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], time_to: e.target.value } }
-                                    }))}
-                                  />
-                                </>
-                              )}
-                              {day.type === 'offsite' && (
-                                <input className="border rounded px-2 py-1 w-36" placeholder="Location"
-                                  value={day.location || ''}
-                                  onChange={(e)=>updateEntry(en.id, (curr) => ({
-                                    ...curr,
-                                    day_schedules: { ...curr.day_schedules, [d]: { ...curr.day_schedules[d], location: e.target.value } }
-                                  }))}
-                                />
-                              )}
-                              {day.type === 'weekly_off' && (
-                                <span className="text-slate-500 text-sm">Weekly off</span>
-                              )}
-                            </div>
-                          </td>
-                        );
-                      })}
-                      {/* Far right: collective weekly off controls */}
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <label className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={!!cwo.enabled}
-                            onChange={(e) => updateEntry(en.id, (curr) => ({
-                              ...curr,
-                              day_schedules: {
-                                ...curr.day_schedules,
-                                _collective_weekly_off: { ...cwo, enabled: e.target.checked }
-                              }
-                            }))}
-                          />
-                          <span className="text-slate-700">Enable</span>
-                        </label>
-                        {cwo.enabled && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <input
-                              type="date"
-                              className="border rounded px-2 py-1"
-                              value={cwo.from || ''}
-                              onChange={(e) => updateEntry(en.id, (curr) => ({
-                                ...curr,
-                                day_schedules: {
-                                  ...curr.day_schedules,
-                                  _collective_weekly_off: { ...cwo, from: e.target.value }
-                                }
-                              }))}
-                            />
-                            <span className="text-slate-500">to</span>
-                            <input
-                              type="date"
-                              className="border rounded px-2 py-1"
-                              value={cwo.to || ''}
-                              onChange={(e) => updateEntry(en.id, (curr) => ({
-                                ...curr,
-                                day_schedules: {
-                                  ...curr.day_schedules,
-                                  _collective_weekly_off: { ...cwo, to: e.target.value }
-                                }
-                              }))}
-                            />
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="text-xs text-gray-500 mt-1">
+            Fix the issues below and resubmit — it will go back to the approver as Pending.
           </div>
         </div>
-      ))}
+      )}
+
+      <div className="card-soft p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Title (optional)</label>
+          <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </div>
+
+        {isHq && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Roster Type</label>
+            <select
+              className="form-input"
+              value={rosterType}
+              onChange={(e) => setRosterType(e.target.value)}
+            >
+              <option value="MONTHLY">Monthly</option>
+              <option value="PERMANENT">Permanent (no end date)</option>
+            </select>
+          </div>
+        )}
+
+        {rosterType === "PERMANENT" ? (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Effective From</label>
+            <input
+              type="date"
+              className="form-input"
+              value={validFrom}
+              onChange={(e) => setValidFrom(e.target.value)}
+            />
+          </div>
+        ) : isHq && customRange ? (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Valid From</label>
+              <input
+                type="date"
+                className="form-input"
+                value={validFrom}
+                onChange={(e) => setValidFrom(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Valid To</label>
+              <input
+                type="date"
+                className="form-input"
+                value={validTo}
+                onChange={(e) => setValidTo(e.target.value)}
+              />
+            </div>
+          </>
+        ) : (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Cycle Month (21st → 20th)
+            </label>
+            <input
+              type="month"
+              className="form-input"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            />
+          </div>
+        )}
+
+        {isHq && rosterType === "MONTHLY" && (
+          <div className="flex items-end pb-1">
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              <input
+                type="checkbox"
+                checked={customRange}
+                onChange={(e) => setCustomRange(e.target.checked)}
+              />
+              Use custom date range
+            </label>
+          </div>
+        )}
+      </div>
+
+      <RosterEntriesEditor employees={ctx.employees || []} entries={entries} onChange={setEntries} />
     </div>
   );
 };

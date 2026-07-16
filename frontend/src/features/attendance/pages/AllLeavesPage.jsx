@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from "react";
 import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { useAuthStore } from "../../auth/authStore";
+import { exportToCSV, exportToExcel } from "../../../lib/exportUtils";
+import { toastBus } from "../../../utils/toastBus";
 
 const AllLeavesPage = () => {
   const user = useAuthStore((s) => s.user);
@@ -101,6 +103,32 @@ const AllLeavesPage = () => {
     });
   }, [leaves, fName, fCnic, fDesignation, fDepartment, fDate, fStart, fEnd, fLeaveType, fLeaveStatus]);
 
+  const LEAVE_EXPORT_HEADERS = ["Employee", "CNIC", "Designation", "Department", "Date", "Type", "Status", "Remarks"];
+  const mapLeavesForExport = (rows) =>
+    rows.map((lv) => {
+      const emp = lv.employee || {};
+      const empRec = emp.employmentRecords?.[0] || {};
+      return {
+        Employee: emp.full_name || "",
+        CNIC: emp.cnic || "",
+        Designation: empRec?.designation?.title || "",
+        Department: empRec?.department?.name || "",
+        Date: String(lv.date || "").slice(0, 10),
+        Type: lv.type || "",
+        Status: lv.current_status || lv.status || "",
+        Remarks: lv.remarks || "",
+      };
+    });
+
+  const handleExport = (type) => {
+    if (!filteredLeaves.length) return;
+    const payload = mapLeavesForExport(filteredLeaves);
+    const filename = `All_Leaves_${new Date().toISOString().slice(0, 10)}.${type === "csv" ? "csv" : "xlsx"}`;
+    if (type === "csv") exportToCSV(filename, payload, LEAVE_EXPORT_HEADERS, "All Leaves");
+    else exportToExcel(filename, payload, "Leaves", LEAVE_EXPORT_HEADERS, "All Leaves");
+    toastBus.emit({ type: "success", message: `Exported ${payload.length} leave rows.` });
+  };
+
   if (!isEstablishment) {
     return <div className="p-6 text-sm text-red-600">Unauthorized</div>;
   }
@@ -111,9 +139,17 @@ const AllLeavesPage = () => {
         <h1 className="text-xl font-semibold tracking-tight text-primary">
           All Leaves
         </h1>
-        <button className="btn btn-secondary text-xs" onClick={load}>
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          <button className="btn btn-outline text-xs" onClick={() => handleExport("csv")}>
+            Export CSV
+          </button>
+          <button className="btn btn-outline text-xs" onClick={() => handleExport("xlsx")}>
+            Export Excel
+          </button>
+          <button className="btn btn-secondary text-xs" onClick={load}>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

@@ -3,67 +3,45 @@ const router = express.Router();
 const rosterController = require("../controllers/rosterController");
 const { isAuthenticated, authorize } = require("../middleware/auth");
 
+// Static paths must be registered before /:id
+
+// Approver queue (assignment enforced in the controller)
 router.get(
-  "/",
+  "/pending-approvals",
   isAuthenticated,
-  authorize("roster.read"),
-  rosterController.list
+  authorize("roster.approve"),
+  rosterController.pendingApprovals
 );
 
-// Helper endpoints for roster creation - rely on controller eligibility (HOD or bazaar user)
+// Everything the create/edit page needs: scope, eligible employees,
+// cycle defaults, approver preview, last roster for prefill
 router.get(
-  "/helpers/officer-employees/list",
+  "/helpers/context",
   isAuthenticated,
-  rosterController.employeesForLoggedInOfficer
-);
-router.get(
-  "/helpers/bazaars",
-  isAuthenticated,
-  rosterController.bazaarsForRoster
+  authorize("roster.create"),
+  rosterController.context
 );
 
-router.get(
-  "/:id",
-  isAuthenticated,
-  authorize("roster.read"),
-  rosterController.getById
-);
-router.post(
-  "/",
-  isAuthenticated,
-  rosterController.create
-);
-router.put(
-  "/:id",
-  isAuthenticated,
-  authorize("roster.update"),
-  rosterController.update
-);
-router.delete(
-  "/:id",
-  isAuthenticated,
-  authorize("roster.delete"),
-  rosterController.remove
-);
+router.get("/", isAuthenticated, authorize("roster.read"), rosterController.list);
+router.get("/:id", isAuthenticated, authorize("roster.read"), rosterController.getById);
 
-// Approval/status actions (system role only + permission)
+// Create/edit/delete are creator-scoped (ownership checked in the controller)
+router.post("/", isAuthenticated, authorize("roster.create"), rosterController.create);
+router.put("/:id", isAuthenticated, authorize("roster.create"), rosterController.update);
+router.delete("/:id", isAuthenticated, authorize("roster.create"), rosterController.remove);
+
+// Approval actions (assigned approver only; reason required for reject)
 router.post(
   "/:id/approve",
   isAuthenticated,
-  authorize("roster.status.change"),
+  authorize("roster.approve"),
   rosterController.approve
 );
 router.post(
   "/:id/reject",
   isAuthenticated,
-  authorize("roster.status.change"),
+  authorize("roster.approve"),
   rosterController.reject
-);
-router.put(
-  "/:id/status",
-  isAuthenticated,
-  authorize("roster.status.change"),
-  rosterController.setStatus
 );
 
 module.exports = router;

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { toastBus } from "../../../utils/toastBus";
+import { exportToExcel } from "../../../lib/exportUtils";
 
 const LeaveTypesDialog = ({ open, onClose }) => {
   const [loading, setLoading] = useState(false);
@@ -257,6 +258,28 @@ const EditAllocationsDialog = ({ open, onClose, bank }) => {
             />
             <button className="btn btn-secondary text-xs" onClick={load}>
               Search
+            </button>
+            <button
+              className="btn btn-outline text-xs"
+              onClick={() => {
+                if (!employees.length) return;
+                const headers = ["Employee", "CNIC", ...types.map((t) => t.name)];
+                const rows = employees.map((emp) => {
+                  const o = { Employee: emp.full_name, CNIC: emp.cnic || "" };
+                  for (const t of types) o[t.name] = getEmpAlloc(emp.id, t.id);
+                  return o;
+                });
+                exportToExcel(
+                  `Leave_Allocations_${bank.title || bank.id}.xlsx`,
+                  rows,
+                  "Allocations",
+                  headers,
+                  `Leave Allocations — ${bank.title || "#" + bank.id}`
+                );
+                toastBus.emit({ type: "success", message: `Exported ${rows.length} employees.` });
+              }}
+            >
+              Export Excel
             </button>
           </div>
           {loading ? (

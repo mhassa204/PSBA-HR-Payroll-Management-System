@@ -1,130 +1,222 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-const { isAuthenticated } = require("../middleware/auth");
+const { resolveRosterApprover } = require("../services/rosterApprovalService");
+const { toDateOnly, formatYMD } = require("../services/rosterScheduleService");
 
-// Helper: resolve bazaar Location.id for the logged-in user's current employment
-async function resolveBazaarIdForUser(user) {
-  try {
-    if (!user?.employee_id) return null;
-    const emp = await prisma.employment.findFirst({
-      where: {
-        employee_id: Number(user.employee_id),
-        is_current: true,
-        is_deleted: false,
-      },
-      include: { location: { include: { city: true, district: true } } },
-    });
-    const loc = emp?.location;
-    if (!loc) return null;
+// Duty roster module.
+//
+// Creation:
+//   LOCATION scope    — the location's own account (User.location_id -> any
+//                       active non-HEAD_OFFICE location). MONTHLY only; the
+//                       period is derived server-side from a cycle month
+//                       (21st of previous month -> 20th of the cycle month).
+//   HQ_DEPARTMENT     — the department's account (User.department_id).
+//                       MONTHLY (cycle default or custom range) or PERMANENT
+//                       (valid_from only, open-ended).
+// Approval:
+//   LOCATION          — any active Operations-role user.
+//   HQ_DEPARTMENT     — the resolved approver user (reporting officer of the
+//                       department's main reporting officer).
+// Approved rosters are immutable for everyone; corrections are made by
+// creating a new roster which supersedes (latest approval wins per date —
+// see rosterScheduleService).
 
-    // If employment already linked to a bazaar, use it directly
-    if (loc.type === "BAZAAR" && loc.is_active && !loc.is_deleted) {
-      return loc.id;
-    }
+const HEAD_OFFICE = "HEAD_OFFICE";
 
-    // Try match by name, then by city_id, then by district_id
-    let bazaar = null;
-    if (loc.name) {
-      bazaar = await prisma.location.findFirst({
-        where: {
-          type: "BAZAAR",
-          is_deleted: false,
-          is_active: true,
-          name: loc.name,
-        },
-      });
-    }
-    if (!bazaar && loc.city_id) {
-      bazaar = await prisma.location.findFirst({
-        where: {
-          type: "BAZAAR",
-          is_deleted: false,
-          is_active: true,
-          city_id: loc.city_id,
-        },
-      });
-    }
-    if (!bazaar && loc.district_id) {
-      bazaar = await prisma.location.findFirst({
-        where: {
-          type: "BAZAAR",
-          is_deleted: false,
-          is_active: true,
-          district_id: loc.district_id,
-        },
-      });
-    }
+function hasPerm(user, key) {
+  if (user?.role?.name === "Super Admin") return true;
+  const perms = user?.permissions || [];
+  return perms.includes("*") || perms.includes(key);
+}
 
-    return bazaar?.id ?? null;
-  } catch (e) {
-    console.error("Failed to resolve bazaar id for user", e);
-    return null;
+// month 'YYYY-MM' names the cycle END month: 2026-07 => 21 Jun - 20 Jul 2026
+// (same convention as attendance locationLSR)
+function cycleRangeFromMonth(monthParam) {
+  if (!/^\d{4}-\d{2}$/.test(String(monthParam || ""))) return null;
+  const y = parseInt(monthParam.slice(0, 4), 10);
+  const m0 = parseInt(monthParam.slice(5, 7), 10) - 1;
+  const startMonth0 = m0 === 0 ? 11 : m0 - 1;
+  const startYear = m0 === 0 ? y - 1 : y;
+  const start = new Date(Date.UTC(startYear, startMonth0, 21));
+  const end = new Date(Date.UTC(y, m0, 20));
+  const label = `${end.toLocaleString("en-US", { month: "long", timeZone: "UTC" })} ${end.getUTCFullYear()}`;
+  return { start, end, label };
+}
+
+function defaultCycleMonth(today = new Date()) {
+  let y = today.getUTCFullYear();
+  let m0 = today.getUTCMonth();
+  if (today.getUTCDate() >= 21) m0 += 1;
+  if (m0 > 11) {
+    m0 = 0;
+    y += 1;
   }
+  return `${y}-${String(m0 + 1).padStart(2, "0")}`;
 }
 
-/**
- * Determine if user is a head of department at head quarter (HOD at HQ).
- * This requires user's employments, department with head_employee_id matching user, and location type HQ.
- */
-async function isUserHodHQ(user, prisma) {
-  if (!user?.employee_id) return false;
-  // Find current employments at HQ as HOD
-  const empRecs = await prisma.employment.findMany({
-    where: {
-      employee_id: user.employee_id,
-      is_current: true,
-      location: { type: "HEAD_OFFICE" },
-    },
-    include: { department: true },
-  });
-  if (!empRecs.length) return false;
-  // Must be department head
-  const deptIds = empRecs.map((e) => e.department_id).filter(Boolean);
-  if (!deptIds.length) return false;
-  const match = await prisma.department.findFirst({
-    where: { id: { in: deptIds }, head_employee_id: user.employee_id },
-  });
-  return !!match;
+// Resolve what the logged-in account is allowed to create rosters for
+async function resolveCreatorScope(user) {
+  if (user.location_id) {
+    const location = await prisma.location.findFirst({
+      where: { id: user.location_id, is_deleted: false, is_active: true },
+      select: { id: true, name: true, type: true },
+    });
+    if (location && location.type !== HEAD_OFFICE) {
+      return { scope: "LOCATION", location };
+    }
+  }
+  if (user.department_id) {
+    const department = await prisma.department.findFirst({
+      where: { id: user.department_id, is_deleted: false },
+      select: { id: true, name: true },
+    });
+    if (department) return { scope: "HQ_DEPARTMENT", department };
+  }
+  return null;
 }
 
-// New: get the first active location managed by this user
-async function getManagedLocationId(user) {
-  if (!user?.id) return null;
-  const loc = await prisma.location.findFirst({
-    where: { manager_user_id: user.id, is_active: true, is_deleted: false },
-    orderBy: { id: "asc" },
-    select: { id: true },
+async function eligibleEmployeesFor(scopeInfo) {
+  const where = {
+    is_current: true,
+    is_deleted: false,
+    employee: { is_deleted: false, status: "Active" },
+  };
+  if (scopeInfo.scope === "LOCATION") where.location_id = scopeInfo.location.id;
+  else where.department_id = scopeInfo.department.id;
+
+  const employments = await prisma.employment.findMany({
+    where,
+    include: { employee: true, designation: true, role_tag: true },
+    orderBy: { employee: { full_name: "asc" } },
   });
-  return loc?.id || null;
+  return employments.map((r) => ({
+    id: r.employee.id,
+    full_name: r.employee.full_name,
+    designation: r.designation?.title || null,
+    cnic: r.employee.cnic || null,
+    mobile_number: r.employee.mobile_number || null,
+    role_tag_id: r.role_tag?.id || null,
+    role_tag_name: r.role_tag?.name || "Unassigned",
+  }));
 }
+
+// Validate + normalize the requested period for a new/updated roster
+function resolvePeriod(scope, body) {
+  const rosterType =
+    scope === "LOCATION" ? "MONTHLY" : body.roster_type === "PERMANENT" ? "PERMANENT" : "MONTHLY";
+
+  if (rosterType === "PERMANENT") {
+    if (!body.valid_from) return { error: "valid_from is required for a permanent roster" };
+    return { roster_type: "PERMANENT", valid_from: toDateOnly(body.valid_from), valid_to: null };
+  }
+
+  // MONTHLY: cycle month, or (HQ only) a custom range
+  const cycle = cycleRangeFromMonth(body.month);
+  if (cycle) return { roster_type: "MONTHLY", valid_from: cycle.start, valid_to: cycle.end };
+
+  if (scope === "HQ_DEPARTMENT" && body.valid_from && body.valid_to) {
+    const from = toDateOnly(body.valid_from);
+    const to = toDateOnly(body.valid_to);
+    if (from > to) return { error: "valid_from must be on or before valid_to" };
+    return { roster_type: "MONTHLY", valid_from: from, valid_to: to };
+  }
+
+  return {
+    error:
+      scope === "LOCATION"
+        ? "month (YYYY-MM cycle month) is required"
+        : "Provide month (YYYY-MM) or a custom valid_from/valid_to range",
+  };
+}
+
+// Normalize + validate entries against the eligible employee set
+function normalizeEntries(entries, eligibleIds) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (!list.length) return { error: "At least one employee entry is required" };
+  const seen = new Set();
+  const normalized = [];
+  for (const e of list) {
+    const employeeId = Number(e.employee_id);
+    if (!employeeId || !eligibleIds.has(employeeId)) {
+      return { error: `Employee ${e.employee_id} is not part of your location/department` };
+    }
+    if (seen.has(employeeId)) continue;
+    seen.add(employeeId);
+    normalized.push({
+      employee_id: employeeId,
+      day_schedules: e.day_schedules || {},
+      remarks: e.remarks || null,
+    });
+  }
+  return { entries: normalized };
+}
+
+// ---- Visibility -------------------------------------------------------
+
+function buildListWhere(user) {
+  const base = { is_deleted: false };
+  if (hasPerm(user, "roster.read.all")) return base;
+  const or = [{ created_by_user_id: user.id }, { approver_user_id: user.id }];
+  if (user.location_id) or.push({ scope: "LOCATION", bazaar_id: user.location_id });
+  if (user.department_id) or.push({ scope: "HQ_DEPARTMENT", department_id: user.department_id });
+  if (user.role?.name === "Operations") or.push({ scope: "LOCATION" });
+  return { ...base, OR: or };
+}
+
+function canViewRoster(user, roster) {
+  if (hasPerm(user, "roster.read.all")) return true;
+  if (roster.created_by_user_id === user.id) return true;
+  if (roster.approver_user_id === user.id) return true;
+  if (user.location_id && roster.scope === "LOCATION" && roster.bazaar_id === user.location_id) return true;
+  if (
+    user.department_id &&
+    roster.scope === "HQ_DEPARTMENT" &&
+    roster.department_id === user.department_id
+  )
+    return true;
+  if (user.role?.name === "Operations" && roster.scope === "LOCATION") return true;
+  return false;
+}
+
+function canActOnApproval(user, roster) {
+  if (roster.is_deleted || roster.status !== "PENDING") return false;
+  if (user?.role?.name === "Super Admin") return true; // break-glass
+  if (roster.scope === "HQ_DEPARTMENT") return roster.approver_user_id === user.id;
+  return user?.role?.name === "Operations";
+}
+
+const listInclude = {
+  location: { select: { id: true, name: true, type: true } },
+  department: { select: { id: true, name: true } },
+  createdBy: { select: { id: true, email: true } },
+  approver: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
+  approvedBy: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
+  rejectedBy: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
+  _count: { select: { entries: true } },
+};
 
 const rosterController = {
-  // List rosters visible to the logged-in user (created by self or within same bazaar if manager)
+  // GET /rosters — scoped list
   async list(req, res) {
     try {
       const user = req.session.user;
       const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
       const skip = (page - 1) * limit;
 
-      const where = { is_deleted: false };
-      // Optional filters
-      if (req.query.bazaar_id) where.bazaar_id = parseInt(req.query.bazaar_id);
-      if (req.query.active === "true") {
-        const now = new Date();
-        where.valid_from = { lte: now };
-        where.valid_to = { gte: now };
+      const where = buildListWhere(user);
+      if (req.query.status && ["PENDING", "APPROVED", "REJECTED"].includes(req.query.status)) {
+        where.status = req.query.status;
+      }
+      if (req.query.scope && ["LOCATION", "HQ_DEPARTMENT"].includes(req.query.scope)) {
+        where.scope = req.query.scope;
       }
 
       const [total, rosters] = await Promise.all([
         prisma.dutyRoster.count({ where }),
         prisma.dutyRoster.findMany({
           where,
-          include: {
-            createdBy: true,
-            location: true,
-            _count: { select: { entries: true } },
-          },
+          include: listInclude,
           orderBy: { createdAt: "desc" },
           skip,
           take: limit,
@@ -138,15 +230,15 @@ const rosterController = {
     }
   },
 
-  // Get one roster with entries
+  // GET /rosters/:id
   async getById(req, res) {
     try {
+      const user = req.session.user;
       const id = parseInt(req.params.id);
       const roster = await prisma.dutyRoster.findUnique({
         where: { id },
         include: {
-          location: true,
-          createdBy: true,
+          ...listInclude,
           entries: {
             include: {
               employee: {
@@ -159,12 +251,17 @@ const rosterController = {
               },
             },
           },
+          statusHistory: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              user: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
+            },
+          },
         },
       });
-      if (!roster)
-        return res
-          .status(404)
-          .json({ success: false, error: "Roster not found" });
+      if (!roster || roster.is_deleted || !canViewRoster(user, roster)) {
+        return res.status(404).json({ success: false, error: "Roster not found" });
+      }
       res.json({ success: true, roster });
     } catch (e) {
       console.error("Error fetching roster", e);
@@ -172,488 +269,347 @@ const rosterController = {
     }
   },
 
-  // Create roster with entries - managers/HODs can create. Location (bazaar) can be provided or auto-assigned
-  async create(req, res) {
+  // GET /rosters/helpers/context — everything the create page needs
+  async context(req, res) {
     try {
       const user = req.session.user;
-      const { title, valid_from, valid_to, entries, bazaar_id } = req.body;
-      if (!valid_from || !valid_to) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            error: "valid_from and valid_to are required",
-          });
-      }
-
-      let assigned_location_id = null;
-
-      // Allow if location_id present and is a bazaar location
-      if (user.location_id) {
-        const loc = await prisma.location.findUnique({
-          where: { id: user.location_id },
-          select: { id: true, type: true, is_active: true, is_deleted: true },
+      const scopeInfo = await resolveCreatorScope(user);
+      if (!scopeInfo) {
+        return res.status(403).json({
+          success: false,
+          error:
+            "Only a location account or an HQ department account can create rosters.",
         });
-        if (loc && loc.type === "BAZAAR" && loc.is_active && !loc.is_deleted) {
-          assigned_location_id = loc.id;
-        }
       }
 
-      // If client provided bazaar_id, validate and use it
-      if (bazaar_id) {
-        const providedLoc = await prisma.location.findUnique({
-          where: { id: Number(bazaar_id) },
-        });
-        if (
-          !providedLoc ||
-          providedLoc.is_deleted ||
-          !providedLoc.is_active ||
-          providedLoc.type !== "BAZAAR"
-        ) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid bazaar_id provided" });
-        }
-        assigned_location_id = providedLoc.id;
-      }
+      const month = defaultCycleMonth();
+      const cycle = cycleRangeFromMonth(month);
 
-      // If still not set, try manager-managed location
-      if (!assigned_location_id) {
-        const managedId = await getManagedLocationId(user);
-        if (managedId) assigned_location_id = managedId;
-      }
+      const [employees, approval, lastRoster] = await Promise.all([
+        eligibleEmployeesFor(scopeInfo),
+        resolveRosterApprover({
+          scope: scopeInfo.scope,
+          department_id: scopeInfo.department?.id,
+        }),
+        prisma.dutyRoster.findFirst({
+          where: { is_deleted: false, created_by_user_id: user.id },
+          orderBy: { createdAt: "desc" },
+          include: { entries: true },
+        }),
+      ]);
 
-      // If still not set, try resolving from current employment/location
-      if (!assigned_location_id) {
-        const resolved = await resolveBazaarIdForUser(user);
-        if (resolved) assigned_location_id = resolved;
-      }
-
-      // Allow if user heads any department; still permitted to create, but roster is location-based in schema
-      let isHeadOfAnyDept = false;
-      if (user.employee_id) {
-        const headedDepts = await prisma.department.findMany({
-          where: { head_employee_id: user.employee_id },
-        });
-        if (headedDepts && headedDepts.length > 0) {
-          isHeadOfAnyDept = true;
-        }
-      }
-
-      if (!assigned_location_id && !isHeadOfAnyDept) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error:
-              "Only a bazaar/location-based user or a head of department can create a roster.",
-          });
-      }
-
-      // Validate entries format
-      const normalizedEntries = (entries || []).map((e) => ({
-        employee_id: Number(e.employee_id),
-        day_schedules: e.day_schedules || {},
-        remarks: e.remarks || null,
-      }));
-      const created = await prisma.dutyRoster.create({
-        data: {
-          title: title || null,
-          bazaar_id: assigned_location_id,
-          valid_from: new Date(valid_from),
-          valid_to: new Date(valid_to),
-          created_by_user_id: user.id,
-          entries: {
-            create: normalizedEntries,
-          },
-        },
-        include: {
-          location: true,
-          createdBy: true,
-          entries: true,
-        },
+      res.json({
+        success: true,
+        scope: scopeInfo.scope,
+        location: scopeInfo.location || null,
+        department: scopeInfo.department || null,
+        roster_types: scopeInfo.scope === "LOCATION" ? ["MONTHLY"] : ["MONTHLY", "PERMANENT"],
+        cycle: cycle
+          ? { month, start: formatYMD(cycle.start), end: formatYMD(cycle.end), label: cycle.label }
+          : null,
+        approver: approval.ok
+          ? {
+              mode: approval.mode,
+              email: approval.approver_email || null,
+              name: approval.approver_name || null,
+              role: approval.role || null,
+            }
+          : { error: approval.reason },
+        employees,
+        lastRoster,
       });
-      res.status(201).json({ success: true, roster: created });
     } catch (e) {
-      console.error("Error creating roster", e);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to create roster" });
+      console.error("Error building roster context", e);
+      res.status(500).json({ success: false, error: "Failed to load roster context" });
     }
   },
 
-  // Update roster and its entries (replace strategy)
+  // POST /rosters — create + submit for approval
+  async create(req, res) {
+    try {
+      const user = req.session.user;
+      const scopeInfo = await resolveCreatorScope(user);
+      if (!scopeInfo) {
+        return res.status(403).json({
+          success: false,
+          error:
+            "Only a location account or an HQ department account can create rosters.",
+        });
+      }
+
+      const period = resolvePeriod(scopeInfo.scope, req.body || {});
+      if (period.error) return res.status(400).json({ success: false, error: period.error });
+
+      const eligible = await eligibleEmployeesFor(scopeInfo);
+      const eligibleIds = new Set(eligible.map((e) => e.id));
+      const normalized = normalizeEntries(req.body?.entries, eligibleIds);
+      if (normalized.error)
+        return res.status(400).json({ success: false, error: normalized.error });
+
+      const approval = await resolveRosterApprover({
+        scope: scopeInfo.scope,
+        department_id: scopeInfo.department?.id,
+      });
+      if (!approval.ok) {
+        return res.status(422).json({ success: false, error: approval.reason });
+      }
+      const approverUserId = approval.mode === "USER" ? approval.approver_user_id : null;
+      if (approverUserId && approverUserId === user.id) {
+        return res.status(422).json({
+          success: false,
+          error: "Roster cannot be routed to its own creator for approval.",
+        });
+      }
+
+      const now = new Date();
+      const created = await prisma.dutyRoster.create({
+        data: {
+          title: req.body?.title || null,
+          scope: scopeInfo.scope,
+          roster_type: period.roster_type,
+          bazaar_id: scopeInfo.scope === "LOCATION" ? scopeInfo.location.id : null,
+          department_id: scopeInfo.scope === "HQ_DEPARTMENT" ? scopeInfo.department.id : null,
+          valid_from: period.valid_from,
+          valid_to: period.valid_to,
+          created_by_user_id: user.id,
+          approver_user_id: approverUserId,
+          submitted_at: now,
+          status: "PENDING",
+          entries: { create: normalized.entries },
+          statusHistory: { create: { action: "SUBMITTED", user_id: user.id } },
+        },
+        include: listInclude,
+      });
+
+      res.status(201).json({ success: true, roster: created });
+    } catch (e) {
+      console.error("Error creating roster", e);
+      res.status(500).json({ success: false, error: "Failed to create roster" });
+    }
+  },
+
+  // PUT /rosters/:id — creator edits own PENDING/REJECTED roster (resubmits)
   async update(req, res) {
     try {
+      const user = req.session.user;
       const id = Number(req.params.id);
-      const { title, bazaar_id, valid_from, valid_to, entries } = req.body;
-
       const roster = await prisma.dutyRoster.findUnique({ where: { id } });
-      if (!roster)
-        return res
-          .status(404)
-          .json({ success: false, error: "Roster not found" });
-
-      // Guard: If roster is APPROVED, only authorized system users (not the creator) may modify; Super Admin exempt
+      if (!roster || roster.is_deleted) {
+        return res.status(404).json({ success: false, error: "Roster not found" });
+      }
       if (roster.status === "APPROVED") {
-        const user = req.session.user;
-        const isSuperAdmin = user?.role?.name === "Super Admin";
-        if (!isSuperAdmin) {
-          const isSystemUser = user?.role?.type === "system";
-          const perms = user?.permissions || [];
-          const hasPermission =
-            perms.includes("*") || perms.includes("roster.status");
-          const isCreator = roster.created_by_user_id === user?.id;
-          if (!isSystemUser || !hasPermission || isCreator) {
-            return res
-              .status(403)
-              .json({
-                success: false,
-                error:
-                  "Approved rosters can only be modified by authorized system users (creator cannot modify).",
-              });
-          }
-        }
+        return res.status(409).json({
+          success: false,
+          error:
+            "Approved rosters cannot be edited. Create a new roster for the same period to supersede it.",
+        });
+      }
+      if (roster.created_by_user_id !== user.id) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Only the creator can edit this roster" });
       }
 
-      // Delete old entries first
-      await prisma.dutyRosterEntry.deleteMany({ where: { roster_id: id } });
-
-      const normalizedEntries = (entries || []).map((e) => ({
-        employee_id: Number(e.employee_id),
-        day_schedules: e.day_schedules || {},
-        remarks: e.remarks || null,
-      }));
-
-      // Determine bazaar id for update: preserve if undefined, else use provided (or resolve if nullish)
-      let nextBazaarId;
-      if (bazaar_id === undefined) {
-        nextBazaarId = roster.bazaar_id;
-      } else if (bazaar_id) {
-        nextBazaarId = Number(bazaar_id);
-      } else {
-        // explicitly null/empty: try resolve from user, can still be null
-        nextBazaarId = await resolveBazaarIdForUser(req.session.user);
+      const scopeInfo = await resolveCreatorScope(user);
+      if (!scopeInfo || scopeInfo.scope !== roster.scope) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Your account can no longer edit this roster" });
       }
 
-      // Update roster basic fields and recreate entries via nested create
-      const updated = await prisma.dutyRoster.update({
-        where: { id },
-        data: {
-          title: title ?? roster.title,
-          bazaar_id: nextBazaarId,
-          valid_from: valid_from ? new Date(valid_from) : roster.valid_from,
-          valid_to: valid_to ? new Date(valid_to) : roster.valid_to,
-          updatedAt: new Date(),
-          entries: { create: normalizedEntries },
-        },
-        include: {
-          location: true,
-          createdBy: true,
-          entries: true,
-        },
+      const period = resolvePeriod(scopeInfo.scope, req.body || {});
+      if (period.error) return res.status(400).json({ success: false, error: period.error });
+
+      const eligible = await eligibleEmployeesFor(scopeInfo);
+      const eligibleIds = new Set(eligible.map((e) => e.id));
+      const normalized = normalizeEntries(req.body?.entries, eligibleIds);
+      if (normalized.error)
+        return res.status(400).json({ success: false, error: normalized.error });
+
+      const approval = await resolveRosterApprover({
+        scope: scopeInfo.scope,
+        department_id: scopeInfo.department?.id,
+      });
+      if (!approval.ok) {
+        return res.status(422).json({ success: false, error: approval.reason });
+      }
+      const approverUserId = approval.mode === "USER" ? approval.approver_user_id : null;
+
+      const wasRejected = roster.status === "REJECTED";
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.dutyRosterEntry.deleteMany({ where: { roster_id: id } });
+        return tx.dutyRoster.update({
+          where: { id },
+          data: {
+            title: req.body?.title !== undefined ? req.body.title || null : roster.title,
+            roster_type: period.roster_type,
+            valid_from: period.valid_from,
+            valid_to: period.valid_to,
+            approver_user_id: approverUserId,
+            status: "PENDING",
+            submitted_at: new Date(),
+            entries: { create: normalized.entries },
+            ...(wasRejected
+              ? { statusHistory: { create: { action: "RESUBMITTED", user_id: user.id } } }
+              : {}),
+          },
+          include: listInclude,
+        });
       });
 
       res.json({ success: true, roster: updated });
     } catch (e) {
       console.error("Error updating roster", e);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to update roster" });
+      res.status(500).json({ success: false, error: "Failed to update roster" });
     }
   },
 
+  // DELETE /rosters/:id — creator deletes own non-approved roster
   async remove(req, res) {
     try {
+      const user = req.session.user;
       const id = Number(req.params.id);
-
-      // Load roster to enforce approved guard
       const roster = await prisma.dutyRoster.findUnique({ where: { id } });
-      if (!roster)
-        return res
-          .status(404)
-          .json({ success: false, error: "Roster not found" });
-
+      if (!roster || roster.is_deleted) {
+        return res.status(404).json({ success: false, error: "Roster not found" });
+      }
       if (roster.status === "APPROVED") {
-        const user = req.session.user;
-        const isSuperAdmin = user?.role?.name === "Super Admin";
-        if (!isSuperAdmin) {
-          const isSystemUser = user?.role?.type === "system";
-          const perms = user?.permissions || [];
-          const hasPermission =
-            perms.includes("*") || perms.includes("roster.status");
-          const isCreator = roster.created_by_user_id === user?.id;
-          if (!isSystemUser || !hasPermission || isCreator) {
-            return res
-              .status(403)
-              .json({
-                success: false,
-                error:
-                  "Approved rosters can only be deleted by authorized system users (creator cannot delete).",
-              });
-          }
-        }
+        return res.status(409).json({
+          success: false,
+          error:
+            "Approved rosters cannot be deleted. Create a new roster for the same period to supersede it.",
+        });
+      }
+      const isSuperAdmin = user?.role?.name === "Super Admin";
+      if (roster.created_by_user_id !== user.id && !isSuperAdmin) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Only the creator can delete this roster" });
       }
 
-      await prisma.dutyRoster.update({
-        where: { id },
-        data: { is_deleted: true },
-      });
+      await prisma.dutyRoster.update({ where: { id }, data: { is_deleted: true } });
       res.json({ success: true, message: "Roster deleted" });
     } catch (e) {
       console.error("Error deleting roster", e);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to delete roster" });
+      res.status(500).json({ success: false, error: "Failed to delete roster" });
     }
   },
 
-  // Fetch employees whose latest employment's reporting_officer_id === logged-in user's employee id
-  async employeesForLoggedInOfficer(req, res) {
+  // GET /rosters/pending-approvals — the logged-in approver's queue
+  async pendingApprovals(req, res) {
     try {
       const user = req.session.user;
-      const employeesSet = new Map();
-      const prisma = require("@prisma/client").PrismaClient
-        ? new (require("@prisma/client").PrismaClient)()
-        : req.app?.locals?.prisma;
+      const or = [{ approver_user_id: user.id }];
+      if (user.role?.name === "Operations") or.push({ scope: "LOCATION" });
+      const where =
+        user.role?.name === "Super Admin"
+          ? { is_deleted: false, status: "PENDING" }
+          : { is_deleted: false, status: "PENDING", OR: or };
 
-      let isLocationUser = false;
-      let isHod = false;
-
-      // If user.location_id points to an active bazaar
-      if (user.location_id) {
-        const loc = await prisma.location.findUnique({
-          where: { id: user.location_id },
-          select: { id: true, type: true, is_active: true, is_deleted: true },
-        });
-        if (loc && loc.type === "BAZAAR" && loc.is_active && !loc.is_deleted) {
-          isLocationUser = true;
-          const employments = await prisma.employment.findMany({
-            where: {
-              is_current: true,
-              is_deleted: false,
-              location_id: loc.id,
-              employee: { is_deleted: false, status: "Active" },
-            },
-            include: { employee: true, designation: true, role_tag: true },
-          });
-          for (const r of employments) {
-            employeesSet.set(r.employee.id, {
-              id: r.employee.id,
-              full_name: r.employee.full_name,
-              designation: r.designation?.title || null,
-              cnic: r.employee.cnic || null,
-              mobile_number: r.employee.mobile_number || null,
-              role_tag_id: r.role_tag?.id || null,
-              role_tag_name: r.role_tag?.name || "Unassigned",
-            });
-          }
-        }
-      }
-
-      // If user is HOD of any department, include all employees in those departments (and HOD too)
-      if (user.employee_id) {
-        const headedDepts = await prisma.department.findMany({
-          where: { head_employee_id: user.employee_id },
-        });
-        if (headedDepts && headedDepts.length > 0) {
-          isHod = true;
-          const deptIds = headedDepts.map((d) => d.id);
-          const employments = await prisma.employment.findMany({
-            where: {
-              is_current: true,
-              is_deleted: false,
-              department_id: { in: deptIds },
-              employee: { is_deleted: false, status: "Active" },
-            },
-            include: { employee: true, designation: true, role_tag: true },
-          });
-          for (const r of employments) {
-            employeesSet.set(r.employee.id, {
-              id: r.employee.id,
-              full_name: r.employee.full_name,
-              designation: r.designation?.title || null,
-              cnic: r.employee.cnic || null,
-              mobile_number: r.employee.mobile_number || null,
-              role_tag_id: r.role_tag?.id || null,
-              role_tag_name: r.role_tag?.name || "Unassigned",
-            });
-          }
-        }
-      }
-
-      if (!isLocationUser && !isHod) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error:
-              "Only a bazaar/location-based user or a head of department can view employees for roster.",
-          });
-      }
-      const employees = Array.from(employeesSet.values());
-      res.json({ success: true, employees });
+      const rosters = await prisma.dutyRoster.findMany({
+        where,
+        include: listInclude,
+        orderBy: { submitted_at: "asc" },
+      });
+      res.json({ success: true, count: rosters.length, rosters });
     } catch (e) {
-      console.error("Error fetching officer employees", e);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to fetch employees" });
+      console.error("Error listing pending approvals", e);
+      res.status(500).json({ success: false, error: "Failed to list pending approvals" });
     }
   },
 
-  async bazaarsForRoster(req, res) {
-    try {
-      const user = req.session.user;
-      const managedLocationId = await getManagedLocationId(user);
-      if (!managedLocationId) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "Only a manager of a location can create roster",
-          });
-      }
-      const [rawBazaars, defaultBazaarId] = await Promise.all([
-        prisma.location.findMany({
-          where: { type: "BAZAAR", is_active: true, is_deleted: false },
-          orderBy: { name: "asc" },
-          select: {
-            id: true,
-            name: true,
-            city: { select: { name: true } },
-            district: { select: { name: true } },
-          },
-        }),
-        Promise.resolve(managedLocationId),
-      ]);
-      const bazaars = rawBazaars.map((b) => ({
-        id: b.id,
-        name: b.name,
-        city: b.city?.name || null,
-        district: b.district?.name || null,
-      }));
-      res.json({ success: true, bazaars, defaultBazaarId });
-    } catch (e) {
-      console.error("Error fetching bazaars for roster", e);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to fetch bazaars" });
-    }
-  },
-
+  // POST /rosters/:id/approve
   async approve(req, res) {
     try {
       const user = req.session.user;
-      const perms = user?.permissions || [];
-      const canChangeStatus =
-        perms.includes("*") || perms.includes("roster.status.change");
-      if (!canChangeStatus) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "You do not have permission to approve rosters",
-          });
-      }
-
       const id = Number(req.params.id);
       const roster = await prisma.dutyRoster.findUnique({ where: { id } });
-      if (!roster || roster.is_deleted)
+      if (!roster || roster.is_deleted) {
+        return res.status(404).json({ success: false, error: "Roster not found" });
+      }
+      if (roster.status !== "PENDING") {
         return res
-          .status(404)
-          .json({ success: false, error: "Roster not found" });
+          .status(409)
+          .json({ success: false, error: `Roster is already ${roster.status}` });
+      }
+      if (!canActOnApproval(user, roster)) {
+        return res
+          .status(403)
+          .json({ success: false, error: "You are not the assigned approver for this roster" });
+      }
 
       const updated = await prisma.dutyRoster.update({
         where: { id },
-        data: { status: "APPROVED" },
-        include: { location: true, createdBy: true },
+        data: {
+          status: "APPROVED",
+          approved_by_user_id: user.id,
+          approved_at: new Date(),
+          statusHistory: { create: { action: "APPROVED", user_id: user.id } },
+        },
+        include: listInclude,
       });
       res.json({ success: true, roster: updated });
+
+      // Fire-and-forget: push the newly-approved schedule to the attendance
+      // system so the dashboard reflects it without waiting for the next cron.
+      try {
+        const { pushRosters, CONFIG } = require("../jobs/attendanceSync");
+        if (CONFIG.enabled) {
+          pushRosters({ force: true }).catch((e) =>
+            console.warn("roster approve: attendance push failed (cron will retry):", e.message)
+          );
+        }
+      } catch (e) {
+        console.warn("roster approve: attendance push unavailable:", e.message);
+      }
     } catch (e) {
       console.error("Error approving roster", e);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to approve roster" });
+      res.status(500).json({ success: false, error: "Failed to approve roster" });
     }
   },
 
+  // POST /rosters/:id/reject — reason required
   async reject(req, res) {
     try {
       const user = req.session.user;
-      const perms = user?.permissions || [];
-      const canChangeStatus =
-        perms.includes("*") || perms.includes("roster.status.change");
-      if (!canChangeStatus) {
+      const id = Number(req.params.id);
+      const reason = String(req.body?.reason || "").trim();
+      if (!reason) {
         return res
-          .status(403)
-          .json({
-            success: false,
-            error: "You do not have permission to reject rosters",
-          });
+          .status(400)
+          .json({ success: false, error: "A rejection reason is required" });
       }
 
-      const id = Number(req.params.id);
       const roster = await prisma.dutyRoster.findUnique({ where: { id } });
-      if (!roster || roster.is_deleted)
+      if (!roster || roster.is_deleted) {
+        return res.status(404).json({ success: false, error: "Roster not found" });
+      }
+      if (roster.status !== "PENDING") {
         return res
-          .status(404)
-          .json({ success: false, error: "Roster not found" });
+          .status(409)
+          .json({ success: false, error: `Roster is already ${roster.status}` });
+      }
+      if (!canActOnApproval(user, roster)) {
+        return res
+          .status(403)
+          .json({ success: false, error: "You are not the assigned approver for this roster" });
+      }
 
       const updated = await prisma.dutyRoster.update({
         where: { id },
-        data: { status: "REJECTED" },
-        include: { location: true, createdBy: true },
+        data: {
+          status: "REJECTED",
+          rejected_by_user_id: user.id,
+          rejected_at: new Date(),
+          rejection_reason: reason,
+          statusHistory: { create: { action: "REJECTED", user_id: user.id, reason } },
+        },
+        include: listInclude,
       });
       res.json({ success: true, roster: updated });
     } catch (e) {
       console.error("Error rejecting roster", e);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to reject roster" });
-    }
-  },
-
-  async setStatus(req, res) {
-    try {
-      const user = req.session.user;
-      const perms = user?.permissions || [];
-      const canChangeStatus =
-        perms.includes("*") || perms.includes("roster.status.change");
-      if (!canChangeStatus) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "You do not have permission to change roster status",
-          });
-      }
-
-      const id = Number(req.params.id);
-      const { status } = req.body || {};
-      const allowed = ["PENDING", "APPROVED", "REJECTED"];
-      if (!allowed.includes(status)) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid status value" });
-      }
-
-      const roster = await prisma.dutyRoster.findUnique({ where: { id } });
-      if (!roster || roster.is_deleted)
-        return res
-          .status(404)
-          .json({ success: false, error: "Roster not found" });
-
-      const updated = await prisma.dutyRoster.update({
-        where: { id },
-        data: { status },
-        include: { location: true, createdBy: true },
-      });
-      res.json({ success: true, roster: updated });
-    } catch (e) {
-      console.error("Error changing roster status", e);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to change status" });
+      res.status(500).json({ success: false, error: "Failed to reject roster" });
     }
   },
 };
