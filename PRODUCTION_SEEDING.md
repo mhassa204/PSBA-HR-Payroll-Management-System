@@ -34,6 +34,34 @@ npm run seed:prod                # idempotent: upserts master data + employees b
 > `npm run seed` (NOT `seed:prod`) is the **local-dev** seeder — it WIPES and rebuilds.
 > Never run `npm run seed` against production.
 
+## July 2026 update: new joiners + reporting lines
+
+The 10-7-26 HR workbook (`Data for HR Software(12-6-26) Reporting Line(10-7-26) v1.xlsx`)
+added 45 new employees and a **Reporting Incharge CNIC** column. This is applied by a
+dedicated, strictly-additive script — **do NOT re-run `seed:prod` for this** (it would
+overwrite live employee edits with workbook values).
+
+```bash
+# 1. (local, Python) regenerate the update payload from the new Excel
+cd server
+npm run etl:reporting        # -> prisma/import/reporting_line_update.json (+ issues csv)
+git add prisma/import/reporting_line_update.json && git commit -m "Reporting line payload"
+
+# 2. (production, Node only)
+cd server
+npm run update:reporting               # DRY RUN — prints the full plan, writes nothing
+npm run update:reporting -- --apply    # execute
+```
+
+`update:reporting` ([scripts/apply_reporting_line_update.js](server/scripts/apply_reporting_line_update.js)):
+- **Creates** employees whose CNIC is missing (never updates existing employees).
+- Creates the one new location (Sahulat Bazaar Haideri Chowk Rawalpindi (On the GO)).
+- Sets `Employment.reporting_officer_id` (= RO's Employee.id, the format the
+  leave/travel approval routing expects) on current employments **only where empty**;
+  pass `--overwrite-reporting` to replace values that were already set differently.
+- Skips + reports anomalies (self-reporting rows, missing CNICs). Idempotent —
+  a second run is a no-op.
+
 ## Data migrations (run once after deploying the new schema)
 
 ```bash

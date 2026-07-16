@@ -1,0 +1,7 @@
+excel_row,sr_no,name,issue,detail,action
+2,1,Naveed Rafaqat Ahmad,NO_REPORTING_INFO,,no reporting line for this row
+68,67,Hafiz Muhamad Saleem Ullah,SELF_REPORTING,RO CNIC == own CNIC (3840138854381),skipped by apply script — fix in source / set via UI
+79,78,Muhammad Zohaib Aslam,SELF_REPORTING,RO CNIC == own CNIC (3520289876563),skipped by apply script — fix in source / set via UI
+197,196,Umar Afzal,UNKNOWN_DEPARTMENT,SOTG Shadman,department left empty (looks like location noise)
+930,929,Waleed Khalil,SELF_REPORTING,RO CNIC == own CNIC (3520243986657),skipped by apply script — fix in source / set via UI
+1464,1463,Bilal Raza,UNKNOWN_DEPARTMENT,SB Township,department left empty (looks like location noise)
