@@ -41,13 +41,14 @@ const SETTING = {
 
 let running = { push: false, pull: false, rosters: false }; // simple in-process locks
 
-const PK_OFFSET_MS = 5 * 3600 * 1000; // Pakistan is UTC+5
-
-// Normalized attendance day (UTC midnight of the punch's PK-local calendar date),
-// matching how existing ZKTeco rows store attendanceDate.
+// Normalized attendance day: UTC midnight of the punch's PK calendar date.
+// Droplet timestamps are ALREADY PK-wall-clock-labelled-UTC (a 20:42 PK punch
+// is stored as 20:42Z), so the calendar day is simply the UTC date of the
+// timestamp — adding a +5h offset here double-counts the timezone and files
+// every punch after 19:00 PK under the NEXT day (evening checkouts vanished
+// from their real day in all HR attendance views).
 function pkAttendanceDate(ts) {
-  const pk = new Date(ts.getTime() + PK_OFFSET_MS);
-  return new Date(Date.UTC(pk.getUTCFullYear(), pk.getUTCMonth(), pk.getUTCDate()));
+  return new Date(Date.UTC(ts.getUTCFullYear(), ts.getUTCMonth(), ts.getUTCDate()));
 }
 
 // ---------- SystemSetting helpers (watermark storage) ----------
