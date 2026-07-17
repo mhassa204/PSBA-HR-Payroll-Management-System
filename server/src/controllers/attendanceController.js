@@ -150,17 +150,25 @@ async function locationAgainstRoster(req, res) {
     // Attendance logs (all types) for range, by cnic
     const att = await fetchAttendanceByCnics(cnics, start, end);
 
-    // Group attendance by cnic+date, reduce to earliest IN and latest OUT
-    const attByUserDate = new Map(); // key: cnic|ymd -> { in: Date|null, out: Date|null }
+    // Group punches by cnic+date, then pick first-in / last-out with the SAME
+    // rules as the attendance dashboard: time-in = first CHECK_IN (or the
+    // first punch of the day when none is typed IN), time-out = last
+    // CHECK_OUT (or the last punch when there are 2+ punches but no OUT —
+    // e.g. someone who pressed check-in twice still gets a checkout time).
+    const punchesByUserDate = new Map(); // key: cnic|ymd -> sorted punches
     for (const a of att) {
       const key = `${norm(a.cnic)}|${formatYMD(a.attendanceDate)}`;
-      const curr = attByUserDate.get(key) || { in: null, out: null };
-      if (a.type === 'IN') {
-        if (!curr.in || a.timestamp < curr.in) curr.in = a.timestamp;
-      } else if (a.type === 'OUT') {
-        if (!curr.out || a.timestamp > curr.out) curr.out = a.timestamp;
-      }
-      attByUserDate.set(key, curr);
+      if (!punchesByUserDate.has(key)) punchesByUserDate.set(key, []);
+      punchesByUserDate.get(key).push(a);
+    }
+    const attByUserDate = new Map(); // key: cnic|ymd -> { in: Date|null, out: Date|null }
+    for (const [key, list] of punchesByUserDate) {
+      list.sort((a, b) => a.timestamp - b.timestamp);
+      const ins = list.filter((p) => p.type === 'IN');
+      const outs = list.filter((p) => p.type === 'OUT');
+      const first = ins.length ? ins[0] : list[0];
+      const last = outs.length ? outs[outs.length - 1] : list.length >= 2 ? list[list.length - 1] : null;
+      attByUserDate.set(key, { in: first ? first.timestamp : null, out: last ? last.timestamp : null });
     }
 
     // Build response rows

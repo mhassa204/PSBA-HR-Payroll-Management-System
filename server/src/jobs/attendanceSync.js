@@ -36,6 +36,7 @@ const SETTING = {
   cursor: "attendance_sync.cursor", // last Attendance.id pulled from droplet
   employeePushAt: "attendance_sync.employee_push_at", // last successful incremental push (ISO)
   rosterPush: "attendance_sync.roster_push", // { watermark } of last pushed approved-roster state
+  updatedSince: "attendance_sync.updated_since", // last droplet correction (edit/delete) mirrored
 };
 
 let running = { push: false, pull: false, rosters: false }; // simple in-process locks
@@ -224,6 +225,34 @@ async function pushEmployees({ full = false } = {}) {
 }
 
 // ---------- 2. Pull attendance droplet -> HR ----------
+// Mirror one exported punch into the local Attendance backup (idempotent on
+// the droplet's row id — source_id @unique — so re-pulls and edits both land
+// as clean overwrites with no history or "modified" markers).
+async function upsertPulledRecord(r) {
+  const cnic = String(r.cnic || "").replace(/\D/g, "");
+  if (!cnic || r.sourceId == null) return false;
+  const ts = r.timestamp ? new Date(r.timestamp) : new Date();
+  const data = {
+    source_id: r.sourceId,
+    cnic,
+    name: r.name ?? null,
+    timestamp: ts,
+    attendanceDate: pkAttendanceDate(ts),
+    type: r.punchType === "CHECK_OUT" ? "OUT" : "IN",
+    verify_mode: r.verifyMode ?? null,
+    auth_method: r.authMethod ?? null,
+    score: r.score ?? null,
+    punch_source: r.source ?? null,
+    source_device_id: r.deviceId ?? null,
+  };
+  await prisma.attendance.upsert({
+    where: { source_id: r.sourceId },
+    create: data,
+    update: data,
+  });
+  return true;
+}
+
 async function pullAttendance() {
   if (running.pull) {
     console.log("[attendanceSync] pull already running, skipping");
@@ -246,29 +275,7 @@ async function pullAttendance() {
       if (!records.length) break;
 
       for (const r of records) {
-        const cnic = String(r.cnic || "").replace(/\D/g, "");
-        if (!cnic || r.sourceId == null) continue;
-        const ts = r.timestamp ? new Date(r.timestamp) : new Date();
-        const data = {
-          source_id: r.sourceId,
-          cnic,
-          name: r.name ?? null,
-          timestamp: ts,
-          attendanceDate: pkAttendanceDate(ts),
-          type: r.punchType === "CHECK_OUT" ? "OUT" : "IN",
-          verify_mode: r.verifyMode ?? null,
-          auth_method: r.authMethod ?? null,
-          score: r.score ?? null,
-          punch_source: r.source ?? null,
-          source_device_id: r.deviceId ?? null,
-        };
-        // Idempotent on the droplet's row id (source_id @unique).
-        await prisma.attendance.upsert({
-          where: { source_id: r.sourceId },
-          create: data,
-          update: data,
-        });
-        totalUpserted++;
+        if (await upsertPulledRecord(r)) totalUpserted++;
       }
 
       cursor = Number(resp.nextCursor) || cursor;
@@ -277,10 +284,53 @@ async function pullAttendance() {
       if (!resp.hasMore) break;
     }
 
-    if (totalUpserted) {
-      console.log(`[attendanceSync] pulled attendance: ${totalUpserted} record(s), cursor=${cursor}`);
+    // Corrections pass: punches edited or deleted on the droplet (the
+    // attendance-control workbench) after our last look. Edits overwrite the
+    // mirror row in place; deletions remove it — reports simply reflect the
+    // corrected data.
+    let corrected = 0;
+    let removed = 0;
+    const uw = await getSetting(SETTING.updatedSince);
+    let updatedSince = uw?.at || null;
+    if (!updatedSince) {
+      // First run after this feature ships: start from now — everything up to
+      // this moment is already covered by the full insert pull above.
+      updatedSince = new Date().toISOString();
+      await setSetting(SETTING.updatedSince, { at: updatedSince });
     }
-    return { upserted: totalUpserted, cursor };
+    let cPages = 0;
+    while (cPages < 50) {
+      const resp = await apiFetch(
+        `/admin/attendance/export?updatedSince=${encodeURIComponent(updatedSince)}&limit=${CONFIG.pullPageLimit}`
+      );
+      const updated = Array.isArray(resp?.updated) ? resp.updated : [];
+      const deletedIds = (Array.isArray(resp?.deletedIds) ? resp.deletedIds : []).filter(
+        (n) => Number.isFinite(Number(n))
+      );
+      if (!updated.length && !deletedIds.length) break;
+
+      for (const r of updated) {
+        if (await upsertPulledRecord(r)) corrected++;
+      }
+      if (deletedIds.length) {
+        const { count } = await prisma.attendance.deleteMany({
+          where: { source_id: { in: deletedIds.map(Number) } },
+        });
+        removed += count;
+      }
+
+      updatedSince = resp.nextUpdatedSince || updatedSince;
+      await setSetting(SETTING.updatedSince, { at: updatedSince });
+      cPages++;
+      if (!resp.hasMore) break;
+    }
+
+    if (totalUpserted || corrected || removed) {
+      console.log(
+        `[attendanceSync] pulled attendance: ${totalUpserted} new, ${corrected} corrected, ${removed} removed, cursor=${cursor}`
+      );
+    }
+    return { upserted: totalUpserted, corrected, removed, cursor };
   } catch (e) {
     console.error("[attendanceSync] pullAttendance failed:", e.message);
     return { error: e.message };
