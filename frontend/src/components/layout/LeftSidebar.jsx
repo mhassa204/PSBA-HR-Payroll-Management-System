@@ -140,6 +140,22 @@ const ViewColumnsIcon = () => (
   </svg>
 );
 
+const ArrowsRightLeftIcon = () => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"
+    />
+  </svg>
+);
+
 const CurrencyDollarIcon = () => (
   <svg
     className="w-5 h-5"
@@ -296,6 +312,12 @@ const LeftSidebar = () => {
           href: "/employees/create",
           icon: PlusIcon,
           show: () => can("employees.create"),
+        },
+        {
+          name: "Transfers",
+          href: "/transfers",
+          icon: ArrowsRightLeftIcon,
+          show: () => can("employment.read"),
         },
       ],
     },

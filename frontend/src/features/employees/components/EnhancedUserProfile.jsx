@@ -427,6 +427,13 @@ const EnhancedUserProfile = () => {
                 <i className="fas fa-briefcase mr-2"></i>
                 Manage Employment
               </button>
+              <button
+                onClick={() => navigate(`/employees/${employee.id}/transfers`)}
+                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors"
+              >
+                <i className="fas fa-exchange-alt mr-2"></i>
+                Transfers
+              </button>
             </div>
           </div>
         </motion.div>

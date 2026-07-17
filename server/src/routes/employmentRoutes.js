@@ -168,6 +168,20 @@ router.delete(
   employmentController.deleteContract
 );
 
+// Transfer routes: read history + perform/record transfers
+router.get(
+  "/:id/transfers",
+  isAuthenticated,
+  authorize("employment.read"),
+  employmentController.getTransferHistory
+);
+router.post(
+  "/:id/transfer",
+  isAuthenticated,
+  authorize("employment.location.update"),
+  employmentController.transferEmployment
+);
+
 // Employment history routes
 router.get(
   "/:id/history",

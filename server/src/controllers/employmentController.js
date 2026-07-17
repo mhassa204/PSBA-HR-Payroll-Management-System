@@ -1,6 +1,7 @@
 // src/controllers/employmentController.js
 const employmentService = require("../services/employmentService");
 const employmentHistoryService = require("../services/employmentHistoryService");
+const employmentTransferService = require("../services/employmentTransferService");
 const path = require("path");
 const { DOCUMENT_TYPES } = require("../config/multer");
 
@@ -1920,6 +1921,40 @@ const employmentController = {
   },
 
   // Manually create a history entry
+  // Transfer history for one employment (enriched with recorded-by names)
+  getTransferHistory: async (req, res) => {
+    try {
+      const result = await employmentTransferService.getTransferHistory(
+        req.params.id
+      );
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error fetching transfer history:", error.message);
+      res
+        .status(error.status || 400)
+        .json({ success: false, error: error.message, code: error.code });
+    }
+  },
+
+  // Perform a transfer (or record a historical one). changed_by always comes
+  // from the session, never the request body.
+  transferEmployment: async (req, res) => {
+    try {
+      const changedBy = req.session?.user?.id || null;
+      const result = await employmentTransferService.transferEmployment(
+        req.params.id,
+        req.body,
+        changedBy
+      );
+      res.status(201).json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error performing transfer:", error.message);
+      res
+        .status(error.status || 400)
+        .json({ success: false, error: error.message, code: error.code });
+    }
+  },
+
   createHistoryEntry: async (req, res) => {
     try {
       const { id } = req.params; // employment id

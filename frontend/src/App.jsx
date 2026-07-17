@@ -15,6 +15,7 @@ import EnhancedUserProfile from "./features/employees/components/EnhancedUserPro
 // import ColorSystemDemo from "./components/ColorSystemDemo";
 import CreateEmployeeForm from "./features/employees/components/CreateEmployeeForm";
 import CleanEmploymentHistory from "./features/employees/components/CleanEmploymentHistory";
+import TransferPage from "./features/transfers/pages/TransferPage";
 import AuditLogsDashboard from "./features/audit/components/AuditLogsDashboard";
 import ConfirmationProvider from "./components/ui/ConfirmationProvider";
 import ToastProvider from "./components/ui/ToastContainer";
@@ -298,6 +299,22 @@ function App() {
               element={
                 <PrivateRoute permissions={["employment.read"]}>
                   <CleanEmploymentHistory />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="transfers"
+              element={
+                <PrivateRoute permissions={["employment.read"]}>
+                  <TransferPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="employees/:employeeId/transfers"
+              element={
+                <PrivateRoute permissions={["employment.read"]}>
+                  <TransferPage />
                 </PrivateRoute>
               }
             />
