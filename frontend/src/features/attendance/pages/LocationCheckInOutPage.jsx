@@ -124,8 +124,6 @@ const LocationCheckInOutPage = () => {
         </div>
       </div>
 
-      <div className="report-title-bar">{titleText}</div>
-
       <div className="card-soft p-4 space-y-3">
         <div className="filter-panel compact">
           <input className="form-input" placeholder="Name" value={fName} onChange={e => setFName(e.target.value)} />

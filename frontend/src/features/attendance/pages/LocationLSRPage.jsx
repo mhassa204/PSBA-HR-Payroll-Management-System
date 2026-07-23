@@ -158,8 +158,6 @@ const LocationLSRPage = () => {
         </div>
       </div>
 
-      <div className="report-title-bar">{titleText}</div>
-
       <div className="card-soft p-4 space-y-3">
         <div className="filter-panel compact">
           <input className="form-input" placeholder="Name" value={filters.name} onChange={e=>setFilters(f=>({...f,name:e.target.value}))} />

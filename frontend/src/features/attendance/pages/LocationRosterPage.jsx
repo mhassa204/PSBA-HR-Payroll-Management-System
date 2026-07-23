@@ -159,8 +159,6 @@ const LocationRosterPage = () => {
         </div>
       </div>
 
-      <div className="report-title-bar">{titleText}</div>
-
       <div className="card-soft p-4 space-y-3">
         <div className="filter-panel compact">
           <input className="form-input" placeholder="Biometric ID" value={fBiometricId} onChange={e=>setFBiometricId(e.target.value)} />

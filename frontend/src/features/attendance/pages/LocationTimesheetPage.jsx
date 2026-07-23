@@ -202,8 +202,6 @@ const LocationTimesheetPage = () => {
         </div>
       </div>
 
-      <div className="report-title-bar">{titleText}</div>
-
       {/* Tabs + filters */}
       <div className="card-soft p-4 space-y-3">
         <div className="flex flex-wrap gap-2">
