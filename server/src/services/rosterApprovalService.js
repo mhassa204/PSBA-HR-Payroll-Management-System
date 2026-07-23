@@ -8,24 +8,21 @@ const prisma = new PrismaClient();
 // leaveService.determineInitialApprover. approver_user_id stays NULL so a
 // replaced operations account never orphans pending rosters.
 //
-// HQ_DEPARTMENT scope, in order:
-//
-// 1. Head-of-Department override: when Department.head_employee_id is set,
-//    that person approves the department's rosters directly (per-department
-//    control, e.g. Operations -> Sadam Hussain). If the submitting account
-//    belongs to the head, approval escalates one level to the head's own
-//    reporting officer (no self-approval). No user account -> climb the
-//    reporting chain.
-//
-// 2. Default (head not set — departments whose chain is already correct,
-//    e.g. Devops/IT, stay on this): the approver is the reporting officer
-//    OF the department's main reporting officer.
-//      e.g. Devops staff report to Ali Hassan; Ali Hassan reports to
-//      Roshan Zameer -> Roshan Zameer's user account approves.
-//    Main RO = the officer most of the department's current employees report
-//    to (Employment.reporting_officer_id holds the RO's Employee.id as a
-//    string).
-//
+// HQ_DEPARTMENT scope: the approver is the reporting officer OF the
+// department's main reporting officer — UNLESS that officer sits in the
+// Competent Authority department, in which case the buck stops one level
+// earlier and the main RO himself approves.
+//   e.g. Devops staff report to Ali Hassan; Ali Hassan reports to
+//        Roshan Zameer (PMU dept) -> Roshan Zameer approves.        (default)
+//   e.g. Operations staff report to Sadam Hussain; Sadam reports to
+//        the ADG (Competent Authority) -> Sadam himself approves.   (stop)
+// Main RO = the officer most of the department's current employees report to
+// (Employment.reporting_officer_id holds the RO's Employee.id as a string).
+// Self-approval guard: if the resolved approver's own account is submitting
+// the roster, approval escalates one level to their reporting officer.
+// No user account -> climb the reporting chain until a live account is found.
+// Fallback when reporting lines are missing: Department.head_employee_id
+// (used only as an alternate main-RO candidate, not as an override).
 // Unresolvable -> { ok:false, reason } and submission must be blocked.
 
 function parseRoId(value) {
@@ -57,6 +54,18 @@ async function employeeName(employeeId, tx) {
     select: { full_name: true },
   });
   return emp?.full_name || `employee #${employeeId}`;
+}
+
+// The top-tier department: reaching it stops the approval escalation, so the
+// last officer BELOW it approves. Matched by name (no schema flag exists).
+const COMPETENT_AUTHORITY_DEPT = "competent authority";
+
+async function isCompetentAuthorityMember(employeeId, tx) {
+  const emp = await tx.employment.findFirst({
+    where: { employee_id: Number(employeeId), is_current: true, is_deleted: false },
+    select: { department: { select: { name: true } } },
+  });
+  return String(emp?.department?.name || "").trim().toLowerCase() === COMPETENT_AUTHORITY_DEPT;
 }
 
 /**
@@ -195,25 +204,7 @@ async function resolveRosterApprover(roster, tx = prisma) {
 
   let lastGap = null;
 
-  // 1. Head-of-Department override: the head approves this department's
-  //    rosters directly. Departments without a head keep the default rule.
-  if (dept.head_employee_id) {
-    const { found, gap } = await approverFromEmployee(dept.head_employee_id, roster.created_by_user_id, tx);
-    if (found) {
-      return {
-        ok: true,
-        mode: "USER",
-        approver_user_id: found.user.id,
-        approver_email: found.user.email,
-        approver_name: found.user.employee?.full_name || null,
-        trail: { mainRoEmployeeId: dept.head_employee_id, approverEmployeeId: found.employeeId, via: "department-head-override" },
-      };
-    }
-    lastGap = gap;
-  }
-
-  // 2. Default: approver = reporting officer OF the main RO.
-  //    Attempt 1: reporting lines. Attempt 2: department head as main RO.
+  // Attempt 1: reporting lines. Attempt 2: department head as main RO.
   const attempts = [];
   const mainRoFromLines = await findMainReportingOfficer(dept.id, tx);
   if (mainRoFromLines) attempts.push({ mainRo: mainRoFromLines, via: "reporting-lines" });
@@ -234,10 +225,23 @@ async function resolveRosterApprover(roster, tx = prisma) {
     const mainRoEmp = await currentEmploymentOf(attempt.mainRo, tx);
     const approverEmployeeId = parseRoId(mainRoEmp?.reporting_officer_id);
     let found = null;
+    let via = attempt.via;
     if (approverEmployeeId && approverEmployeeId !== attempt.mainRo) {
-      found = await findApproverUserViaChain(approverEmployeeId, tx);
-      if (!found) {
-        lastGap = `approver ${await employeeName(approverEmployeeId, tx)} has no user account`;
+      if (await isCompetentAuthorityMember(approverEmployeeId, tx)) {
+        // The main RO reports straight into the Competent Authority tier:
+        // the buck stops with the main RO — they approve their department's
+        // rosters themselves (dept service accounts submit, so this is not
+        // self-approval; if the main RO's own account submits, escalation
+        // still goes one level up via approverFromEmployee).
+        const r = await approverFromEmployee(attempt.mainRo, roster.created_by_user_id, tx);
+        found = r.found;
+        if (!found) lastGap = r.gap;
+        else via = `${attempt.via} (officer is Competent Authority — main RO approves)`;
+      } else {
+        found = await findApproverUserViaChain(approverEmployeeId, tx);
+        if (!found) {
+          lastGap = `approver ${await employeeName(approverEmployeeId, tx)} has no user account`;
+        }
       }
     } else {
       // Main RO is at the top of the hierarchy (e.g. the DG): they approve themselves
@@ -252,7 +256,7 @@ async function resolveRosterApprover(roster, tx = prisma) {
         approver_user_id: found.user.id,
         approver_email: found.user.email,
         approver_name: found.user.employee?.full_name || null,
-        trail: { mainRoEmployeeId: attempt.mainRo, approverEmployeeId: found.employeeId, via: attempt.via },
+        trail: { mainRoEmployeeId: attempt.mainRo, approverEmployeeId: found.employeeId, via },
       };
     }
   }
