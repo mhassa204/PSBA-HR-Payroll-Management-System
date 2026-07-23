@@ -15,10 +15,10 @@ const { toDateOnly, formatYMD } = require("../services/rosterScheduleService");
 //                       (valid_from only, open-ended).
 // Approval:
 //   LOCATION          — any active Operations-role user.
-//   HQ_DEPARTMENT     — the department's main reporting officer (the boss its
-//                       employees report to); escalates one level up if the
-//                       submitter IS that person's own account, and climbs
-//                       the reporting chain when they have no user account.
+//   HQ_DEPARTMENT     — Head of Department when set (per-department override,
+//                       self-approval escalates one level); otherwise the
+//                       reporting officer of the department's main reporting
+//                       officer (default, unchanged).
 // Approved rosters are immutable for everyone; corrections are made by
 // creating a new roster which supersedes (latest approval wins per date —
 // see rosterScheduleService).
