@@ -16,6 +16,7 @@ const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', titl
   );
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState('filtered');
+  const [busy, setBusy] = useState(false);
   // Track DESELECTED keys so newly appearing columns (dynamic day columns)
   // default to selected.
   const [deselected, setDeselected] = useState(() => new Set());
@@ -40,14 +41,26 @@ const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', titl
     return next;
   });
 
-  const doExport = (type) => {
-    const rows = getRows(scope) || [];
-    if (!rows.length) {
-      toastBus.emit({ type: 'info', message: 'Nothing to export for the current selection.' });
-      return;
-    }
+  // getRows may be sync (rows already on the page) or async (fetched on
+  // demand, e.g. the all-locations export).
+  const doExport = async (type) => {
+    if (busy) return;
     if (!selectedCols.length) {
       toastBus.emit({ type: 'info', message: 'Select at least one column to export.' });
+      return;
+    }
+    let rows;
+    try {
+      setBusy(true);
+      rows = (await getRows(scope)) || [];
+    } catch (e) {
+      toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to load export data.' });
+      return;
+    } finally {
+      setBusy(false);
+    }
+    if (!rows.length) {
+      toastBus.emit({ type: 'info', message: 'Nothing to export for the current selection.' });
       return;
     }
     const headers = selectedCols.map((c) => c.key);
@@ -100,8 +113,8 @@ const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', titl
             </div>
           </div>
           <div className="flex gap-2">
-            <button type="button" className="btn btn-primary text-xs flex-1" onClick={() => doExport('xlsx')}>Excel</button>
-            <button type="button" className="btn btn-outline text-xs flex-1" onClick={() => doExport('csv')}>CSV</button>
+            <button type="button" className="btn btn-primary text-xs flex-1" disabled={busy} onClick={() => doExport('xlsx')}>{busy ? 'Exporting…' : 'Excel'}</button>
+            <button type="button" className="btn btn-outline text-xs flex-1" disabled={busy} onClick={() => doExport('csv')}>{busy ? 'Exporting…' : 'CSV'}</button>
           </div>
         </div>
       )}

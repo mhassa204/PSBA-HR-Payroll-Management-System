@@ -566,4 +566,89 @@ async function locationCheckInOut(req, res) {
   }
 }
 
-module.exports = { locationFMO, locationAgainstRoster, listLocations, locationLSR, locationCheckInOut };
+// GET /attendance/locations/export
+// Check-in/out log across ALL active locations at once (same row shape and
+// first-in/last-out rules as the per-location check-in/out view, plus the
+// location columns). One row per employee per day with punches.
+async function allLocationsCheckInOut(req, res) {
+  try {
+    const startParam = req.query.start; const endParam = req.query.end;
+    let start, end;
+    if (startParam && endParam) {
+      start = toDateOnly(startParam); end = toDateOnly(endParam);
+    } else {
+      const r = getDefaultPayrollRangeUTC(new Date());
+      start = r.start; end = r.end;
+    }
+    if (start > end) return res.status(400).json({ success: false, error: 'start must be on or before end' });
+
+    const employments = await prisma.employment.findMany({
+      where: {
+        is_current: true,
+        is_deleted: false,
+        location_id: { not: null },
+        location: { is_deleted: false, is_active: true },
+        employee: { is_deleted: false },
+      },
+      select: {
+        location: { select: { id: true, name: true, type: true } },
+        employee: { select: { id: true, full_name: true, cnic: true } },
+        designation: { select: { title: true } },
+        role_tag: { select: { name: true } },
+      },
+    });
+    const empByCnic = new Map();
+    for (const rec of employments) {
+      const ecnic = norm(rec.employee.cnic);
+      if (ecnic) empByCnic.set(ecnic, rec);
+    }
+
+    const att = await fetchAttendanceByCnics([...empByCnic.keys()], start, end);
+    const punchesByUserDate = new Map();
+    for (const a of att) {
+      const key = `${norm(a.cnic)}|${formatYMD(a.attendanceDate)}`;
+      if (!punchesByUserDate.has(key)) punchesByUserDate.set(key, []);
+      punchesByUserDate.get(key).push(a);
+    }
+
+    const rows = [];
+    for (const [key, list] of punchesByUserDate) {
+      const [ecnic, ymd] = key.split('|');
+      const rec = empByCnic.get(ecnic);
+      if (!rec) continue;
+      list.sort((a, b) => a.timestamp - b.timestamp);
+      const ins = list.filter((p) => p.type === 'IN');
+      const outs = list.filter((p) => p.type === 'OUT');
+      const first = ins.length ? ins[0] : list[0];
+      const last = outs.length ? outs[outs.length - 1] : (list.length >= 2 ? list[list.length - 1] : null);
+      const date = new Date(ymd + 'T00:00:00Z');
+      rows.push({
+        locationId: rec.location.id,
+        locationName: rec.location.name,
+        locationType: rec.location.type,
+        employeeId: rec.employee.id,
+        cnic: rec.employee.cnic || null,
+        name: rec.employee.full_name,
+        designation: rec.designation?.title || null,
+        costCenter: rec.role_tag?.name || null,
+        date: ymd,
+        day: dayName(date),
+        checkIn: formatHHmmFromUTCDate(first ? first.timestamp : null) || '',
+        checkOut: formatHHmmFromUTCDate(last ? last.timestamp : null) || '',
+        punches: list.length,
+        singleMark: !last,
+      });
+    }
+    rows.sort((a, b) =>
+      a.locationName !== b.locationName ? String(a.locationName).localeCompare(String(b.locationName))
+      : a.date !== b.date ? (a.date < b.date ? -1 : 1)
+      : String(a.name).localeCompare(String(b.name)));
+
+    res.json({ success: true, range: { start: formatYMD(start), end: formatYMD(end) }, rows });
+  } catch (e) {
+    console.error('allLocationsCheckInOut error', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+}
+
+module.exports = { locationFMO, locationAgainstRoster, listLocations, locationLSR, locationCheckInOut, allLocationsCheckInOut };

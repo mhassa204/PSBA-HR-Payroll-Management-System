@@ -1,8 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { useToastContext } from '../../../components/ui/ToastContainer';
 import { attendanceService } from '../services/attendanceService';
+import axios from '../../../lib/axios';
+import PayrollRangeControl, { getDefaultPayrollRange } from '../components/PayrollRangeControl';
+import ExportMenu from '../components/ExportMenu';
 
 const TYPE_CHIPS = [
   { value: 'ALL', label: 'All' },
@@ -72,6 +75,41 @@ const AttendanceLocations = () => {
     });
   }, [locations, q, type, district]);
 
+  // ---- All-locations attendance export -------------------------------
+  const [range, setRange] = useState(() => getDefaultPayrollRange());
+  const exportCache = useRef({ key: null, rows: null }); // avoid refetching the same range
+  const EXPORT_COLUMNS = ['Location', 'Location Type', 'EmployeeID', 'CNIC', 'Name', 'Designation', 'CostCenter', 'Date', 'Day', 'Check In', 'Check Out', 'Punches', 'Status'];
+
+  const fetchExportRows = async () => {
+    const key = `${range.start}|${range.end}`;
+    if (exportCache.current.key !== key) {
+      const { data } = await axios.get('/attendance/locations/export', { params: { start: range.start, end: range.end } });
+      exportCache.current = { key, rows: data.rows || [] };
+    }
+    return exportCache.current.rows;
+  };
+
+  const getExportRows = async (scope) => {
+    const rows = await fetchExportRows();
+    const visibleIds = new Set(filtered.map((l) => l.id));
+    const src = scope === 'filtered' ? rows.filter((r) => visibleIds.has(r.locationId)) : rows;
+    return src.map((r) => ({
+      Location: r.locationName ?? '',
+      'Location Type': typeLabel(r.locationType),
+      EmployeeID: r.employeeId ?? '',
+      CNIC: r.cnic ?? '',
+      Name: r.name ?? '',
+      Designation: r.designation ?? '',
+      CostCenter: r.costCenter ?? '',
+      Date: r.date ?? '',
+      Day: r.day ?? '',
+      'Check In': r.checkIn ?? '',
+      'Check Out': r.checkOut ?? '',
+      Punches: r.punches ?? '',
+      Status: r.singleMark ? 'Single Mark' : 'Complete',
+    }));
+  };
+
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -87,6 +125,17 @@ const AttendanceLocations = () => {
           <p className="text-xs text-gray-500 mt-0.5">
             {filtered.length} of {locations.length} locations
           </p>
+        </div>
+        <div className="actions-inline">
+          <PayrollRangeControl start={range.start} end={range.end} onChange={setRange} />
+          <ExportMenu
+            columns={EXPORT_COLUMNS}
+            getRows={getExportRows}
+            filenameBase={`Attendance_All_Locations_${range.start}_to_${range.end}`}
+            sheetName="Attendance"
+            title={`Attendance (Check In / Check Out) — All Locations (${range.start} to ${range.end})`}
+            counts={{ filtered: `${filtered.length} locations`, all: `${locations.length} locations` }}
+          />
         </div>
       </div>
 
