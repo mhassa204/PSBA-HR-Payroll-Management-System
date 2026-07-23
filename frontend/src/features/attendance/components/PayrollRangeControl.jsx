@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 // Payroll cycle helpers (21st of month -> 20th of next month)
 export function getPayrollRangeForMonth(year, month0 /* 0-based start month */) {
@@ -56,6 +56,7 @@ const PayrollRangeControl = ({ start, end, onChange }) => {
   const matched = options.find((o) => o.start === start && o.end === end);
   const dirty = draftStart !== (start || '') || draftEnd !== (end || '');
   const invalid = !draftStart || !draftEnd || draftStart > draftEnd;
+  const startRef = useRef(null);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -64,7 +65,12 @@ const PayrollRangeControl = ({ start, end, onChange }) => {
         value={matched ? matched.value : 'custom'}
         onChange={(e) => {
           const v = e.target.value;
-          if (v === 'custom') return; // custom = just edit the dates below
+          if (v === 'custom') {
+            // Send the user straight to the start-date picker
+            const el = startRef.current;
+            if (el) { el.focus(); if (typeof el.showPicker === 'function') { try { el.showPicker(); } catch { /* needs user gesture in some browsers */ } } }
+            return;
+          }
           const opt = options.find((o) => o.value === v);
           if (opt) onChange({ start: opt.start, end: opt.end });
         }}
@@ -73,6 +79,7 @@ const PayrollRangeControl = ({ start, end, onChange }) => {
         {options.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
       </select>
       <input
+        ref={startRef}
         type="date"
         className="form-input dense-input !w-auto text-xs"
         title="Custom range: start date"
