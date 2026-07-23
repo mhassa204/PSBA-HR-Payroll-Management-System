@@ -26,9 +26,9 @@ function fmtShort(ymd) {
 }
 
 // Period selector shared by attendance submodule screens: payroll cycle
-// dropdown plus a free custom date range (start/end + Apply).
+// dropdown plus ALWAYS-VISIBLE custom start/end date pickers with Apply —
+// pick a cycle for the standard 21st→20th window, or type any two dates.
 const PayrollRangeControl = ({ start, end, onChange }) => {
-  const [customMode, setCustomMode] = useState(false);
   const [draftStart, setDraftStart] = useState(start || '');
   const [draftEnd, setDraftEnd] = useState(end || '');
   useEffect(() => { setDraftStart(start || ''); setDraftEnd(end || ''); }, [start, end]);
@@ -54,41 +54,50 @@ const PayrollRangeControl = ({ start, end, onChange }) => {
   }, []);
 
   const matched = options.find((o) => o.start === start && o.end === end);
-  const selectValue = customMode || !matched ? 'custom' : matched.value;
-  const applyDisabled = !draftStart || !draftEnd || draftStart > draftEnd;
+  const dirty = draftStart !== (start || '') || draftEnd !== (end || '');
+  const invalid = !draftStart || !draftEnd || draftStart > draftEnd;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <select
         className="form-input dense-input !w-auto text-xs"
-        value={selectValue}
+        value={matched ? matched.value : 'custom'}
         onChange={(e) => {
           const v = e.target.value;
-          if (v === 'custom') { setCustomMode(true); return; }
-          setCustomMode(false);
+          if (v === 'custom') return; // custom = just edit the dates below
           const opt = options.find((o) => o.value === v);
           if (opt) onChange({ start: opt.start, end: opt.end });
         }}
       >
-        {options.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
         <option value="custom">Custom range…</option>
+        {options.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
       </select>
-      {selectValue === 'custom' && (
-        <>
-          <input type="date" className="form-input dense-input !w-auto text-xs" value={draftStart} max={draftEnd || undefined} onChange={(e) => setDraftStart(e.target.value)} />
-          <span className="text-xs text-gray-500">to</span>
-          <input type="date" className="form-input dense-input !w-auto text-xs" value={draftEnd} min={draftStart || undefined} onChange={(e) => setDraftEnd(e.target.value)} />
-          <button
-            type="button"
-            className="btn btn-secondary text-xs"
-            disabled={applyDisabled}
-            title={applyDisabled ? 'Pick a valid start and end date' : 'Apply date range'}
-            onClick={() => onChange({ start: draftStart, end: draftEnd })}
-          >
-            Apply
-          </button>
-        </>
-      )}
+      <input
+        type="date"
+        className="form-input dense-input !w-auto text-xs"
+        title="Custom range: start date"
+        value={draftStart}
+        max={draftEnd || undefined}
+        onChange={(e) => setDraftStart(e.target.value)}
+      />
+      <span className="text-xs text-gray-500">to</span>
+      <input
+        type="date"
+        className="form-input dense-input !w-auto text-xs"
+        title="Custom range: end date"
+        value={draftEnd}
+        min={draftStart || undefined}
+        onChange={(e) => setDraftEnd(e.target.value)}
+      />
+      <button
+        type="button"
+        className="btn btn-secondary text-xs"
+        disabled={invalid || !dirty}
+        title={invalid ? 'Pick a valid start and end date' : 'Apply the custom date range'}
+        onClick={() => onChange({ start: draftStart, end: draftEnd })}
+      >
+        Apply
+      </button>
     </div>
   );
 };
