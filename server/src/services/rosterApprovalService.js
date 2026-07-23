@@ -8,13 +8,17 @@ const prisma = new PrismaClient();
 // leaveService.determineInitialApprover. approver_user_id stays NULL so a
 // replaced operations account never orphans pending rosters.
 //
-// HQ_DEPARTMENT scope: the approver is the reporting officer OF the
-// department's main reporting officer.
-//   e.g. Devops staff report to Ali Hassan; Ali Hassan reports to
-//   Roshan Zameer -> Roshan Zameer's user account approves.
+// HQ_DEPARTMENT scope: the approver is the department's main reporting
+// officer HIMSELF — the boss the department's employees actually report to
+// (e.g. Operations staff report to Sadam Hussain -> Sadam approves).
+// Rosters are submitted by the department's service account, so this is not
+// self-approval; if the roster IS being submitted by the main RO's own user
+// account, approval escalates one level to the main RO's reporting officer.
 // Main RO = the officer most of the department's current employees report to
 // (Employment.reporting_officer_id holds the RO's Employee.id as a string).
-// Fallback when reporting lines are missing: Department.head_employee_id.
+// If the main RO has no user account the reporting chain is climbed until a
+// live account is found. Fallback when reporting lines are missing:
+// Department.head_employee_id.
 // Unresolvable -> { ok:false, reason } and submission must be blocked.
 
 function parseRoId(value) {
@@ -122,6 +126,7 @@ async function findApproverUserViaChain(startEmployeeId, tx = prisma, maxHops = 
 /**
  * Resolve the approver for a roster being submitted.
  * roster: { scope, department_id?, created_by_user_id? }
+ * created_by_user_id (when provided) triggers the self-approval escalation.
  */
 async function resolveRosterApprover(roster, tx = prisma) {
   if (roster.scope !== "HQ_DEPARTMENT") {
@@ -172,19 +177,23 @@ async function resolveRosterApprover(roster, tx = prisma) {
 
   let lastGap = null;
   for (const attempt of attempts) {
-    const mainRoEmp = await currentEmploymentOf(attempt.mainRo, tx);
-    const approverEmployeeId = parseRoId(mainRoEmp?.reporting_officer_id);
-    let found = null;
-    if (approverEmployeeId && approverEmployeeId !== attempt.mainRo) {
-      found = await findApproverUserViaChain(approverEmployeeId, tx);
+    // The department's own boss (main RO) approves; the department service
+    // account submits the roster, so this is not self-approval. When the
+    // main RO has no user account the chain is climbed to the next boss up.
+    let found = await findApproverUserViaChain(attempt.mainRo, tx);
+    if (!found) {
+      lastGap = `${await employeeName(attempt.mainRo, tx)} has no user account (nor anyone up their reporting chain)`;
+    }
+    // If the roster is being submitted by the resolved approver's own user
+    // account, escalate one level so nobody approves their own roster.
+    if (found && roster.created_by_user_id && found.user.id === roster.created_by_user_id) {
+      const selfEmp = await currentEmploymentOf(found.employeeId, tx);
+      const upId = parseRoId(selfEmp?.reporting_officer_id);
+      const selfName = await employeeName(found.employeeId, tx);
+      found = upId && upId !== found.employeeId ? await findApproverUserViaChain(upId, tx) : null;
       if (!found) {
-        lastGap = `approver ${await employeeName(approverEmployeeId, tx)} has no user account`;
+        lastGap = `${selfName} cannot approve their own roster and has no reporting officer with a user account`;
       }
-    } else {
-      // Main RO is at the top of the hierarchy (e.g. the DG): they approve themselves
-      lastGap = `${await employeeName(attempt.mainRo, tx)} has no reporting officer set`;
-      const own = await liveUserForEmployee(attempt.mainRo, tx);
-      if (own) found = { user: own, employeeId: attempt.mainRo, hops: 0 };
     }
     if (found) {
       return {

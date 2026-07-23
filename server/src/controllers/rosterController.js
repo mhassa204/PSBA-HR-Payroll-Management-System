@@ -15,8 +15,10 @@ const { toDateOnly, formatYMD } = require("../services/rosterScheduleService");
 //                       (valid_from only, open-ended).
 // Approval:
 //   LOCATION          — any active Operations-role user.
-//   HQ_DEPARTMENT     — the resolved approver user (reporting officer of the
-//                       department's main reporting officer).
+//   HQ_DEPARTMENT     — the department's main reporting officer (the boss its
+//                       employees report to); escalates one level up if the
+//                       submitter IS that person's own account, and climbs
+//                       the reporting chain when they have no user account.
 // Approved rosters are immutable for everyone; corrections are made by
 // creating a new roster which supersedes (latest approval wins per date —
 // see rosterScheduleService).
@@ -290,6 +292,7 @@ const rosterController = {
         resolveRosterApprover({
           scope: scopeInfo.scope,
           department_id: scopeInfo.department?.id,
+          created_by_user_id: user.id,
         }),
         prisma.dutyRoster.findFirst({
           where: { is_deleted: false, created_by_user_id: user.id },
@@ -349,6 +352,7 @@ const rosterController = {
       const approval = await resolveRosterApprover({
         scope: scopeInfo.scope,
         department_id: scopeInfo.department?.id,
+        created_by_user_id: user.id,
       });
       if (!approval.ok) {
         return res.status(422).json({ success: false, error: approval.reason });
@@ -429,6 +433,7 @@ const rosterController = {
       const approval = await resolveRosterApprover({
         scope: scopeInfo.scope,
         department_id: scopeInfo.department?.id,
+        created_by_user_id: user.id,
       });
       if (!approval.ok) {
         return res.status(422).json({ success: false, error: approval.reason });
