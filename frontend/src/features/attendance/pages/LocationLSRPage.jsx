@@ -1,32 +1,37 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
-import { exportToCSV, exportToExcel } from '../../../lib/exportUtils';
 import { toastBus } from '../../../utils/toastBus';
-
-function getDefaultCycleMonth() {
-  const now = new Date();
-  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  // We treat selected month as cycle END month (ending 20th). If date > 20 use current month as end month else previous.
-  if (utc.getUTCDate() > 20) return { year: utc.getUTCFullYear(), month: utc.getUTCMonth() }; // 0-based
-  const prev = new Date(Date.UTC(utc.getUTCFullYear(), utc.getUTCMonth()-1, 1));
-  return { year: prev.getUTCFullYear(), month: prev.getUTCMonth() };
-}
-
-function toMonthParam(year, month0) { // month0 0-based
-  return `${year}-${String(month0+1).padStart(2,'0')}`;
-}
+import PayrollRangeControl, { getDefaultPayrollRange, getPayrollRangeForMonth } from '../components/PayrollRangeControl';
+import ExportMenu from '../components/ExportMenu';
 
 const LocationLSRPage = () => {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialMonthParam = searchParams.get('month');
-  const def = getDefaultCycleMonth();
-  const [selYear, setSelYear] = useState(initialMonthParam ? parseInt(initialMonthParam.slice(0,4),10) : def.year);
-  const [selMonth, setSelMonth] = useState(initialMonthParam ? (parseInt(initialMonthParam.slice(5,7),10)-1) : def.month); // 0-based
 
-  const monthParam = useMemo(()=> toMonthParam(selYear, selMonth), [selYear, selMonth]);
+  const start = searchParams.get('start') || '';
+  const end = searchParams.get('end') || '';
+
+  // default period: legacy ?month=YYYY-MM links (cycle END month) are
+  // converted to start/end; otherwise use the current payroll cycle
+  useEffect(() => {
+    if (start && end) return;
+    const legacyMonth = searchParams.get('month');
+    let def;
+    if (legacyMonth && /^\d{4}-\d{2}$/.test(legacyMonth)) {
+      const y = parseInt(legacyMonth.slice(0, 4), 10);
+      const endM0 = parseInt(legacyMonth.slice(5, 7), 10) - 1;
+      def = endM0 === 0 ? getPayrollRangeForMonth(y - 1, 11) : getPayrollRangeForMonth(y, endM0 - 1);
+    } else {
+      def = getDefaultPayrollRange();
+    }
+    const np = new URLSearchParams(searchParams);
+    np.delete('month');
+    np.set('start', def.start); np.set('end', def.end);
+    setSearchParams(np, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end]);
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,14 +42,10 @@ const LocationLSRPage = () => {
     account: searchParams.get('facct') || '',
     remarks: searchParams.get('frem') || '',
   }));
-  const exportRef = useRef(null);
-  const [exportOpen, setExportOpen] = useState(false);
-
-  // keep month + filters in URL (parity with FMO/Roster pages)
+  // keep filters in URL (parity with FMO/Roster pages)
   useEffect(()=>{
     const np = new URLSearchParams(searchParams);
     const before = np.toString();
-    if (np.get('month') !== monthParam) np.set('month', monthParam);
     const setOrDelete = (k, v) => { if (v && String(v).length) np.set(k, v); else np.delete(k); };
     setOrDelete('fname', filters.name);
     setOrDelete('fdesig', filters.designation);
@@ -53,21 +54,21 @@ const LocationLSRPage = () => {
     setOrDelete('frem', filters.remarks);
     if (np.toString() !== before) setSearchParams(np, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthParam, filters]);
+  }, [filters]);
 
-  // Load data when month changes
+  // Load data when the date range changes
   useEffect(()=>{
     const load = async () => {
       try {
         setLoading(true);
-        const { data } = await axios.get(`/attendance/locations/${id}/lsr`, { params: { month: monthParam } });
+        const { data } = await axios.get(`/attendance/locations/${id}/lsr`, { params: { start, end } });
         setData(data);
       } catch (e) {
         toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to load LSR' });
       } finally { setLoading(false); }
     };
-    if (monthParam) load();
-  }, [id, monthParam]);
+    if (start && end) load();
+  }, [id, start, end]);
 
   const rows = data?.employees || [];
 
@@ -75,35 +76,6 @@ const LocationLSRPage = () => {
     const inc = (v,f) => String(v||'').toLowerCase().includes(String(f||'').toLowerCase());
     return inc(r.name, filters.name) && inc(r.designation, filters.designation) && inc(r.cnic, filters.cnic) && inc(r.bank?.accountNumber, filters.account) && inc(r.remarks, filters.remarks);
   });
-
-  // Month dropdown: past 18 and future 12 cycle end months anchored to today's cycle end month (not the selected month)
-  const monthOptions = useMemo(()=>{
-    const PAST_MONTHS = 18; // months back (including anchor counts as 0 offset separately)
-    const FUTURE_MONTHS = 12; // months ahead
-    const anchor = getDefaultCycleMonth();
-    const anchorDate = new Date(Date.UTC(anchor.year, anchor.month, 1));
-    const list = [];
-    // Build future months first (so latest/future appear on top), then anchor, then past
-    for (let f=FUTURE_MONTHS; f>0; f--) {
-      const d = new Date(Date.UTC(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth()+f, 1));
-      const label = d.toLocaleString('en-US',{ month:'long', year:'numeric', timeZone:'UTC' });
-      list.push({ label, param: toMonthParam(d.getUTCFullYear(), d.getUTCMonth()), y: d.getUTCFullYear(), m: d.getUTCMonth() });
-    }
-    // Anchor month
-    list.push({ label: anchorDate.toLocaleString('en-US',{ month:'long', year:'numeric', timeZone:'UTC' }), param: toMonthParam(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth()), y: anchorDate.getUTCFullYear(), m: anchorDate.getUTCMonth() });
-    // Past months
-    for (let p=1; p<=PAST_MONTHS; p++) {
-      const d = new Date(Date.UTC(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth()-p, 1));
-      const label = d.toLocaleString('en-US',{ month:'long', year:'numeric', timeZone:'UTC' });
-      list.push({ label, param: toMonthParam(d.getUTCFullYear(), d.getUTCMonth()), y: d.getUTCFullYear(), m: d.getUTCMonth() });
-    }
-    // Ensure currently selected (if outside range) is included
-    if (!list.some(o => o.param === monthParam)) {
-      const selDate = new Date(Date.UTC(selYear, selMonth, 1));
-      list.unshift({ label: selDate.toLocaleString('en-US',{ month:'long', year:'numeric', timeZone:'UTC' }), param: monthParam, y: selYear, m: selMonth });
-    }
-    return list;
-  }, [monthParam, selYear, selMonth]);
 
   const titleText = `Leave Status Report (LSR) - ${data?.location?.name || ''} - ${data?.cycle?.label || ''} (${data?.cycle?.start} to ${data?.cycle?.end})`;
 
@@ -152,19 +124,7 @@ const LocationLSRPage = () => {
     }));
   }
 
-  function handleExport(type, filtered) {
-    const src = filtered ? filteredRows : rows;
-    if (!src.length) return;
-    const payload = mapRowsForExport(src);
-    const headers = ['Sr','BazaarName','EmployeeName','Designation','CNIC','AccountHolderName','BranchCode','AccountNumber','TotalWorkingDays','PresentDays','Absents','HolidaysWeeklyOff','WeeklyOffDates','FullDayLeavesApproved','ApprovedLeaveDates','UnapprovedLeaves','Remarks'];
-    const filename = `LSR_${data?.location?.name || 'Location'}_${data?.cycle?.start}_${data?.cycle?.end}.${type==='csv'?'csv':'xlsx'}`;
-    if (type==='csv') exportToCSV(filename, payload, headers, titleText);
-    else exportToExcel(filename, payload, 'LSR', headers, titleText);
-    toastBus.emit({ type: 'success', message: `Exported ${src.length} ${filtered?'filtered':'all'} rows to ${type.toUpperCase()}` });
-  }
-
-  useEffect(()=>{ if(!exportOpen) return; const handler=(e)=>{ if(exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false); }; document.addEventListener('mousedown', handler); return ()=>document.removeEventListener('mousedown', handler); },[exportOpen]);
-  useEffect(()=>{ const key=(e)=>{ if(e.key==='Escape') setExportOpen(false); }; window.addEventListener('keydown', key); return ()=>window.removeEventListener('keydown', key); },[]);
+  const EXPORT_COLUMNS = ['Sr','BazaarName','EmployeeName','Designation','CNIC','AccountHolderName','BranchCode','AccountNumber','TotalWorkingDays','PresentDays','Absents','HolidaysWeeklyOff','WeeklyOffDates','FullDayLeavesApproved','ApprovedLeaveDates','UnapprovedLeaves','Remarks'];
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading LSR..." /></div>;
   if (!data?.success) return <div className="p-6 text-red-600">Failed to load</div>;
@@ -177,21 +137,23 @@ const LocationLSRPage = () => {
           <p className="text-xs text-gray-500">Cycle: {data.cycle.start} to {data.cycle.end}</p>
         </div>
         <div className="actions-inline">
-          <select className="form-input dense-input !w-auto text-xs" value={monthParam} onChange={(e)=>{ const v=e.target.value; setSelYear(parseInt(v.slice(0,4),10)); setSelMonth(parseInt(v.slice(5,7),10)-1); }}>
-            {monthOptions.map((o,i)=>(<option key={i} value={o.param}>{o.label}</option>))}
-          </select>
-          <div className="relative" ref={exportRef}>
-            <button type="button" className="btn btn-secondary text-xs" onClick={()=>setExportOpen(o=>!o)}>Export ▾</button>
-            {exportOpen && (
-              <div className="menu-surface absolute right-0 mt-1 z-30 flex flex-col" role="menu">
-                <button className="menu-item" onClick={()=>{handleExport('csv', true); setExportOpen(false);}}>Filtered CSV</button>
-                <button className="menu-item" onClick={()=>{handleExport('xlsx', true); setExportOpen(false);}}>Filtered Excel</button>
-                <div className="h-px my-1 bg-gray-200" />
-                <button className="menu-item" onClick={()=>{handleExport('csv', false); setExportOpen(false);}}>All CSV</button>
-                <button className="menu-item" onClick={()=>{handleExport('xlsx', false); setExportOpen(false);}}>All Excel</button>
-              </div>
-            )}
-          </div>
+          <PayrollRangeControl
+            start={start}
+            end={end}
+            onChange={({ start: s, end: e }) => {
+              const np = new URLSearchParams(searchParams);
+              np.set('start', s); np.set('end', e);
+              setSearchParams(np, { replace: true });
+            }}
+          />
+          <ExportMenu
+            columns={EXPORT_COLUMNS}
+            getRows={(scope) => mapRowsForExport(scope === 'filtered' ? filteredRows : rows)}
+            filenameBase={`LSR_${data?.location?.name || 'Location'}_${data?.cycle?.start}_${data?.cycle?.end}`}
+            sheetName="LSR"
+            title={titleText}
+            counts={{ filtered: filteredRows.length, all: rows.length }}
+          />
           <Link to={`/attendance/locations/${id}`} className="btn btn-outline text-xs">Back</Link>
         </div>
       </div>

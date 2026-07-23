@@ -53,6 +53,15 @@ const AttendanceLocationDetailHome = () => {
             Late check-in detail and per-employee late-day counts, exportable in the official format.
           </div>
         </Link>
+        <Link to={`${base}/checkinout${q}`} className="group card-soft hover:shadow-md transition-all duration-200 overflow-hidden">
+          <div className="card-soft-header flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-wide text-gray-700 group-hover:text-primary">Check In / Check Out</h2>
+            <span className="badge badge-gray">Daily</span>
+          </div>
+          <div className="p-4 text-sm text-gray-600 leading-relaxed">
+            Simple daily punch log — just check-in and check-out per employee.
+          </div>
+        </Link>
       </div>
     </div>
   );

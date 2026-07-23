@@ -10,5 +10,6 @@ router.get('/locations', isAuthenticated, authorize('attendance.read'), ctrl.lis
 router.get('/locations/:id/fmo', isAuthenticated, authorize('attendance.read'), ctrl.locationFMO);
 router.get('/locations/:id/roster', isAuthenticated, authorize('attendance.read'), ctrl.locationAgainstRoster);
 router.get('/locations/:id/lsr', isAuthenticated, authorize('attendance.read'), ctrl.locationLSR);
+router.get('/locations/:id/checkinout', isAuthenticated, authorize('attendance.read'), ctrl.locationCheckInOut);
 
 module.exports = router;

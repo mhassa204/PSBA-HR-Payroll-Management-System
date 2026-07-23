@@ -1,27 +1,16 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
-import { exportToCSV, exportToExcelMultiSheet } from '../../../lib/exportUtils';
+import { exportToExcelMultiSheet } from '../../../lib/exportUtils';
 import { toastBus } from '../../../utils/toastBus';
+import PayrollRangeControl, { getDefaultPayrollRange } from '../components/PayrollRangeControl';
+import ExportMenu from '../components/ExportMenu';
 
 // Biometric Timesheet — late check-in report in the official format:
 //   "Late Check IN" sheet: one row per late check-in day (roster columns)
 //   "Pivot" sheet: per-employee count of late check-in days
 // Built from the same rows as Attendance vs Duty Roster (timeInStatus === 'Late').
-
-function getPayrollRangeForMonth(year, month /* 0-based */) {
-  const start = new Date(Date.UTC(year, month, 21));
-  const end = new Date(Date.UTC(year, month + 1, 20));
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
-}
-function getDefaultPayrollMonth() {
-  const now = new Date();
-  const utcNow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  if (utcNow.getUTCDate() >= 21) return { year: utcNow.getUTCFullYear(), month: utcNow.getUTCMonth() };
-  const d = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth() - 1, 1));
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() };
-}
 
 const DETAIL_HEADERS = [
   'Employ ID', 'Biometric Name', 'CNIC No.', 'Name', 'Designation', 'Actual Cost Center',
@@ -52,21 +41,21 @@ const LocationTimesheetPage = () => {
 
   const start = searchParams.get('start') || '';
   const end = searchParams.get('end') || '';
-  const initialMonth = useMemo(() => {
-    if (start && end) {
-      const d = new Date(start + 'T00:00:00Z');
-      return { year: d.getUTCFullYear(), month: d.getUTCMonth() };
-    }
-    return getDefaultPayrollMonth();
-  }, [start, end]);
-  const [selYear, setSelYear] = useState(initialMonth.year);
-  const [selMonth, setSelMonth] = useState(initialMonth.month);
 
+  // default period: current payroll cycle (only when URL has no range yet)
   useEffect(() => {
-    const { start: s, end: e } = getPayrollRangeForMonth(selYear, selMonth);
+    if (start && end) return;
+    const def = getDefaultPayrollRange();
+    const np = new URLSearchParams(searchParams);
+    np.set('start', def.start); np.set('end', def.end);
+    setSearchParams(np, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end]);
+
+  // keep tab + filters in URL
+  useEffect(() => {
     const np = new URLSearchParams(searchParams);
     const before = np.toString();
-    np.set('start', s); np.set('end', e);
     np.set('tab', tab);
     const setOrDelete = (k, v) => { if (v && String(v).length) np.set(k, v); else np.delete(k); };
     setOrDelete('fname', fName);
@@ -76,7 +65,7 @@ const LocationTimesheetPage = () => {
     setOrDelete('fmin', fMinLateDays);
     if (np.toString() !== before) setSearchParams(np, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selYear, selMonth, tab, fName, fCnic, fDesignation, fCostCenter, fMinLateDays]);
+  }, [tab, fName, fCnic, fDesignation, fCostCenter, fMinLateDays]);
 
   useEffect(() => {
     if (!start || !end) return;
@@ -107,26 +96,22 @@ const LocationTimesheetPage = () => {
   );
 
   // Pivot: late-day counts per employee
-  const pivot = useMemo(() => {
+  const buildPivot = (list) => {
     const m = new Map();
-    for (const r of filteredLate) {
+    for (const r of list) {
       const key = r.employeeId;
       if (!m.has(key)) m.set(key, { cnic: r.cnic || '', name: r.name, days: 0 });
       m.get(key).days++;
     }
-    let list = [...m.values()].sort((a, b) => b.days - a.days);
+    return [...m.values()].sort((a, b) => b.days - a.days);
+  };
+  const pivotAll = useMemo(() => buildPivot(lateRows), [lateRows]);
+  const pivot = useMemo(() => {
+    let list = buildPivot(filteredLate);
     const min = parseInt(fMinLateDays, 10);
     if (!Number.isNaN(min) && min > 0) list = list.filter(p => p.days >= min);
     return list;
   }, [filteredLate, fMinLateDays]);
-
-  const monthOptions = [];
-  const now = new Date();
-  const baseD = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(Date.UTC(baseD.getUTCFullYear(), baseD.getUTCMonth() - i, 1));
-    monthOptions.push({ value: `${d.getUTCFullYear()}-${d.getUTCMonth()}`, label: d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }) });
-  }
 
   const cycleLabel = useMemo(() => {
     if (!end) return '';
@@ -166,33 +151,19 @@ const LocationTimesheetPage = () => {
     'No. of Days Late Check/IN': p.days,
   }));
 
-  const handleExport = (type) => {
+  const filenameBase = `Biometric_Timesheet_${data?.location?.name || 'Location'}_${start}_to_${end}`;
+
+  const handleOfficialExport = () => {
     if (!filteredLate.length) {
       toastBus.emit({ type: 'info', message: 'No late check-ins to export for this period.' });
       return;
     }
-    const base = `Biometric_Timesheet_${data?.location?.name || 'Location'}_${start}_to_${end}`;
-    if (type === 'xlsx') {
-      exportToExcelMultiSheet(`${base}.xlsx`, [
-        { name: 'Pivot', rows: mapPivot(pivot), headerOrder: PIVOT_HEADERS, title: titleText },
-        { name: 'Late Check IN', rows: mapDetail(filteredLate), headerOrder: DETAIL_HEADERS },
-      ]);
-    } else if (tab === 'pivot') {
-      exportToCSV(`${base}_pivot.csv`, mapPivot(pivot), PIVOT_HEADERS, titleText);
-    } else {
-      exportToCSV(`${base}_late_checkin.csv`, mapDetail(filteredLate), DETAIL_HEADERS, titleText);
-    }
-    toastBus.emit({ type: 'success', message: `Exported ${type === 'xlsx' ? 'workbook (Pivot + Late Check IN)' : 'CSV'}.` });
+    exportToExcelMultiSheet(`${filenameBase}.xlsx`, [
+      { name: 'Pivot', rows: mapPivot(pivot), headerOrder: PIVOT_HEADERS, title: titleText },
+      { name: 'Late Check IN', rows: mapDetail(filteredLate), headerOrder: DETAIL_HEADERS },
+    ]);
+    toastBus.emit({ type: 'success', message: 'Exported workbook (Pivot + Late Check IN).' });
   };
-
-  const exportRef = useRef(null);
-  const [exportOpen, setExportOpen] = useState(false);
-  useEffect(() => {
-    if (!exportOpen) return;
-    const handler = (e) => { if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [exportOpen]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading timesheet..." /></div>;
   if (!data?.success) return <div className="p-6 text-red-600">Failed to load</div>;
@@ -205,18 +176,28 @@ const LocationTimesheetPage = () => {
           <p className="text-xs text-gray-500">{data.range.start} to {data.range.end} · {lateRows.length} late check-in(s) · {pivot.length} employee(s)</p>
         </div>
         <div className="actions-inline">
-          <select className="form-input dense-input !w-auto text-xs" value={`${selYear}-${selMonth}`} onChange={(e) => { const [y, m] = e.target.value.split('-').map(n => parseInt(n, 10)); setSelYear(y); setSelMonth(m); }}>
-            {monthOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-          </select>
-          <div className="relative" ref={exportRef}>
-            <button type="button" className="btn btn-secondary text-xs" onClick={() => setExportOpen(o => !o)}>Export ▾</button>
-            {exportOpen && (
-              <div className="menu-surface absolute right-0 mt-1 z-30 flex flex-col" role="menu">
-                <button className="menu-item" onClick={() => { handleExport('xlsx'); setExportOpen(false); }}>Excel (official format)</button>
-                <button className="menu-item" onClick={() => { handleExport('csv'); setExportOpen(false); }}>CSV (current tab)</button>
-              </div>
-            )}
-          </div>
+          <PayrollRangeControl
+            start={start}
+            end={end}
+            onChange={({ start: s, end: e }) => {
+              const np = new URLSearchParams(searchParams);
+              np.set('start', s); np.set('end', e);
+              setSearchParams(np, { replace: true });
+            }}
+          />
+          <ExportMenu
+            columns={tab === 'pivot' ? PIVOT_HEADERS : DETAIL_HEADERS}
+            getRows={(scope) => tab === 'pivot'
+              ? mapPivot(scope === 'filtered' ? pivot : pivotAll)
+              : mapDetail(scope === 'filtered' ? filteredLate : lateRows)}
+            filenameBase={`${filenameBase}_${tab === 'pivot' ? 'pivot' : 'late_checkin'}`}
+            sheetName={tab === 'pivot' ? 'Pivot' : 'Late Check IN'}
+            title={titleText}
+            counts={tab === 'pivot'
+              ? { filtered: pivot.length, all: pivotAll.length }
+              : { filtered: filteredLate.length, all: lateRows.length }}
+            extraActions={[{ label: 'Excel — official format (all columns)', onClick: handleOfficialExport }]}
+          />
           <Link to={`/attendance/locations/${id}`} className="btn btn-outline text-xs">Back</Link>
         </div>
       </div>

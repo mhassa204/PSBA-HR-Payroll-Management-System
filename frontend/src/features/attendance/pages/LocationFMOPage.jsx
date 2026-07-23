@@ -1,33 +1,9 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
-import { exportToCSV, exportToExcel } from "../../../lib/exportUtils";
-import { toastBus } from "../../../utils/toastBus";
-
-function getPayrollRangeForMonth(year, month /* 0-based */) {
-  // cycle: 21st of given month to 20th of next month
-  const start = new Date(Date.UTC(year, month, 21));
-  const end = new Date(Date.UTC(year, month + 1, 20));
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-  };
-}
-function getDefaultPayrollMonth() {
-  const now = new Date();
-  const utcNow = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
-  // if today >= 21, current month cycle; else previous month cycle
-  if (utcNow.getUTCDate() >= 21)
-    return { year: utcNow.getUTCFullYear(), month: utcNow.getUTCMonth() };
-  // previous month
-  const d = new Date(
-    Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth() - 1, 1)
-  );
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() };
-}
+import PayrollRangeControl, { getDefaultPayrollRange } from "../components/PayrollRangeControl";
+import ExportMenu from "../components/ExportMenu";
 
 const LocationFMOPage = () => {
   const { id } = useParams();
@@ -51,33 +27,16 @@ const LocationFMOPage = () => {
   const start = searchParams.get("start") || "";
   const end = searchParams.get("end") || "";
 
-  // month selector state derives from start/end or default payroll month
-  const initialMonth = useMemo(() => {
-    if (start && end) {
-      const d = new Date(start + "T00:00:00Z");
-      return { year: d.getUTCFullYear(), month: d.getUTCMonth() };
-    }
-    return getDefaultPayrollMonth();
-  }, [start, end]);
-  const [selYear, setSelYear] = useState(initialMonth.year);
-  const [selMonth, setSelMonth] = useState(initialMonth.month); // 0-based
-
-  // Sync month into URL only when changed
+  // default period: current payroll cycle (only when URL has no range yet)
   useEffect(() => {
-    const { start: s, end: e } = getPayrollRangeForMonth(selYear, selMonth);
+    if (start && end) return;
+    const def = getDefaultPayrollRange();
     const np = new URLSearchParams(searchParams);
-    let changed = false;
-    if (np.get("start") !== s) {
-      np.set("start", s);
-      changed = true;
-    }
-    if (np.get("end") !== e) {
-      np.set("end", e);
-      changed = true;
-    }
-    if (changed) setSearchParams(np, { replace: true });
+    np.set("start", def.start);
+    np.set("end", def.end);
+    setSearchParams(np, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selYear, selMonth]);
+  }, [start, end]);
 
   // keep filters in URL (only when changed)
   useEffect(() => {
@@ -151,24 +110,6 @@ const LocationFMOPage = () => {
     }
   };
 
-  // build month options: show last 12 months including current
-  const monthOptions = [];
-  const now = new Date();
-  const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(
-      Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - i, 1)
-    );
-    monthOptions.push({
-      value: { y: d.getUTCFullYear(), m: d.getUTCMonth() },
-      label: d.toLocaleString("en-US", {
-        month: "long",
-        year: "numeric",
-        timeZone: "UTC",
-      }),
-    });
-  }
-
   // Export helpers
   const mapFmoForExport = (rowsForExport, daysForExport) => {
     // Flatten row into object with dynamic date columns and totals
@@ -197,55 +138,19 @@ const LocationFMOPage = () => {
     data?.range?.start
   } to ${data?.range?.end})`;
 
-  const handleExport = (type, onlyFiltered) => {
-    const rowsSrc = onlyFiltered ? filteredRows : rows;
-    if (!rowsSrc?.length) return;
-    const payload = mapFmoForExport(rowsSrc, days);
-    const headers = [
-      "SrNo",
-      "BiometricID",
-      "CNIC",
-      "Name",
-      "Designation",
-      "CostCenter",
-      ...days.map((d) => `${d.dow} ${d.label}`),
-      "TotalDays",
-      "Present",
-      "NotMark",
-      "Absent",
-    ];
-    const filename = `FMO_${data?.location?.name || "Location"}_${
-      data?.range?.start
-    }_to_${data?.range?.end}.${type === "csv" ? "csv" : "xlsx"}`;
-    if (type === "csv") exportToCSV(filename, payload, headers, titleText);
-    else exportToExcel(filename, payload, "FMO", headers, titleText);
-    const mode = onlyFiltered ? "filtered" : "all";
-    toastBus.emit({
-      type: "success",
-      message: `Exported ${
-        rowsSrc.length
-      } ${mode} rows to ${type.toUpperCase()}.`,
-    });
-  };
-
-  const exportRef = useRef(null);
-  const [exportOpen, setExportOpen] = useState(false);
-  useEffect(() => {
-    if (!exportOpen) return;
-    const handler = (e) => {
-      if (exportRef.current && !exportRef.current.contains(e.target))
-        setExportOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [exportOpen]);
-  useEffect(() => {
-    const key = (e) => {
-      if (e.key === "Escape") setExportOpen(false);
-    };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, []);
+  const exportColumns = [
+    "SrNo",
+    "BiometricID",
+    "CNIC",
+    "Name",
+    "Designation",
+    "CostCenter",
+    ...days.map((d) => `${d.dow} ${d.label}`),
+    "TotalDays",
+    "Present",
+    "NotMark",
+    "Absent",
+  ];
 
   if (loading)
     return (
@@ -268,76 +173,28 @@ const LocationFMOPage = () => {
           </p>
         </div>
         <div className="actions-inline">
-          <select
-            className="form-input dense-input !w-auto text-xs"
-            value={`${selYear}-${selMonth}`}
-            onChange={(e) => {
-              const [y, m] = e.target.value
-                .split("-")
-                .map((n) => parseInt(n, 10));
-              setSelYear(y);
-              setSelMonth(m);
+          <PayrollRangeControl
+            start={start}
+            end={end}
+            onChange={({ start: s, end: e }) => {
+              const np = new URLSearchParams(searchParams);
+              np.set("start", s);
+              np.set("end", e);
+              setSearchParams(np, { replace: true });
             }}
-          >
-            {monthOptions.map((opt, idx) => (
-              <option key={idx} value={`${opt.value.y}-${opt.value.m}`}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <div className="relative" ref={exportRef}>
-            <button
-              type="button"
-              className="btn btn-secondary text-xs"
-              onClick={() => setExportOpen((o) => !o)}
-            >
-              Export ▾
-            </button>
-            {exportOpen && (
-              <div
-                className="menu-surface absolute right-0 mt-1 z-30 flex flex-col"
-                role="menu"
-              >
-                <button
-                  className="menu-item"
-                  onClick={() => {
-                    handleExport("csv", true);
-                    setExportOpen(false);
-                  }}
-                >
-                  Filtered CSV
-                </button>
-                <button
-                  className="menu-item"
-                  onClick={() => {
-                    handleExport("xlsx", true);
-                    setExportOpen(false);
-                  }}
-                >
-                  Filtered Excel
-                </button>
-                <div className="h-px my-1 bg-gray-200" />
-                <button
-                  className="menu-item"
-                  onClick={() => {
-                    handleExport("csv", false);
-                    setExportOpen(false);
-                  }}
-                >
-                  All CSV
-                </button>
-                <button
-                  className="menu-item"
-                  onClick={() => {
-                    handleExport("xlsx", false);
-                    setExportOpen(false);
-                  }}
-                >
-                  All Excel
-                </button>
-              </div>
-            )}
-          </div>
+          />
+          <ExportMenu
+            columns={exportColumns}
+            getRows={(scope) =>
+              mapFmoForExport(scope === "filtered" ? filteredRows : rows, days)
+            }
+            filenameBase={`FMO_${data?.location?.name || "Location"}_${
+              data?.range?.start
+            }_to_${data?.range?.end}`}
+            sheetName="FMO"
+            title={titleText}
+            counts={{ filtered: filteredRows.length, all: rows.length }}
+          />
           <Link
             to={`/attendance/locations/${id}`}
             className="btn btn-outline text-xs"

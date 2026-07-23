@@ -49,6 +49,7 @@ import LeaveManagement from "./features/attendance/pages/LeaveManagement";
 import LeaveBankPage from "./features/attendance/pages/LeaveBankPage";
 import LocationLSRPage from "./features/attendance/pages/LocationLSRPage";
 import LocationTimesheetPage from "./features/attendance/pages/LocationTimesheetPage";
+import LocationCheckInOutPage from "./features/attendance/pages/LocationCheckInOutPage";
 import LeaveApply from "./features/attendance/pages/LeaveApply";
 import LeaveApprovalsPage from "./features/attendance/pages/LeaveApprovalsPage";
 import AllLeavesPage from "./features/attendance/pages/AllLeavesPage";
@@ -581,6 +582,14 @@ function App() {
               element={
                 <PrivateRoute permissions={["attendance.read"]}>
                   <LocationTimesheetPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="attendance/locations/:id/checkinout"
+              element={
+                <PrivateRoute permissions={["attendance.read"]}>
+                  <LocationCheckInOutPage />
                 </PrivateRoute>
               }
             />

@@ -289,10 +289,21 @@ async function locationLSR(req, res) {
     const loc = await prisma.location.findFirst({ where: { id: locationId, is_deleted: false, is_active: true } });
     if (!loc) return res.status(404).json({ success: false, error: 'Location not found' });
 
-    // Parse month=YYYY-MM (month represents cycle END month e.g. 2025-07 => 21 Jun - 20 Jul)
+    // Range priority: explicit start/end (custom range) > month=YYYY-MM
+    // (cycle END month e.g. 2025-07 => 21 Jun - 20 Jul) > default cycle.
+    const startParam = String(req.query.start || '').trim();
+    const endParam = String(req.query.end || '').trim();
     const monthParam = String(req.query.month || '').trim();
     let cycleStart, cycleEnd, cycleLabel;
-    if (/^\d{4}-\d{2}$/.test(monthParam)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(startParam) && /^\d{4}-\d{2}-\d{2}$/.test(endParam)) {
+      cycleStart = toDateOnly(startParam);
+      cycleEnd = toDateOnly(endParam);
+      if (cycleStart > cycleEnd) return res.status(400).json({ success: false, error: 'start must be on or before end' });
+      const isPayrollCycle = cycleStart.getUTCDate() === 21 && cycleEnd.getUTCDate() === 20;
+      cycleLabel = isPayrollCycle
+        ? `${cycleEnd.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })} ${cycleEnd.getUTCFullYear()}`
+        : `${formatYMD(cycleStart)} to ${formatYMD(cycleEnd)}`;
+    } else if (/^\d{4}-\d{2}$/.test(monthParam)) {
       const y = parseInt(monthParam.slice(0,4),10);
       const m0 = parseInt(monthParam.slice(5,7),10)-1; // 0-based end month
       const startMonth0 = m0 === 0 ? 11 : m0-1;
@@ -480,4 +491,79 @@ async function locationLSR(req, res) {
   }
 }
 
-module.exports = { locationFMO, locationAgainstRoster, listLocations, locationLSR };
+// GET /attendance/locations/:id/checkinout
+// Simple punch log: one row per employee per day with punches, showing the
+// check-in / check-out picked with the SAME first-in/last-out rules as the
+// Attendance vs Duty Roster view (no roster required — pure punches).
+async function locationCheckInOut(req, res) {
+  try {
+    const locationId = Number(req.params.id);
+    const loc = await prisma.location.findFirst({ where: { id: locationId, is_deleted: false, is_active: true } });
+    if (!loc) return res.status(404).json({ success: false, error: 'Location not found' });
+
+    const startParam = req.query.start; const endParam = req.query.end;
+    let start, end;
+    if (startParam && endParam) {
+      start = toDateOnly(startParam); end = toDateOnly(endParam);
+    } else {
+      const r = getDefaultPayrollRangeUTC(new Date());
+      start = r.start; end = r.end;
+    }
+    if (start > end) return res.status(400).json({ success: false, error: 'start must be on or before end' });
+
+    const employees = await prisma.employee.findMany({
+      where: {
+        is_deleted: false,
+        employmentRecords: { some: { is_current: true, is_deleted: false, location_id: locationId } },
+      },
+      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
+    });
+    const empByCnic = new Map();
+    for (const emp of employees) {
+      const ecnic = norm(emp.cnic);
+      if (ecnic) empByCnic.set(ecnic, emp);
+    }
+
+    const att = await fetchAttendanceByCnics([...empByCnic.keys()], start, end);
+    const punchesByUserDate = new Map(); // key: cnic|ymd -> punches
+    for (const a of att) {
+      const key = `${norm(a.cnic)}|${formatYMD(a.attendanceDate)}`;
+      if (!punchesByUserDate.has(key)) punchesByUserDate.set(key, []);
+      punchesByUserDate.get(key).push(a);
+    }
+
+    const rows = [];
+    for (const [key, list] of punchesByUserDate) {
+      const [ecnic, ymd] = key.split('|');
+      const emp = empByCnic.get(ecnic);
+      if (!emp) continue;
+      list.sort((a, b) => a.timestamp - b.timestamp);
+      const ins = list.filter((p) => p.type === 'IN');
+      const outs = list.filter((p) => p.type === 'OUT');
+      const first = ins.length ? ins[0] : list[0];
+      const last = outs.length ? outs[outs.length - 1] : (list.length >= 2 ? list[list.length - 1] : null);
+      const date = new Date(ymd + 'T00:00:00Z');
+      rows.push({
+        employeeId: emp.id,
+        cnic: emp.cnic || null,
+        name: emp.full_name,
+        designation: emp.employmentRecords?.[0]?.designation?.title || null,
+        costCenter: emp.employmentRecords?.[0]?.role_tag?.name || null,
+        date: ymd,
+        day: dayName(date),
+        checkIn: formatHHmmFromUTCDate(first ? first.timestamp : null) || '',
+        checkOut: formatHHmmFromUTCDate(last ? last.timestamp : null) || '',
+        punches: list.length,
+        singleMark: !last,
+      });
+    }
+    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.name).localeCompare(String(b.name))));
+
+    res.json({ success: true, location: { id: loc.id, name: loc.name }, range: { start: formatYMD(start), end: formatYMD(end) }, rows });
+  } catch (e) {
+    console.error('locationCheckInOut error', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+}
+
+module.exports = { locationFMO, locationAgainstRoster, listLocations, locationLSR, locationCheckInOut };
