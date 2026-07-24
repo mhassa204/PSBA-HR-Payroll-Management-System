@@ -280,7 +280,6 @@ module.exports = {
       where: whereEmp,
       select: {
         id: true,
-        employee_id: true,
         full_name: true,
         cnic: true,
         employmentRecords: {
@@ -364,7 +363,6 @@ module.exports = {
             full_name: true,
             cnic: true,
             email: true,
-            employee_id: true,
           },
         },
         statusHistory: {
@@ -675,7 +673,6 @@ module.exports = {
             full_name: true,
             cnic: true,
             email: true,
-            employee_id: true,
           },
         },
         routes: {
@@ -735,7 +732,6 @@ module.exports = {
           select: {
             id: true,
             full_name: true,
-            employee_id: true,
           },
         },
       },
@@ -835,7 +831,6 @@ module.exports = {
           select: {
             id: true,
             full_name: true,
-            employee_id: true,
           },
         },
       },
@@ -875,7 +870,6 @@ module.exports = {
             full_name: true,
             cnic: true,
             email: true,
-            employee_id: true,
           },
         },
         routes: {
@@ -988,7 +982,6 @@ module.exports = {
             full_name: true,
             cnic: true,
             email: true,
-            employee_id: true,
           },
         },
         routes: {
@@ -1053,7 +1046,6 @@ module.exports = {
             full_name: true,
             cnic: true,
             email: true,
-            employee_id: true,
           },
         },
         routes: {
