@@ -503,7 +503,8 @@ const LeftSidebar = () => {
         can("roles.read") ||
         can("districts.read") ||
         can("cities.read") ||
-        can("education-levels.read"),
+        can("education-levels.read") ||
+        can("leaves.status"),
       children: [
         {
           name: "Departments",
@@ -558,6 +559,12 @@ const LeftSidebar = () => {
           href: "/settings/education-levels",
           icon: ViewColumnsIcon,
           show: () => can("education-levels.read"),
+        },
+        {
+          name: "Leave Workflow",
+          href: "/settings/leave-workflow",
+          icon: ViewColumnsIcon,
+          show: () => can("leaves.status"),
         },
       ],
     },

@@ -82,6 +82,7 @@ const navigation = [
       { name: "Districts", href: "/settings/districts" },
       { name: "Cities", href: "/settings/cities" },
       { name: "Education Levels", href: "/settings/education-levels" },
+      { name: "Leave Workflow", href: "/settings/leave-workflow" },
     ],
   },
 ];
