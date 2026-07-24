@@ -97,6 +97,14 @@ const SettingsDashboard = () => {
           superOnly: true,
         },
         {
+          name: "Leave Workflow",
+          description: "Regional Incharge coverage and DG stage rules",
+          path: "/settings/leave-workflow",
+          icon: Shield,
+          color: "green",
+          required: ["leaves.status"],
+        },
+        {
           name: "Districts",
           description: "Manage districts list",
           path: "/settings/districts",

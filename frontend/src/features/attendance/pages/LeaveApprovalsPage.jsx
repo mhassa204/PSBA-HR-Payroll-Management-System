@@ -193,7 +193,16 @@ const LeaveApprovalsPage = () => {
         label: "Reject",
         cls: "btn btn-error-soft text-[11px]",
       });
-    } else {
+      // Return for correction — sends the application back to the
+      // submitting incharge as editable (per HR workflow)
+      if (isNextApprover || isEstablishment) {
+        btns.push({
+          key: "RETURN",
+          label: "Return for Correction",
+          cls: "btn btn-outline text-[11px]",
+        });
+      }
+    } else if (l.current_status !== "RETURNED") {
       // No more routes - final approval stage
       btns.push({
         key: "APPROVE",
@@ -309,10 +318,12 @@ const LeaveApprovalsPage = () => {
                             ? "badge-success"
                             : l.current_status === "REJECTED"
                             ? "badge-error"
+                            : l.current_status === "RETURNED"
+                            ? "badge-amber"
                             : "badge-gray"
                         }`}
                       >
-                        {l.current_status}
+                        {l.current_status === "RETURNED" ? "RETURNED FOR CORRECTION" : l.current_status}
                       </span>
                     </td>
                     <td>{actionButtonsFor(l)}</td>

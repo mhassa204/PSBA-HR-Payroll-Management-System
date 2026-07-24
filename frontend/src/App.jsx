@@ -30,6 +30,7 @@ import {
   DistrictManagement,
   CityManagement,
   EducationLevelManagement,
+  LeaveWorkflowSettings,
 } from "./features/settings";
 import { UserManagement } from "./features/users";
 import DatabaseSettings from "./features/settings/pages/DatabaseSettings";
@@ -423,6 +424,14 @@ function App() {
               element={
                 <PrivateRoute permissions={["roles.read"]}>
                   <RoleManagement />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="settings/leave-workflow"
+              element={
+                <PrivateRoute permissions={["leaves.status"]}>
+                  <LeaveWorkflowSettings />
                 </PrivateRoute>
               }
             />

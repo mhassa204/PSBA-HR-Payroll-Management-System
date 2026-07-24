@@ -58,9 +58,31 @@ router.get(
   authorizeAny(["*", "leaves.read"]),
   leaveController.listAllLeavesForEstablishment
 );
+// Workflow administration: Regional Incharge coverage + dynamic DG rules
+router.get(
+  "/workflow/regional-assignments",
+  authorizeAny(["*", "users.read", "leaves.read"]),
+  leaveController.listRegionalAssignments
+);
+router.put(
+  "/workflow/regional-assignments/:userId",
+  authorizeAny(["*", "users.update"]),
+  leaveController.setRegionalAssignments
+);
+router.get(
+  "/workflow/dg-rules",
+  authorizeAny(["*", "leaves.read", "leaves.status"]),
+  leaveController.getDgRules
+);
+router.put(
+  "/workflow/dg-rules",
+  authorizeAny(["*", "leaves.status"]),
+  leaveController.saveDgRules
+);
 router.get("/:employeeId", canAnyRead, leaveController.getEmployeeLeaves);
 router.post("/:employeeId", canCreate, leaveController.createLeaves);
-router.put("/:id", canUpdate, leaveController.updateLeave);
+// leaves.apply may resubmit RETURNED leaves; controller enforces the split
+router.put("/:id", authorizeAny(["*", "leaves.update", "leaves.apply"]), leaveController.updateLeave);
 router.patch("/:id/status", canStatus, leaveController.updateStatus);
 router.delete("/:id", leaveController.deleteLeave);
 // Approvals listing and action routes

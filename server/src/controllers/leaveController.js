@@ -77,6 +77,47 @@ module.exports = {
       res.status(500).json({ success: false, error: e.message });
     }
   },
+  listRegionalAssignments: async (req, res) => {
+    try {
+      const users = await leaveService.listRegionalAssignments();
+      res.json({ success: true, users });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  setRegionalAssignments: async (req, res) => {
+    try {
+      const result = await leaveService.setRegionalAssignments(
+        req.params.userId,
+        req.body?.location_ids
+      );
+      res.json({ success: true, ...result });
+    } catch (e) {
+      const client = ["User not found", "User is not a Regional Incharge"];
+      res
+        .status(client.includes(e.message) ? 400 : 500)
+        .json({ success: false, error: e.message });
+    }
+  },
+  getDgRules: async (req, res) => {
+    try {
+      const rules = await leaveService.getDgRulesSetting();
+      res.json({ success: true, ...rules });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
+  saveDgRules: async (req, res) => {
+    try {
+      const saved = await leaveService.saveDgRulesSetting(
+        req.body,
+        req.session?.user?.id
+      );
+      res.json({ success: true, ...saved });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  },
   actOnLeave: async (req, res) => {
     try {
       const leaveId = Number(req.params.id);
@@ -249,6 +290,28 @@ module.exports = {
       if (backup_duty_to !== undefined) data.backup_duty_to = backup_duty_to;
       if (documents !== undefined)
         data.documents = documents ? JSON.stringify(documents) : null;
+
+      // RETURNED leaves are resubmitted by whoever may apply for the
+      // employee (incharge/department account); the edit re-enters the
+      // approval workflow. Other edits require leaves.update as before.
+      const existing = await leaveService.getLeaveById(id);
+      if (!existing || existing.is_deleted)
+        return res.status(404).json({ success: false, error: "Not found" });
+      const perms = req.session?.user?.permissions || [];
+      const hasUpdate = perms.includes("*") || perms.includes("leaves.update");
+      if (existing.current_status === "RETURNED") {
+        if (!hasUpdate) {
+          const ok =
+            (await leaveService.checkSubordinate(existing.employee_id, req)) ||
+            (await leaveService.checkDeptOrLocation(existing.employee_id, req));
+          if (!ok)
+            return res.status(403).json({ success: false, error: "Not allowed for this employee" });
+        }
+        const updated = await leaveService.resubmitLeave(id, data, req.session?.user?.id);
+        return res.json({ success: true, leave: updated, resubmitted: true });
+      }
+      if (!hasUpdate)
+        return res.status(403).json({ success: false, error: "Forbidden" });
       const updated = await leaveService.updateLeave(id, data);
       res.json({ success: true, leave: updated });
     } catch (e) {

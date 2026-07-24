@@ -427,6 +427,8 @@ model User {
   // Back-relation: payrolls processed by this user
   processedPayrolls Payroll[]
   createdPayrollTranches PayrollTranch[]
+  // Back-relation: regional incharge location coverage
+  regionalAssignments RegionalAssignment[] @relation(name: "UserRegionalAssignments")
 
   @@index([department_id])
   @@index([location_id])
@@ -500,6 +502,8 @@ model Location {
   employments     Employment[]
   // back relation: users optionally linked to this location (distinct from manager)
   users           User[]     @relation(name: "UserLocation")
+  // back relation: regional incharge coverage
+  regionalAssignments RegionalAssignment[] @relation(name: "LocationRegionalAssignments")
 
   @@index([district_id])
   @@index([city_id])
@@ -664,6 +668,7 @@ enum LeaveWorkflowStatus {
   ALLOWED
   APPROVED
   REJECTED
+  RETURNED
 }
 
 // Manual routing type for leave approvals
@@ -689,6 +694,21 @@ model LeaveApprovalRoute {
 }
 
 // Status history per leave action
+// Which locations a Regional Incharge user covers (leave workflow stage 1
+// for bazaar/location employees). Managed from the Users admin screen.
+model RegionalAssignment {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  location_id Int
+  createdAt   DateTime @default(now())
+
+  user     User     @relation(name: "UserRegionalAssignments", fields: [user_id], references: [id], onDelete: Cascade)
+  location Location @relation(name: "LocationRegionalAssignments", fields: [location_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, location_id])
+  @@index([location_id])
+}
+
 model LeaveStatusHistory {
   id           Int                  @id @default(autoincrement())
   leave_id     Int
@@ -711,6 +731,8 @@ enum LeaveHistoryAction {
   APPROVED
   REJECTED
   FORWARDED
+  RETURNED
+  RESUBMITTED
 }
 
 // New: Leave Types for configuring bankable leave categories

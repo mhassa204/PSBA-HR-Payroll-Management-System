@@ -4,6 +4,7 @@ export { default as DesignationManagement } from './pages/DesignationManagement'
 export { default as RoleTagManagement } from './pages/RoleTagManagement';
 export { default as ScaleGradeManagement } from './pages/ScaleGradeManagement';
 export { default as RoleManagement } from './pages/RoleManagement';
+export { default as LeaveWorkflowSettings } from './pages/LeaveWorkflowSettings';
 export { default as LocationManagement } from './pages/LocationManagement';
 export { default as DistrictManagement } from './pages/DistrictManagement';
 export { default as CityManagement } from './pages/CityManagement';

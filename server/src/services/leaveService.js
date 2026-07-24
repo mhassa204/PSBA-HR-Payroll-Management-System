@@ -94,6 +94,76 @@ function buildSummaryForEmployees({
   return itemsByEmp;
 }
 
+function isWithoutPayType(type) {
+  return /without\s*pay/i.test(String(type || ""));
+}
+
+// Hard balance guard (HR policy): when the active leave bank's balance for
+// the chosen type is exhausted, only "Leave Without Pay" may be submitted.
+// Skipped when no active bank exists or the type is not tracked in the bank
+// (custom/"Other" types) — there is no balance to enforce then.
+async function checkLeaveBalanceOrThrow(employeeId, typeName, requestedDays) {
+  if (isWithoutPayType(typeName)) return;
+  const bank = await getActiveLeaveBank();
+  if (!bank) return;
+  const type = await prisma.leaveType.findFirst({
+    where: { name: typeName, is_deleted: false, is_active: true },
+  });
+  if (!type) return;
+  const alloc = await prisma.leaveBankAllocation.findFirst({
+    where: { leave_bank_id: bank.id, employee_id: Number(employeeId), leave_type_id: type.id },
+  });
+  const defaultDays = (bank.defaults || []).find((d) => d.leave_type_id === type.id)?.days ?? 0;
+  const allocated = alloc?.days ?? defaultDays;
+  const used = await prisma.leave.count({
+    where: {
+      employee_id: Number(employeeId),
+      type: typeName,
+      is_deleted: false,
+      status: { in: ["APPROVED", "PENDING"] },
+      date: { gte: bank.period_start, lte: bank.period_end },
+    },
+  });
+  const remaining = allocated - used;
+  if (requestedDays > remaining) {
+    throw new Error(
+      `Leave balance exhausted for "${typeName}" (${Math.max(0, remaining)} of ${allocated} day(s) remaining, ${requestedDays} requested). Only "Leave Without Pay" can be submitted.`
+    );
+  }
+}
+
+// Dynamic Director General stage rules (no hardcoded policy). Stored in
+// SystemSetting key "leave_dg_rules": { enabled, rules: [{ leave_types:[],
+// min_days:null|n, without_pay:null|bool }] }. A rule matches when ALL of
+// its set conditions match; any matching rule => DG stage required.
+const DG_RULES_KEY = "leave_dg_rules";
+async function getDgRules(tx = prisma) {
+  const row = await tx.systemSetting.findUnique({ where: { key: DG_RULES_KEY } });
+  const v = row?.value;
+  if (!v || typeof v !== "object") return { enabled: false, rules: [] };
+  return { enabled: !!v.enabled, rules: Array.isArray(v.rules) ? v.rules : [] };
+}
+async function dgStageRequired(leave, tx = prisma) {
+  const cfg = await getDgRules(tx);
+  if (!cfg.enabled || !cfg.rules.length) return false;
+  // Day count = sibling rows of the same submission (one Leave row per date)
+  const days = await tx.leave.count({
+    where: {
+      employee_id: leave.employee_id,
+      type: leave.type,
+      submission_time: leave.submission_time,
+      is_deleted: false,
+    },
+  });
+  const lwp = isWithoutPayType(leave.type);
+  return cfg.rules.some((r) => {
+    if (Array.isArray(r.leave_types) && r.leave_types.length && !r.leave_types.includes(leave.type)) return false;
+    if (r.min_days != null && !(days >= Number(r.min_days))) return false;
+    if (r.without_pay != null && Boolean(r.without_pay) !== lwp) return false;
+    return true;
+  });
+}
+
 module.exports = {
   helpers: {
     toDateOnly,
@@ -129,6 +199,7 @@ module.exports = {
     let employees = [];
 
     // Location-based account path: user account directly linked with locations table
+    // Per the HR-approved workflow, incharges search employees by CNIC only.
     if (!userEmpId && !deptId && locId) {
       employees = await prisma.employee.findMany({
         where: {
@@ -137,15 +208,7 @@ module.exports = {
           employmentRecords: {
             some: { is_current: true, is_deleted: false, location_id: locId },
           },
-          ...(search
-            ? {
-                OR: [
-                  { full_name: { contains: search, mode: "insensitive" } },
-                  { cnic: { contains: search, mode: "insensitive" } },
-                  { email: { contains: search, mode: "insensitive" } },
-                ],
-              }
-            : {}),
+          ...(search ? { cnic: { contains: search, mode: "insensitive" } } : {}),
         },
         include: {
           employmentRecords: {
@@ -460,10 +523,20 @@ module.exports = {
     if (!applicantEmp) return null;
 
     // Case 1: location-based employee at any non-Head-Office location
-    // (bazaars, mobile bazaars, special units) — same convention as the
-    // duty-roster module: the Operations role approves.
+    // (bazaars, mobile bazaars, special units). Per the HR-approved
+    // workflow: Regional Incharge (recommendation) -> Operations Wing.
+    // Regional Incharges are users with the "Regional Incharge" role whose
+    // RegionalAssignment rows cover the applicant's location; if none is
+    // assigned the leave goes straight to Operations.
     if (applicantEmp.location && applicantEmp.location.type !== "HEAD_OFFICE") {
-      // Route to Operations role users
+      const regionalUsers = await tx.user.findMany({
+        where: {
+          is_deleted: false,
+          role: { name: "Regional Incharge", is_deleted: false, enabled: true },
+          regionalAssignments: { some: { location_id: applicantEmp.location.id } },
+        },
+        select: { id: true, email: true },
+      });
       const operationsUsers = await tx.user.findMany({
         where: {
           is_deleted: false,
@@ -471,13 +544,19 @@ module.exports = {
         },
         select: { id: true, email: true },
       });
-      return operationsUsers.length > 0
-        ? operationsUsers.map((u) => ({
-            type: "ALLOW",
-            approver_user_id: u.id,
-            approver_email: u.email,
-          }))
-        : null;
+      const chain = [
+        ...regionalUsers.map((u) => ({
+          type: "RECOMMEND",
+          approver_user_id: u.id,
+          approver_email: u.email,
+        })),
+        ...operationsUsers.map((u) => ({
+          type: "ALLOW",
+          approver_user_id: u.id,
+          approver_email: u.email,
+        })),
+      ];
+      return chain.length > 0 ? chain : null;
     }
 
     // Case 2: Headquarter user
@@ -619,6 +698,8 @@ module.exports = {
     let skipped = list.length - payload.length;
     const createdLeaveIds = [];
     if (payload.length) {
+      // HR policy: balance exhausted => only Leave Without Pay is accepted
+      await checkLeaveBalanceOrThrow(employeeId, String(type), payload.length);
       await prisma.$transaction(async (tx) => {
         for (const record of payload) {
           const createdLeave = await tx.leave.create({ data: record });
@@ -1129,12 +1210,38 @@ module.exports = {
         if (h.action_type === "APPROVED") {
           newStatus = "APPROVED";
         }
+        if (h.action_type === "RETURNED") {
+          newStatus = "RETURNED";
+          newStage = 0;
+        }
+        if (h.action_type === "RESUBMITTED") {
+          newStatus = "PENDING";
+          newStage = 0;
+        }
       }
       // Sync legacy status when finalized
       const updateData = { current_status: newStatus, current_stage: newStage };
       if (newStatus === "APPROVED") updateData["status"] = "APPROVED";
       if (newStatus === "REJECTED") updateData["status"] = "REJECTED";
       await tx.leave.update({ where: { id: leaveId }, data: updateData });
+      // A RETURN deletes the routing; if the undo brought the leave back
+      // into the live workflow with no routes, rebuild the initial routing.
+      if (newStatus !== "RETURNED") {
+        const routeCount = await tx.leaveApprovalRoute.count({ where: { leave_id: leaveId } });
+        if (!routeCount) {
+          const approvers = await module.exports.determineInitialApprover(leave.employee_id, tx);
+          if (approvers?.length) {
+            await tx.leaveApprovalRoute.createMany({
+              data: approvers.map((a, idx) => ({
+                leave_id: leaveId,
+                type: a.type === "RECOMMEND" ? "RECOMMEND" : "ALLOW",
+                approver_user_id: a.approver_user_id,
+                sequence: idx + 1,
+              })),
+            });
+          }
+        }
+      }
       return { success: true };
     });
   },
@@ -1149,6 +1256,7 @@ module.exports = {
       "APPROVE",
       "REJECT",
       "FORWARD",
+      "RETURN",
     ]);
     const upper = String(action || "").toUpperCase();
     if (!allowed.has(upper)) throw new Error("Invalid action");
@@ -1166,10 +1274,10 @@ module.exports = {
         throw new Error("Leave already finalized");
       }
 
-      // Get current user info for forward history
+      // Get current user info for forward history / DG detection
       const currentUser = await tx.user.findUnique({
         where: { id: userId },
-        select: { id: true, email: true },
+        select: { id: true, email: true, role: { select: { name: true } } },
       });
       const currentUserEmail = currentUser?.email || `user${userId}`;
 
@@ -1254,6 +1362,36 @@ module.exports = {
         return updated;
       }
 
+      // Handle RETURN (for correction) — the current approver (or a
+      // leaves.status holder) sends the application back to the submitter,
+      // who edits and resubmits it (PUT /leaves/:id rebuilds the routing).
+      if (upper === "RETURN") {
+        const sessUser = req?.session?.user;
+        const perms = sessUser?.permissions || [];
+        const isPrivileged =
+          perms.includes("*") ||
+          perms.includes("leaves.status") ||
+          sessUser?.role?.name === "Super Admin";
+        const isNextApprover =
+          nextRoute && Number(nextRoute.approver_user_id) === Number(userId);
+        if (!isPrivileged && !isNextApprover) {
+          throw new Error("Not authorized for this stage");
+        }
+        await tx.leaveApprovalRoute.deleteMany({ where: { leave_id: leaveId } });
+        await tx.leaveStatusHistory.create({
+          data: {
+            leave_id: leaveId,
+            user_id: userId,
+            action_type: "RETURNED",
+            comments: comments || null,
+          },
+        });
+        return tx.leave.update({
+          where: { id: leaveId },
+          data: { current_status: "RETURNED", current_stage: 0 },
+        });
+      }
+
       // Validate actor.
       // RECOMMEND/ALLOW: must be exactly the next routed approver.
       // APPROVE/REJECT: must hold leaves.status (Establishment/Admin) or be
@@ -1300,20 +1438,35 @@ module.exports = {
         newWorkflow = "ALLOWED";
         newStage = nextSeq;
 
-        // When ALLOW is clicked, route to Establishment role users
-        const maxSeq = Math.max(
-          ...orderedRoutes.map((r) => r.sequence || 0),
-          0
-        );
-        const establishmentUsers = await tx.user.findMany({
-          where: {
-            is_deleted: false,
-            role: { name: "Establishment" },
-          },
-          select: { id: true },
-        });
+        // After ALLOW the leave moves on. Next stage is the Director
+        // General IF a dynamic DG rule matches (SystemSetting
+        // leave_dg_rules) and the DG has not already allowed it;
+        // otherwise the Establishment (HR) role for final processing.
+        const actorIsDg = currentUser?.role?.name === "Director General";
+        let nextUsers = [];
+        if (!actorIsDg && (await dgStageRequired(leave, tx))) {
+          const dgAlreadyActed = await tx.leaveStatusHistory.findFirst({
+            where: {
+              leave_id: leaveId,
+              action_type: "ALLOWED",
+              user: { role: { name: "Director General" } },
+            },
+          });
+          if (!dgAlreadyActed) {
+            nextUsers = await tx.user.findMany({
+              where: { is_deleted: false, role: { name: "Director General" } },
+              select: { id: true },
+            });
+          }
+        }
+        if (!nextUsers.length) {
+          nextUsers = await tx.user.findMany({
+            where: { is_deleted: false, role: { name: "Establishment" } },
+            select: { id: true },
+          });
+        }
 
-        if (establishmentUsers.length > 0) {
+        if (nextUsers.length > 0) {
           // Remove existing routes after current stage (nextSeq)
           await tx.leaveApprovalRoute.deleteMany({
             where: {
@@ -1322,14 +1475,13 @@ module.exports = {
             },
           });
 
-          // Add Establishment routes starting after current stage
-          const establishmentRoutes = establishmentUsers.map((user, idx) => ({
+          const nextRoutes = nextUsers.map((user, idx) => ({
             leave_id: leaveId,
             type: "ALLOW",
             approver_user_id: user.id,
             sequence: nextSeq + 1 + idx,
           }));
-          await tx.leaveApprovalRoute.createMany({ data: establishmentRoutes });
+          await tx.leaveApprovalRoute.createMany({ data: nextRoutes });
         }
       } else if (upper === "APPROVE") {
         historyAction = "APPROVED";
@@ -1362,7 +1514,92 @@ module.exports = {
       return updated;
     });
   },
+  // ---- Workflow administration -------------------------------------
+  listRegionalAssignments: async () => {
+    const users = await prisma.user.findMany({
+      where: { is_deleted: false, role: { name: "Regional Incharge", is_deleted: false } },
+      select: {
+        id: true,
+        email: true,
+        employee: { select: { full_name: true } },
+        regionalAssignments: { select: { location: { select: { id: true, name: true, type: true } } } },
+      },
+      orderBy: { email: "asc" },
+    });
+    return users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.employee?.full_name || null,
+      locations: u.regionalAssignments.map((a) => a.location),
+    }));
+  },
+  setRegionalAssignments: async (userId, locationIds) => {
+    const user = await prisma.user.findFirst({
+      where: { id: Number(userId), is_deleted: false },
+      include: { role: true },
+    });
+    if (!user) throw new Error("User not found");
+    if (user.role?.name !== "Regional Incharge") throw new Error("User is not a Regional Incharge");
+    const ids = [...new Set((locationIds || []).map(Number).filter(Boolean))];
+    await prisma.$transaction([
+      prisma.regionalAssignment.deleteMany({ where: { user_id: user.id } }),
+      ...(ids.length
+        ? [prisma.regionalAssignment.createMany({ data: ids.map((l) => ({ user_id: user.id, location_id: l })) })]
+        : []),
+    ]);
+    return { count: ids.length };
+  },
+  getDgRulesSetting: () => getDgRules(),
+  saveDgRulesSetting: async (value, userId) => {
+    const v = {
+      enabled: !!value?.enabled,
+      rules: Array.isArray(value?.rules)
+        ? value.rules.map((r) => ({
+            leave_types: Array.isArray(r.leave_types) ? r.leave_types.map(String) : [],
+            min_days: r.min_days != null && r.min_days !== "" ? Number(r.min_days) : null,
+            without_pay: r.without_pay == null ? null : !!r.without_pay,
+          }))
+        : [],
+    };
+    await prisma.systemSetting.upsert({
+      where: { key: DG_RULES_KEY },
+      update: { value: v, updatedBy: userId || null },
+      create: { key: DG_RULES_KEY, category: "leaves", value: v, updatedBy: userId || null },
+    });
+    return v;
+  },
   updateLeave: (id, data) => prisma.leave.update({ where: { id }, data }),
+  // Resubmit a RETURNED leave: apply the edits, reset the workflow and
+  // rebuild the initial routing so it re-enters the approval flow.
+  resubmitLeave: async (id, data, userId) => {
+    return await prisma.$transaction(async (tx) => {
+      const leave = await tx.leave.findUnique({ where: { id } });
+      if (!leave || leave.is_deleted) throw new Error("Not found");
+      if (leave.current_status !== "RETURNED") {
+        throw new Error("Only a returned leave can be resubmitted");
+      }
+      const updated = await tx.leave.update({
+        where: { id },
+        data: { ...data, current_status: "PENDING", current_stage: 0, status: "PENDING" },
+      });
+      await tx.leaveApprovalRoute.deleteMany({ where: { leave_id: id } });
+      const approvers = await module.exports.determineInitialApprover(updated.employee_id, tx);
+      if (approvers?.length) {
+        await tx.leaveApprovalRoute.createMany({
+          data: approvers.map((a, idx) => ({
+            leave_id: id,
+            type: a.type === "RECOMMEND" ? "RECOMMEND" : "ALLOW",
+            approver_user_id: a.approver_user_id,
+            sequence: idx + 1,
+          })),
+        });
+      }
+      await tx.leaveStatusHistory.create({
+        data: { leave_id: id, user_id: userId || 0, action_type: "RESUBMITTED", comments: null },
+      });
+      return updated;
+    });
+  },
   updateStatus: async (id, status, userId) => {
     const allowed = ["PENDING", "APPROVED", "REJECTED"];
     if (!allowed.includes(String(status))) {
