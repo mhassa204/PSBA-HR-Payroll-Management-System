@@ -459,8 +459,10 @@ module.exports = {
 
     if (!applicantEmp) return null;
 
-    // Case 1: Bazaar (location-based) user
-    if (applicantEmp.location?.type === "BAZAAR") {
+    // Case 1: location-based employee at any non-Head-Office location
+    // (bazaars, mobile bazaars, special units) — same convention as the
+    // duty-roster module: the Operations role approves.
+    if (applicantEmp.location && applicantEmp.location.type !== "HEAD_OFFICE") {
       // Route to Operations role users
       const operationsUsers = await tx.user.findMany({
         where: {
@@ -1252,12 +1254,31 @@ module.exports = {
         return updated;
       }
 
-      // Validate actor: either the next approver, or (no more routes) establishment approver can APPROVE
+      // Validate actor.
+      // RECOMMEND/ALLOW: must be exactly the next routed approver.
+      // APPROVE/REJECT: must hold leaves.status (Establishment/Admin) or be
+      // one of the remaining routed approvers — merely being able to view or
+      // apply for leaves must not allow finalizing one.
       if (upper !== "APPROVE" && upper !== "REJECT") {
         if (
           !nextRoute ||
           Number(nextRoute.approver_user_id) !== Number(userId)
         ) {
+          throw new Error("Not authorized for this stage");
+        }
+      } else {
+        const sessUser = req?.session?.user;
+        const perms = sessUser?.permissions || [];
+        const isPrivileged =
+          perms.includes("*") ||
+          perms.includes("leaves.status") ||
+          sessUser?.role?.name === "Super Admin";
+        const isRoutedApprover = orderedRoutes.some(
+          (r) =>
+            (r.sequence || 0) >= nextSeq &&
+            Number(r.approver_user_id) === Number(userId)
+        );
+        if (!isPrivileged && !isRoutedApprover) {
           throw new Error("Not authorized for this stage");
         }
       }
