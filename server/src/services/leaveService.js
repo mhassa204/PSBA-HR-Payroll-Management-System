@@ -113,8 +113,13 @@ async function checkLeaveBalanceOrThrow(employeeId, typeName, requestedDays) {
   const alloc = await prisma.leaveBankAllocation.findFirst({
     where: { leave_bank_id: bank.id, employee_id: Number(employeeId), leave_type_id: type.id },
   });
-  const defaultDays = (bank.defaults || []).find((d) => d.leave_type_id === type.id)?.days ?? 0;
-  const allocated = alloc?.days ?? defaultDays;
+  const defaultRow = (bank.defaults || []).find((d) => d.leave_type_id === type.id);
+  // No allocation for this employee and no bank default for this type =>
+  // the balance simply is not configured yet. Allow the application; once
+  // the bank/allocation is created the leaves in its period automatically
+  // count against it (balances are computed live from leave rows).
+  if (!alloc && !defaultRow) return;
+  const allocated = alloc?.days ?? defaultRow?.days ?? 0;
   const used = await prisma.leave.count({
     where: {
       employee_id: Number(employeeId),
