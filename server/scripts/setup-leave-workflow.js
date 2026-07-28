@@ -38,6 +38,19 @@ const PERMISSION_KEYS = ["leaves.read"]; // approvals queue + acting use canAct(
     console.log(`ensured permission ${key} on ${ROLE_NAME}`);
   }
 
+  // The balance guard's escape hatch must exist as a selectable type
+  const LWP = "Leave Without Pay";
+  const lwp = await prisma.leaveType.findUnique({ where: { name: LWP } });
+  if (!lwp) {
+    await prisma.leaveType.create({ data: { name: LWP, is_active: true, is_deleted: false } });
+    console.log(`created leave type "${LWP}"`);
+  } else if (lwp.is_deleted || !lwp.is_active) {
+    await prisma.leaveType.update({ where: { id: lwp.id }, data: { is_deleted: false, is_active: true } });
+    console.log(`re-enabled leave type "${LWP}"`);
+  } else {
+    console.log(`leave type "${LWP}" already exists`);
+  }
+
   const assignments = await prisma.regionalAssignment.count();
   console.log(`regional assignments currently configured: ${assignments}`);
   console.log("Done. Create Regional Incharge user accounts in the Users admin and assign their locations.");

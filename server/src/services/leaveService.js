@@ -100,12 +100,21 @@ function isWithoutPayType(type) {
 
 // Hard balance guard (HR policy): when the active leave bank's balance for
 // the chosen type is exhausted, only "Leave Without Pay" may be submitted.
-// Skipped when no active bank exists or the type is not tracked in the bank
-// (custom/"Other" types) — there is no balance to enforce then.
-async function checkLeaveBalanceOrThrow(employeeId, typeName, requestedDays) {
+// Skipped when no active bank exists, the type is not tracked in the bank
+// (custom/"Other" types), or no allocation/default is configured — there is
+// no balance to enforce then. Counts APPROVED leaves only, matching the
+// "available" figure shown across the UI (pending requests are judged by
+// the approvers, per the workflow's "leave balance check" duty).
+async function checkLeaveBalanceOrThrow(employeeId, typeName, requestedYmdDates) {
   if (isWithoutPayType(typeName)) return;
   const bank = await getActiveLeaveBank();
   if (!bank) return;
+  // Only the requested dates inside the bank period consume this balance
+  const inPeriod = (requestedYmdDates || []).filter((d) => {
+    const dt = toDateOnly(d);
+    return dt && dt >= bank.period_start && dt <= bank.period_end;
+  });
+  if (!inPeriod.length) return;
   const type = await prisma.leaveType.findFirst({
     where: { name: typeName, is_deleted: false, is_active: true },
   });
@@ -125,14 +134,14 @@ async function checkLeaveBalanceOrThrow(employeeId, typeName, requestedDays) {
       employee_id: Number(employeeId),
       type: typeName,
       is_deleted: false,
-      status: { in: ["APPROVED", "PENDING"] },
+      status: "APPROVED",
       date: { gte: bank.period_start, lte: bank.period_end },
     },
   });
   const remaining = allocated - used;
-  if (requestedDays > remaining) {
+  if (inPeriod.length > remaining) {
     throw new Error(
-      `Leave balance exhausted for "${typeName}" (${Math.max(0, remaining)} of ${allocated} day(s) remaining, ${requestedDays} requested). Only "Leave Without Pay" can be submitted.`
+      `Leave balance exhausted for "${typeName}" (${Math.max(0, remaining)} of ${allocated} day(s) remaining, ${inPeriod.length} requested). Only "Leave Without Pay" can be submitted.`
     );
   }
 }
@@ -704,7 +713,11 @@ module.exports = {
     const createdLeaveIds = [];
     if (payload.length) {
       // HR policy: balance exhausted => only Leave Without Pay is accepted
-      await checkLeaveBalanceOrThrow(employeeId, String(type), payload.length);
+      await checkLeaveBalanceOrThrow(
+        employeeId,
+        String(type),
+        payload.map((p) => ymd(toDateOnly(p.date)))
+      );
       await prisma.$transaction(async (tx) => {
         for (const record of payload) {
           const createdLeave = await tx.leave.create({ data: record });
