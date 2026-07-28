@@ -689,6 +689,9 @@ module.exports = {
     const backupDutyFrom = fmtBackup(backup_duty_from);
     const backupDutyTo = fmtBackup(backup_duty_to);
 
+    // One shared timestamp for the whole batch — the UI groups a multi-day
+    // application by it, and the DG day-count rule counts siblings by it.
+    const submissionTime = new Date(new Date().getTime() + 5 * 60 * 60 * 1000); // UTC+5
     const payload = list
       .filter((d) => !existSet.has(d))
       .map((d) => ({
@@ -696,8 +699,7 @@ module.exports = {
         date: new Date(d),
         type: String(type),
         remarks: enrichRemarks(remarks || null),
-        // New fields - submission_time auto-saved on creation
-        submission_time: new Date(new Date().getTime() + 5 * 60 * 60 * 1000), // UTC+5
+        submission_time: submissionTime,
         custom_type: custom_type || null,
         backup_employee_id: backup_employee_id
           ? Number(backup_employee_id)

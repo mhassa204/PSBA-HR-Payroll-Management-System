@@ -38,21 +38,30 @@ const LeaveApprovalsPage = () => {
     load();
   }, []);
 
-  const act = async (leaveId, action, forwardToUserId = null) => {
+  // A multi-day application is one Leave row per date; actions apply to
+  // every row of the submission.
+  const act = async (leaveIds, action, forwardToUserId = null) => {
+    const ids = Array.isArray(leaveIds) ? leaveIds : [leaveIds];
     try {
-      await axios.post(`/leaves/${leaveId}/act`, {
-        action,
-        comments: comments || null,
-        forwardToUserId: forwardToUserId || null,
-      });
+      for (const id of ids) {
+        await axios.post(`/leaves/${id}/act`, {
+          action,
+          comments: comments || null,
+          forwardToUserId: forwardToUserId || null,
+        });
+      }
       setComments("");
       setSelected(null);
       setForwardingLeave(null);
       setForwardSearch("");
-      await load();
-      toastBus.emit({ type: "success", message: `Action ${action} applied` });
+      toastBus.emit({
+        type: "success",
+        message: `Action ${action} applied${ids.length > 1 ? ` to ${ids.length} day(s)` : ""}`,
+      });
     } catch {
       // interceptor shows error
+    } finally {
+      await load();
     }
   };
 
@@ -123,7 +132,7 @@ const LeaveApprovalsPage = () => {
     return comment.replace(/\s+at\s+\d{1,2}\/\d{1,2}\/\d{4},\s+\d{1,2}:\d{2}:\d{2}\s+(?:am|pm|AM|PM)/i, "");
   };
 
-  const actionButtonsFor = (l) => {
+  const actionButtonsFor = (l, groupIds = [l?.id], groupDates = null) => {
     const routes = (l.routes || [])
       .slice()
       .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
@@ -183,7 +192,7 @@ const LeaveApprovalsPage = () => {
               key: "FORWARD",
               label: "Forward",
               cls: "btn btn-outline text-[11px]",
-              action: () => setForwardingLeave(l),
+              action: () => setForwardingLeave({ first: l, ids: groupIds }),
             });
           }
         }
@@ -220,7 +229,7 @@ const LeaveApprovalsPage = () => {
       <div className="flex flex-wrap gap-2">
         <button
           className="btn btn-outline text-[11px]"
-          onClick={() => setSelected(l)}
+          onClick={() => setSelected(groupDates ? { ...l, _dates: groupDates } : l)}
         >
           View
         </button>
@@ -232,7 +241,7 @@ const LeaveApprovalsPage = () => {
               if (b.action) {
                 b.action();
               } else {
-                act(l.id, b.key);
+                act(groupIds, b.key);
               }
             }}
           >
@@ -252,15 +261,40 @@ const LeaveApprovalsPage = () => {
     return Number(last.user?.id) === Number(userId);
   };
 
-  const undo = async (leaveId) => {
+  const undo = async (leaveIds) => {
+    const ids = Array.isArray(leaveIds) ? leaveIds : [leaveIds];
     try {
-      await axios.post(`/leaves/${leaveId}/undo`);
-      await load();
+      for (const id of ids) {
+        await axios.post(`/leaves/${id}/undo`);
+      }
       toastBus.emit({ type: "success", message: "Last action undone" });
     } catch {
       // no-op: interceptor handles errors
+    } finally {
+      await load();
     }
   };
+
+  // Group the per-date rows of one submission (same employee, type,
+  // submission time and workflow position) into a single list item.
+  const groupList = (list) => {
+    const map = new Map();
+    for (const l of list) {
+      const sub = String(l.submission_time || l.createdAt || "").slice(0, 16);
+      const key = [l.employee_id, l.type, l.current_status, l.current_stage, sub].join("|");
+      if (!map.has(key)) map.set(key, { key, first: l, ids: [], dates: [] });
+      const g = map.get(key);
+      g.ids.push(l.id);
+      g.dates.push(String(l.date).slice(0, 10));
+    }
+    return [...map.values()].map((g) => ({ ...g, dates: [...g.dates].sort() }));
+  };
+  const dateLabel = (g) =>
+    g.dates.length === 1
+      ? g.dates[0]
+      : `${g.dates[0]} → ${g.dates[g.dates.length - 1]} (${g.dates.length} days)`;
+  const pendingGroups = groupList(items);
+  const allGroups = groupList(allItems);
 
   return (
     <div className="p-6 space-y-4">
@@ -297,37 +331,37 @@ const LeaveApprovalsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {items.map((l) => (
-                  <tr key={l.id}>
-                    <td>{String(l.date).slice(0, 10)}</td>
+                {pendingGroups.map((g) => (
+                  <tr key={g.key}>
+                    <td className="whitespace-nowrap">{dateLabel(g)}</td>
                     <td className="text-left">
-                      {l.employee?.full_name} ({l.employee?.cnic || "-"})
+                      {g.first.employee?.full_name} ({g.first.employee?.cnic || "-"})
                     </td>
                     <td className="text-left">
-                      {l.employee?.employmentRecords?.[0]?.designation?.title ||
+                      {g.first.employee?.employmentRecords?.[0]?.designation?.title ||
                         "-"}
                     </td>
                     <td className="text-left">
-                      {l.employee?.employmentRecords?.[0]?.location?.name ||
+                      {g.first.employee?.employmentRecords?.[0]?.location?.name ||
                         "-"}
                     </td>
-                    <td>{l.type}</td>
+                    <td>{g.first.type}</td>
                     <td>
                       <span
                         className={`badge text-xs ${
-                          l.current_status === "APPROVED"
+                          g.first.current_status === "APPROVED"
                             ? "badge-success"
-                            : l.current_status === "REJECTED"
+                            : g.first.current_status === "REJECTED"
                             ? "badge-error"
-                            : l.current_status === "RETURNED"
+                            : g.first.current_status === "RETURNED"
                             ? "badge-amber"
                             : "badge-gray"
                         }`}
                       >
-                        {l.current_status === "RETURNED" ? "RETURNED FOR CORRECTION" : l.current_status}
+                        {g.first.current_status === "RETURNED" ? "RETURNED FOR CORRECTION" : g.first.current_status}
                       </span>
                     </td>
-                    <td>{actionButtonsFor(l)}</td>
+                    <td>{actionButtonsFor(g.first, g.ids, g.dates)}</td>
                   </tr>
                 ))}
                 {!items.length && (
@@ -362,46 +396,48 @@ const LeaveApprovalsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {allItems.map((l) => (
-                  <tr key={l.id}>
-                    <td>{String(l.date).slice(0, 10)}</td>
+                {allGroups.map((g) => (
+                  <tr key={g.key}>
+                    <td className="whitespace-nowrap">{dateLabel(g)}</td>
                     <td className="text-left">
-                      {l.employee?.full_name} ({l.employee?.cnic || "-"})
+                      {g.first.employee?.full_name} ({g.first.employee?.cnic || "-"})
                     </td>
                     <td className="text-left">
-                      {l.employee?.employmentRecords?.[0]?.designation?.title ||
+                      {g.first.employee?.employmentRecords?.[0]?.designation?.title ||
                         "-"}
                     </td>
                     <td className="text-left">
-                      {l.employee?.employmentRecords?.[0]?.location?.name ||
+                      {g.first.employee?.employmentRecords?.[0]?.location?.name ||
                         "-"}
                     </td>
-                    <td>{l.type}</td>
+                    <td>{g.first.type}</td>
                     <td>
                       <span
                         className={`badge text-xs ${
-                          l.current_status === "APPROVED"
+                          g.first.current_status === "APPROVED"
                             ? "badge-success"
-                            : l.current_status === "REJECTED"
+                            : g.first.current_status === "REJECTED"
                             ? "badge-error"
+                            : g.first.current_status === "RETURNED"
+                            ? "badge-amber"
                             : "badge-gray"
                         }`}
                       >
-                        {l.current_status}
+                        {g.first.current_status === "RETURNED" ? "RETURNED FOR CORRECTION" : g.first.current_status}
                       </span>
                     </td>
                     <td>
                       <div className="flex flex-wrap gap-2">
                         <button
                           className="btn btn-outline text-[11px]"
-                          onClick={() => setSelected(l)}
+                          onClick={() => setSelected({ ...g.first, _dates: g.dates })}
                         >
                           View
                         </button>
-                        {canUndo(l, currentUserId) && (
+                        {canUndo(g.first, currentUserId) && (
                           <button
                             className="btn btn-error-soft text-[11px]"
-                            onClick={() => undo(l.id)}
+                            onClick={() => undo(g.ids)}
                           >
                             Undo
                           </button>
@@ -432,7 +468,10 @@ const LeaveApprovalsPage = () => {
           <div className="modal-surface w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-thin-scroll">
             <div className="modal-header">
               <h2 className="text-sm font-semibold tracking-wide">
-                Leave Details - {String(selected.date).slice(0, 10)}
+                Leave Details -{" "}
+                {selected._dates && selected._dates.length > 1
+                  ? `${selected._dates[0]} → ${selected._dates[selected._dates.length - 1]} (${selected._dates.length} days)`
+                  : String(selected.date).slice(0, 10)}
               </h2>
               <button
                 onClick={() => setSelected(null)}
@@ -480,6 +519,16 @@ const LeaveApprovalsPage = () => {
                     {selected.current_status}
                   </span>
                 </div>
+                {selected._dates && selected._dates.length > 1 && (
+                  <div className="md:col-span-2">
+                    <span className="text-gray-600">Dates ({selected._dates.length}):</span>{" "}
+                    <span className="ml-1 flex flex-wrap gap-1 mt-1">
+                      {selected._dates.map((d) => (
+                        <span key={d} className="text-[11px] bg-gray-100 px-2 py-0.5 rounded">{d}</span>
+                      ))}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="text-gray-600">Submitted:</span>{" "}
                   <span className="ml-1">
@@ -659,7 +708,7 @@ const LeaveApprovalsPage = () => {
                   value=""
                   onChange={(value, label) => {
                     if (value) {
-                      act(forwardingLeave.id, "FORWARD", value);
+                      act(forwardingLeave.ids || [forwardingLeave.id], "FORWARD", value);
                     }
                   }}
                   placeholder="Search and select user..."
