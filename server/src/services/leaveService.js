@@ -1242,6 +1242,28 @@ module.exports = {
       if (newStatus === "APPROVED") updateData["status"] = "APPROVED";
       if (newStatus === "REJECTED") updateData["status"] = "REJECTED";
       await tx.leave.update({ where: { id: leaveId }, data: updateData });
+      // Undoing a FORWARD must also revert the route swap: the forward
+      // replaced the forwarder's route at the current stage with the
+      // target user's — put the forwarder back, or the leave vanishes
+      // from their queue.
+      if (last.action_type === "FORWARDED") {
+        const seq = newStage + 1;
+        const fRoute = await tx.leaveApprovalRoute.findFirst({
+          where: { leave_id: leaveId, sequence: seq },
+        });
+        if (fRoute && Number(fRoute.approver_user_id) !== Number(userId)) {
+          await tx.leaveApprovalRoute.delete({ where: { id: fRoute.id } });
+          await tx.leaveApprovalRoute.create({
+            data: {
+              leave_id: leaveId,
+              type: fRoute.type,
+              approver_user_id: Number(userId),
+              sequence: seq,
+            },
+          });
+        }
+      }
+
       // A RETURN deletes the routing; if the undo brought the leave back
       // into the live workflow with no routes, rebuild the initial routing.
       if (newStatus !== "RETURNED") {
@@ -1339,7 +1361,7 @@ module.exports = {
         await tx.leaveApprovalRoute.create({
           data: {
             leave_id: leaveId,
-            type: "ALLOW",
+            type: nextRoute.type, // keep the stage's action (RECOMMEND/ALLOW)
             approver_user_id: forwardToUser.id,
             sequence: nextSeq, // Forwarded user takes over at same sequence
           },
