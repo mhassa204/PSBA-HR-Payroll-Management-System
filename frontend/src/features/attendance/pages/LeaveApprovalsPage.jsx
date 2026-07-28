@@ -175,12 +175,13 @@ const LeaveApprovalsPage = () => {
             label: "Allow",
             cls: "btn btn-secondary text-[11px]",
           });
-          // Any next approver can recommend (Operations role users and others), but not Establishment
-          // Don't show recommend option if next approver is Director General
+          // Hand the case to another approver (e.g. route to the DG when
+          // policy requires). Labeled "Forward" — the stage's own action
+          // stays a single Recommend OR Allow.
           if (isNextApprover && !isEstablishment && !isNextApproverDirectorGeneral) {
             btns.push({
               key: "FORWARD",
-              label: "Recommend",
+              label: "Forward",
               cls: "btn btn-outline text-[11px]",
               action: () => setForwardingLeave(l),
             });
@@ -560,7 +561,7 @@ const LeaveApprovalsPage = () => {
                           >
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <span className="badge badge-gray whitespace-nowrap">
-                                {isForwarded ? "Recommended" : h.action_type}
+                                {isForwarded ? "Forwarded" : h.action_type}
                               </span>
                               {displayComment ? (
                                 <span className="text-gray-600 break-words">
@@ -632,7 +633,7 @@ const LeaveApprovalsPage = () => {
           <div className="modal-surface w-full max-w-md">
             <div className="modal-header">
               <h2 className="text-sm font-semibold tracking-wide">
-                Recommend Leave Request
+                Forward Leave Request
               </h2>
               <button
                 onClick={() => {
@@ -646,7 +647,8 @@ const LeaveApprovalsPage = () => {
             </div>
             <div className="p-4 space-y-4">
               <div className="text-sm text-gray-700">
-                Select a user to recommend this leave request to:
+                Select the user this leave request should be forwarded to —
+                they become the approver for the current stage:
               </div>
               <div>
                 <label className="form-label text-[11px] mb-1">

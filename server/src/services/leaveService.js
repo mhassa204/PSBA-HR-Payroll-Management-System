@@ -1360,7 +1360,7 @@ module.exports = {
         const timestamp = `${day}/${month}/${year}, ${String(
           displayHours
         ).padStart(2, "0")}:${minutes}:${seconds} ${ampm}`;
-        const forwardComment = `${currentUserEmail} recommended to ${forwardToUser.email} at ${timestamp}`;
+        const forwardComment = `${currentUserEmail} forwarded to ${forwardToUser.email} at ${timestamp}`;
         await tx.leaveStatusHistory.create({
           data: {
             leave_id: leaveId,
