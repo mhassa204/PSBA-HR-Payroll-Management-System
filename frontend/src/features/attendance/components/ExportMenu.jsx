@@ -9,13 +9,28 @@ import { toastBus } from '../../../utils/toastBus';
 // getRows(scope): returns rows keyed by column key for 'filtered' | 'all'.
 // extraActions: optional [{ label, onClick }] page-specific exports (e.g.
 // official multi-sheet formats) shown above the column picker.
-const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', title, counts, extraActions }) => {
+const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', title, counts, extraActions, scopes, header }) => {
   const cols = useMemo(
     () => (columns || []).map((c) => (typeof c === 'string' ? { key: c, label: c.replace(/\n/g, ' ') } : { key: c.key, label: (c.label || c.key).replace(/\n/g, ' ') })),
     [columns]
   );
+  // Row scopes: custom list (e.g. Selected/Filtered/All locations) or the
+  // default Filtered/All pair driven by `counts`.
+  const scopeList = useMemo(
+    () => scopes || [
+      { key: 'filtered', label: `Filtered rows${counts ? ` (${counts.filtered})` : ''}` },
+      { key: 'all', label: `All rows${counts ? ` (${counts.all})` : ''}` },
+    ],
+    [scopes, counts]
+  );
   const [open, setOpen] = useState(false);
-  const [scope, setScope] = useState('filtered');
+  const [scope, setScope] = useState(scopeList[0]?.key || 'filtered');
+  useEffect(() => {
+    if (!scopeList.some((s) => s.key === scope && !s.disabled)) {
+      const firstEnabled = scopeList.find((s) => !s.disabled);
+      if (firstEnabled) setScope(firstEnabled.key);
+    }
+  }, [scopeList, scope]);
   const [busy, setBusy] = useState(false);
   // Track DESELECTED keys so newly appearing columns (dynamic day columns)
   // default to selected.
@@ -84,16 +99,15 @@ const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', titl
               <div className="h-px bg-gray-200" />
             </div>
           ) : null}
+          {header || null}
           <div className="space-y-1">
             <div className="font-semibold text-gray-700">Rows</div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="export-scope" checked={scope === 'filtered'} onChange={() => setScope('filtered')} />
-              <span>Filtered rows{counts ? ` (${counts.filtered})` : ''}</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="export-scope" checked={scope === 'all'} onChange={() => setScope('all')} />
-              <span>All rows{counts ? ` (${counts.all})` : ''}</span>
-            </label>
+            {scopeList.map((s) => (
+              <label key={s.key} className={`flex items-center gap-2 ${s.disabled ? 'opacity-50' : 'cursor-pointer'}`}>
+                <input type="radio" name="export-scope" disabled={!!s.disabled} checked={scope === s.key} onChange={() => setScope(s.key)} />
+                <span>{s.label}</span>
+              </label>
+            ))}
           </div>
           <div className="space-y-1">
             <div className="flex items-center justify-between">
