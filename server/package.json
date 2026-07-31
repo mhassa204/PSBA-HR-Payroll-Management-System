@@ -10,6 +10,8 @@
     "etl": "python prisma/import/transform_excel.py",
     "etl:reporting": "python prisma/import/transform_reporting_update.py",
     "update:reporting": "node scripts/apply_reporting_line_update.js",
+    "etl:v3": "python prisma/import/transform_v3.py",
+    "update:v3": "node scripts/apply_v3_update.js",
     "update:roster-rbac": "node scripts/update-roster-permissions.js",
     "setup:leave-workflow": "node scripts/setup-leave-workflow.js",
     "backfill:roster": "node scripts/backfill_roster_fields.js",

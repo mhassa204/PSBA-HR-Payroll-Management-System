@@ -62,6 +62,43 @@ npm run update:reporting -- --apply    # execute
 - Skips + reports anomalies (self-reporting rows, missing CNICs). Idempotent —
   a second run is a no-op.
 
+## July 2026 v3 update (30-7-26 workbook)
+
+The v3 workbook (`Data for HR Software(12-6-26) Reporting Line(18-7-26) 30-7-26v3.xlsx`)
+adds 53 employees, 68 transfers, 639 emails, ~1,500 mother names and ~100 CNIC
+renewals, removes 1 employee, and renames Nishtar Town. Full analysis + all user
+decisions: `EXCEL_V3_ANALYSIS.md`. Applied by a dedicated idempotent script —
+again, do **NOT** re-run `seed:prod`.
+
+```bash
+# 1. (local, Python) regenerate the payload from the v3 Excel
+cd server
+npm run etl:v3            # -> prisma/import/v3_update.json (+ v3_update_issues.csv)
+git add prisma/import/v3_update.json && git commit -m "v3 update payload"
+
+# 2. (production, Node only)
+cd server
+npm run update:v3                # DRY RUN — prints the full plan, writes nothing
+npm run update:v3 -- --apply     # execute
+```
+
+`update:v3` ([scripts/apply_v3_update.js](server/scripts/apply_v3_update.js)):
+- Renames `Sahulat Bazaar Nishtar Town` → `Sahulat Bazaar Nishter Town`.
+- Ensures `One Unit Bahawalpur (On the GO)` (matched fuzzily — added manually in
+  prod) and creates `Sahulat Bazaar Sue-e-Asal (On the GO)`.
+- Creates missing employees; applies location moves and field corrections with an
+  **overwrite-only-untouched** rule (a field is written only if the DB still holds
+  the previous workbook's value — manual UI edits win and are reported).
+- Fills emails/mother names where empty, sets reporting officers where empty,
+  soft-deletes the 1 confirmed exit, creates login accounts for the two ensured
+  locations (password abc123 — change after first login).
+- Minchinabad / Pasrur / Samundri are under construction: not created; their 3
+  employees keep their current location.
+- Attendance side: nothing manual — the prod cron pushes employee changes to the
+  droplet automatically. The 53 new employees need face/fingerprint enrollment on
+  a tablet before they can punch; transferred staff need new rosters at their new
+  location (old approved rosters stay until superseded).
+
 ## Data migrations (run once after deploying the new schema)
 
 ```bash
