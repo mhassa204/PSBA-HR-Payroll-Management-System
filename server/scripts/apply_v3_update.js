@@ -87,6 +87,7 @@ async function main() {
     },
   });
   const empByCnic = new Map(dbEmployees.filter((e) => !e.is_deleted).map((e) => [String(e.cnic).split("__DEL__")[0], e]));
+  const deletedCnics = new Set(dbEmployees.filter((e) => e.is_deleted).map((e) => String(e.cnic).split("__DEL__")[0]));
   const usedEmails = new Set(dbEmployees.map((e) => e.email && e.email.toLowerCase()).filter(Boolean));
 
   const currentEmployments = await prisma.employment.findMany({
@@ -174,8 +175,13 @@ async function main() {
   }
 
   // Resolve a payload location name -> {id, name} AFTER phases 1-2 (dry-run aware).
+  // Head office is matched by TYPE: the seed named it "Head Quarter" but prod
+  // renamed it "Headquarters" — name lookup breaks there.
+  const hqLoc = locs.find((l) => l.name === "Head Quarter" && l.type === "HEAD_OFFICE")
+    || locs.find((l) => l.type === "HEAD_OFFICE");
   const resolveLoc = (payloadName) => {
     if (!payloadName) return null;
+    if (payloadName === "Head Quarter") return hqLoc ? { id: hqLoc.id, name: hqLoc.name } : null;
     const ensured = ensurePlan.find((p) => p.payloadName === payloadName);
     if (ensured && ensured.locId) return { id: ensured.locId, name: ensured.dbName };
     if (ensured) return { id: null, name: payloadName, pendingCreate: true };
@@ -201,10 +207,28 @@ async function main() {
     if (em.designation && !desigByTitle.has(em.designation)) missingMaster.designation.add(em.designation);
     if (em.scale_grade && !gradeByName.has(em.scale_grade)) missingMaster.scale_grade.add(em.scale_grade);
     if (em.location_name && !resolveLoc(em.location_name)) missingMaster.location.add(em.location_name);
-    console.log(`   + ${e.cnic} ${e.full_name} — ${em.designation || "(no designation)"} @ ${em.location_name || "(keep/none)"}${em.joining_date ? "" : " [no joining date]"}`);
+    const redo = deletedCnics.has(e.cnic) ? " [was DELETED in HR before — re-creating fresh]" : "";
+    console.log(`   + ${e.cnic} ${e.full_name} — ${em.designation || "(no designation)"} @ ${em.location_name || "(keep/none)"}${em.joining_date ? "" : " [no joining date]"}${redo}`);
+  }
+  const recreates = toCreate.filter((e) => deletedCnics.has(e.cnic));
+  if (recreates.length) {
+    console.log(`   ℹ️ ${recreates.length} of these were previously DELETED in HR (workbook still lists them) — they will be re-created as new records (old data stays soft-deleted)`);
   }
   for (const [kind, set] of Object.entries(missingMaster)) {
     if (set.size) console.log(`   ⚠️ ${kind} referenced but missing in DB (left NULL): ${[...set].join(", ")}`);
+  }
+
+  // 3b. Existing employees with NO current employment — create one from the workbook.
+  const emplFixPlan = data.employees.filter((e) => {
+    const dbEmp = empByCnic.get(e.cnic);
+    return dbEmp && !curEmpByEmployee.get(dbEmp.id);
+  });
+  const emplFixSet = new Set(emplFixPlan.map((e) => e.cnic));
+  if (emplFixPlan.length) {
+    console.log(`\n   Employments to create for EXISTING employees (had none): ${emplFixPlan.length}`);
+    for (const e of emplFixPlan) {
+      console.log(`   ⊕ ${e.cnic} ${e.full_name} — ${e.employment.designation || "(no designation)"} @ ${e.employment.location_name || "(none)"}`);
+    }
   }
 
   // =========================================================================
@@ -219,7 +243,10 @@ async function main() {
     const dbEmp = empByCnic.get(e.cnic);
     if (!dbEmp) continue; // created in this run with the right location already
     const cur = curEmpByEmployee.get(dbEmp.id);
-    if (!cur) { report.skipped.push(`MOVE ${e.cnic} ${e.full_name}: no current employment`); continue; }
+    if (!cur) {
+      if (!emplFixSet.has(e.cnic)) report.skipped.push(`MOVE ${e.cnic} ${e.full_name}: no current employment`);
+      continue; // employment (with the right location) created in phase 3b
+    }
     const target = resolveLoc(em.location_name);
     if (!target) { report.skipped.push(`MOVE ${e.cnic} ${e.full_name}: target location "${em.location_name}" unresolved`); continue; }
     const dbLocName = cur.location?.name || "";
@@ -319,7 +346,10 @@ async function main() {
     if (!ro && !roPending) { plan.roMissing.push(rl); continue; }
     if (empPending) { plan.set.push({ rl, pendingEmp: true }); continue; }
     const cur = curEmpByEmployee.get(emp.id);
-    if (!cur) { plan.noCurrent.push(rl); continue; }
+    if (!cur) {
+      if (emplFixSet.has(rl.cnic)) { plan.set.push({ rl, pendingEmp: true }); continue; } // employment created in phase 3b
+      plan.noCurrent.push(rl); continue;
+    }
     const existing = cur.reporting_officer_id ? String(cur.reporting_officer_id).trim() : "";
     const target = ro ? String(ro.id) : null;
     if (existing === "") { plan.set.push({ rl, employmentId: cur.id, target }); continue; }
@@ -474,6 +504,35 @@ async function main() {
     }
     createdCount++;
     console.log(`   👤 created ${employee.id} ${emp.cnic} ${emp.full_name}`);
+  }
+
+  // 3b. Employments for existing employees that had none
+  for (const emp of emplFixPlan) {
+    const dbEmp = empByCnic.get(emp.cnic);
+    if (!dbEmp || curEmpByEmployee.get(dbEmp.id)) continue;
+    const em = emp.employment;
+    const locRef = resolveLoc(em.location_name);
+    const employment = await prisma.employment.create({
+      data: {
+        employee_id: dbEmp.id,
+        organization: em.organization || "PSBA",
+        department_id: em.department ? deptByName.get(em.department) || null : null,
+        designation_id: em.designation ? desigByTitle.get(em.designation) || null : null,
+        role_tag_id: em.role_tag ? roleTagByName.get(em.role_tag) || null : null,
+        scale_grade_id: em.scale_grade ? gradeByName.get(em.scale_grade) || null : null,
+        employment_type: em.employment_type || "Regular",
+        joining_date: toDate(em.joining_date),
+        office_location: orNull(locRef ? locRef.name : em.location_name),
+        location_id: locRef ? locRef.id : null,
+        remarks: orNull(em.additional_charge),
+        employment_status: "active",
+        is_current: true,
+        is_deleted: false,
+      },
+    });
+    curEmpByEmployee.set(dbEmp.id, { id: employment.id, employee_id: dbEmp.id, reporting_officer_id: null });
+    await prisma.employmentSalary.create({ data: { employment_id: employment.id, basic_salary: 0, is_deleted: false } });
+    console.log(`   ⊕ created employment for existing ${emp.cnic} ${emp.full_name} @ ${locRef ? locRef.name : "(none)"}`);
   }
 
   // 4. Location moves
