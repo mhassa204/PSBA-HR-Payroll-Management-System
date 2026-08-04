@@ -71,3 +71,10 @@ export function canModify(roster, user) {
   const isCreator = (roster.created_by_user_id ?? roster.createdBy?.id) === user.id;
   return isCreator && roster.status !== "APPROVED";
 }
+
+// Super Admin can delete any roster regardless of status or creator
+export function canDelete(roster, user) {
+  if (!roster || !user) return false;
+  if (user.role?.name === "Super Admin") return true;
+  return canModify(roster, user);
+}

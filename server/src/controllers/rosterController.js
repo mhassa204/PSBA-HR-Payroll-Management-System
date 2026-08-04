@@ -469,7 +469,8 @@ const rosterController = {
     }
   },
 
-  // DELETE /rosters/:id — creator deletes own non-approved roster
+  // DELETE /rosters/:id — creator deletes own non-approved roster;
+  // Super Admin can delete any roster regardless of status
   async remove(req, res) {
     try {
       const user = req.session.user;
@@ -478,22 +479,45 @@ const rosterController = {
       if (!roster || roster.is_deleted) {
         return res.status(404).json({ success: false, error: "Roster not found" });
       }
-      if (roster.status === "APPROVED") {
-        return res.status(409).json({
-          success: false,
-          error:
-            "Approved rosters cannot be deleted. Create a new roster for the same period to supersede it.",
-        });
-      }
       const isSuperAdmin = user?.role?.name === "Super Admin";
-      if (roster.created_by_user_id !== user.id && !isSuperAdmin) {
-        return res
-          .status(403)
-          .json({ success: false, error: "Only the creator can delete this roster" });
+      if (!isSuperAdmin) {
+        if (roster.status === "APPROVED") {
+          return res.status(409).json({
+            success: false,
+            error:
+              "Approved rosters cannot be deleted. Create a new roster for the same period to supersede it.",
+          });
+        }
+        if (roster.created_by_user_id !== user.id) {
+          return res
+            .status(403)
+            .json({ success: false, error: "Only the creator can delete this roster" });
+        }
       }
 
-      await prisma.dutyRoster.update({ where: { id }, data: { is_deleted: true } });
+      await prisma.dutyRoster.update({
+        where: { id },
+        data: {
+          is_deleted: true,
+          statusHistory: { create: { action: "DELETED", user_id: user.id } },
+        },
+      });
       res.json({ success: true, message: "Roster deleted" });
+
+      // Deleting an approved roster changes the effective schedule, so push
+      // the refresh to the attendance system instead of waiting for the cron.
+      if (roster.status === "APPROVED") {
+        try {
+          const { pushRosters, CONFIG } = require("../jobs/attendanceSync");
+          if (CONFIG.enabled) {
+            pushRosters({ force: true }).catch((e) =>
+              console.warn("roster delete: attendance push failed (cron will retry):", e.message)
+            );
+          }
+        } catch (e) {
+          console.warn("roster delete: attendance push unavailable:", e.message);
+        }
+      }
     } catch (e) {
       console.error("Error deleting roster", e);
       res.status(500).json({ success: false, error: "Failed to delete roster" });

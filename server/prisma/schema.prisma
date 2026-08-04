@@ -557,7 +557,7 @@ model DutyRoster {
 model DutyRosterStatusHistory {
   id        Int        @id @default(autoincrement())
   roster_id Int
-  action    String // SUBMITTED | RESUBMITTED | APPROVED | REJECTED
+  action    String // SUBMITTED | RESUBMITTED | APPROVED | REJECTED | DELETED
   user_id   Int
   reason    String?
   createdAt DateTime   @default(now())

@@ -11,6 +11,7 @@ import {
   cycleLabel,
   approverLabel,
   canModify,
+  canDelete,
 } from "../rosterUtils";
 
 const STATUS_FILTERS = ["ALL", "PENDING", "APPROVED", "REJECTED"];
@@ -148,20 +149,20 @@ const RosterList = () => {
                           View
                         </button>
                         {canModify(r, user) && (
-                          <>
-                            <button
-                              onClick={() => navigate(`/rosters/${r.id}/edit`)}
-                              className="btn btn-secondary btn-sm"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteId(r.id)}
-                              className="btn btn-error-soft btn-sm"
-                            >
-                              Delete
-                            </button>
-                          </>
+                          <button
+                            onClick={() => navigate(`/rosters/${r.id}/edit`)}
+                            className="btn btn-secondary btn-sm"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {canDelete(r, user) && (
+                          <button
+                            onClick={() => setConfirmDeleteId(r.id)}
+                            className="btn btn-error-soft btn-sm"
+                          >
+                            Delete
+                          </button>
                         )}
                       </div>
                     </td>
@@ -198,20 +199,20 @@ const RosterList = () => {
                     View
                   </button>
                   {canModify(r, user) && (
-                    <>
-                      <button
-                        onClick={() => navigate(`/rosters/${r.id}/edit`)}
-                        className="btn btn-secondary btn-sm"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteId(r.id)}
-                        className="btn btn-error-soft btn-sm"
-                      >
-                        Delete
-                      </button>
-                    </>
+                    <button
+                      onClick={() => navigate(`/rosters/${r.id}/edit`)}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {canDelete(r, user) && (
+                    <button
+                      onClick={() => setConfirmDeleteId(r.id)}
+                      className="btn btn-error-soft btn-sm"
+                    >
+                      Delete
+                    </button>
                   )}
                 </div>
               </div>
