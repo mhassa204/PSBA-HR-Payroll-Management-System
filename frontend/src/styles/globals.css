@@ -717,6 +717,15 @@
   font-size: 0.65rem;
 }
 
+/* Selects need native appearance so the closed control shows the selected
+   label and caret. appearance:none (above) collapses/hides that on Windows. */
+select.form-input {
+  appearance: auto;
+  -webkit-appearance: menulist;
+  background-image: none;
+  cursor: pointer;
+}
+
 /* Table alignment adjustments */
 .table-enhanced th,
 .table-enhanced td {

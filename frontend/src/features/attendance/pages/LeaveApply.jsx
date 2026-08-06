@@ -160,7 +160,9 @@ const ApplyDialog = ({ employee, open, onClose }) => {
           await Promise.all([
             axios.get(`/leaves/${employee.id}`),
             axios.get("/leave-banks/types"),
-            axios.get("/leaves/backup-employees"),
+            axios.get(
+              `/leaves/backup-employees?applicantId=${employee.id}`
+            ),
           ]);
         if (ignore) return;
         setLeaves(leavesRes.leaves || []);

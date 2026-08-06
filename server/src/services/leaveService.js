@@ -1708,142 +1708,104 @@ module.exports = {
   },
   getBackupEmployees: async (user, applicantId) => {
     try {
+      const activeEmployeeFilter = {
+        is_deleted: false,
+        status: "Active",
+      };
+
+      // Colleagues who can cover: same department, else same location.
+      // Employment.employee_id is always set, so do NOT branch on it for
+      // "subordinates only" — that left the dropdown empty for most staff.
+      const loadPeers = async ({
+        department_id,
+        location_id,
+        excludeEmployeeId,
+      }) => {
+        const excludeId = excludeEmployeeId
+          ? Number(excludeEmployeeId)
+          : null;
+        const baseWhere = {
+          is_current: true,
+          is_deleted: false,
+          employee: activeEmployeeFilter,
+          ...(excludeId ? { NOT: { employee_id: excludeId } } : {}),
+        };
+
+        if (department_id) {
+          const rows = await prisma.employment.findMany({
+            where: { ...baseWhere, department_id: Number(department_id) },
+            include: { employee: true },
+          });
+          return rows.map((row) => row.employee);
+        }
+
+        if (location_id) {
+          const rows = await prisma.employment.findMany({
+            where: { ...baseWhere, location_id: Number(location_id) },
+            include: { employee: true },
+          });
+          return rows.map((row) => row.employee);
+        }
+
+        return [];
+      };
+
       let employees = [];
 
       if (applicantId) {
-        // Get backup employees based on the applicant's context
         const applicantEmployment = await prisma.employment.findFirst({
-          where: { employee_id: Number(applicantId), is_current: true },
-          include: { employee: true },
-        });
-
-        if (applicantEmployment) {
-          const { employee_id, department_id, location_id } =
-            applicantEmployment;
-
-          if (employee_id) {
-            // Employee-based applicant: get subordinates
-            const subordinates = await prisma.employment.findMany({
-              where: {
-                reporting_officer_id: String(employee_id),
-                is_current: true,
-                is_deleted: false,
-              },
-              include: { employee: true },
-            });
-            employees = subordinates.map((emp) => emp.employee);
-          } else if (department_id) {
-            // Department-based applicant: get all employees in the department
-            const deptEmployees = await prisma.employment.findMany({
-              where: {
-                department_id,
-                is_current: true,
-                is_deleted: false,
-              },
-              include: { employee: true },
-            });
-            employees = deptEmployees.map((emp) => emp.employee);
-          } else if (location_id) {
-            // Location-based applicant: get all employees in the location
-            const locationEmployees = await prisma.employment.findMany({
-              where: {
-                location_id,
-                is_current: true,
-                is_deleted: false,
-              },
-              include: { employee: true },
-            });
-            employees = locationEmployees.map((emp) => emp.employee);
-          }
-        }
-      } else {
-        // Fallback to logged-in user's context
-        // First, get the user's current employment record to determine their context
-        if (!user.employee_id) {
-          // If user has no employee_id, return empty array
-          return [];
-        }
-
-        const userEmployment = await prisma.employment.findFirst({
           where: {
-            employee_id: user.employee_id,
+            employee_id: Number(applicantId),
             is_current: true,
             is_deleted: false,
           },
-          include: { employee: true },
+        });
+
+        if (applicantEmployment) {
+          employees = await loadPeers({
+            department_id: applicantEmployment.department_id,
+            location_id: applicantEmployment.location_id,
+            excludeEmployeeId: Number(applicantId),
+          });
+        }
+      } else if (user?.employee_id) {
+        const userEmployment = await prisma.employment.findFirst({
+          where: {
+            employee_id: Number(user.employee_id),
+            is_current: true,
+            is_deleted: false,
+          },
         });
 
         if (userEmployment) {
-          const { employee_id, department_id, location_id } = userEmployment;
-
-          if (employee_id) {
-            // Employee-based user: get subordinates
-            const subordinates = await prisma.employment.findMany({
-              where: {
-                reporting_officer_id: String(employee_id),
-                is_current: true,
-                is_deleted: false,
-              },
-              include: { employee: true },
-            });
-            employees = subordinates.map((emp) => emp.employee);
-          } else if (department_id) {
-            // Department-based user: get all employees in the department
-            const deptEmployees = await prisma.employment.findMany({
-              where: {
-                department_id,
-                is_current: true,
-                is_deleted: false,
-              },
-              include: { employee: true },
-            });
-            employees = deptEmployees.map((emp) => emp.employee);
-          } else if (location_id) {
-            // Location-based user: get all employees in the location
-            const locationEmployees = await prisma.employment.findMany({
-              where: {
-                location_id,
-                is_current: true,
-                is_deleted: false,
-              },
-              include: { employee: true },
-            });
-            employees = locationEmployees.map((emp) => emp.employee);
-          }
-        } else {
-          // Fallback: try using user's direct department_id and location_id from session
-          const department_id = user.department_id;
-          const location_id = user.location_id;
-
-          if (department_id) {
-            // Department-based user: get all employees in the department
-            const deptEmployees = await prisma.employment.findMany({
-              where: {
-                department_id,
-                is_current: true,
-                is_deleted: false,
-              },
-              include: { employee: true },
-            });
-            employees = deptEmployees.map((emp) => emp.employee);
-          } else if (location_id) {
-            // Location-based user: get all employees in the location
-            const locationEmployees = await prisma.employment.findMany({
-              where: {
-                location_id,
-                is_current: true,
-                is_deleted: false,
-              },
-              include: { employee: true },
-            });
-            employees = locationEmployees.map((emp) => emp.employee);
-          }
+          employees = await loadPeers({
+            department_id: userEmployment.department_id,
+            location_id: userEmployment.location_id,
+            excludeEmployeeId: Number(user.employee_id),
+          });
         }
+      } else if (user?.department_id) {
+        employees = await loadPeers({
+          department_id: user.department_id,
+          location_id: null,
+          excludeEmployeeId: null,
+        });
+      } else if (user?.location_id) {
+        employees = await loadPeers({
+          department_id: null,
+          location_id: user.location_id,
+          excludeEmployeeId: null,
+        });
       }
 
-      // Filter out deleted employees and format for frontend
+      // Deduplicate and format for frontend
+      const seen = new Set();
       return employees
-        .filter((emp) => !emp.is_deleted)
+        .filter((emp) => {
+          if (!emp || emp.is_deleted || seen.has(emp.id)) return false;
+          seen.add(emp.id);
+          return true;
+        })
         .map((emp) => ({
           id: emp.id,
           full_name: emp.full_name,

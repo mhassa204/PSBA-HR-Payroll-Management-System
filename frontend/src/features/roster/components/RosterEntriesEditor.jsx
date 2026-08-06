@@ -29,7 +29,7 @@ function DayEditor({ day, onChange, compact = false }) {
   return (
     <div className={compact ? "flex flex-wrap items-center gap-1.5" : "flex items-center gap-1.5"}>
       <select
-        className="form-input sm w-auto"
+        className="form-input sm !w-auto min-w-[6.5rem]"
         value={type}
         onChange={(e) => {
           const t = e.target.value;
