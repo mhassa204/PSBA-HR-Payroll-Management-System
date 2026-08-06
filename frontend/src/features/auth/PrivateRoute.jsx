@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuthStore } from "./authStore";
 import { toastBus } from "../../utils/toastBus";
 import { useEffect, useMemo } from "react";
+import Loader from "../../components/Loader";
 
 const PrivateRoute = ({
   roles = [],
@@ -50,7 +51,7 @@ const PrivateRoute = ({
   }, [violation]);
 
   if (isChecking || user === undefined) {
-    return null;
+    return <Loader text="Checking session..." />;
   }
 
   if (!user) {

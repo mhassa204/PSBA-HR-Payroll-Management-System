@@ -37,14 +37,18 @@ export const useAuthStore = create(
           const res = await axios.get("/me", { withCredentials: true });
           set({ user: res.data.user, isChecking: false });
         } catch (err) {
-          // Only clear user on 401 (unauthenticated). For network/server errors, don't force logout.
+          // Only clear user on 401 (unauthenticated). For network/server errors, don't force logout
+          // if we already have a user — but never leave user as `undefined` (that blanks the UI).
           const status = err?.response?.status;
+          const current = get().user;
           if (status === 401) {
             set({ user: null, isChecking: false });
-            resetAuthenticationState(); // Reset authentication state when session expires
+            resetAuthenticationState();
           } else {
-            // For non-401 errors, preserve the current user state but stop checking
-            set({ isChecking: false });
+            set({
+              user: current === undefined ? null : current,
+              isChecking: false,
+            });
           }
         }
       },

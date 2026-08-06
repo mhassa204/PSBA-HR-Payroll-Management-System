@@ -1,11 +1,13 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import DataTable from "../../../components/DataTable";
 import ErrorPage from "../../../components/ErrorPage";
 import { useEmployeeStore } from "../store/employeeStore";
+import employeeService from "../services/employeeService";
 import useAppNavigation from "../../../hooks/useAppNavigation";
 import Loader from "../../../components/Loader";
 import { useConfirmationContext } from "../../../components/ui/ConfirmationProvider";
+import { toastBus } from "../../../utils/toastBus";
 import {
   displayCNIC,
   displayPhoneNumber,
@@ -27,7 +29,67 @@ const EmployeeTable = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const exportAbortRef = useRef(null);
   const { confirmDelete } = useConfirmationContext();
+
+  // Abort any in-flight export if the user leaves the page
+  useEffect(() => {
+    return () => {
+      if (exportAbortRef.current) {
+        exportAbortRef.current.abort();
+        exportAbortRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleExportEmployees = useCallback(async () => {
+    if (exporting) return;
+
+    // Cancel any previous orphaned request before starting a new one
+    if (exportAbortRef.current) {
+      exportAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    exportAbortRef.current = controller;
+    setExporting(true);
+
+    try {
+      const { blob, filename } = await employeeService.exportEmployeesExcel({
+        signal: controller.signal,
+        timeoutMs: 120000,
+      });
+
+      if (controller.signal.aborted) return;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoke after a tick so the download can start
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      toastBus.emit({
+        type: "success",
+        message: "Employees exported successfully.",
+      });
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        toastBus.emit({
+          type: "error",
+          message: err?.message || "Failed to export employees.",
+        });
+      }
+    } finally {
+      if (exportAbortRef.current === controller) {
+        exportAbortRef.current = null;
+      }
+      setExporting(false);
+    }
+  }, [exporting]);
 
   // Helpers
   const getCurrentParams = () => ({
@@ -318,6 +380,23 @@ const EmployeeTable = () => {
           serverPaginated={true}
           serverTotal={pagination?.total || 0}
           serverTotalPages={pagination?.totalPages || 0}
+          toolbarActions={
+            <button
+              type="button"
+              onClick={handleExportEmployees}
+              disabled={exporting}
+              className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              {exporting ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Exporting...
+                </>
+              ) : (
+                "Export Employees"
+              )}
+            </button>
+          }
         />
       )}
     </div>

@@ -84,6 +84,8 @@ const DataTable = ({
   serverPaginated = false,
   serverTotal = 0,
   serverTotalPages = 0,
+  // Optional extra toolbar controls (e.g. Export) rendered next to Create
+  toolbarActions = null,
 }) => {
   // Use persistent pagination state
   const {
@@ -240,7 +242,8 @@ const DataTable = ({
             Search
           </button>
         </div>
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end items-center gap-2">
+          {toolbarActions}
           <Link
             to="/employees/create"
             className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-colors duration-150"

@@ -379,6 +379,50 @@ const employeeController = {
       return res.status(400).json({ success: false, error: error.message });
     }
   },
+  /**
+   * Stream a lean Excel export of all active employees.
+   * Built server-side so the browser never holds the full nested employee graph.
+   */
+  exportEmployees: async (req, res) => {
+    let clientGone = false;
+    const onClose = () => {
+      clientGone = true;
+    };
+    req.on("close", onClose);
+
+    try {
+      const { employees, reportingLookup } =
+        await employeeService.getEmployeesForExport();
+      if (clientGone || req.aborted || res.headersSent) return;
+
+      const { buildEmployeeExcelBuffer } = require("../utils/buildEmployeeExcel");
+      const { buffer, contentType, filename } = buildEmployeeExcelBuffer(
+        employees,
+        reportingLookup
+      );
+
+      if (clientGone || req.aborted || res.headersSent) return;
+
+      res.setHeader("Content-Type", contentType);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`
+      );
+      res.setHeader("Content-Length", buffer.length);
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(200).end(buffer);
+    } catch (error) {
+      console.error("Error exporting employees:", error);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          success: false,
+          error: error.message || "Failed to export employees",
+        });
+      }
+    } finally {
+      req.off("close", onClose);
+    }
+  },
   getEmployeeById: async (req, res) => {
     try {
       const employee = await employeeService.getEmployeeById(req.params.id);

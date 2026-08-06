@@ -1551,6 +1551,118 @@ const employeeService = {
     }
   },
 
+  /**
+   * Lean projection of all active employees for Excel export.
+   * Only selects fields needed for export columns — no documents/education/history.
+   */
+  getEmployeesForExport: async () => {
+    try {
+      const employees = await prisma.employee.findMany({
+        where: { is_deleted: false },
+        select: {
+          id: true,
+          full_name: true,
+          father_husband_name: true,
+          mother_name: true,
+          cnic: true,
+          cnic_issue_date: true,
+          cnic_expire_date: true,
+          cnic_lifetime: true,
+          date_of_birth: true,
+          gender: true,
+          religion: true,
+          has_disability: true,
+          disability_type: true,
+          disability_description: true,
+          mobile_number: true,
+          whatsapp_number: true,
+          email: true,
+          present_address: true,
+          permanent_address: true,
+          educationQualifications: {
+            where: { is_deleted: false },
+            select: {
+              education_level: true,
+              institution_name: true,
+              level: { select: { name: true } },
+            },
+            orderBy: { id: "asc" },
+          },
+          employmentRecords: {
+            where: { is_current: true, is_deleted: false },
+            take: 1,
+            select: {
+              organization: true,
+              employment_type: true,
+              joining_date: true,
+              reporting_officer_id: true,
+              department_text: true,
+              designation_text: true,
+              department: { select: { name: true } },
+              designation: { select: { title: true } },
+              scale_grade: { select: { name: true } },
+              location: { select: { name: true } },
+              salary: {
+                select: {
+                  basic_salary: true,
+                  gross_salary: true,
+                  bank_name_primary: true,
+                  bank_account_primary: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { id: "asc" },
+      });
+
+      // Resolve reporting officers (stored as Employment.reporting_officer_id = Employee.id string)
+      const roIds = [
+        ...new Set(
+          employees
+            .map((e) => e.employmentRecords?.[0]?.reporting_officer_id)
+            .filter((id) => id != null && String(id).trim() !== "")
+            .map((id) => parseInt(String(id).trim(), 10))
+            .filter((id) => Number.isFinite(id))
+        ),
+      ];
+
+      const reportingLookup = new Map();
+      if (roIds.length > 0) {
+        const officers = await prisma.employee.findMany({
+          where: { id: { in: roIds }, is_deleted: false },
+          select: {
+            id: true,
+            cnic: true,
+            full_name: true,
+            employmentRecords: {
+              where: { is_current: true, is_deleted: false },
+              take: 1,
+              select: {
+                designation: { select: { title: true } },
+                designation_text: true,
+              },
+            },
+          },
+        });
+        for (const officer of officers) {
+          const emp = officer.employmentRecords?.[0];
+          reportingLookup.set(String(officer.id), {
+            cnic: officer.cnic || "",
+            full_name: officer.full_name || "",
+            designation:
+              emp?.designation?.title || emp?.designation_text || "",
+          });
+        }
+      }
+
+      return { employees, reportingLookup };
+    } catch (error) {
+      console.error("Error in getEmployeesForExport:", error);
+      throw error;
+    }
+  },
+
   // Find an active employee by CNIC (optionally excluding one id, for edit mode)
   findByCnic: async (cnic, excludeId = null) => {
     return prisma.employee.findFirst({

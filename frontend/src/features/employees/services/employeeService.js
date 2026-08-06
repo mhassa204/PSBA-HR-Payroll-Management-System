@@ -168,6 +168,83 @@ class EmployeeService {
   }
 
   /**
+   * Download Excel export of all employees (server-generated file).
+   * Uses AbortController support so the UI can cancel orphaned requests.
+   * @param {{ signal?: AbortSignal, timeoutMs?: number }} options
+   * @returns {Promise<{ blob: Blob, filename: string }>}
+   */
+  async exportEmployeesExcel(options = {}) {
+    const { signal, timeoutMs = 120000 } = options;
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    }
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await this.apiClient.get("/employees/export", {
+        responseType: "blob",
+        signal: controller.signal,
+        // Large export — do not treat blob error bodies as generic 500 toast noise
+        // until we parse them below.
+        timeout: timeoutMs,
+      });
+
+      const disposition = response.headers?.["content-disposition"] || "";
+      const match = /filename="?([^"]+)"?/i.exec(disposition);
+      const filename =
+        match?.[1] ||
+        `employees-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      const contentType = response.headers?.["content-type"] || "";
+      if (
+        contentType.includes("application/json") ||
+        (response.data?.type && response.data.type.includes("application/json"))
+      ) {
+        const text = await response.data.text();
+        let message = "Failed to export employees";
+        try {
+          message = JSON.parse(text)?.error || message;
+        } catch {
+          /* ignore parse errors */
+        }
+        throw new Error(message);
+      }
+
+      return { blob: response.data, filename };
+    } catch (error) {
+      if (
+        error?.code === "ERR_CANCELED" ||
+        error?.name === "CanceledError" ||
+        error?.name === "AbortError"
+      ) {
+        throw new Error("Export cancelled or timed out. Please try again.");
+      }
+      // Axios may wrap JSON error responses as blobs when responseType is blob
+      const data = error?.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          throw new Error(parsed?.error || "Failed to export employees");
+        } catch (inner) {
+          if (inner?.message && !inner.message.startsWith("Unexpected")) {
+            throw inner;
+          }
+        }
+      }
+      throw new Error(
+        error?.message || "Failed to export employees. Please try again."
+      );
+    } finally {
+      clearTimeout(timeoutId);
+      if (signal) signal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  /**
    * Live-check whether a CNIC already exists (for the add/edit form).
    * @param {string} cnic
    * @param {number|null} excludeId - employee id to ignore (edit mode)

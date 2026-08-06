@@ -57,6 +57,7 @@ import AllLeavesPage from "./features/attendance/pages/AllLeavesPage";
 import PayrollList from "./features/payroll/pages/PayrollList";
 import PayrollDetail from "./features/payroll/pages/PayrollDetail";
 import PayrollTranches from "./features/payroll/pages/PayrollTranches";
+import Loader from "./components/Loader";
 
 // Payroll Route Guard - Restrict access to Super Admin, Accounts, and Establishment roles only
 const PayrollRouteGuard = () => {
@@ -72,7 +73,7 @@ const PayrollRouteGuard = () => {
   }, [user, isChecking, fetchSession]);
 
   if (isChecking || user === undefined) {
-    return null; // Show loading state
+    return <Loader text="Checking session..." />;
   }
 
   if (!user) {
@@ -100,13 +101,17 @@ const PayrollTranchesRouteGuard = () => {
   const fetchSession = useAuthStore((s) => s.fetchSession);
 
   useEffect(() => {
-    if (!isChecking && !user) {
+    if (user === undefined && !isChecking) {
       fetchSession();
     }
   }, [isChecking, user, fetchSession]);
 
-  if (isChecking || !user) {
-    return <Loader />;
+  if (isChecking || user === undefined) {
+    return <Loader text="Checking session..." />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
   }
 
   const userRole = user?.role?.name || "";
@@ -134,7 +139,7 @@ const PayrollDetailRouteGuard = () => {
   }, [user, isChecking, fetchSession]);
 
   if (isChecking || user === undefined) {
-    return null;
+    return <Loader text="Checking session..." />;
   }
 
   if (!user) {

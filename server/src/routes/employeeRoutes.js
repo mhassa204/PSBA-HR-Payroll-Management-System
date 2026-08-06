@@ -85,6 +85,14 @@ router.get(
   employeeController.getAllEmployees
 );
 
+// Excel export of all employees. Must be before "/:id".
+router.get(
+  "/export",
+  isAuthenticated,
+  authorize("employees.read"),
+  employeeController.exportEmployees
+);
+
 // Live CNIC uniqueness check (used by the add/edit form). Must be before "/:id".
 router.get(
   "/check-cnic",
