@@ -129,13 +129,24 @@ class EmployeeService {
    * @param {string} searchTerm - Search term
    * @returns {Promise<Object>} Paginated employees data
    */
-  async getAllEmployees(page = 1, limit = 10, searchTerm = "") {
+  async getAllEmployees(page = 1, limit = 10, searchTerm = "", filters = {}) {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
         ...(searchTerm && { search: searchTerm }),
       });
+      // Optional list filters (bazaar/location, scale grade, department, status)
+      const filterKeys = [
+        "location_id",
+        "scale_grade_id",
+        "department_id",
+        "designation_id",
+        "employment_status",
+      ];
+      for (const k of filterKeys) {
+        if (filters[k]) params.set(k, String(filters[k]));
+      }
 
       const result = await this.apiClient.get("/employees", { params });
       return {
@@ -174,7 +185,7 @@ class EmployeeService {
    * @returns {Promise<{ blob: Blob, filename: string }>}
    */
   async exportEmployeesExcel(options = {}) {
-    const { signal, timeoutMs = 120000 } = options;
+    const { signal, timeoutMs = 120000, filters = {} } = options;
     const controller = new AbortController();
     const onAbort = () => controller.abort();
     if (signal) {
@@ -184,7 +195,22 @@ class EmployeeService {
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      // Mirror the active list filters so the export matches what the user sees
+      const params = new URLSearchParams();
+      const filterKeys = [
+        "search",
+        "location_id",
+        "scale_grade_id",
+        "department_id",
+        "designation_id",
+        "employment_status",
+      ];
+      for (const k of filterKeys) {
+        if (filters[k]) params.set(k, String(filters[k]));
+      }
+
       const response = await this.apiClient.get("/employees/export", {
+        params,
         responseType: "blob",
         signal: controller.signal,
         // Large export — do not treat blob error bodies as generic 500 toast noise

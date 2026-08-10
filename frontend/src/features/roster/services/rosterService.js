@@ -11,6 +11,9 @@ const rosterService = {
   pendingApprovals: () => axios.get("/rosters/pending-approvals").then((r) => r.data),
   approve: (id) => axios.post(`/rosters/${id}/approve`).then((r) => r.data),
   reject: (id, reason) => axios.post(`/rosters/${id}/reject`, { reason }).then((r) => r.data),
+  // Establishment-only: set the late-arrival grace period (minutes) on an HQ roster
+  setGrace: (id, grace_minutes) =>
+    axios.patch(`/rosters/${id}/grace`, { grace_minutes }).then((r) => r.data),
 };
 
 export default rosterService;

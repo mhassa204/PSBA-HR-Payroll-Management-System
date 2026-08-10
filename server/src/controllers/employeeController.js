@@ -361,6 +361,7 @@ const employeeController = {
         designation_title,
         location_id,
         scale_grade_id,
+        employment_status,
       } = req.query;
 
       const employees = await employeeService.getAllEmployeesPaginated({
@@ -372,6 +373,7 @@ const employeeController = {
         designation_title,
         location_id,
         scale_grade_id,
+        employment_status,
       });
 
       return res.status(200).json(employees);
@@ -391,8 +393,23 @@ const employeeController = {
     req.on("close", onClose);
 
     try {
+      const {
+        search,
+        department_id,
+        designation_id,
+        location_id,
+        scale_grade_id,
+        employment_status,
+      } = req.query || {};
       const { employees, reportingLookup } =
-        await employeeService.getEmployeesForExport();
+        await employeeService.getEmployeesForExport({
+          search,
+          department_id,
+          designation_id,
+          location_id,
+          scale_grade_id,
+          employment_status,
+        });
       if (clientGone || req.aborted || res.headersSent) return;
 
       const { buildEmployeeExcelBuffer } = require("../utils/buildEmployeeExcel");

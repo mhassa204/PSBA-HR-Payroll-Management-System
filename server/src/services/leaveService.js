@@ -65,6 +65,7 @@ function buildSummaryForEmployees({
   const usedApproved = new Map();
   const usedPending = new Map();
   for (const l of leavesInPeriod) {
+    if (l.is_short_leave) continue; // short leaves don't consume bank days
     const key = `${l.employee_id}|${l.type || ""}`;
     if (l.status === "APPROVED")
       usedApproved.set(key, (usedApproved.get(key) || 0) + 1);
@@ -134,6 +135,7 @@ async function checkLeaveBalanceOrThrow(employeeId, typeName, requestedYmdDates)
       employee_id: Number(employeeId),
       type: typeName,
       is_deleted: false,
+      is_short_leave: false,
       status: "APPROVED",
       date: { gte: bank.period_start, lte: bank.period_end },
     },
@@ -394,7 +396,7 @@ module.exports = {
             lte: toDateOnly(activeBank.period_end),
           },
         },
-        select: { employee_id: true, type: true, status: true },
+        select: { employee_id: true, type: true, status: true, is_short_leave: true },
       });
       summaryByEmp = buildSummaryForEmployees({
         employees,
@@ -490,7 +492,7 @@ module.exports = {
             lte: toDateOnly(activeBank.period_end),
           },
         },
-        select: { employee_id: true, type: true, status: true },
+        select: { employee_id: true, type: true, status: true, is_short_leave: true },
       });
       const itemsMap = buildSummaryForEmployees({
         employees: [{ id: employeeId }],
@@ -631,9 +633,13 @@ module.exports = {
       backup_duty_from,
       backup_duty_to,
       documents,
+      is_short_leave,
+      short_leave_from,
+      short_leave_to,
     },
     req
   ) => {
+    const shortLeave = is_short_leave === true || is_short_leave === "true";
     const toInsert = new Set();
     if (Array.isArray(dates) && dates.length) {
       for (const d of dates) {
@@ -658,6 +664,8 @@ module.exports = {
     }
     const list = Array.from(toInsert);
     if (!list.length) throw new Error("No valid dates to insert");
+    if (shortLeave && list.length > 1)
+      throw new Error("Short leave must be for a single date");
     const existing = await prisma.leave.findMany({
       where: {
         employee_id: employeeId,
@@ -675,6 +683,16 @@ module.exports = {
     };
     const df = fmt(duty_from);
     const dt = fmt(duty_to);
+    let shortFrom = null;
+    let shortTo = null;
+    if (shortLeave) {
+      shortFrom = fmt(short_leave_from);
+      shortTo = fmt(short_leave_to);
+      if (!short_leave_from || !short_leave_to)
+        throw new Error("Short leave time interval (from/to) is required");
+      if (!shortFrom || !shortTo || shortFrom >= shortTo)
+        throw new Error("Invalid short leave time interval");
+    }
     const enrichRemarks = (base) => {
       // Don't append duty time to remarks since we have separate fields now
       return base || null;
@@ -709,17 +727,22 @@ module.exports = {
         duty_from: df,
         duty_to: dt,
         documents: documents ? JSON.stringify(documents) : null,
+        is_short_leave: shortLeave,
+        short_leave_from: shortFrom,
+        short_leave_to: shortTo,
       }));
     let created = 0;
     let skipped = list.length - payload.length;
     const createdLeaveIds = [];
     if (payload.length) {
-      // HR policy: balance exhausted => only Leave Without Pay is accepted
-      await checkLeaveBalanceOrThrow(
-        employeeId,
-        String(type),
-        payload.map((p) => ymd(toDateOnly(p.date)))
-      );
+      // HR policy: balance exhausted => only Leave Without Pay is accepted.
+      // Short leaves are time-boxed, not full days — they don't consume bank balance.
+      if (!shortLeave)
+        await checkLeaveBalanceOrThrow(
+          employeeId,
+          String(type),
+          payload.map((p) => ymd(toDateOnly(p.date)))
+        );
       await prisma.$transaction(async (tx) => {
         for (const record of payload) {
           const createdLeave = await tx.leave.create({ data: record });

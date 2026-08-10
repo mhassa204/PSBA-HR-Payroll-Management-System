@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import rosterService from "../services/rosterService";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
+import { toastBus } from "../../../utils/toastBus";
 import { useAuthStore } from "../../auth/authStore";
 import {
   DAYS,
@@ -36,13 +37,45 @@ const ViewRoster = () => {
   const user = useAuthStore((s) => s.user);
   const [roster, setRoster] = useState(null);
   const [error, setError] = useState(null);
+  const [graceInput, setGraceInput] = useState("");
+  const [savingGrace, setSavingGrace] = useState(false);
 
   useEffect(() => {
     rosterService
       .get(id)
-      .then((res) => setRoster(res.roster))
+      .then((res) => {
+        setRoster(res.roster);
+        setGraceInput(String(res.roster?.grace_minutes ?? 0));
+      })
       .catch((e) => setError(e?.response?.data?.error || "Failed to load roster"));
   }, [id]);
+
+  const isEstablishment = /^\s*establishment/i.test(user?.role?.name || "");
+
+  const saveGrace = async () => {
+    const minutes = Number(graceInput);
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 240) {
+      toastBus.emit({
+        type: "error",
+        message: "Grace must be a whole number of minutes (0–240).",
+      });
+      return;
+    }
+    setSavingGrace(true);
+    try {
+      const res = await rosterService.setGrace(roster.id, minutes);
+      setRoster(res.roster);
+      setGraceInput(String(res.roster?.grace_minutes ?? 0));
+      toastBus.emit({ type: "success", message: "Grace period updated" });
+    } catch (e) {
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to update grace period",
+      });
+    } finally {
+      setSavingGrace(false);
+    }
+  };
 
   if (error) return <div className="p-6 text-red-600">{error}</div>;
   if (!roster) return <LoadingSpinner text="Loading roster..." />;
@@ -110,6 +143,52 @@ const ViewRoster = () => {
       {isHq && (
         <div className="text-xs text-gray-400">
           HQ employees not listed on any approved roster default to 09:15 – 17:00, Monday to Friday.
+        </div>
+      )}
+
+      {/* Grace period — HQ rosters only; editable by the Establishment account */}
+      {isHq && (
+        <div className="card-soft p-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-gray-700">
+              Late-arrival grace period
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              A check-in within this many minutes past duty start is treated as on
+              time.
+              {isEstablishment
+                ? " Set by the Establishment account."
+                : " Only the Establishment account can change this."}
+            </div>
+          </div>
+          {isEstablishment ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={240}
+                className="form-input w-24"
+                value={graceInput}
+                onChange={(e) => setGraceInput(e.target.value)}
+              />
+              <span className="text-xs text-gray-500">min</span>
+              <button
+                onClick={saveGrace}
+                disabled={
+                  savingGrace ||
+                  String(roster.grace_minutes ?? 0) === String(graceInput)
+                }
+                className="btn btn-primary"
+              >
+                {savingGrace ? "Saving..." : "Save"}
+              </button>
+            </div>
+          ) : (
+            <div className="text-lg font-semibold text-gray-800">
+              {roster.grace_minutes || 0}{" "}
+              <span className="text-sm font-normal text-gray-500">min</span>
+            </div>
+          )}
         </div>
       )}
 

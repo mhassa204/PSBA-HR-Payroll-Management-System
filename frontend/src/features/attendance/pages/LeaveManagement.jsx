@@ -3,6 +3,7 @@ import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { toastBus } from "../../../utils/toastBus";
 import { useNavigate } from "react-router-dom";
+import { Req, ShortLeaveChip } from "../leaveUtils";
 
 const LeaveDialog = ({ employee, open, onClose }) => {
   const [loading, setLoading] = useState(false);
@@ -56,7 +57,10 @@ const LeaveDialog = ({ employee, open, onClose }) => {
     backup_duty_from: "",
     backup_duty_to: "",
     documents: [],
+    short_leave_from: "",
+    short_leave_to: "",
   });
+  const [shortLeave, setShortLeave] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
 
   // Document upload handlers
@@ -186,7 +190,18 @@ const LeaveDialog = ({ employee, open, onClose }) => {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.type) return;
+    const fail = (message) => toastBus.emit({ type: "error", message });
+    if (!form.type) return fail("Leave type is required");
+    if (form.type === "Other" && !form.custom_type.trim())
+      return fail("Custom leave type is required");
+    if (!form.duty_from || !form.duty_to)
+      return fail("Duty time (from and to) is required");
+    if (shortLeave) {
+      if (!form.short_leave_from || !form.short_leave_to)
+        return fail("Short leave time (from and to) is required");
+      if (form.short_leave_from >= form.short_leave_to)
+        return fail("Short leave 'to' time must be after 'from' time");
+    }
     const body = {
       type: form.type,
       remarks: form.remarks,
@@ -202,17 +217,21 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       backup_duty_to: form.backup_duty_to || null,
       documents:
         form.documents.length > 0 ? form.documents.map((f) => f.path) : null,
+      is_short_leave: shortLeave,
+      short_leave_from: shortLeave ? form.short_leave_from : null,
+      short_leave_to: shortLeave ? form.short_leave_to : null,
     };
-    if (mode === "single") {
-      if (!form.date) return;
+    if (shortLeave || mode === "single") {
+      if (!form.date) return fail("Leave date is required");
       body.date = form.date;
     } else if (mode === "range") {
-      if (!range.start || !range.end) return;
+      if (!range.start || !range.end)
+        return fail("Start and end dates are required");
       body.start = range.start;
       body.end = range.end;
     } else if (mode === "multi") {
       const dates = multiDates.filter(Boolean);
-      if (!dates.length) return;
+      if (!dates.length) return fail("At least one leave date is required");
       body.dates = dates;
     }
 
@@ -230,7 +249,10 @@ const LeaveDialog = ({ employee, open, onClose }) => {
         backup_duty_from: "",
         backup_duty_to: "",
         documents: [],
+        short_leave_from: "",
+        short_leave_to: "",
       });
+      setShortLeave(false);
       setRange({ start: "", end: "" });
       setMultiDates([""]);
       setUploadedFiles([]);
@@ -342,6 +364,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       count: g.leaves.length,
       status: g.statuses.size === 1 ? Array.from(g.statuses)[0] : "MIXED",
       remarks: g.remarksSet.size === 1 ? Array.from(g.remarksSet)[0] : "",
+      isShortLeave: g.leaves.some((l) => l.is_short_leave),
       leaveIds: g.leaves.map((l) => l.id),
     }));
   }, [leaves]);
@@ -458,7 +481,16 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                           <td>{g.start?.slice(0, 10)}</td>
                           <td>{g.end?.slice(0, 10)}</td>
                           <td>{g.count}</td>
-                          <td>{g.type}</td>
+                          <td>
+                            <div className="flex items-center justify-center gap-1 flex-wrap">
+                              <span>{g.type}</span>
+                              {g.isShortLeave && (
+                                <span className="badge badge-blue text-[10px] whitespace-nowrap">
+                                  Short
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td>{g.status}</td>
                           <td
                             className="text-left whitespace-nowrap max-w-[160px] overflow-hidden text-ellipsis"
@@ -516,9 +548,36 @@ const LeaveDialog = ({ employee, open, onClose }) => {
             )}
 
             <form className="card-soft p-4 space-y-4" onSubmit={submit}>
+              <div className="flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+                <div>
+                  <span className="text-xs font-semibold text-blue-800">
+                    Short Leave
+                  </span>
+                  <p className="text-[10px] text-blue-700">
+                    Time-boxed leave for a single date — specify the time
+                    interval instead of a full day
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 select-none cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={shortLeave}
+                    onChange={(e) => {
+                      setShortLeave(e.target.checked);
+                      if (e.target.checked) setMode("single");
+                    }}
+                  />
+                  <span className="text-xs font-medium text-blue-800">
+                    Apply as short leave
+                  </span>
+                </label>
+              </div>
               <div className="filter-panel compact">
                 <div>
-                  <label className="form-label text-[11px] mb-1">Type</label>
+                  <label className="form-label text-[11px] mb-1">
+                    Type
+                    <Req />
+                  </label>
                   <select
                     className="form-input"
                     value={form.type}
@@ -539,6 +598,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                   <div className="col-span-2">
                     <label className="form-label text-[11px] mb-1">
                       Custom Leave Type
+                      <Req />
                     </label>
                     <input
                       className="form-input"
@@ -566,6 +626,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                 <div>
                   <label className="form-label text-[11px] mb-1">
                     Duty time (from)
+                    <Req />
                   </label>
                   <input
                     type="time"
@@ -579,6 +640,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                 <div>
                   <label className="form-label text-[11px] mb-1">
                     Duty time (to)
+                    <Req />
                   </label>
                   <input
                     type="time"
@@ -589,6 +651,44 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                     }
                   />
                 </div>
+                {shortLeave && (
+                  <>
+                    <div>
+                      <label className="form-label text-[11px] mb-1">
+                        Short Leave Time (From)
+                        <Req />
+                      </label>
+                      <input
+                        type="time"
+                        className="form-input"
+                        value={form.short_leave_from}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            short_leave_from: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label text-[11px] mb-1">
+                        Short Leave Time (To)
+                        <Req />
+                      </label>
+                      <input
+                        type="time"
+                        className="form-input"
+                        value={form.short_leave_to}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            short_leave_to: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="form-label text-[11px] mb-1">
                     Submission Time
@@ -660,19 +760,37 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                   <label className="form-label text-[11px] mb-1">Mode</label>
                   <select
                     className="form-input"
-                    value={mode}
+                    value={shortLeave ? "single" : mode}
                     onChange={(e) => setMode(e.target.value)}
+                    disabled={shortLeave}
+                    title={
+                      shortLeave
+                        ? "Short leave is always for a single date"
+                        : undefined
+                    }
                   >
                     <option value="single">Single Date</option>
-                    <option value="range">Date Range</option>
-                    <option value="multi">Multiple Dates</option>
+                    {!shortLeave && (
+                      <>
+                        <option value="range">Date Range</option>
+                        <option value="multi">Multiple Dates</option>
+                      </>
+                    )}
                   </select>
+                  {shortLeave && (
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Short leave is limited to a single date
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {mode === "single" && (
+              {(shortLeave || mode === "single") && (
                 <div>
-                  <label className="form-label text-[11px] mb-1">Date</label>
+                  <label className="form-label text-[11px] mb-1">
+                    Date
+                    <Req />
+                  </label>
                   <input
                     type="date"
                     className="form-input"
@@ -684,10 +802,13 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                 </div>
               )}
 
-              {mode === "range" && (
+              {!shortLeave && mode === "range" && (
                 <div className="flex flex-wrap gap-4">
                   <div className="flex-1 min-w-[140px]">
-                    <label className="form-label text-[11px] mb-1">Start</label>
+                    <label className="form-label text-[11px] mb-1">
+                      Start
+                      <Req />
+                    </label>
                     <input
                       type="date"
                       className="form-input"
@@ -698,7 +819,10 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                     />
                   </div>
                   <div className="flex-1 min-w-[140px]">
-                    <label className="form-label text-[11px] mb-1">End</label>
+                    <label className="form-label text-[11px] mb-1">
+                      End
+                      <Req />
+                    </label>
                     <input
                       type="date"
                       className="form-input"
@@ -711,9 +835,12 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                 </div>
               )}
 
-              {mode === "multi" && (
+              {!shortLeave && mode === "multi" && (
                 <div className="space-y-2">
-                  <label className="form-label text-[11px] mb-1">Dates</label>
+                  <label className="form-label text-[11px] mb-1">
+                    Dates
+                    <Req />
+                  </label>
                   {multiDates.map((d, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <input
@@ -832,6 +959,9 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                           <div>
                             <span className="text-gray-600 text-xs">Type:</span>
                             <span className="ml-1 font-medium">{l.type}</span>
+                            <span className="ml-2">
+                              <ShortLeaveChip leave={l} />
+                            </span>
                             {l.type === "Other" && l.custom_type && (
                               <span className="ml-2 text-[11px] bg-gray-100 px-2 py-0.5 rounded">
                                 {l.custom_type}
@@ -848,10 +978,14 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                                   ? "badge-success"
                                   : l.current_status === "REJECTED"
                                   ? "badge-error"
+                                  : l.current_status === "RETURNED"
+                                  ? "badge-amber"
                                   : "badge-gray"
                               }`}
                             >
-                              {l.current_status}
+                              {l.current_status === "RETURNED"
+                                ? "RETURNED FOR CORRECTION"
+                                : l.current_status}
                             </span>
                           </div>
                           <div className="max-w-[320px] truncate">
@@ -1020,6 +1154,24 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                           )}
                         </div>
                       </div>
+                      {selectedDetail.is_short_leave && (
+                        <div className="md:col-span-2">
+                          <span className="text-gray-600 text-xs">
+                            Short Leave
+                          </span>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="badge badge-blue text-[11px]">
+                              Short Leave
+                            </span>
+                            <span className="text-sm font-medium">
+                              {selectedDetail.short_leave_from &&
+                              selectedDetail.short_leave_to
+                                ? `${selectedDetail.short_leave_from} - ${selectedDetail.short_leave_to}`
+                                : "Time not specified"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       <div className="md:col-span-2">
                         <span className="text-gray-600 text-xs">Reason</span>
                         <textarea

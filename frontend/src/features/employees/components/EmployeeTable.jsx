@@ -13,6 +13,18 @@ import {
   displayPhoneNumber,
   toTitleCase,
 } from "../../../utils/formatters";
+import locationService from "../../settings/services/locationService";
+import { scaleGradeService } from "../../settings/services/scaleGradeService";
+import { departmentService } from "../../settings/services/departmentService";
+
+// Filter keys persisted in the URL as filter_<key>; they drive both the list
+// query and the Excel export so the export always matches the on-screen result.
+const FILTER_KEYS = [
+  "location_id",
+  "scale_grade_id",
+  "department_id",
+  "employment_status",
+];
 
 const EmployeeTable = () => {
   const {
@@ -26,12 +38,64 @@ const EmployeeTable = () => {
     pagination,
   } = useEmployeeStore();
   const { employees: employeeNav, saveCurrentLocation } = useAppNavigation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [exporting, setExporting] = useState(false);
   const exportAbortRef = useRef(null);
   const { confirmDelete } = useConfirmationContext();
+
+  // Filter dropdown option sources
+  const [locations, setLocations] = useState([]);
+  const [scaleGrades, setScaleGrades] = useState([]);
+  const [departments, setDepartments] = useState([]);
+
+  useEffect(() => {
+    let ignore = false;
+    const loadOptions = async () => {
+      try {
+        const [locRes, sgRes, deptRes] = await Promise.all([
+          locationService.getAllLocations(),
+          scaleGradeService.getAllScaleGrades(),
+          departmentService.getAllDepartments(),
+        ]);
+        if (ignore) return;
+        setLocations(locRes?.locations || locRes?.bazaars || []);
+        setScaleGrades(sgRes?.scaleGrades || []);
+        setDepartments(deptRes?.departments || []);
+      } catch (err) {
+        console.error("Failed to load filter options:", err?.message);
+      }
+    };
+    loadOptions();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  // Read the currently-applied filters straight from the URL
+  const activeFilters = FILTER_KEYS.reduce((acc, key) => {
+    const val = searchParams.get(`filter_${key}`);
+    if (val) acc[key] = val;
+    return acc;
+  }, {});
+  const activeSearch = searchParams.get("search") || "";
+  const hasActiveFilters = Object.keys(activeFilters).length > 0;
+
+  const setFilter = (key, value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(`filter_${key}`, value);
+    else next.delete(`filter_${key}`);
+    next.set("page", "1"); // any filter change returns to the first page
+    setSearchParams(next);
+  };
+
+  const clearFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    FILTER_KEYS.forEach((key) => next.delete(`filter_${key}`));
+    next.set("page", "1");
+    setSearchParams(next);
+  };
 
   // Abort any in-flight export if the user leaves the page
   useEffect(() => {
@@ -58,6 +122,7 @@ const EmployeeTable = () => {
       const { blob, filename } = await employeeService.exportEmployeesExcel({
         signal: controller.signal,
         timeoutMs: 120000,
+        filters: { ...activeFilters, search: activeSearch },
       });
 
       if (controller.signal.aborted) return;
@@ -89,7 +154,7 @@ const EmployeeTable = () => {
       }
       setExporting(false);
     }
-  }, [exporting]);
+  }, [exporting, searchParams]);
 
   // Helpers
   const getCurrentParams = () => ({
@@ -370,6 +435,97 @@ const EmployeeTable = () => {
       {loading && isInitialLoad ? (
         <Loader size="large" text="Loading employees..." />
       ) : (
+        <>
+        <div className="mb-3 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-col">
+            <label className="mb-1 text-xs font-medium text-slate-600">
+              Bazaar / Location
+            </label>
+            <select
+              className="min-w-[180px] rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              value={activeFilters.location_id || ""}
+              onChange={(e) => setFilter("location_id", e.target.value)}
+            >
+              <option value="">All locations</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                  {loc.type && loc.type !== "BAZAAR"
+                    ? ` (${toTitleCase(loc.type.replace(/_/g, " "))})`
+                    : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col">
+            <label className="mb-1 text-xs font-medium text-slate-600">
+              Grade / Scale
+            </label>
+            <select
+              className="min-w-[150px] rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              value={activeFilters.scale_grade_id || ""}
+              onChange={(e) => setFilter("scale_grade_id", e.target.value)}
+            >
+              <option value="">All grades</option>
+              {scaleGrades.map((sg) => (
+                <option key={sg.id} value={sg.id}>
+                  {sg.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col">
+            <label className="mb-1 text-xs font-medium text-slate-600">
+              Department
+            </label>
+            <select
+              className="min-w-[160px] rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              value={activeFilters.department_id || ""}
+              onChange={(e) => setFilter("department_id", e.target.value)}
+            >
+              <option value="">All departments</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col">
+            <label className="mb-1 text-xs font-medium text-slate-600">
+              Status
+            </label>
+            <select
+              className="min-w-[140px] rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              value={activeFilters.employment_status || ""}
+              onChange={(e) => setFilter("employment_status", e.target.value)}
+            >
+              <option value="">Any status</option>
+              <option value="Active">Active</option>
+              <option value="Probation">Probation</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Terminated">Terminated</option>
+              <option value="Resigned">Resigned</option>
+              <option value="Retired">Retired</option>
+            </select>
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              Clear filters
+            </button>
+          )}
+          <span className="ml-auto self-center text-xs text-slate-500">
+            Export respects the filters above
+          </span>
+        </div>
         <DataTable
           title="Employees"
           columns={columns}
@@ -398,6 +554,7 @@ const EmployeeTable = () => {
             </button>
           }
         />
+        </>
       )}
     </div>
   );

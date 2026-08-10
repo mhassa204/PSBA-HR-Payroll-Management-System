@@ -34,24 +34,27 @@ const useEmployeeStore = create(
 
       try {
         // Handle both object params and individual parameters
-        let page, actualLimit, actualSearchTerm;
+        let page, actualLimit, actualSearchTerm, actualFilters;
 
         if (typeof pageOrParams === "object") {
-          // Called with params object: fetchEmployees({page: 1, pageSize: 10, search: 'term'})
+          // Called with params object: fetchEmployees({page, pageSize, search, filters})
           page = pageOrParams.page || 1;
           actualLimit = pageOrParams.pageSize || 10;
           actualSearchTerm = pageOrParams.search || "";
+          actualFilters = pageOrParams.filters || {};
         } else {
           // Called with individual parameters: fetchEmployees(1, 10, 'term')
           page = pageOrParams;
           actualLimit = limit;
           actualSearchTerm = searchTerm;
+          actualFilters = {};
         }
 
         const result = await employeeService.getAllEmployees(
           page,
           actualLimit,
-          actualSearchTerm
+          actualSearchTerm,
+          actualFilters
         );
 
         // Sort by latest activity (employee updated_at/created_at or employment record dates)

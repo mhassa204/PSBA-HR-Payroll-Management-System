@@ -30,6 +30,14 @@ router.post("/", isAuthenticated, authorize("roster.create"), rosterController.c
 router.put("/:id", isAuthenticated, authorize("roster.create"), rosterController.update);
 router.delete("/:id", isAuthenticated, authorize("roster.create"), rosterController.remove);
 
+// Grace period for an HQ roster — Establishment account only (enforced in controller)
+router.patch(
+  "/:id/grace",
+  isAuthenticated,
+  authorize("roster.read"),
+  rosterController.setGracePeriod
+);
+
 // Approval actions (assigned approver only; reason required for reject)
 router.post(
   "/:id/approve",

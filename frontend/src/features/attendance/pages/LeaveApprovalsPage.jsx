@@ -4,6 +4,7 @@ import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import SearchableSelect from "../../../components/ui/SearchableSelect";
 import { toastBus } from "../../../utils/toastBus";
 import { useAuthStore } from "../../auth/authStore";
+import { Req, ShortLeaveChip } from "../leaveUtils";
 
 const LeaveApprovalsPage = () => {
   const [loading, setLoading] = useState(true);
@@ -14,6 +15,8 @@ const LeaveApprovalsPage = () => {
   const currentUserId = user?.id;
   const userRole = user?.role?.name || "";
   const [comments, setComments] = useState("");
+  // Return-for-correction / reject remarks dialog: { action, ids, first, dates }
+  const [remarksAction, setRemarksAction] = useState(null);
   const [forwardingLeave, setForwardingLeave] = useState(null);
   const [forwardUserOptions, setForwardUserOptions] = useState([]);
   const [forwardSearch, setForwardSearch] = useState("");
@@ -52,6 +55,7 @@ const LeaveApprovalsPage = () => {
       }
       setComments("");
       setSelected(null);
+      setRemarksAction(null);
       setForwardingLeave(null);
       setForwardSearch("");
       toastBus.emit({
@@ -240,6 +244,14 @@ const LeaveApprovalsPage = () => {
             onClick={() => {
               if (b.action) {
                 b.action();
+              } else if (b.key === "REJECT" || b.key === "RETURN") {
+                // Capture the approver's reason/remarks before acting
+                setRemarksAction({
+                  action: b.key,
+                  ids: groupIds,
+                  first: l,
+                  dates: groupDates,
+                });
               } else {
                 act(groupIds, b.key);
               }
@@ -345,7 +357,12 @@ const LeaveApprovalsPage = () => {
                       {g.first.employee?.employmentRecords?.[0]?.location?.name ||
                         "-"}
                     </td>
-                    <td>{g.first.type}</td>
+                    <td>
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        <span>{g.first.type}</span>
+                        <ShortLeaveChip leave={g.first} />
+                      </div>
+                    </td>
                     <td>
                       <span
                         className={`badge text-xs ${
@@ -410,7 +427,12 @@ const LeaveApprovalsPage = () => {
                       {g.first.employee?.employmentRecords?.[0]?.location?.name ||
                         "-"}
                     </td>
-                    <td>{g.first.type}</td>
+                    <td>
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        <span>{g.first.type}</span>
+                        <ShortLeaveChip leave={g.first} />
+                      </div>
+                    </td>
                     <td>
                       <span
                         className={`badge text-xs ${
@@ -507,6 +529,9 @@ const LeaveApprovalsPage = () => {
                 <div>
                   <span className="text-gray-600">Type:</span>{" "}
                   <span className="ml-1 font-medium">{selected.type}</span>
+                  <span className="ml-2">
+                    <ShortLeaveChip leave={selected} />
+                  </span>
                   {selected.type === "Other" && selected.custom_type && (
                     <span className="ml-2 text-[11px] bg-gray-100 px-2 py-0.5 rounded">
                       {selected.custom_type}
@@ -581,6 +606,16 @@ const LeaveApprovalsPage = () => {
                       : "Not specified"}
                   </span>
                 </div>
+                {selected.is_short_leave && (
+                  <div>
+                    <span className="text-gray-600">Short Leave Time:</span>{" "}
+                    <span className="ml-1 font-medium">
+                      {selected.short_leave_from && selected.short_leave_to
+                        ? `${selected.short_leave_from} - ${selected.short_leave_to}`
+                        : "Not specified"}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="text-gray-600">Reason:</span>{" "}
                   <span className="ml-1">
@@ -671,6 +706,89 @@ const LeaveApprovalsPage = () => {
                     return null;
                   }
                 })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remarks modal for Return for Correction / Reject */}
+      {remarksAction && (
+        <div className="fixed inset-0 backdrop-fade bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="modal-surface w-full max-w-md">
+            <div className="modal-header">
+              <h2 className="text-sm font-semibold tracking-wide">
+                {remarksAction.action === "RETURN"
+                  ? "Return for Correction"
+                  : "Reject Leave Request"}
+              </h2>
+              <button
+                onClick={() => {
+                  setRemarksAction(null);
+                  setComments("");
+                }}
+                className="btn btn-outline btn-sm text-xs"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="text-sm text-gray-700">
+                {remarksAction.first?.employee?.full_name || "Employee"} —{" "}
+                {remarksAction.first?.type}
+                {remarksAction.dates?.length
+                  ? ` (${remarksAction.dates.length} day${remarksAction.dates.length > 1 ? "s" : ""})`
+                  : ""}
+              </div>
+              <div>
+                <label className="form-label text-[11px] mb-1">
+                  {remarksAction.action === "RETURN" ? (
+                    <>
+                      Reason / correction required
+                      <Req />
+                    </>
+                  ) : (
+                    "Reason / remarks (optional)"
+                  )}
+                </label>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  autoFocus
+                  value={comments}
+                  onChange={(e) => setComments(e.target.value)}
+                  placeholder={
+                    remarksAction.action === "RETURN"
+                      ? "Tell the applicant what needs to be corrected"
+                      : "Why is this request being rejected?"
+                  }
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  className="btn btn-secondary text-xs"
+                  onClick={() => {
+                    setRemarksAction(null);
+                    setComments("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={`text-xs ${
+                    remarksAction.action === "RETURN"
+                      ? "btn btn-outline"
+                      : "btn btn-error"
+                  }`}
+                  disabled={
+                    remarksAction.action === "RETURN" && !comments.trim()
+                  }
+                  onClick={() => act(remarksAction.ids, remarksAction.action)}
+                >
+                  {remarksAction.action === "RETURN"
+                    ? "Return for Correction"
+                    : "Reject"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -531,6 +531,9 @@ model DutyRoster {
   scope              String            @default("LOCATION")
   // MONTHLY (21st -> 20th payroll cycle) or PERMANENT (no end date)
   roster_type        String            @default("MONTHLY")
+  // Late-arrival grace tolerance (minutes) for HQ_DEPARTMENT rosters.
+  // Set by the Establishment account only; ignored for LOCATION rosters.
+  grace_minutes      Int               @default(0)
   department_id      Int?
   department         Department?       @relation(fields: [department_id], references: [id])
   // Assigned approver (HQ_DEPARTMENT scope). NULL for LOCATION scope: any Operations-role user approves.
@@ -636,6 +639,11 @@ model Leave {
   duty_from          String? // Duty time from (HH:mm format)
   duty_to            String? // Duty time to (HH:mm format)
   documents          String? // JSON array of document file paths
+  // Short leave: a single-date, time-boxed leave that does not consume a
+  // full day of leave-bank balance and is excluded from full-day counts
+  is_short_leave     Boolean @default(false)
+  short_leave_from   String? // Short leave time from (HH:mm format)
+  short_leave_to     String? // Short leave time to (HH:mm format)
   // Workflow tracking
   current_status  LeaveWorkflowStatus @default(PENDING)
   current_stage   Int                 @default(0) // 0 before routing starts; increments per sequence

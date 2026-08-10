@@ -1463,6 +1463,7 @@ const employeeService = {
         designation_title,
         location_id,
         scale_grade_id,
+        employment_status,
       } = params;
       const skip = (page - 1) * limit;
 
@@ -1492,6 +1493,9 @@ const employeeService = {
         }),
         ...(location_id && { location_id: parseInt(location_id) }),
         ...(scale_grade_id && { scale_grade_id: parseInt(scale_grade_id) }),
+        ...(employment_status && {
+          employment_status: { equals: employment_status, mode: "insensitive" },
+        }),
       };
 
       // If we have filters on employment, we need to filter employees by their employment records
@@ -1500,7 +1504,8 @@ const employeeService = {
         designation_id ||
         designation_title ||
         location_id ||
-        scale_grade_id
+        scale_grade_id ||
+        employment_status
       ) {
         employeeWhere.employmentRecords = {
           some: employmentWhere,
@@ -1555,10 +1560,53 @@ const employeeService = {
    * Lean projection of all active employees for Excel export.
    * Only selects fields needed for export columns — no documents/education/history.
    */
-  getEmployeesForExport: async () => {
+  getEmployeesForExport: async (filters = {}) => {
     try {
+      const {
+        search = "",
+        department_id,
+        designation_id,
+        location_id,
+        scale_grade_id,
+        employment_status,
+      } = filters;
+
+      const employeeWhere = {
+        is_deleted: false,
+        ...(search && {
+          OR: [
+            { full_name: { contains: search, mode: "insensitive" } },
+            { cnic: { contains: search, mode: "insensitive" } },
+            { mobile_number: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+          ],
+        }),
+      };
+
+      // Filters that live on the current employment record
+      const employmentFilter = {
+        is_current: true,
+        is_deleted: false,
+        ...(department_id && { department_id: parseInt(department_id) }),
+        ...(designation_id && { designation_id: parseInt(designation_id) }),
+        ...(location_id && { location_id: parseInt(location_id) }),
+        ...(scale_grade_id && { scale_grade_id: parseInt(scale_grade_id) }),
+        ...(employment_status && {
+          employment_status: { equals: employment_status, mode: "insensitive" },
+        }),
+      };
+      if (
+        department_id ||
+        designation_id ||
+        location_id ||
+        scale_grade_id ||
+        employment_status
+      ) {
+        employeeWhere.employmentRecords = { some: employmentFilter };
+      }
+
       const employees = await prisma.employee.findMany({
-        where: { is_deleted: false },
+        where: employeeWhere,
         select: {
           id: true,
           full_name: true,

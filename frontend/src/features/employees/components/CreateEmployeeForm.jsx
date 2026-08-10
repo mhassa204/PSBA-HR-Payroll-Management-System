@@ -1118,7 +1118,7 @@ const CreateEmployeeForm = ({ employee = null }) => {
 
       // Close modal and navigate
       setShowPreviewModal(false);
-      navigate(isEditMode ? `/employees/${employee.id}` : "/employees");
+      navigate(isEditMode ? `/employees/view/${employee.id}` : "/employees");
     } catch (error) {
       // Log error for audit trail
       // Note: Form data is preserved automatically by the persistence hook

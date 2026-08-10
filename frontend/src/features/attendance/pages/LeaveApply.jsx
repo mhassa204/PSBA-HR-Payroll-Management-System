@@ -3,6 +3,7 @@ import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { toastBus } from "../../../utils/toastBus";
 import { useAuthStore } from "../../auth/authStore";
+import { Req, ShortLeaveChip, lastReturnComment } from "../leaveUtils";
 
 const ApplyDialog = ({ employee, open, onClose }) => {
   const [loading, setLoading] = useState(false);
@@ -55,6 +56,8 @@ const ApplyDialog = ({ employee, open, onClose }) => {
     backup_duty_from: "",
     backup_duty_to: "",
     documents: [],
+    short_leave_from: "",
+    short_leave_to: "",
   });
 
   // Helper function to convert UTC+5 time to local datetime-local format
@@ -75,6 +78,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
     return utc5Date.toISOString();
   };
   const [mode, setMode] = useState("single");
+  const [shortLeave, setShortLeave] = useState(false);
   const [range, setRange] = useState({ start: "", end: "" });
   const [multiDates, setMultiDates] = useState([""]);
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -182,7 +186,18 @@ const ApplyDialog = ({ employee, open, onClose }) => {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.type) return;
+    const fail = (message) => toastBus.emit({ type: "error", message });
+    if (!form.type) return fail("Leave type is required");
+    if (form.type === "Other" && !form.custom_type.trim())
+      return fail("Custom leave type is required");
+    if (!form.duty_from || !form.duty_to)
+      return fail("Duty time (from and to) is required");
+    if (shortLeave) {
+      if (!form.short_leave_from || !form.short_leave_to)
+        return fail("Short leave time (from and to) is required");
+      if (form.short_leave_from >= form.short_leave_to)
+        return fail("Short leave 'to' time must be after 'from' time");
+    }
     const body = {
       type: form.type,
       remarks: form.remarks,
@@ -195,17 +210,21 @@ const ApplyDialog = ({ employee, open, onClose }) => {
       backup_duty_to: form.backup_duty_to || null,
       documents:
         form.documents.length > 0 ? form.documents.map((f) => f.path) : null,
+      is_short_leave: shortLeave,
+      short_leave_from: shortLeave ? form.short_leave_from : null,
+      short_leave_to: shortLeave ? form.short_leave_to : null,
     };
-    if (mode === "single") {
-      if (!form.date) return;
+    if (shortLeave || mode === "single") {
+      if (!form.date) return fail("Leave date is required");
       body.date = form.date;
     } else if (mode === "range") {
-      if (!range.start || !range.end) return;
+      if (!range.start || !range.end)
+        return fail("Start and end dates are required");
       body.start = range.start;
       body.end = range.end;
     } else if (mode === "multi") {
       const dates = multiDates.filter(Boolean);
-      if (!dates.length) return;
+      if (!dates.length) return fail("At least one leave date is required");
       body.dates = dates;
     }
 
@@ -222,7 +241,10 @@ const ApplyDialog = ({ employee, open, onClose }) => {
         backup_duty_from: "",
         backup_duty_to: "",
         documents: [],
+        short_leave_from: "",
+        short_leave_to: "",
       });
+      setShortLeave(false);
       setRange({ start: "", end: "" });
       setMultiDates([""]);
       setUploadedFiles([]);
@@ -270,9 +292,36 @@ const ApplyDialog = ({ employee, open, onClose }) => {
         ) : (
           <div className="p-4 space-y-6">
             <form className="card-soft p-4 space-y-4" onSubmit={submit}>
+              <div className="col-span-2 flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+                <div>
+                  <span className="text-xs font-semibold text-blue-800">
+                    Short Leave
+                  </span>
+                  <p className="text-[10px] text-blue-700">
+                    Time-boxed leave for a single date — specify the time
+                    interval instead of a full day
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 select-none cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={shortLeave}
+                    onChange={(e) => {
+                      setShortLeave(e.target.checked);
+                      if (e.target.checked) setMode("single");
+                    }}
+                  />
+                  <span className="text-xs font-medium text-blue-800">
+                    Apply as short leave
+                  </span>
+                </label>
+              </div>
               <div className="filter-panel compact">
                 <div>
-                  <label className="form-label text-[11px] mb-1">Type</label>
+                  <label className="form-label text-[11px] mb-1">
+                    Type
+                    <Req />
+                  </label>
                   <select
                     className="form-input"
                     value={form.type}
@@ -293,6 +342,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                   <div className="col-span-2">
                     <label className="form-label text-[11px] mb-1">
                       Custom Leave Type
+                      <Req />
                     </label>
                     <input
                       className="form-input"
@@ -320,6 +370,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                 <div>
                   <label className="form-label text-[11px] mb-1">
                     Duty time (from)
+                    <Req />
                   </label>
                   <input
                     type="time"
@@ -333,6 +384,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                 <div>
                   <label className="form-label text-[11px] mb-1">
                     Duty time (to)
+                    <Req />
                   </label>
                   <input
                     type="time"
@@ -343,6 +395,44 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                     }
                   />
                 </div>
+                {shortLeave && (
+                  <>
+                    <div>
+                      <label className="form-label text-[11px] mb-1">
+                        Short Leave Time (From)
+                        <Req />
+                      </label>
+                      <input
+                        type="time"
+                        className="form-input"
+                        value={form.short_leave_from}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            short_leave_from: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label text-[11px] mb-1">
+                        Short Leave Time (To)
+                        <Req />
+                      </label>
+                      <input
+                        type="time"
+                        className="form-input"
+                        value={form.short_leave_to}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            short_leave_to: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="col-span-2">
                   <label className="form-label text-[11px] mb-1">
                     Backup Resource
@@ -398,19 +488,37 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                   <label className="form-label text-[11px] mb-1">Mode</label>
                   <select
                     className="form-input"
-                    value={mode}
+                    value={shortLeave ? "single" : mode}
                     onChange={(e) => setMode(e.target.value)}
+                    disabled={shortLeave}
+                    title={
+                      shortLeave
+                        ? "Short leave is always for a single date"
+                        : undefined
+                    }
                   >
                     <option value="single">Single Date</option>
-                    <option value="range">Date Range</option>
-                    <option value="multi">Multiple Dates</option>
+                    {!shortLeave && (
+                      <>
+                        <option value="range">Date Range</option>
+                        <option value="multi">Multiple Dates</option>
+                      </>
+                    )}
                   </select>
+                  {shortLeave && (
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Short leave is limited to a single date
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {mode === "single" && (
+              {(shortLeave || mode === "single") && (
                 <div>
-                  <label className="form-label text-[11px] mb-1">Date</label>
+                  <label className="form-label text-[11px] mb-1">
+                    Date
+                    <Req />
+                  </label>
                   <input
                     type="date"
                     className="form-input"
@@ -422,10 +530,13 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                 </div>
               )}
 
-              {mode === "range" && (
+              {!shortLeave && mode === "range" && (
                 <div className="flex flex-wrap gap-4">
                   <div className="flex-1 min-w-[140px]">
-                    <label className="form-label text-[11px] mb-1">Start</label>
+                    <label className="form-label text-[11px] mb-1">
+                      Start
+                      <Req />
+                    </label>
                     <input
                       type="date"
                       className="form-input"
@@ -436,7 +547,10 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                     />
                   </div>
                   <div className="flex-1 min-w-[140px]">
-                    <label className="form-label text-[11px] mb-1">End</label>
+                    <label className="form-label text-[11px] mb-1">
+                      End
+                      <Req />
+                    </label>
                     <input
                       type="date"
                       className="form-input"
@@ -449,9 +563,12 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                 </div>
               )}
 
-              {mode === "multi" && (
+              {!shortLeave && mode === "multi" && (
                 <div className="space-y-2">
-                  <label className="form-label text-[11px] mb-1">Dates</label>
+                  <label className="form-label text-[11px] mb-1">
+                    Dates
+                    <Req />
+                  </label>
                   {multiDates.map((d, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <input
@@ -582,6 +699,7 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                                 <span className="text-sm font-medium">
                                   {l.type}
                                 </span>
+                                <ShortLeaveChip leave={l} />
                                 {l.type === "Other" && l.custom_type && (
                                   <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
                                     {l.custom_type}
@@ -599,10 +717,14 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                                     ? "badge-success"
                                     : l.current_status === "REJECTED"
                                     ? "badge-error"
+                                    : l.current_status === "RETURNED"
+                                    ? "badge-amber"
                                     : "badge-gray"
                                 }`}
                               >
-                                {l.current_status}
+                                {l.current_status === "RETURNED"
+                                  ? "RETURNED FOR CORRECTION"
+                                  : l.current_status}
                               </span>
                             </div>
                           </div>
@@ -659,6 +781,14 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                           </button>
                         </div>
                       </div>
+                      {l.current_status === "RETURNED" && (
+                        <div className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+                          <span className="font-semibold">
+                            Correction requested:
+                          </span>{" "}
+                          {lastReturnComment(l) || "No reason provided"}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -709,6 +839,9 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                   <div>
                     <span className="font-medium text-gray-600">Type:</span>
                     <span className="ml-2">{selectedLeave.type}</span>
+                    <span className="ml-2">
+                      <ShortLeaveChip leave={selectedLeave} />
+                    </span>
                     {selectedLeave.type === "Other" &&
                       selectedLeave.custom_type && (
                         <span className="ml-2 text-xs bg-gray-100 px-2 py-1 rounded">
@@ -724,10 +857,14 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                           ? "badge-success"
                           : selectedLeave.current_status === "REJECTED"
                           ? "badge-error"
+                          : selectedLeave.current_status === "RETURNED"
+                          ? "badge-amber"
                           : "badge-gray"
                       }`}
                     >
-                      {selectedLeave.current_status}
+                      {selectedLeave.current_status === "RETURNED"
+                        ? "RETURNED FOR CORRECTION"
+                        : selectedLeave.current_status}
                     </span>
                   </div>
                   <div>
@@ -775,7 +912,9 @@ const ApplyDialog = ({ employee, open, onClose }) => {
               </div>
 
               {/* Duty Information */}
-              {(selectedLeave.duty_from || selectedLeave.duty_to) && (
+              {(selectedLeave.duty_from ||
+                selectedLeave.duty_to ||
+                selectedLeave.is_short_leave) && (
                 <div className="card-soft p-4 space-y-3">
                   <h3 className="text-sm font-semibold text-gray-700">
                     Duty Information
@@ -791,6 +930,19 @@ const ApplyDialog = ({ employee, open, onClose }) => {
                           : "Not specified"}
                       </span>
                     </div>
+                    {selectedLeave.is_short_leave && (
+                      <div>
+                        <span className="font-medium text-gray-600">
+                          Short Leave Time:
+                        </span>
+                        <span className="ml-2">
+                          {selectedLeave.short_leave_from &&
+                          selectedLeave.short_leave_to
+                            ? `${selectedLeave.short_leave_from} - ${selectedLeave.short_leave_to}`
+                            : "Not specified"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

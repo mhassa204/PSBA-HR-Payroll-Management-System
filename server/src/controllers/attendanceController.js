@@ -17,8 +17,11 @@ function addDays(d, n) { const dt = new Date(d); dt.setUTCDate(dt.getUTCDate()+n
 function formatYMD(d){ const y=d.getUTCFullYear(); const m=String(d.getUTCMonth()+1).padStart(2,'0'); const dd=String(d.getUTCDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
 function dayName(d){ return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getUTCDay()]; }
 function dayShort(d){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()]; }
-function formatHHmmFromUTCDate(d){ if(!d) return null; const h=String(d.getUTCHours()).padStart(2,'0'); const m=String(d.getUTCMinutes()).padStart(2,'0'); return `${h}:${m}`; }
-function parseHHmmToMinutes(s){ if(!s) return null; const m=s.match(/^(\d{1,2}):(\d{2})$/); if(!m) return null; return parseInt(m[1],10)*60+parseInt(m[2],10); }
+// Clock times are shown in HH:MM:SS. Punch timestamps carry real seconds;
+// duty/roster times are HH:mm in the DB, so they are padded to :00 for display.
+function formatHHmmFromUTCDate(d){ if(!d) return null; const h=String(d.getUTCHours()).padStart(2,'0'); const m=String(d.getUTCMinutes()).padStart(2,'0'); const s=String(d.getUTCSeconds()).padStart(2,'0'); return `${h}:${m}:${s}`; }
+function padSeconds(s){ if(!s) return s; const m=String(s).match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/); if(!m) return s; return `${m[1].padStart(2,'0')}:${m[2]}:${m[3]||'00'}`; }
+function parseHHmmToMinutes(s){ if(!s) return null; const m=String(s).match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/); if(!m) return null; return parseInt(m[1],10)*60+parseInt(m[2],10); }
 
 // Fetch face-attendance rows for a set of cnics in a date range.
 async function fetchAttendanceByCnics(cnics, start, end) {
@@ -214,8 +217,15 @@ async function locationAgainstRoster(req, res) {
           performedStatus = '';
         }
 
+        // HQ rosters may allow a late-arrival grace window (minutes). A check-in
+        // within grace is treated as on-time; only lateness beyond it is 'Late'.
+        const graceMin = day.grace_minutes || 0;
         const timeInLateMin = (parseHHmmToMinutes(dutyIn) != null && inOut.in) ? ( (inOut.in.getUTCHours()*60+inOut.in.getUTCMinutes()) - parseHHmmToMinutes(dutyIn) ) : null;
-        const timeInStatus = (timeInLateMin != null && timeInLateMin > 0) ? 'Late' : (timeInLateMin != null ? 'Early' : '');
+        const timeInStatus = (timeInLateMin == null)
+          ? ''
+          : (timeInLateMin > graceMin
+              ? 'Late'
+              : (timeInLateMin > 0 ? 'On Time' : 'Early'));
 
         const timeOutDiffMin = (parseHHmmToMinutes(dutyOut) != null && inOut.out) ? ( (inOut.out.getUTCHours()*60+inOut.out.getUTCMinutes()) - parseHHmmToMinutes(dutyOut) ) : null;
         const timeOutStatus = (timeOutDiffMin != null && timeOutDiffMin < 0) ? 'Early' : (timeOutDiffMin != null && timeOutDiffMin > 0 ? 'Late-Sitting' : '');
@@ -231,8 +241,8 @@ async function locationAgainstRoster(req, res) {
           dateLabel: `${dayName(date)}, ${date.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`,
           time1,
           time2,
-          dutyIn: dutyIn || '',
-          dutyOut: dutyOut || '',
+          dutyIn: padSeconds(dutyIn) || '',
+          dutyOut: padSeconds(dutyOut) || '',
           dutyTimings: (dutyMinutes!=null) ? `${Math.floor(dutyMinutes/60)}:${String(dutyMinutes%60).padStart(2,'0')}` : '',
           actualPerformed: (actualMinutes!=null) ? `${Math.floor(actualMinutes/60)}:${String(actualMinutes%60).padStart(2,'0')}` : '',
           performedStatus,
@@ -346,11 +356,12 @@ async function locationLSR(req, res) {
     // Leaves in range (all statuses)
     const leaveRows = await prisma.leave.findMany({
       where: { employee_id: { in: allEmpIds }, is_deleted: false, date: { gte: cycleStart, lte: cycleEnd } },
-      select: { employee_id: true, date: true, status: true, type: true }
+      select: { employee_id: true, date: true, status: true, type: true, is_short_leave: true }
     });
     const approvedLeaveByEmp = new Map();
     const unapprovedLeaveByEmp = new Map(); // pending + rejected counts
     for (const l of leaveRows) {
+      if (l.is_short_leave) continue; // short leaves are not full-day leaves
       const key = l.employee_id;
       if (l.status === 'APPROVED') {
         if (!approvedLeaveByEmp.has(key)) approvedLeaveByEmp.set(key, []);
@@ -368,7 +379,7 @@ async function locationLSR(req, res) {
     if (activeBank) {
       leaveTypes = await prisma.leaveType.findMany({ where: { is_deleted: false, is_active: true } });
       bankAllocations = await prisma.leaveBankAllocation.findMany({ where: { leave_bank_id: activeBank.id, employee_id: { in: allEmpIds } } });
-      leavesInBankPeriod = await prisma.leave.findMany({ where: { is_deleted: false, employee_id: { in: allEmpIds }, date: { gte: activeBank.period_start, lte: activeBank.period_end } }, select: { employee_id: true, type: true, status: true } });
+      leavesInBankPeriod = await prisma.leave.findMany({ where: { is_deleted: false, is_short_leave: false, employee_id: { in: allEmpIds }, date: { gte: activeBank.period_start, lte: activeBank.period_end } }, select: { employee_id: true, type: true, status: true } });
     }
     // Build bank summary per employee
     const defaultsMap = new Map();

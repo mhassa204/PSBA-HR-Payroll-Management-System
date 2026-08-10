@@ -188,6 +188,7 @@ async function buildScheduleResolver(employeeIds, start, end, opts = {}) {
           source: "ROSTER",
           roster_id: applicable.roster.id,
           entry_id: applicable.entry.id,
+          grace_minutes: applicable.roster.grace_minutes || 0,
           ...interpretDaySchedules(applicable.entry.day_schedules, date),
         };
       }

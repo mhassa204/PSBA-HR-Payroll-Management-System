@@ -4,6 +4,7 @@ import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { useAuthStore } from "../../auth/authStore";
 import { exportToCSV, exportToExcel } from "../../../lib/exportUtils";
 import { toastBus } from "../../../utils/toastBus";
+import { ShortLeaveChip } from "../leaveUtils";
 
 const AllLeavesPage = () => {
   const user = useAuthStore((s) => s.user);
@@ -103,7 +104,7 @@ const AllLeavesPage = () => {
     });
   }, [leaves, fName, fCnic, fDesignation, fDepartment, fDate, fStart, fEnd, fLeaveType, fLeaveStatus]);
 
-  const LEAVE_EXPORT_HEADERS = ["Employee", "CNIC", "Designation", "Department", "Date", "Type", "Status", "Remarks"];
+  const LEAVE_EXPORT_HEADERS = ["Employee", "CNIC", "Designation", "Department", "Date", "Type", "Short Leave", "Status", "Remarks"];
   const mapLeavesForExport = (rows) =>
     rows.map((lv) => {
       const emp = lv.employee || {};
@@ -115,6 +116,9 @@ const AllLeavesPage = () => {
         Department: empRec?.department?.name || "",
         Date: String(lv.date || "").slice(0, 10),
         Type: lv.type || "",
+        "Short Leave": lv.is_short_leave
+          ? `Yes${lv.short_leave_from && lv.short_leave_to ? ` (${lv.short_leave_from}-${lv.short_leave_to})` : ""}`
+          : "No",
         Status: lv.current_status || lv.status || "",
         Remarks: lv.remarks || "",
       };
@@ -223,6 +227,7 @@ const AllLeavesPage = () => {
             <option value="REJECTED">REJECTED</option>
             <option value="ALLOWED">ALLOWED</option>
             <option value="RECOMMENDED">RECOMMENDED</option>
+            <option value="RETURNED">RETURNED</option>
           </select>
         </div>
       </div>
@@ -261,13 +266,20 @@ const AllLeavesPage = () => {
                             ? "badge-success"
                             : lv.current_status === "REJECTED"
                             ? "badge-error"
+                            : lv.current_status === "RETURNED"
+                            ? "badge-amber"
                             : "badge-gray"
                         }`}
                       >
                         {lv.current_status || "PENDING"}
                       </span>
                     </td>
-                    <td>{lv.type}</td>
+                    <td>
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        <span>{lv.type}</span>
+                        <ShortLeaveChip leave={lv} />
+                      </div>
+                    </td>
                     <td>{emp.cnic || "-"}</td>
                     <td className="text-left">{emp.full_name || "-"}</td>
                     <td className="text-left">
@@ -350,6 +362,9 @@ const AllLeavesPage = () => {
                 <div>
                   <span className="text-gray-600">Type:</span>{" "}
                   <span className="ml-1 font-medium">{selectedLeave.type}</span>
+                  <span className="ml-2">
+                    <ShortLeaveChip leave={selectedLeave} />
+                  </span>
                   {selectedLeave.type === "Other" &&
                     selectedLeave.custom_type && (
                       <span className="ml-2 text-[11px] bg-gray-100 px-2 py-0.5 rounded">
@@ -414,6 +429,17 @@ const AllLeavesPage = () => {
                       : "Not specified"}
                   </span>
                 </div>
+                {selectedLeave.is_short_leave && (
+                  <div>
+                    <span className="text-gray-600">Short Leave Time:</span>{" "}
+                    <span className="ml-1 font-medium">
+                      {selectedLeave.short_leave_from &&
+                      selectedLeave.short_leave_to
+                        ? `${selectedLeave.short_leave_from} - ${selectedLeave.short_leave_to}`
+                        : "Not specified"}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="text-gray-600">Reason:</span>{" "}
                   <span className="ml-1">

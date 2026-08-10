@@ -469,6 +469,52 @@ const rosterController = {
     }
   },
 
+  // PATCH /rosters/:id/grace — set the late-arrival grace period (minutes) for
+  // an HQ_DEPARTMENT roster. Establishment account (or Super Admin) only.
+  async setGracePeriod(req, res) {
+    try {
+      const user = req.session.user;
+      const isSuperAdmin = user?.role?.name === "Super Admin";
+      const isEstablishment = /^\s*establishment/i.test(user?.role?.name || "");
+      if (!isSuperAdmin && !isEstablishment) {
+        return res.status(403).json({
+          success: false,
+          error: "Only the Establishment account can set a roster grace period.",
+        });
+      }
+
+      const id = Number(req.params.id);
+      const roster = await prisma.dutyRoster.findUnique({ where: { id } });
+      if (!roster || roster.is_deleted) {
+        return res.status(404).json({ success: false, error: "Roster not found" });
+      }
+      if (roster.scope !== "HQ_DEPARTMENT") {
+        return res.status(400).json({
+          success: false,
+          error: "Grace period applies to headquarter (HQ) rosters only.",
+        });
+      }
+
+      const minutes = Number(req.body?.grace_minutes);
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 240) {
+        return res.status(400).json({
+          success: false,
+          error: "grace_minutes must be a whole number between 0 and 240.",
+        });
+      }
+
+      const updated = await prisma.dutyRoster.update({
+        where: { id },
+        data: { grace_minutes: minutes },
+        include: listInclude,
+      });
+      res.json({ success: true, roster: updated });
+    } catch (e) {
+      console.error("Error setting roster grace period", e);
+      res.status(500).json({ success: false, error: "Failed to set grace period" });
+    }
+  },
+
   // DELETE /rosters/:id — creator deletes own non-approved roster;
   // Super Admin can delete any roster regardless of status
   async remove(req, res) {

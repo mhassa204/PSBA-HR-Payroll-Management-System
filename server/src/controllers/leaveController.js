@@ -187,6 +187,9 @@ module.exports = {
         backup_duty_from,
         backup_duty_to,
         documents,
+        is_short_leave,
+        short_leave_from,
+        short_leave_to,
       } = req.body || {};
       const perms = req.session?.user?.permissions || [];
       const userEmpId = req.session?.user?.employee_id || null;
@@ -222,6 +225,9 @@ module.exports = {
           backup_duty_from,
           backup_duty_to,
           documents,
+          is_short_leave,
+          short_leave_from,
+          short_leave_to,
         },
         req
       );
@@ -232,6 +238,9 @@ module.exports = {
         "Invalid date",
         "Provide date or start/end or dates[]",
         "No valid dates to insert",
+        "Short leave must be for a single date",
+        "Short leave time interval (from/to) is required",
+        "Invalid short leave time interval",
       ];
       if (clientErrors.includes(e.message))
         return res.status(400).json({ success: false, error: e.message });

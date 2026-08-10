@@ -146,9 +146,10 @@ const payrollService = {
       const workingDays = coveredDates.length; // includes weekly offs
       const weeklyOffCount = weeklyOffDates.length;
       // Approved leaves count only on duty dates (a leave falling on a weekly
-      // off must not be subtracted twice from the absents formula)
-      const approvedFullDayLeaves = approvedLeaves.filter((l) =>
-        dutyDateSet.has(formatYMD(l.date))
+      // off must not be subtracted twice from the absents formula). Short
+      // leaves are time-boxed, not full days, so they are excluded here.
+      const approvedFullDayLeaves = approvedLeaves.filter(
+        (l) => !l.is_short_leave && dutyDateSet.has(formatYMD(l.date))
       ).length;
 
       // Calculate absents
