@@ -117,7 +117,7 @@ const RosterEntriesEditor = ({ employees, entries, onChange }) => {
   // rule, exceptions are the exception.
   const [selected, setSelected] = useState(() => new Set(employees.map((e) => e.id)));
   const [bulkDay, setBulkDay] = useState({ type: "time", time_from: "09:15", time_to: "17:00", location: "" });
-  const [bulkDays, setBulkDays] = useState(() => new Set(DAYS.slice(0, 5)));
+  const [bulkDays, setBulkDays] = useState(() => new Set(DAYS));
 
   useEffect(() => {
     setSelected(new Set(employees.map((e) => e.id)));
