@@ -389,6 +389,7 @@ const EmploymentTab = ({
                     register={register}
                     name="reporting_officer_id"
                     required={false}
+                    allowClear={true}
                     error={employmentErrors?.reporting_officer_id?.message}
                     disabled={
                       !formOptions?.users || formOptions.users.length === 0
