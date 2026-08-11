@@ -131,6 +131,37 @@ function resolvePeriod(scope, body) {
   };
 }
 
+// Every employee needs a complete selection for all 7 days: a Time day needs
+// both times, an Offsite day needs a location, Weekly off is complete on its
+// own. Returns the first incomplete day label, or null when all are valid.
+const ROSTER_DAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+function findIncompleteDaySchedule(daySchedules) {
+  const sched = daySchedules || {};
+  for (const d of ROSTER_DAYS) {
+    const cell = sched[d];
+    if (!cell || !cell.type) return d;
+    if (cell.type === "time") {
+      if (!cell.time_from || !cell.time_to) return d;
+    } else if (cell.type === "offsite") {
+      const loc = cell.location || cell.location_name || cell.offsite_location;
+      if (!loc || !String(loc).trim()) return d;
+    } else if (cell.type !== "weekly_off") {
+      return d; // unknown type
+    }
+  }
+  const cwo = sched._collective_weekly_off;
+  if (cwo?.enabled && (!cwo.from || !cwo.to)) return "collective off range";
+  return null;
+}
+
 // Normalize + validate entries against the eligible employee set
 function normalizeEntries(entries, eligibleIds) {
   const list = Array.isArray(entries) ? entries : [];
@@ -144,6 +175,12 @@ function normalizeEntries(entries, eligibleIds) {
     }
     if (seen.has(employeeId)) continue;
     seen.add(employeeId);
+    const badDay = findIncompleteDaySchedule(e.day_schedules);
+    if (badDay) {
+      return {
+        error: `Incomplete schedule: an employee has no valid selection for ${badDay}. Every day must be Time (with both times), Offsite (with a location), or Weekly off.`,
+      };
+    }
     normalized.push({
       employee_id: employeeId,
       day_schedules: e.day_schedules || {},
@@ -567,6 +604,60 @@ const rosterController = {
     } catch (e) {
       console.error("Error deleting roster", e);
       res.status(500).json({ success: false, error: "Failed to delete roster" });
+    }
+  },
+
+  // POST /rosters/bulk-delete — Super Admin break-glass: soft-delete EVERY
+  // roster in one shot. Requires the client to confirm ("delete") to help
+  // prevent accidents; the real guard is the Super Admin role check.
+  async bulkRemove(req, res) {
+    try {
+      const user = req.session.user;
+      if (user?.role?.name !== "Super Admin") {
+        return res.status(403).json({
+          success: false,
+          error: "Only a Super Admin can bulk-delete rosters.",
+        });
+      }
+      const confirm = String(req.body?.confirm || "").trim().toLowerCase();
+      if (confirm !== "delete") {
+        return res.status(400).json({
+          success: false,
+          error: 'Type "delete" to confirm bulk deletion.',
+        });
+      }
+
+      // Note whether any approved roster is being removed so we can refresh the
+      // attendance system afterwards (approved rosters drive schedule/lateness).
+      const hadApproved = await prisma.dutyRoster.count({
+        where: { is_deleted: false, status: "APPROVED" },
+      });
+
+      const result = await prisma.dutyRoster.updateMany({
+        where: { is_deleted: false },
+        data: { is_deleted: true },
+      });
+
+      res.json({ success: true, count: result.count });
+
+      if (hadApproved > 0) {
+        try {
+          const { pushRosters, CONFIG } = require("../jobs/attendanceSync");
+          if (CONFIG.enabled) {
+            pushRosters({ force: true }).catch((e) =>
+              console.warn(
+                "roster bulk-delete: attendance push failed (cron will retry):",
+                e.message
+              )
+            );
+          }
+        } catch (e) {
+          console.warn("roster bulk-delete: attendance push unavailable:", e.message);
+        }
+      }
+    } catch (e) {
+      console.error("Error bulk-deleting rosters", e);
+      res.status(500).json({ success: false, error: "Failed to bulk-delete rosters" });
     }
   },
 

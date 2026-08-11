@@ -4,7 +4,11 @@ import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { useAuthStore } from "../../auth/authStore";
 import { exportToCSV, exportToExcel } from "../../../lib/exportUtils";
 import { toastBus } from "../../../utils/toastBus";
-import { ShortLeaveChip } from "../leaveUtils";
+import {
+  ShortLeaveChip,
+  groupLeavesByRequest,
+  requestDateLabel,
+} from "../leaveUtils";
 
 const AllLeavesPage = () => {
   const user = useAuthStore((s) => s.user);
@@ -103,6 +107,12 @@ const AllLeavesPage = () => {
       return true;
     });
   }, [leaves, fName, fCnic, fDesignation, fDepartment, fDate, fStart, fEnd, fLeaveType, fLeaveStatus]);
+
+  // Show one row per leave request (a multi-day application is many Leave rows)
+  const groupedLeaves = useMemo(
+    () => groupLeavesByRequest(filteredLeaves),
+    [filteredLeaves]
+  );
 
   const LEAVE_EXPORT_HEADERS = ["Employee", "CNIC", "Designation", "Department", "Date", "Type", "Short Leave", "Status", "Remarks"];
   const mapLeavesForExport = (rows) =>
@@ -253,25 +263,26 @@ const AllLeavesPage = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredLeaves.map((lv) => {
+              {groupedLeaves.map((g) => {
+                const lv = g.first;
                 const emp = lv.employee || {};
                 const empRec = emp.employmentRecords?.[0] || {};
                 return (
-                  <tr key={lv.id}>
-                    <td>{String(lv.date || "").slice(0, 10)}</td>
+                  <tr key={g.key}>
+                    <td className="whitespace-nowrap">{requestDateLabel(g)}</td>
                     <td>
                       <span
                         className={`badge text-xs ${
-                          lv.current_status === "APPROVED"
+                          g.status === "APPROVED"
                             ? "badge-success"
-                            : lv.current_status === "REJECTED"
+                            : g.status === "REJECTED"
                             ? "badge-error"
-                            : lv.current_status === "RETURNED"
+                            : g.status === "RETURNED"
                             ? "badge-amber"
                             : "badge-gray"
                         }`}
                       >
-                        {lv.current_status || "PENDING"}
+                        {g.status || "PENDING"}
                       </span>
                     </td>
                     <td>
@@ -297,7 +308,9 @@ const AllLeavesPage = () => {
                     <td>
                       <button
                         className="btn btn-outline text-[11px]"
-                        onClick={() => setSelectedLeave(lv)}
+                        onClick={() =>
+                          setSelectedLeave({ ...lv, _dates: g.dates })
+                        }
                       >
                         View
                       </button>
@@ -305,7 +318,7 @@ const AllLeavesPage = () => {
                   </tr>
                 );
               })}
-              {!filteredLeaves.length && (
+              {!groupedLeaves.length && (
                 <tr>
                   <td
                     colSpan={9}
@@ -326,7 +339,10 @@ const AllLeavesPage = () => {
           <div className="modal-surface w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-thin-scroll">
             <div className="modal-header">
               <h2 className="text-sm font-semibold tracking-wide">
-                Leave Details - {String(selectedLeave.date).slice(0, 10)}
+                Leave Details -{" "}
+                {selectedLeave._dates && selectedLeave._dates.length > 1
+                  ? `${selectedLeave._dates[0]} → ${selectedLeave._dates[selectedLeave._dates.length - 1]} (${selectedLeave._dates.length} days)`
+                  : String(selectedLeave.date).slice(0, 10)}
               </h2>
               <button
                 onClick={() => setSelectedLeave(null)}
@@ -378,6 +394,23 @@ const AllLeavesPage = () => {
                     {selectedLeave.current_status}
                   </span>
                 </div>
+                {selectedLeave._dates && selectedLeave._dates.length > 1 && (
+                  <div className="md:col-span-2">
+                    <span className="text-gray-600">
+                      Dates ({selectedLeave._dates.length}):
+                    </span>
+                    <span className="ml-1 flex flex-wrap gap-1 mt-1">
+                      {selectedLeave._dates.map((d) => (
+                        <span
+                          key={d}
+                          className="text-[11px] bg-gray-100 px-2 py-0.5 rounded"
+                        >
+                          {d}
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="text-gray-600">Submitted:</span>{" "}
                   <span className="ml-1">

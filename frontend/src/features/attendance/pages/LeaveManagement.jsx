@@ -3,7 +3,12 @@ import axios from "../../../lib/axios";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { toastBus } from "../../../utils/toastBus";
 import { useNavigate } from "react-router-dom";
-import { Req, ShortLeaveChip } from "../leaveUtils";
+import {
+  Req,
+  ShortLeaveChip,
+  groupLeavesByRequest,
+  requestDateLabel,
+} from "../leaveUtils";
 
 const LeaveDialog = ({ employee, open, onClose }) => {
   const [loading, setLoading] = useState(false);
@@ -12,6 +17,7 @@ const LeaveDialog = ({ employee, open, onClose }) => {
   const [summary, setSummary] = useState(null);
   const [backupEmployees, setBackupEmployees] = useState([]);
   const [selectedDetail, setSelectedDetail] = useState(null);
+  const [expandedKey, setExpandedKey] = useState(null);
   // Helper function to format date consistently (dd/mm/yyyy, hh:mm:ss am/pm)
   const formatStatusHistoryDate = (dateString) => {
     if (!dateString) return "";
@@ -313,6 +319,33 @@ const LeaveDialog = ({ employee, open, onClose }) => {
     }
   };
 
+  // Delete every day of a single leave request (multi-day applications are
+  // stored as one row per date).
+  const removeRequest = async (ids) => {
+    const list = Array.isArray(ids) ? ids : [ids];
+    if (!list.length) return;
+    if (
+      list.length > 1 &&
+      !window.confirm(`Delete this leave request (${list.length} days)?`)
+    )
+      return;
+    try {
+      await Promise.all(list.map((id) => axios.delete(`/leaves/${id}`)));
+      const { data } = await axios.get(`/leaves/${employee.id}`);
+      setLeaves(data.leaves || []);
+      setSummary(data.summary || null);
+      toastBus.emit({
+        type: "success",
+        message: list.length > 1 ? "Leave request deleted" : "Leave deleted",
+      });
+    } catch (e) {
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to delete leave(s)",
+      });
+    }
+  };
+
   // Group consecutive (by date) leaves of same type into ranges
   const groupedLeaves = useMemo(() => {
     if (!leaves?.length) return [];
@@ -368,6 +401,13 @@ const LeaveDialog = ({ employee, open, onClose }) => {
       leaveIds: g.leaves.map((l) => l.id),
     }));
   }, [leaves]);
+
+  // One entry per leave request (a multi-day application is many Leave rows
+  // that share a submission time) — used for the Leave Records list below.
+  const requestGroups = useMemo(
+    () => groupLeavesByRequest(leaves),
+    [leaves]
+  );
 
   const bulkUpdateGroupStatus = async (group, status) => {
     if (!canStatus) return;
@@ -938,7 +978,9 @@ const LeaveDialog = ({ employee, open, onClose }) => {
 
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-gray-700">
-                Leave Records ({leaves.length})
+                Leave Records ({requestGroups.length}{" "}
+                {requestGroups.length === 1 ? "request" : "requests"},{" "}
+                {leaves.length} {leaves.length === 1 ? "day" : "days"})
               </h3>
               {leaves.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
@@ -946,72 +988,139 @@ const LeaveDialog = ({ employee, open, onClose }) => {
                 </div>
               ) : (
                 <div className="grid gap-3">
-                  {leaves.map((l) => (
-                    <div key={l.id} className="card-soft p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap gap-4 text-sm">
-                          <div>
-                            <span className="text-gray-600 text-xs">Date:</span>
-                            <span className="ml-1 font-medium">
-                              {l.date?.slice(0, 10)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-gray-600 text-xs">Type:</span>
-                            <span className="ml-1 font-medium">{l.type}</span>
-                            <span className="ml-2">
-                              <ShortLeaveChip leave={l} />
-                            </span>
-                            {l.type === "Other" && l.custom_type && (
-                              <span className="ml-2 text-[11px] bg-gray-100 px-2 py-0.5 rounded">
-                                {l.custom_type}
+                  {requestGroups.map((g) => {
+                    const l = g.first;
+                    const multi = g.count > 1;
+                    const expanded = expandedKey === g.key;
+                    return (
+                      <div key={g.key} className="card-soft p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-600 text-xs">
+                                {multi ? "Dates:" : "Date:"}
                               </span>
+                              <span className="ml-1 font-medium">
+                                {requestDateLabel(g)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600 text-xs">
+                                Type:
+                              </span>
+                              <span className="ml-1 font-medium">{l.type}</span>
+                              <span className="ml-2">
+                                <ShortLeaveChip leave={l} />
+                              </span>
+                              {l.type === "Other" && l.custom_type && (
+                                <span className="ml-2 text-[11px] bg-gray-100 px-2 py-0.5 rounded">
+                                  {l.custom_type}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-gray-600 text-xs">
+                                Status:
+                              </span>
+                              <span
+                                className={`ml-1 badge text-xs ${
+                                  g.status === "APPROVED"
+                                    ? "badge-success"
+                                    : g.status === "REJECTED"
+                                    ? "badge-error"
+                                    : g.status === "RETURNED"
+                                    ? "badge-amber"
+                                    : g.status === "MIXED"
+                                    ? "badge-blue"
+                                    : "badge-gray"
+                                }`}
+                              >
+                                {g.status === "RETURNED"
+                                  ? "RETURNED FOR CORRECTION"
+                                  : g.status}
+                              </span>
+                            </div>
+                            <div className="max-w-[320px] truncate">
+                              <span className="text-gray-600 text-xs">
+                                Reason:
+                              </span>
+                              <span className="ml-1">{l.remarks || "-"}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {multi ? (
+                              <button
+                                className="btn btn-outline text-[11px]"
+                                onClick={() =>
+                                  setExpandedKey(expanded ? null : g.key)
+                                }
+                              >
+                                {expanded
+                                  ? "Hide days"
+                                  : `View ${g.count} days`}
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-outline text-[11px]"
+                                onClick={() => setSelectedDetail(l)}
+                              >
+                                View Details
+                              </button>
                             )}
-                          </div>
-                          <div>
-                            <span className="text-gray-600 text-xs">
-                              Status:
-                            </span>
-                            <span
-                              className={`ml-1 badge text-xs ${
-                                l.current_status === "APPROVED"
-                                  ? "badge-success"
-                                  : l.current_status === "REJECTED"
-                                  ? "badge-error"
-                                  : l.current_status === "RETURNED"
-                                  ? "badge-amber"
-                                  : "badge-gray"
-                              }`}
+                            <button
+                              className="btn btn-error-soft text-[11px]"
+                              onClick={() => removeRequest(g.ids)}
                             >
-                              {l.current_status === "RETURNED"
-                                ? "RETURNED FOR CORRECTION"
-                                : l.current_status}
-                            </span>
-                          </div>
-                          <div className="max-w-[320px] truncate">
-                            <span className="text-gray-600 text-xs">
-                              Reason:
-                            </span>
-                            <span className="ml-1">{l.remarks || "-"}</span>
+                              Delete
+                            </button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            className="btn btn-outline text-[11px]"
-                            onClick={() => setSelectedDetail(l)}
-                          >
-                            View Details
-                          </button>
-                          <button
-                            className="btn btn-error-soft text-[11px]"
-                            onClick={() => remove(l.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
+
+                        {/* Per-day breakdown for a multi-day request */}
+                        {multi && expanded && (
+                          <div className="mt-3 border-t border-gray-100 pt-2 space-y-1">
+                            {g.days.map((day) => (
+                              <div
+                                key={day.id}
+                                className="flex flex-wrap items-center justify-between gap-2 text-xs bg-gray-50 rounded px-2 py-1.5"
+                              >
+                                <span className="font-medium">
+                                  {day.date?.slice(0, 10)}
+                                </span>
+                                <span
+                                  className={`badge text-[10px] ${
+                                    day.current_status === "APPROVED"
+                                      ? "badge-success"
+                                      : day.current_status === "REJECTED"
+                                      ? "badge-error"
+                                      : day.current_status === "RETURNED"
+                                      ? "badge-amber"
+                                      : "badge-gray"
+                                  }`}
+                                >
+                                  {day.current_status}
+                                </span>
+                                <div className="flex items-center gap-2 ml-auto">
+                                  <button
+                                    className="btn btn-outline text-[10px]"
+                                    onClick={() => setSelectedDetail(day)}
+                                  >
+                                    Details
+                                  </button>
+                                  <button
+                                    className="btn btn-error-soft text-[10px]"
+                                    onClick={() => remove(day.id)}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

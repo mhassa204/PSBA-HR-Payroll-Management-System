@@ -26,8 +26,12 @@ const RosterList = () => {
   const [status, setStatus] = useState("ALL");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkConfirmText, setBulkConfirmText] = useState("");
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const canCreate = can("roster.create") && (user?.location_id || user?.department_id);
+  const isSuperAdmin = user?.role?.name === "Super Admin";
 
   const load = async (statusFilter = status) => {
     setLoading(true);
@@ -61,6 +65,28 @@ const RosterList = () => {
     }
   };
 
+  const doBulkDelete = async () => {
+    if (bulkConfirmText.trim().toLowerCase() !== "delete") return;
+    setBulkDeleting(true);
+    try {
+      const res = await rosterService.bulkDeleteAll(bulkConfirmText.trim());
+      toastBus.emit({
+        type: "success",
+        message: `Deleted ${res.count ?? 0} roster(s)`,
+      });
+      setBulkOpen(false);
+      setBulkConfirmText("");
+      await load();
+    } catch (e) {
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to delete rosters",
+      });
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const typeLabel = (r) =>
     r.roster_type === "PERMANENT" ? "Permanent" : cycleLabel(r) || "Monthly";
 
@@ -82,6 +108,17 @@ const RosterList = () => {
           {canCreate && (
             <button onClick={() => navigate("/rosters/create")} className="btn btn-primary">
               Create Roster
+            </button>
+          )}
+          {isSuperAdmin && data.rosters?.length > 0 && (
+            <button
+              onClick={() => {
+                setBulkConfirmText("");
+                setBulkOpen(true);
+              }}
+              className="btn btn-error"
+            >
+              Delete All Rosters
             </button>
           )}
         </div>
@@ -233,6 +270,54 @@ const RosterList = () => {
               </button>
               <button onClick={doDelete} disabled={deleting} className="btn btn-error">
                 {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk delete confirmation (Super Admin) — requires typing "delete" */}
+      {bulkOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-fade z-50 flex items-center justify-center p-4">
+          <div className="modal-surface w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold mb-2 text-red-700">
+              Delete ALL rosters?
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              This soft-deletes <span className="font-semibold">every</span> duty
+              roster in the system — all locations and HQ departments, every
+              status. This cannot be undone from the UI.
+            </p>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Type <span className="font-mono font-semibold">delete</span> to
+              confirm
+            </label>
+            <input
+              className="form-input w-full"
+              value={bulkConfirmText}
+              onChange={(e) => setBulkConfirmText(e.target.value)}
+              placeholder="delete"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setBulkOpen(false);
+                  setBulkConfirmText("");
+                }}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={doBulkDelete}
+                disabled={
+                  bulkDeleting ||
+                  bulkConfirmText.trim().toLowerCase() !== "delete"
+                }
+                className="btn btn-error"
+              >
+                {bulkDeleting ? "Deleting..." : "Delete all rosters"}
               </button>
             </div>
           </div>

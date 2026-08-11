@@ -8,6 +8,9 @@ const rosterService = {
   create: (payload) => axios.post("/rosters", payload).then((r) => r.data),
   update: (id, payload) => axios.put(`/rosters/${id}`, payload).then((r) => r.data),
   remove: (id) => axios.delete(`/rosters/${id}`).then((r) => r.data),
+  // Super Admin: delete all rosters (server requires confirm === "delete")
+  bulkDeleteAll: (confirm) =>
+    axios.post("/rosters/bulk-delete", { confirm }).then((r) => r.data),
   pendingApprovals: () => axios.get("/rosters/pending-approvals").then((r) => r.data),
   approve: (id) => axios.post(`/rosters/${id}/approve`).then((r) => r.data),
   reject: (id, reason) => axios.post(`/rosters/${id}/reject`, { reason }).then((r) => r.data),

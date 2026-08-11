@@ -23,6 +23,16 @@ router.get(
 );
 
 router.get("/", isAuthenticated, authorize("roster.read"), rosterController.list);
+
+// Super Admin break-glass: delete ALL rosters (role enforced in controller).
+// Registered before "/:id" so the literal path is matched first.
+router.post(
+  "/bulk-delete",
+  isAuthenticated,
+  authorize("roster.read"),
+  rosterController.bulkRemove
+);
+
 router.get("/:id", isAuthenticated, authorize("roster.read"), rosterController.getById);
 
 // Create/edit/delete are creator-scoped (ownership checked in the controller)

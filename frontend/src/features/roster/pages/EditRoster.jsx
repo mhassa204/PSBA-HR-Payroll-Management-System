@@ -5,7 +5,7 @@ import RosterEntriesEditor from "../components/RosterEntriesEditor";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { toastBus } from "../../../utils/toastBus";
 import { useAuthStore } from "../../auth/authStore";
-import { blankDaySchedules, statusBadgeClass } from "../rosterUtils";
+import { blankDaySchedules, statusBadgeClass, findIncompleteDay } from "../rosterUtils";
 
 // Creator-only editing of PENDING / REJECTED rosters. Saving resubmits the
 // roster for approval (approver is re-resolved server-side).
@@ -82,6 +82,20 @@ const EditRoster = () => {
   const scopeName = isHq ? ctx.department?.name : ctx.location?.name;
 
   const submit = async () => {
+    for (const en of entries) {
+      const badDay = findIncompleteDay(en.day_schedules);
+      if (badDay) {
+        const emp = ctx.employees.find((e) => e.id === en.employee_id);
+        toastBus.emit({
+          type: "error",
+          message:
+            `${emp?.full_name || "An employee"} has no schedule set for ${badDay}. ` +
+            `Every day must be Time (with both times), Offsite (with a location), or Weekly off.`,
+        });
+        return;
+      }
+    }
+
     const payload = { title: title || null, roster_type: rosterType, entries };
     if (rosterType === "PERMANENT") {
       payload.valid_from = validFrom;

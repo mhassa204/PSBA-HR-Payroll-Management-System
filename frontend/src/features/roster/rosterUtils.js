@@ -65,6 +65,26 @@ export function blankDaySchedules() {
   };
 }
 
+// Every day of an employee's week must carry a complete selection before a
+// roster can be submitted. Returns the first incomplete day label, else null.
+export function findIncompleteDay(daySchedules) {
+  const sched = daySchedules || {};
+  for (const d of DAYS) {
+    const cell = sched[d];
+    if (!cell || !cell.type) return d;
+    if (cell.type === "time") {
+      if (!cell.time_from || !cell.time_to) return d;
+    } else if (cell.type === "offsite") {
+      if (!cell.location || !String(cell.location).trim()) return d;
+    } else if (cell.type !== "weekly_off") {
+      return d;
+    }
+  }
+  const cwo = sched._collective_weekly_off;
+  if (cwo?.enabled && (!cwo.from || !cwo.to)) return "collective off range";
+  return null;
+}
+
 // Owner can edit/delete only their own non-approved rosters
 export function canModify(roster, user) {
   if (!roster || !user) return false;
