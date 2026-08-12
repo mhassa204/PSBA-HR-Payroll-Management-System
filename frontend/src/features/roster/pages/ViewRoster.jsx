@@ -12,6 +12,7 @@ import {
   cycleLabel,
   approverLabel,
   canModify,
+  timeRangeLabel,
 } from "../rosterUtils";
 
 const ACTION_LABELS = {
@@ -26,7 +27,7 @@ function dayCellText(day) {
   if (day.type === "weekly_off") return "Weekly off";
   if (day.type === "offsite") return `Offsite: ${day.location || "—"}`;
   if (day.type === "time" && (day.time_from || day.time_to)) {
-    return `${day.time_from || "—"} – ${day.time_to || "—"}`;
+    return timeRangeLabel(day.time_from, day.time_to);
   }
   return "—";
 }
@@ -142,7 +143,8 @@ const ViewRoster = () => {
       )}
       {isHq && (
         <div className="text-xs text-gray-400">
-          HQ employees not listed on any approved roster default to 09:15 – 17:00, Monday to Friday.
+          HQ employees not listed on any approved roster default to {timeRangeLabel("09:15", "17:00")},
+          Monday to Friday.
         </div>
       )}
 
@@ -197,6 +199,7 @@ const ViewRoster = () => {
         <table className="table-enhanced table-no-wrap min-w-full">
           <thead>
             <tr>
+              <th>#</th>
               <th className="text-left">Employee</th>
               <th className="text-left">Designation</th>
               {DAYS.map((d) => (
@@ -209,12 +212,13 @@ const ViewRoster = () => {
             </tr>
           </thead>
           <tbody>
-            {roster.entries.map((en) => {
+            {roster.entries.map((en, i) => {
               const emp = en.employee;
               const desig = emp?.employmentRecords?.[0]?.designation?.title || "—";
               const cwo = en.day_schedules?._collective_weekly_off;
               return (
                 <tr key={en.id}>
+                  <td className="text-gray-500">{i + 1}</td>
                   <td className="text-left font-medium whitespace-nowrap">{emp?.full_name}</td>
                   <td className="text-left whitespace-nowrap">{desig}</td>
                   {DAYS.map((d) => (
@@ -235,12 +239,15 @@ const ViewRoster = () => {
 
       {/* Schedule — mobile cards */}
       <div className="md:hidden space-y-2">
-        {roster.entries.map((en) => {
+        {roster.entries.map((en, i) => {
           const emp = en.employee;
           const cwo = en.day_schedules?._collective_weekly_off;
           return (
             <div key={en.id} className="card-soft p-4">
-              <div className="font-medium text-gray-800">{emp?.full_name}</div>
+              <div className="font-medium text-gray-800">
+                <span className="text-gray-400 mr-1">{i + 1}.</span>
+                {emp?.full_name}
+              </div>
               <div className="text-xs text-gray-400 mb-2">
                 {emp?.employmentRecords?.[0]?.designation?.title || "—"}
               </div>

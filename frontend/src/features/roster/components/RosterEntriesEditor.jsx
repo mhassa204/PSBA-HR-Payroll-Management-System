@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { DAYS } from "../rosterUtils";
+import TimeSelect12 from "./TimeSelect12";
 import { toastBus } from "../../../utils/toastBus";
 
 // Editor for per-employee day schedules. Desktop: grouped tables with a column
@@ -27,9 +28,12 @@ const DAY_PRESETS = [
 function DayEditor({ day, onChange, compact = false }) {
   const type = day?.type || "time";
   return (
+    // One line in the desktop day grid (the table scrolls sideways); only the
+    // full-width mobile/bulk layouts wrap. Every control is shrink-0, so a tight
+    // column widens the table instead of squeezing AM/PM out of view.
     <div className={compact ? "flex flex-wrap items-center gap-1.5" : "flex items-center gap-1.5"}>
       <select
-        className="form-input sm !w-auto min-w-[6.5rem]"
+        className="form-input sm !w-auto min-w-[6.5rem] shrink-0"
         value={type}
         onChange={(e) => {
           const t = e.target.value;
@@ -50,24 +54,22 @@ function DayEditor({ day, onChange, compact = false }) {
       </select>
       {type === "time" && (
         <>
-          <input
-            type="time"
-            className="form-input sm w-24"
+          <TimeSelect12
+            label="Start time"
             value={day.time_from || ""}
-            onChange={(e) => onChange({ ...day, time_from: e.target.value })}
+            onChange={(v) => onChange({ ...day, time_from: v })}
           />
-          <span className="text-gray-400 text-xs">to</span>
-          <input
-            type="time"
-            className="form-input sm w-24"
+          <span className="shrink-0 text-gray-400 text-xs">to</span>
+          <TimeSelect12
+            label="End time"
             value={day.time_to || ""}
-            onChange={(e) => onChange({ ...day, time_to: e.target.value })}
+            onChange={(v) => onChange({ ...day, time_to: v })}
           />
         </>
       )}
       {type === "offsite" && (
         <input
-          className="form-input sm w-28"
+          className="form-input sm !w-28 shrink-0"
           placeholder="Location"
           value={day.location || ""}
           onChange={(e) => onChange({ ...day, location: e.target.value })}
@@ -97,7 +99,7 @@ function CollectiveWeeklyOff({ cwo, onChange }) {
             value={cwo.from || ""}
             onChange={(e) => onChange({ ...cwo, from: e.target.value })}
           />
-          <span className="text-gray-400 text-xs">to</span>
+          <span className="shrink-0 text-gray-400 text-xs">to</span>
           <input
             type="date"
             className="form-input sm"
@@ -296,9 +298,10 @@ const RosterEntriesEditor = ({ employees, entries, onChange }) => {
           </button>
         </div>
         <p className="text-[11px] text-gray-400">
-          Tip: apply the common timing to everyone first (e.g. 09:15–17:00 Mon–Fri, then Weekly off
-          for Sat/Sun), then hand-edit only the employees whose roster differs. You can also set one
-          employee's week and use "Copy to selected" on their row.
+          Tip: apply the common timing to everyone first (e.g. 9:15 AM–5:00 PM Mon–Fri, then Weekly
+          off for Sat/Sun), then hand-edit only the employees whose roster differs. You can also set
+          one employee's week and use "Copy to selected" on their row. Times are picked as hour,
+          minute and AM/PM — any minute can be set, and nothing is typed by hand.
         </p>
       </div>
 

@@ -86,7 +86,7 @@ app.use(
       secure: false, // use HTTPS + true in production
       httpOnly: true,
       sameSite: "lax", // ✅ use lax instead of none for dev (browser safe)
-      maxAge: 3600000,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours from login
     },
   })
 );

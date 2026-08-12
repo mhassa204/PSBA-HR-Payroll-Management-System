@@ -22,6 +22,10 @@ router.get(
   rosterController.context
 );
 
+// Per-cycle coverage: which locations/departments have a roster and which
+// don't. Registered before "/:id" so the literal path wins.
+router.get("/coverage", isAuthenticated, authorize("roster.read"), rosterController.coverage);
+
 router.get("/", isAuthenticated, authorize("roster.read"), rosterController.list);
 
 // Super Admin break-glass: delete ALL rosters (role enforced in controller).

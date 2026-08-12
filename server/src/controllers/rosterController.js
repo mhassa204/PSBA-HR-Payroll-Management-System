@@ -45,6 +45,17 @@ function cycleRangeFromMonth(monthParam) {
   return { start, end, label };
 }
 
+// A roster "belongs to" a cycle month when its validity overlaps the cycle
+// range. PERMANENT rosters (valid_to = null) cover every month from valid_from.
+function cycleOverlapFilter(cycle) {
+  return {
+    AND: [
+      { valid_from: { lte: cycle.end } },
+      { OR: [{ valid_to: null }, { valid_to: { gte: cycle.start } }] },
+    ],
+  };
+}
+
 function defaultCycleMonth(today = new Date()) {
   let y = today.getUTCFullYear();
   let m0 = today.getUTCMonth();
@@ -236,36 +247,201 @@ const listInclude = {
 
 const rosterController = {
   // GET /rosters — scoped list
+  // Filters: status, scope, roster_type, month (YYYY-MM cycle), search, sort
   async list(req, res) {
     try {
       const user = req.session.user;
-      const page = parseInt(req.query.page) || 1;
-      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-      const skip = (page - 1) * limit;
+      const limit = Math.min(Math.max(parseInt(req.query.limit) || 25, 1), 200);
+      const requestedPage = Math.max(parseInt(req.query.page) || 1, 1);
 
       const where = buildListWhere(user);
+      const and = [];
+
       if (req.query.status && ["PENDING", "APPROVED", "REJECTED"].includes(req.query.status)) {
         where.status = req.query.status;
       }
       if (req.query.scope && ["LOCATION", "HQ_DEPARTMENT"].includes(req.query.scope)) {
         where.scope = req.query.scope;
       }
+      if (req.query.roster_type && ["MONTHLY", "PERMANENT"].includes(req.query.roster_type)) {
+        where.roster_type = req.query.roster_type;
+      }
 
-      const [total, rosters] = await Promise.all([
-        prisma.dutyRoster.count({ where }),
-        prisma.dutyRoster.findMany({
-          where,
-          include: listInclude,
-          orderBy: { createdAt: "desc" },
-          skip,
-          take: limit,
-        }),
-      ]);
+      const cycle = cycleRangeFromMonth(req.query.month);
+      if (cycle) and.push(cycleOverlapFilter(cycle));
 
-      res.json({ success: true, page, limit, total, rosters });
+      const search = String(req.query.search || "").trim();
+      if (search) {
+        const or = [
+          { title: { contains: search, mode: "insensitive" } },
+          { location: { name: { contains: search, mode: "insensitive" } } },
+          { department: { name: { contains: search, mode: "insensitive" } } },
+          { createdBy: { email: { contains: search, mode: "insensitive" } } },
+        ];
+        if (/^\d+$/.test(search)) or.push({ id: Number(search) });
+        and.push({ OR: or });
+      }
+      if (and.length) where.AND = and;
+
+      const orderBy =
+        {
+          id_asc: { id: "asc" },
+          id_desc: { id: "desc" },
+          oldest: { createdAt: "asc" },
+        }[req.query.sort] || { createdAt: "desc" };
+
+      const total = await prisma.dutyRoster.count({ where });
+      // Clamp to the last page so a stale page number never returns an empty list
+      const totalPages = Math.max(Math.ceil(total / limit), 1);
+      const page = Math.min(requestedPage, totalPages);
+
+      const rosters = await prisma.dutyRoster.findMany({
+        where,
+        include: listInclude,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+      res.json({
+        success: true,
+        page,
+        limit,
+        total,
+        totalPages,
+        month: cycle ? req.query.month : null,
+        rosters,
+      });
     } catch (e) {
       console.error("Error listing rosters", e);
       res.status(500).json({ success: false, error: "Failed to list rosters" });
+    }
+  },
+
+  // GET /rosters/coverage?month=YYYY-MM — who has (and hasn't) submitted a
+  // roster for the cycle. Every active non-HQ location and every HQ department
+  // is expected to produce one, so the gap is as interesting as the total.
+  async coverage(req, res) {
+    try {
+      const user = req.session.user;
+      const month = cycleRangeFromMonth(req.query.month) ? req.query.month : defaultCycleMonth();
+      const cycle = cycleRangeFromMonth(month);
+      const seeAll = hasPerm(user, "roster.read.all");
+      const isOperations = user.role?.name === "Operations";
+
+      // The units this account is expected to see coverage for
+      const locationWhere = { is_deleted: false, is_active: true, type: { not: HEAD_OFFICE } };
+      const departmentWhere = { is_deleted: false };
+      if (!seeAll) {
+        if (!isOperations) locationWhere.id = user.location_id || -1;
+        departmentWhere.id = user.department_id || -1;
+      }
+
+      const [locations, departments, rosters] = await Promise.all([
+        prisma.location.findMany({
+          where: locationWhere,
+          select: { id: true, name: true, type: true },
+          orderBy: { name: "asc" },
+        }),
+        prisma.department.findMany({
+          where: departmentWhere,
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        }),
+        prisma.dutyRoster.findMany({
+          where: { ...buildListWhere(user), AND: [cycleOverlapFilter(cycle)] },
+          select: {
+            id: true,
+            scope: true,
+            bazaar_id: true,
+            department_id: true,
+            status: true,
+            roster_type: true,
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+
+      // A unit can hold several rosters for one cycle (rejected then resubmitted,
+      // or a superseding correction). The unit's effective state is the best one.
+      const RANK = { APPROVED: 3, PENDING: 2, REJECTED: 1 };
+      const byUnit = new Map();
+      const keyOf = (scope, id) => `${scope}:${id}`;
+      for (const r of rosters) {
+        const unitId = r.scope === "HQ_DEPARTMENT" ? r.department_id : r.bazaar_id;
+        if (!unitId) continue;
+        const key = keyOf(r.scope, unitId);
+        const prev = byUnit.get(key);
+        if (!prev) {
+          byUnit.set(key, { status: r.status, roster_id: r.id, roster_count: 1 });
+        } else {
+          prev.roster_count += 1;
+          if (RANK[r.status] > RANK[prev.status]) {
+            prev.status = r.status;
+            prev.roster_id = r.id;
+          }
+        }
+      }
+
+      const blank = () => ({
+        total: 0,
+        created: 0,
+        notCreated: 0,
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+        rosterCount: 0,
+      });
+      const summary = { LOCATION: blank(), HQ_DEPARTMENT: blank(), overall: blank() };
+
+      const buildUnits = (list, scope) =>
+        list.map((u) => {
+          const hit = byUnit.get(keyOf(scope, u.id));
+          const status = hit?.status || "NOT_CREATED";
+          for (const bucket of [summary[scope], summary.overall]) {
+            bucket.total += 1;
+            bucket.rosterCount += hit?.roster_count || 0;
+            if (!hit) bucket.notCreated += 1;
+            else {
+              bucket.created += 1;
+              if (status === "APPROVED") bucket.approved += 1;
+              else if (status === "PENDING") bucket.pending += 1;
+              else if (status === "REJECTED") bucket.rejected += 1;
+            }
+          }
+          return {
+            scope,
+            id: u.id,
+            name: u.name,
+            type: u.type || null,
+            status,
+            roster_id: hit?.roster_id || null,
+            roster_count: hit?.roster_count || 0,
+          };
+        });
+
+      const units = [
+        ...buildUnits(locations, "LOCATION"),
+        ...buildUnits(departments, "HQ_DEPARTMENT"),
+      ];
+
+      // Rosters counted above are only those tied to a listed unit; anything else
+      // (a unit since deactivated) still belongs in the cycle total.
+      const orphanRosters = rosters.length - summary.overall.rosterCount;
+
+      res.json({
+        success: true,
+        month,
+        cycle: { start: formatYMD(cycle.start), end: formatYMD(cycle.end), label: cycle.label },
+        scoped: !seeAll,
+        summary,
+        units,
+        totalRosters: rosters.length,
+        orphanRosters: orphanRosters > 0 ? orphanRosters : 0,
+      });
+    } catch (e) {
+      console.error("Error building roster coverage", e);
+      res.status(500).json({ success: false, error: "Failed to build roster coverage" });
     }
   },
 

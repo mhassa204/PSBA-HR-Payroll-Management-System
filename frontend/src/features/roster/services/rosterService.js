@@ -3,6 +3,9 @@ import axios from "../../../lib/axios";
 const rosterService = {
   list: (params = {}) => axios.get("/rosters", { params }).then((r) => r.data),
   get: (id) => axios.get(`/rosters/${id}`).then((r) => r.data),
+  // Per-cycle coverage: created / not created / pending / approved per unit
+  coverage: (month) =>
+    axios.get("/rosters/coverage", { params: month ? { month } : {} }).then((r) => r.data),
   // Scope, eligible employees, cycle defaults, approver preview, last roster
   context: () => axios.get("/rosters/helpers/context").then((r) => r.data),
   create: (payload) => axios.post("/rosters", payload).then((r) => r.data),
