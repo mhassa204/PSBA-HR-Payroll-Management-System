@@ -25,6 +25,64 @@ const { toDateOnly, formatYMD } = require("../services/rosterScheduleService");
 
 const HEAD_OFFICE = "HEAD_OFFICE";
 
+// Late-arrival grace (minutes) for HQ_DEPARTMENT rosters. It lives on each
+// roster because attendance reads it from whichever roster applies to a day,
+// but the intended value is organisation-wide — so it is also kept as a system
+// setting that new HQ rosters inherit, instead of being re-applied every cycle.
+// With grace 15 and a 09:00 duty start, 09:15:59 is On Time and 09:16 is Late
+// (attendance truncates seconds).
+const GRACE_SETTING_KEY = "roster.hq_grace_minutes";
+const GRACE_FALLBACK_MINUTES = 15;
+const MAX_GRACE_MINUTES = 240;
+
+function parseGraceMinutes(value) {
+  const minutes = Number(value);
+  return Number.isInteger(minutes) && minutes >= 0 && minutes <= MAX_GRACE_MINUTES
+    ? minutes
+    : null;
+}
+
+async function readGraceDefault(tx = prisma) {
+  const row = await tx.systemSetting.findUnique({ where: { key: GRACE_SETTING_KEY } });
+  const minutes = parseGraceMinutes(row?.value?.minutes);
+  return minutes === null ? GRACE_FALLBACK_MINUTES : minutes;
+}
+
+async function writeGraceDefault(minutes, userId, tx = prisma) {
+  return tx.systemSetting.upsert({
+    where: { key: GRACE_SETTING_KEY },
+    create: {
+      key: GRACE_SETTING_KEY,
+      category: "roster",
+      value: { minutes },
+      updatedBy: userId,
+    },
+    update: { value: { minutes }, updatedBy: userId },
+  });
+}
+
+// Grace changes what the attendance system counts as Late, so a change has to
+// be pushed rather than waiting for the next cron tick.
+function pushRosterSchedules(reason) {
+  try {
+    const { pushRosters, CONFIG } = require("../jobs/attendanceSync");
+    if (CONFIG.enabled) {
+      pushRosters({ force: true }).catch((e) =>
+        console.warn(`${reason}: attendance push failed (cron will retry):`, e.message)
+      );
+    }
+  } catch (e) {
+    console.warn(`${reason}: attendance push unavailable:`, e.message);
+  }
+}
+
+// Only the Establishment account sets grace (Super Admin as break-glass)
+function canSetGrace(user) {
+  return (
+    user?.role?.name === "Super Admin" || /^\s*establishment/i.test(user?.role?.name || "")
+  );
+}
+
 function hasPerm(user, key) {
   if (user?.role?.name === "Super Admin") return true;
   const perms = user?.permissions || [];
@@ -579,10 +637,15 @@ const rosterController = {
       }
 
       const now = new Date();
+      // HQ rosters start at the organisation-wide grace so it doesn't have to
+      // be set by hand every cycle; location rosters never use grace.
+      const graceMinutes =
+        scopeInfo.scope === "HQ_DEPARTMENT" ? await readGraceDefault() : 0;
       const created = await prisma.dutyRoster.create({
         data: {
           title: req.body?.title || null,
           scope: scopeInfo.scope,
+          grace_minutes: graceMinutes,
           roster_type: period.roster_type,
           bazaar_id: scopeInfo.scope === "LOCATION" ? scopeInfo.location.id : null,
           department_id: scopeInfo.scope === "HQ_DEPARTMENT" ? scopeInfo.department.id : null,
@@ -682,14 +745,128 @@ const rosterController = {
     }
   },
 
+  // GET /rosters/grace/settings — the organisation-wide default plus what each
+  // HQ department's rosters currently carry, so the UI can show live state.
+  async graceSettings(req, res) {
+    try {
+      const [defaultMinutes, departments, rosters] = await Promise.all([
+        readGraceDefault(),
+        prisma.department.findMany({
+          where: { is_deleted: false },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        }),
+        prisma.dutyRoster.findMany({
+          where: { is_deleted: false, scope: "HQ_DEPARTMENT" },
+          select: { id: true, department_id: true, grace_minutes: true },
+        }),
+      ]);
+
+      const byDept = new Map();
+      for (const r of rosters) {
+        if (!r.department_id) continue;
+        const row = byDept.get(r.department_id) || { rosters: 0, values: new Set() };
+        row.rosters += 1;
+        row.values.add(r.grace_minutes || 0);
+        byDept.set(r.department_id, row);
+      }
+
+      res.json({
+        success: true,
+        default_minutes: defaultMinutes,
+        max_minutes: MAX_GRACE_MINUTES,
+        can_edit: canSetGrace(req.session.user),
+        total_hq_rosters: rosters.length,
+        departments: departments.map((d) => {
+          const row = byDept.get(d.id);
+          const values = row ? [...row.values].sort((a, b) => a - b) : [];
+          return {
+            id: d.id,
+            name: d.name,
+            roster_count: row?.rosters ?? 0,
+            // null when a department's rosters disagree — the UI shows "mixed"
+            grace_minutes: values.length === 1 ? values[0] : null,
+            grace_values: values,
+          };
+        }),
+      });
+    } catch (e) {
+      console.error("Error reading grace settings", e);
+      res.status(500).json({ success: false, error: "Failed to read grace settings" });
+    }
+  },
+
+  // POST /rosters/grace/bulk — set grace across HQ department rosters in one
+  // go: every department at once, or a single department. Establishment only.
+  //
+  // Deliberately covers rosters of every month, including finished cycles, so
+  // the whole organisation reads consistently — note that this also re-scores
+  // lateness on attendance already reported for those months.
+  async setBulkGracePeriod(req, res) {
+    try {
+      const user = req.session.user;
+      if (!canSetGrace(user)) {
+        return res.status(403).json({
+          success: false,
+          error: "Only the Establishment account can set a roster grace period.",
+        });
+      }
+
+      const minutes = parseGraceMinutes(req.body?.grace_minutes);
+      if (minutes === null) {
+        return res.status(400).json({
+          success: false,
+          error: `grace_minutes must be a whole number between 0 and ${MAX_GRACE_MINUTES}.`,
+        });
+      }
+
+      // department_id omitted/null => every HQ department
+      const where = { is_deleted: false, scope: "HQ_DEPARTMENT" };
+      let departmentName = "all HQ departments";
+      if (req.body?.department_id != null && req.body.department_id !== "") {
+        const departmentId = Number(req.body.department_id);
+        if (!Number.isInteger(departmentId)) {
+          return res.status(400).json({ success: false, error: "Invalid department_id." });
+        }
+        const department = await prisma.department.findFirst({
+          where: { id: departmentId, is_deleted: false },
+          select: { id: true, name: true },
+        });
+        if (!department) {
+          return res.status(404).json({ success: false, error: "Department not found." });
+        }
+        where.department_id = departmentId;
+        departmentName = department.name;
+      }
+
+      const saveDefault = req.body?.save_default !== false; // default true
+      const result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.dutyRoster.updateMany({ where, data: { grace_minutes: minutes } });
+        if (saveDefault) await writeGraceDefault(minutes, user.id, tx);
+        return updated;
+      });
+
+      res.json({
+        success: true,
+        grace_minutes: minutes,
+        updated: result.count,
+        target: departmentName,
+        default_saved: saveDefault,
+      });
+
+      if (result.count > 0) pushRosterSchedules("roster bulk grace");
+    } catch (e) {
+      console.error("Error setting bulk grace period", e);
+      res.status(500).json({ success: false, error: "Failed to set grace period" });
+    }
+  },
+
   // PATCH /rosters/:id/grace — set the late-arrival grace period (minutes) for
   // an HQ_DEPARTMENT roster. Establishment account (or Super Admin) only.
   async setGracePeriod(req, res) {
     try {
       const user = req.session.user;
-      const isSuperAdmin = user?.role?.name === "Super Admin";
-      const isEstablishment = /^\s*establishment/i.test(user?.role?.name || "");
-      if (!isSuperAdmin && !isEstablishment) {
+      if (!canSetGrace(user)) {
         return res.status(403).json({
           success: false,
           error: "Only the Establishment account can set a roster grace period.",
@@ -708,20 +885,25 @@ const rosterController = {
         });
       }
 
-      const minutes = Number(req.body?.grace_minutes);
-      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 240) {
+      const minutes = parseGraceMinutes(req.body?.grace_minutes);
+      if (minutes === null) {
         return res.status(400).json({
           success: false,
-          error: "grace_minutes must be a whole number between 0 and 240.",
+          error: `grace_minutes must be a whole number between 0 and ${MAX_GRACE_MINUTES}.`,
         });
       }
 
+      const changed = roster.grace_minutes !== minutes;
       const updated = await prisma.dutyRoster.update({
         where: { id },
         data: { grace_minutes: minutes },
         include: listInclude,
       });
       res.json({ success: true, roster: updated });
+
+      // Grace feeds the Late/On-Time call, so the attendance system needs the
+      // new value now rather than at the next cron tick.
+      if (changed) pushRosterSchedules("roster grace");
     } catch (e) {
       console.error("Error setting roster grace period", e);
       res.status(500).json({ success: false, error: "Failed to set grace period" });

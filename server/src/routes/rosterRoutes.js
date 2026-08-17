@@ -26,6 +26,21 @@ router.get(
 // don't. Registered before "/:id" so the literal path wins.
 router.get("/coverage", isAuthenticated, authorize("roster.read"), rosterController.coverage);
 
+// Organisation-wide late-arrival grace for HQ rosters (Establishment only —
+// enforced in the controller). Literal paths, so before "/:id".
+router.get(
+  "/grace/settings",
+  isAuthenticated,
+  authorize("roster.read"),
+  rosterController.graceSettings
+);
+router.post(
+  "/grace/bulk",
+  isAuthenticated,
+  authorize("roster.read"),
+  rosterController.setBulkGracePeriod
+);
+
 router.get("/", isAuthenticated, authorize("roster.read"), rosterController.list);
 
 // Super Admin break-glass: delete ALL rosters (role enforced in controller).

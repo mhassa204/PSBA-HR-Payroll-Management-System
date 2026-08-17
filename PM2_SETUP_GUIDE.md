@@ -8,19 +8,43 @@ npm install -g pm2
 
 ## 2. Configure PM2 for Auto-Start on System Reboot
 
-### Step 1: Install PM2 Windows Service
-Run PowerShell as Administrator:
+> **`pm2 startup windows` does not work.** PM2 has no native Windows init
+> support — that command errors out, which is why a reboot on 12 Aug 2026 left
+> the API down until it was started by hand. Use the scheduled task below.
 
-```powershell
-pm2 install pm2-windows-startup
-pm2 set pm2-windows-startup MACHINE_NAME MyPC  # Replace MyPC with your computer name
+A scheduled task runs `pm2 resurrect` at system start, restoring whatever
+`pm2 save` last recorded. It runs as SYSTEM, so it needs no stored password and
+does not require anyone to log in.
+
+### Step 1: The resurrect script
+`C:\Users\Administrator\pm2-resurrect.cmd` (already present on this server):
+
+```bat
+@echo off
+set "PM2_HOME=C:\Users\Administrator\.pm2"
+echo ==== %DATE% %TIME% resurrect starting ==== >> "%PM2_HOME%\resurrect.log"
+call "C:\Users\Administrator\AppData\Roaming\npm\pm2.cmd" resurrect >> "%PM2_HOME%\resurrect.log" 2>&1
+echo ==== exit code %ERRORLEVEL% ==== >> "%PM2_HOME%\resurrect.log"
 ```
 
-### Step 2: Generate Windows Service Configuration
-From your server directory:
+`PM2_HOME` is pinned to the Administrator profile so the daemon started at boot
+is the same one an interactive `pm2 list` talks to.
+
+### Step 2: Register the task
+Run as Administrator (the 30s delay lets PostgreSQL finish starting first):
 
 ```powershell
-pm2 startup windows --user Administrator --no-save
+schtasks /create /tn "PM2 Resurrect" /tr "C:\Users\Administrator\pm2-resurrect.cmd" ^
+  /sc onstart /delay 0000:30 /ru SYSTEM /rl HIGHEST /f
+```
+
+Check it, test it without rebooting, or remove it:
+
+```powershell
+schtasks /query /tn "PM2 Resurrect" /fo LIST /v
+schtasks /run   /tn "PM2 Resurrect"     # then: pm2 list
+schtasks /delete /tn "PM2 Resurrect" /f
+type C:\Users\Administrator\.pm2\resurrect.log
 ```
 
 ## 3. Start the Server with PM2

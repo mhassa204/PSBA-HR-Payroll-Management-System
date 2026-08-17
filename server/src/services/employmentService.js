@@ -1102,7 +1102,12 @@ const employmentService = {
           contract_type: strOrC(contract.contract_type, ec.contract_type ?? null),
           contract_number: strOrC(contract.contract_number, ec.contract_number ?? null),
           start_date: dateOrC(contract.start_date, ec.start_date),
-          end_date: dateOrC(contract.end_date, ec.end_date),
+          // Allow clearing end_date (optional field) when blank is submitted
+          end_date: Object.prototype.hasOwnProperty.call(contract, "end_date")
+            ? !isBlank(contract.end_date)
+              ? new Date(contract.end_date)
+              : null
+            : (ec.end_date ?? null),
           renewal_count: !isBlank(contract.renewal_count)
             ? parseInt(contract.renewal_count)
             : ec.renewal_count ?? 0,

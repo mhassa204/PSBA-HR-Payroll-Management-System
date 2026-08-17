@@ -935,10 +935,6 @@ const TabbedEmploymentForm = forwardRef(
           alert("Please select a contract start date");
           return;
         }
-        if (isFieldVisible("contract", "end_date") && !data.end_date) {
-          alert("Please select a contract end date");
-          return;
-        }
         setCompletedTabs((prev) => ({ ...prev, contract: true }));
         await handleCompleteForm();
       } catch (error) {

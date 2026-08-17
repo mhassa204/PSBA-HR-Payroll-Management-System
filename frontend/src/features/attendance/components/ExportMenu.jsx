@@ -9,7 +9,7 @@ import { toastBus } from '../../../utils/toastBus';
 // getRows(scope): returns rows keyed by column key for 'filtered' | 'all'.
 // extraActions: optional [{ label, onClick }] page-specific exports (e.g.
 // official multi-sheet formats) shown above the column picker.
-const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', title, counts, extraActions, scopes, header }) => {
+const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', title, counts, extraActions, scopes, header, buttonLabel = 'Export' }) => {
   const cols = useMemo(
     () => (columns || []).map((c) => (typeof c === 'string' ? { key: c, label: c.replace(/\n/g, ' ') } : { key: c.key, label: (c.label || c.key).replace(/\n/g, ' ') })),
     [columns]
@@ -88,7 +88,7 @@ const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', titl
 
   return (
     <div className="relative" ref={ref}>
-      <button type="button" className="btn btn-secondary text-xs" onClick={() => setOpen((o) => !o)}>Export ▾</button>
+      <button type="button" className="btn btn-secondary text-xs" onClick={() => setOpen((o) => !o)}>{buttonLabel} ▾</button>
       {open && (
         <div className="menu-surface absolute right-0 mt-1 z-30 w-72 p-3 space-y-3 text-xs" role="menu">
           {extraActions?.length ? (

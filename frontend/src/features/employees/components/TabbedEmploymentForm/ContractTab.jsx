@@ -74,13 +74,11 @@ const ContractTab = ({
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Contract End Date <span className="text-red-500">*</span>
+                Contract End Date
               </label>
               <input
                 type="date"
-                {...register("end_date", {
-                  required: "Contract end date is required",
-                })}
+                {...register("end_date")}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900"
               />
               {contractErrors?.end_date && (

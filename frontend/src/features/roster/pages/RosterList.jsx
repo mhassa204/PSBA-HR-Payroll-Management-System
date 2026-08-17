@@ -82,6 +82,14 @@ const RosterList = () => {
   const [detail, setDetail] = useState(null); // { scope, statuses[], title }
   const [detailSearch, setDetailSearch] = useState("");
 
+  // Late-arrival grace for HQ rosters (Establishment account)
+  const [graceOpen, setGraceOpen] = useState(false);
+  const [grace, setGrace] = useState(null); // { default_minutes, departments, ... }
+  const [graceTarget, setGraceTarget] = useState(""); // "" = all HQ departments
+  const [graceMinutes, setGraceMinutes] = useState("");
+  const [graceSaveDefault, setGraceSaveDefault] = useState(true);
+  const [graceSaving, setGraceSaving] = useState(false);
+
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -90,6 +98,7 @@ const RosterList = () => {
 
   const canCreate = can("roster.create") && (user?.location_id || user?.department_id);
   const isSuperAdmin = user?.role?.name === "Super Admin";
+  const canSetGrace = isSuperAdmin || /^\s*establishment/i.test(user?.role?.name || "");
   const monthOptions = useMemo(() => cycleMonthOptions(), []);
 
   // Debounce the search box so typing doesn't hammer the API
@@ -200,6 +209,63 @@ const RosterList = () => {
     }
   };
 
+  const openGrace = async () => {
+    setGraceOpen(true);
+    setGrace(null);
+    try {
+      const res = await rosterService.graceSettings();
+      setGrace(res);
+      setGraceTarget("");
+      setGraceMinutes(String(res.default_minutes ?? 15));
+      setGraceSaveDefault(true);
+    } catch (e) {
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to load grace settings",
+      });
+      setGraceOpen(false);
+    }
+  };
+
+  const saveGrace = async () => {
+    const minutes = Number(graceMinutes);
+    const max = grace?.max_minutes ?? 240;
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > max) {
+      toastBus.emit({
+        type: "error",
+        message: `Grace must be a whole number of minutes (0–${max}).`,
+      });
+      return;
+    }
+    setGraceSaving(true);
+    try {
+      const res = await rosterService.setBulkGrace({
+        department_id: graceTarget === "" ? null : Number(graceTarget),
+        grace_minutes: minutes,
+        save_default: graceSaveDefault,
+      });
+      toastBus.emit({
+        type: "success",
+        message: `Grace set to ${minutes} min for ${res.target} — ${res.updated} roster(s) updated.`,
+      });
+      setGraceOpen(false);
+      await loadList();
+    } catch (e) {
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to set grace period",
+      });
+    } finally {
+      setGraceSaving(false);
+    }
+  };
+
+  // How many rosters the current selection will touch
+  const graceTargetCount =
+    graceTarget === ""
+      ? grace?.total_hq_rosters ?? 0
+      : grace?.departments?.find((d) => String(d.id) === String(graceTarget))?.roster_count ?? 0;
+
   const resetFilters = () => {
     setMonth("");
     setStatus("ALL");
@@ -265,6 +331,11 @@ const RosterList = () => {
           {can("roster.approve") && (
             <button onClick={() => navigate("/rosters/approvals")} className="btn btn-outline">
               Approvals
+            </button>
+          )}
+          {canSetGrace && (
+            <button onClick={openGrace} className="btn btn-outline">
+              Grace Period
             </button>
           )}
           {canCreate && (
@@ -685,6 +756,112 @@ const RosterList = () => {
                 </table>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Late-arrival grace for HQ rosters */}
+      {graceOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-fade z-50 flex items-center justify-center p-4">
+          <div className="modal-surface w-full max-w-lg max-h-[85vh] flex flex-col">
+            <div className="modal-header">
+              <div>
+                <h3 className="text-base font-semibold">Late-arrival grace period</h3>
+                <p className="text-[11px] text-gray-500">
+                  Applies to HQ department rosters — bazaar rosters do not use grace
+                </p>
+              </div>
+              <button onClick={() => setGraceOpen(false)} className="btn btn-sm btn-ghost">
+                Close
+              </button>
+            </div>
+
+            {!grace ? (
+              <div className="p-6 text-sm text-gray-500">Loading…</div>
+            ) : (
+              <>
+                <div className="p-4 space-y-3 overflow-y-auto custom-thin-scroll">
+                  <div className="text-xs text-gray-600">
+                    Current default for new rosters:{" "}
+                    <span className="font-semibold">{grace.default_minutes} min</span>. With a 9:00
+                    AM start and 15 minutes, arriving up to 9:15:59 counts as on time; 9:16 is late.
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                      Apply to
+                    </label>
+                    <select
+                      className="form-input w-full"
+                      value={graceTarget}
+                      onChange={(e) => setGraceTarget(e.target.value)}
+                    >
+                      <option value="">
+                        HQ — all departments ({grace.total_hq_rosters} roster
+                        {grace.total_hq_rosters === 1 ? "" : "s"})
+                      </option>
+                      {grace.departments?.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} ({d.roster_count} roster{d.roster_count === 1 ? "" : "s"}
+                          {d.roster_count
+                            ? `, currently ${d.grace_minutes === null ? "mixed" : `${d.grace_minutes} min`}`
+                            : ""}
+                          )
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                      Grace period (minutes)
+                    </label>
+                    <input
+                      className="form-input w-32"
+                      type="number"
+                      min={0}
+                      max={grace.max_minutes}
+                      value={graceMinutes}
+                      onChange={(e) => setGraceMinutes(e.target.value)}
+                    />
+                  </div>
+
+                  <label className="flex items-start gap-2 text-xs text-gray-600">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={graceSaveDefault}
+                      onChange={(e) => setGraceSaveDefault(e.target.checked)}
+                    />
+                    <span>
+                      Save as the default so rosters created from now on start with this value —
+                      otherwise it has to be set again every cycle.
+                    </span>
+                  </label>
+
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-[11px] text-amber-800">
+                    This updates <span className="font-semibold">{graceTargetCount}</span> roster
+                    {graceTargetCount === 1 ? "" : "s"} across{" "}
+                    <span className="font-semibold">every month, including finished cycles</span>.
+                    Grace decides Late vs On Time, so attendance already reported for past months
+                    will be re-scored.
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 p-4 border-t border-gray-100">
+                  <button onClick={() => setGraceOpen(false)} className="btn btn-secondary">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveGrace}
+                    disabled={graceSaving || !grace.can_edit}
+                    className="btn btn-primary"
+                  >
+                    {graceSaving ? "Applying…" : `Apply to ${graceTargetCount} roster(s)`}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

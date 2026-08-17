@@ -219,7 +219,23 @@ const AttendanceLocations = () => {
         </div>
         <div className="actions-inline">
           <PayrollRangeControl start={range.start} end={range.end} onChange={setRange} />
+          {/* Report choice lives on the toolbar, not buried inside the export
+              popover — all four attendance modules export from this page. */}
+          <label className="flex items-center gap-1.5 text-xs text-gray-600">
+            <span className="font-medium whitespace-nowrap">Report</span>
+            <select
+              className="form-input text-xs !w-auto"
+              value={report}
+              onChange={(e) => setReport(e.target.value)}
+              title="Which attendance module to export"
+            >
+              {Object.entries(REPORTS).map(([k, r]) => (
+                <option key={k} value={k}>{r.label}</option>
+              ))}
+            </select>
+          </label>
           <ExportMenu
+            buttonLabel={`Export ${REPORTS[report].sheet}`}
             columns={REPORTS[report].columns}
             getRows={getExportRows}
             filenameBase={`${REPORTS[report].sheet}_${report === 'checkinout' ? 'Locations' : 'Multi_Location'}_${range.start}_to_${range.end}`}
@@ -236,6 +252,12 @@ const AttendanceLocations = () => {
                 <select className="form-input text-xs w-full" value={report} onChange={(e) => setReport(e.target.value)}>
                   {Object.entries(REPORTS).map(([k, r]) => (<option key={k} value={k}>{r.label}</option>))}
                 </select>
+                {report !== 'checkinout' && (
+                  <div className="text-[11px] text-gray-500">
+                    {REPORTS[report].label} is fetched one location at a time, so a wide selection
+                    takes a while — narrow it with the filters or checkboxes if it stalls.
+                  </div>
+                )}
               </div>
             }
           />

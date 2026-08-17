@@ -20,6 +20,13 @@ const rosterService = {
   // Establishment-only: set the late-arrival grace period (minutes) on an HQ roster
   setGrace: (id, grace_minutes) =>
     axios.patch(`/rosters/${id}/grace`, { grace_minutes }).then((r) => r.data),
+  // Organisation-wide grace: current default + what each HQ department carries
+  graceSettings: () => axios.get("/rosters/grace/settings").then((r) => r.data),
+  // Set grace across all HQ departments (department_id omitted) or just one
+  setBulkGrace: ({ department_id, grace_minutes, save_default }) =>
+    axios
+      .post("/rosters/grace/bulk", { department_id, grace_minutes, save_default })
+      .then((r) => r.data),
 };
 
 export default rosterService;
