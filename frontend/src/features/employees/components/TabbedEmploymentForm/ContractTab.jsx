@@ -28,12 +28,10 @@ const ContractTab = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Contract Type <span className="text-red-500">*</span>
+                Contract Type
               </label>
               <select
-                {...register("contract_type", {
-                  required: "Contract type is required",
-                })}
+                {...register("contract_type")}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900"
               >
                 <option value="">Select Contract Type</option>
@@ -56,13 +54,11 @@ const ContractTab = ({
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Contract Start Date <span className="text-red-500">*</span>
+                Contract Start Date
               </label>
               <input
                 type="date"
-                {...register("start_date", {
-                  required: "Contract start date is required",
-                })}
+                {...register("start_date")}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900"
               />
               {contractErrors?.start_date && (

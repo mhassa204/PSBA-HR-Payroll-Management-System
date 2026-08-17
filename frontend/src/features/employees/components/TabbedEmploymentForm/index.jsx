@@ -924,17 +924,6 @@ const TabbedEmploymentForm = forwardRef(
 
     const onContractSubmit = async (data) => {
       try {
-        if (
-          isFieldVisible("contract", "contract_type") &&
-          !data.contract_type?.trim()
-        ) {
-          alert("Please select a contract type");
-          return;
-        }
-        if (isFieldVisible("contract", "start_date") && !data.start_date) {
-          alert("Please select a contract start date");
-          return;
-        }
         setCompletedTabs((prev) => ({ ...prev, contract: true }));
         await handleCompleteForm();
       } catch (error) {

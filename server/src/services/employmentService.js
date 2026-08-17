@@ -1099,9 +1099,21 @@ const employmentService = {
         const dateOrC = (v, fallback) =>
           !isBlank(v) ? new Date(v) : fallback ?? null;
         const contractData = {
-          contract_type: strOrC(contract.contract_type, ec.contract_type ?? null),
+          // Allow clearing optional contract fields when blank is submitted
+          contract_type: Object.prototype.hasOwnProperty.call(
+            contract,
+            "contract_type"
+          )
+            ? !isBlank(contract.contract_type)
+              ? contract.contract_type
+              : null
+            : (ec.contract_type ?? null),
           contract_number: strOrC(contract.contract_number, ec.contract_number ?? null),
-          start_date: dateOrC(contract.start_date, ec.start_date),
+          start_date: Object.prototype.hasOwnProperty.call(contract, "start_date")
+            ? !isBlank(contract.start_date)
+              ? new Date(contract.start_date)
+              : null
+            : (ec.start_date ?? null),
           // Allow clearing end_date (optional field) when blank is submitted
           end_date: Object.prototype.hasOwnProperty.call(contract, "end_date")
             ? !isBlank(contract.end_date)
