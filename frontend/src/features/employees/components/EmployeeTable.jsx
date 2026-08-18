@@ -507,6 +507,8 @@ const EmployeeTable = () => {
               <option value="Active">Active</option>
               <option value="Probation">Probation</option>
               <option value="Inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
+              <option value="off_duty">Off Duty</option>
               <option value="Terminated">Terminated</option>
               <option value="Resigned">Resigned</option>
               <option value="Retired">Retired</option>

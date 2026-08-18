@@ -14,6 +14,11 @@ import {
   canModify,
   timeRangeLabel,
 } from "../rosterUtils";
+import {
+  designationRank,
+  isLongDuty,
+  staffCountSummary,
+} from "../../../utils/dutyRoster";
 
 const ACTION_LABELS = {
   SUBMITTED: "Submitted",
@@ -22,14 +27,36 @@ const ACTION_LABELS = {
   REJECTED: "Rejected",
 };
 
-function dayCellText(day) {
-  if (!day) return "—";
-  if (day.type === "weekly_off") return "Weekly off";
-  if (day.type === "offsite") return `Offsite: ${day.location || "—"}`;
-  if (day.type === "time" && (day.time_from || day.time_to)) {
-    return timeRangeLabel(day.time_from, day.time_to);
+const entryDesignation = (en) =>
+  en?.employee?.employmentRecords?.[0]?.designation?.title || "";
+
+// A day's schedule cell: Weekly Off shown in bold, and any duty over 8 hours
+// highlighted.
+function DayCell({ day }) {
+  if (!day) return <span className="text-gray-300">—</span>;
+  if (day.type === "weekly_off") {
+    return <span className="font-bold text-rose-700">Weekly Off</span>;
   }
-  return "—";
+  if (day.type === "offsite") {
+    return <span>Offsite: {day.location || "—"}</span>;
+  }
+  if (day.type === "time" && (day.time_from || day.time_to)) {
+    const long = isLongDuty(day.time_from, day.time_to);
+    return (
+      <span
+        className={
+          long
+            ? "font-semibold text-amber-800 bg-amber-100 rounded px-1.5 py-0.5 whitespace-nowrap"
+            : "whitespace-nowrap"
+        }
+        title={long ? "Duty exceeds 8 hours" : undefined}
+      >
+        {timeRangeLabel(day.time_from, day.time_to)}
+        {long ? " ⚠" : ""}
+      </span>
+    );
+  }
+  return <span className="text-gray-300">—</span>;
 }
 
 const ViewRoster = () => {
@@ -82,6 +109,15 @@ const ViewRoster = () => {
   if (!roster) return <LoadingSpinner text="Loading roster..." />;
 
   const isHq = roster.scope === "HQ_DEPARTMENT";
+
+  // Arrange designation-wise (Incharge → Supervisor → Record Keeper → Security
+  // Guard → others), then by name.
+  const sortedEntries = [...(roster.entries || [])].sort(
+    (a, b) =>
+      designationRank(entryDesignation(a)) - designationRank(entryDesignation(b)) ||
+      (a.employee?.full_name || "").localeCompare(b.employee?.full_name || "")
+  );
+  const staffCounts = staffCountSummary(roster.entries || [], entryDesignation);
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -194,6 +230,26 @@ const ViewRoster = () => {
         </div>
       )}
 
+      {/* Staff count summary (designation-wise) */}
+      {staffCounts.length > 0 && (
+        <div className="card-soft p-4">
+          <div className="text-sm font-semibold text-gray-700 mb-2">
+            Staff on this roster ({roster.entries.length})
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {staffCounts.map((c) => (
+              <span
+                key={c.label}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 text-xs px-3 py-1"
+              >
+                <span className="font-semibold">{c.count}</span>
+                {c.count === 1 ? c.label : `${c.label}s`}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Schedule — desktop table */}
       <div className="hidden md:block table-shell card-soft p-0 custom-thin-scroll overflow-x-auto">
         <table className="table-enhanced table-no-wrap min-w-full">
@@ -212,7 +268,7 @@ const ViewRoster = () => {
             </tr>
           </thead>
           <tbody>
-            {roster.entries.map((en, i) => {
+            {sortedEntries.map((en, i) => {
               const emp = en.employee;
               const desig = emp?.employmentRecords?.[0]?.designation?.title || "—";
               const cwo = en.day_schedules?._collective_weekly_off;
@@ -223,7 +279,7 @@ const ViewRoster = () => {
                   <td className="text-left whitespace-nowrap">{desig}</td>
                   {DAYS.map((d) => (
                     <td key={d} className="text-left whitespace-nowrap">
-                      {dayCellText(en.day_schedules?.[d])}
+                      <DayCell day={en.day_schedules?.[d]} />
                     </td>
                   ))}
                   <td className="text-left whitespace-nowrap">
@@ -239,7 +295,7 @@ const ViewRoster = () => {
 
       {/* Schedule — mobile cards */}
       <div className="md:hidden space-y-2">
-        {roster.entries.map((en, i) => {
+        {sortedEntries.map((en, i) => {
           const emp = en.employee;
           const cwo = en.day_schedules?._collective_weekly_off;
           return (
@@ -255,7 +311,9 @@ const ViewRoster = () => {
                 {DAYS.map((d) => (
                   <div key={d} className="flex justify-between border-b border-gray-50 py-1">
                     <span className="text-gray-500">{d}</span>
-                    <span className="text-gray-700">{dayCellText(en.day_schedules?.[d])}</span>
+                    <span className="text-gray-700">
+                      <DayCell day={en.day_schedules?.[d]} />
+                    </span>
                   </div>
                 ))}
                 {cwo?.enabled && (

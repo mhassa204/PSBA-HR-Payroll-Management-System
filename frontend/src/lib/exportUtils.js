@@ -1,4 +1,25 @@
-import * as XLSX from 'xlsx';
+// xlsx-js-style is a drop-in for SheetJS that also honours per-cell styles
+// (fills/fonts), which the community `xlsx` build silently drops on write.
+import * as XLSX from 'xlsx-js-style';
+
+// Apply a solid background fill (and bold header) to whole columns of a sheet.
+// columnColors: { <headerKey>: 'RRGGBB' }. headerRow is the 0-based row index of
+// the header; dataRows is how many data rows follow it.
+function applyColumnColors(ws, headers, columnColors, headerRow, dataRows) {
+  if (!columnColors) return;
+  for (const [key, rgb] of Object.entries(columnColors)) {
+    const col = headers.indexOf(key);
+    if (col < 0) continue;
+    for (let r = headerRow; r <= headerRow + dataRows; r++) {
+      const ref = XLSX.utils.encode_cell({ r, c: col });
+      if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+      ws[ref].s = {
+        fill: { patternType: 'solid', fgColor: { rgb } },
+        font: { bold: r === headerRow },
+      };
+    }
+  }
+}
 
 function sanitizeFilename(name) {
   const fallback = 'export';
@@ -40,7 +61,7 @@ export function exportToCSV(filename, rows, headerOrder, title) {
   downloadBlob(blob, sanitizeFilename(filename));
 }
 
-export function exportToExcel(filename, rows, sheetName = 'Sheet1', headerOrder, title) {
+export function exportToExcel(filename, rows, sheetName = 'Sheet1', headerOrder, title, columnColors) {
   if (!rows || rows.length === 0) return;
   const headers = headerOrder && headerOrder.length ? headerOrder : Object.keys(rows[0]);
   const normalized = rows.map(r => {
@@ -61,6 +82,7 @@ export function exportToExcel(filename, rows, sheetName = 'Sheet1', headerOrder,
   // Add JSON (with header) starting at row index 2 if title exists, else 0
   const originRow = title ? 2 : 0;
   XLSX.utils.sheet_add_json(ws, normalized, { header: headers, origin: { r: originRow, c: 0 } });
+  applyColumnColors(ws, headers, columnColors, originRow, normalized.length);
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

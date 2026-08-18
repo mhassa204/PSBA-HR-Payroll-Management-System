@@ -4,6 +4,7 @@ import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import PayrollRangeControl, { getDefaultPayrollRange } from '../components/PayrollRangeControl';
 import ExportMenu from '../components/ExportMenu';
+import { designationRank, isLongDuty, staffCountSummary } from '../../../utils/dutyRoster';
 
 const LocationRosterPage = () => {
   const { id } = useParams();
@@ -93,6 +94,26 @@ const LocationRosterPage = () => {
     );
   }, [rows, fBiometricId, fCnic, fName, fDesignation, fActualCC, fBioCC, fDate, fPerformedStatus, fTimeInStatus, fSingleMark, fTimeOutStatus, fSource]);
 
+  // Arrange designation-wise (Incharge → Supervisor → Record Keeper → Security
+  // Guard → others); an employee's dates stay together, ordered by date.
+  const sortedRows = useMemo(() => {
+    return [...filteredRows].sort(
+      (a, b) =>
+        designationRank(a.designation) - designationRank(b.designation) ||
+        String(a.name || '').localeCompare(String(b.name || '')) ||
+        String(a.date || '').localeCompare(String(b.date || ''))
+    );
+  }, [filteredRows]);
+
+  // Per-bazaar staff count by designation (distinct employees, not rows).
+  const staffCounts = useMemo(() => {
+    const byEmp = new Map();
+    for (const r of filteredRows) {
+      if (!byEmp.has(r.employeeId)) byEmp.set(r.employeeId, r.designation);
+    }
+    return staffCountSummary([...byEmp.values()], (d) => d);
+  }, [filteredRows]);
+
   const titleText = `Attendance vs Duty Roster - ${data?.location?.name || ''} (${data?.range?.start} to ${data?.range?.end})`;
 
   // Export helpers
@@ -127,6 +148,17 @@ const LocationRosterPage = () => {
     'EmployeeID','BiometricID','CNIC','Name','Designation','ActualCostCenter','BiometricCostCenter','Date','DateLabel','Check In','Check Out','DutyIn','DutyOut','DutyTimings','Source','ActualPerformed','PerformedStatus','TimeInLate','TimeInStatus','SingleMark','TimeOutEarlyLate','TimeOutStatus'
   ];
 
+  // Colour key columns in the Excel export so the report is easier to scan.
+  const EXPORT_COLORS = {
+    Name: 'D9E1F2',        // light blue
+    Date: 'E2EFDA',        // light green
+    'Check In': 'FFF2CC',  // light yellow
+    'Check Out': 'FFF2CC',
+    DutyIn: 'FCE4D6',      // light orange
+    DutyOut: 'FCE4D6',
+    TimeInLate: 'F8CBAD',  // salmon
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading attendance..." /></div>;
   if (!data?.success) return <div className="p-6 text-red-600">Failed to load</div>;
 
@@ -149,11 +181,12 @@ const LocationRosterPage = () => {
           />
           <ExportMenu
             columns={EXPORT_COLUMNS}
-            getRows={(scope) => mapRosterForExport(scope === 'filtered' ? filteredRows : rows)}
+            getRows={(scope) => mapRosterForExport(scope === 'filtered' ? sortedRows : rows)}
             filenameBase={`Roster_${data?.location?.name || 'Location'}_${data?.range?.start}_to_${data?.range?.end}`}
             sheetName="Roster"
             title={titleText}
             counts={{ filtered: filteredRows.length, all: rows.length }}
+            columnColors={EXPORT_COLORS}
           />
           <Link to={`/attendance/locations/${id}`} className="btn btn-outline text-xs">Back</Link>
         </div>
@@ -184,6 +217,25 @@ const LocationRosterPage = () => {
         </div>
       </div>
 
+      {staffCounts.length > 0 && (
+        <div className="card-soft p-4">
+          <div className="text-sm font-semibold text-gray-700 mb-2">
+            Staff at this bazaar ({staffCounts.reduce((n, c) => n + c.count, 0)})
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {staffCounts.map((c) => (
+              <span
+                key={c.label}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 text-xs px-3 py-1"
+              >
+                <span className="font-semibold">{c.count}</span>
+                {c.count === 1 ? c.label : `${c.label}s`}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="table-shell card-soft p-0 custom-thin-scroll table-fixed-viewport">
         <table className="table-enhanced table-no-wrap" style={{ tableLayout:'auto', minWidth:'100%' }}>
           <thead>
@@ -213,8 +265,11 @@ const LocationRosterPage = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((r,i)=>(
-              <tr key={`${r.employeeId}-${r.date}-${i}`}>
+            {sortedRows.map((r,i)=>{
+              const longDuty = isLongDuty(r.dutyIn, r.dutyOut);
+              const weeklyOff = String(r.performedStatus || '').toLowerCase() === 'weekly off';
+              return (
+              <tr key={`${r.employeeId}-${r.date}-${i}`} className={longDuty ? 'bg-amber-50' : ''}>
                 <td>{r.employeeId}</td>
                 <td>{r.biometricId || '-'}</td>
                 <td>{r.cnic || '-'}</td>
@@ -228,7 +283,9 @@ const LocationRosterPage = () => {
                 <td>{r.time2}</td>
                 <td>{r.dutyIn}</td>
                 <td>{r.dutyOut}</td>
-                <td>{r.dutyTimings}</td>
+                <td className={longDuty ? 'font-semibold text-amber-800' : ''} title={longDuty ? 'Duty exceeds 8 hours' : undefined}>
+                  {r.dutyTimings}{longDuty ? ' ⚠' : ''}
+                </td>
                 <td>
                   {r.scheduleSource === 'HQ_DEFAULT'
                     ? <span className="badge badge-gray">HQ Default</span>
@@ -237,15 +294,16 @@ const LocationRosterPage = () => {
                       : ''}
                 </td>
                 <td>{r.actualPerformed}</td>
-                <td>{r.performedStatus}</td>
+                <td className={weeklyOff ? 'font-bold text-rose-700' : ''}>{r.performedStatus}</td>
                 <td>{r.timeInLate}</td>
                 <td>{r.timeInStatus}</td>
                 <td>{r.singleMark ? 'Yes' : ''}</td>
                 <td>{r.timeOutEarlyLate}</td>
                 <td>{r.timeOutStatus}</td>
               </tr>
-            ))}
-            {!filteredRows.length && (
+              );
+            })}
+            {!sortedRows.length && (
               <tr>
                 <td colSpan={22} className="text-center py-6 text-gray-500 text-xs">
                   {rows.length ? 'No records match the filters' : (

@@ -306,6 +306,30 @@ const RosterList = () => {
   const typeLabel = (r) =>
     r.roster_type === "PERMANENT" ? "Permanent" : cycleLabel(r) || "Monthly";
 
+  // The cycle month a roster belongs to (named by the month its validity ends in).
+  const rosterCycleMonth = (r) => {
+    if (r.valid_to) {
+      const d = new Date(r.valid_to);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    }
+    return month || currentCycleMonth();
+  };
+  const unitOf = (r) => (r.scope === "HQ_DEPARTMENT" ? r.department_id : r.bazaar_id);
+
+  // Per-unit roster count for the coverage month, to flag units with several
+  // rosters in one cycle ("show them as one" → View combined).
+  const unitCountMap = useMemo(() => {
+    const m = new Map();
+    for (const u of coverage?.units || []) m.set(`${u.scope}:${u.id}`, u.roster_count || 0);
+    return m;
+  }, [coverage]);
+  const cycleCountFor = (r) =>
+    rosterCycleMonth(r) === coverageMonth
+      ? unitCountMap.get(`${r.scope}:${unitOf(r)}`) || 0
+      : 0;
+  const goToCycle = (r) =>
+    navigate(`/rosters/cycle/${r.scope}/${unitOf(r)}?month=${rosterCycleMonth(r)}`);
+
   const firstIndex = (data.page ? data.page - 1 : page - 1) * limit;
 
   const coverageGroups = coverage
@@ -566,6 +590,14 @@ const RosterList = () => {
                     <td>{r._count?.entries ?? 0}</td>
                     <td>
                       <span className={statusBadgeClass(r.status)}>{r.status}</span>
+                      {cycleCountFor(r) > 1 && (
+                        <span
+                          className="ml-1 badge badge-blue"
+                          title={`${cycleCountFor(r)} rosters exist for this unit in this cycle`}
+                        >
+                          {cycleCountFor(r)} in cycle
+                        </span>
+                      )}
                     </td>
                     <td className="text-left">
                       {r.status === "PENDING" ? approverLabel(r) : "—"}
@@ -578,6 +610,15 @@ const RosterList = () => {
                         >
                           View
                         </button>
+                        {cycleCountFor(r) > 1 && (
+                          <button
+                            onClick={() => goToCycle(r)}
+                            className="btn btn-secondary btn-sm"
+                            title="Combine all rosters for this unit's cycle into one breakdown"
+                          >
+                            Cycle
+                          </button>
+                        )}
                         {canModify(r, user) && (
                           <button
                             onClick={() => navigate(`/rosters/${r.id}/edit`)}
@@ -629,6 +670,14 @@ const RosterList = () => {
                   >
                     View
                   </button>
+                  {cycleCountFor(r) > 1 && (
+                    <button
+                      onClick={() => goToCycle(r)}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Cycle ({cycleCountFor(r)})
+                    </button>
+                  )}
                   {canModify(r, user) && (
                     <button
                       onClick={() => navigate(`/rosters/${r.id}/edit`)}

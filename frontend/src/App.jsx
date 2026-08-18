@@ -39,6 +39,7 @@ import RosterList from "./features/roster/pages/RosterList";
 import CreateRoster from "./features/roster/pages/CreateRoster";
 import EditRoster from "./features/roster/pages/EditRoster";
 import ViewRoster from "./features/roster/pages/ViewRoster";
+import CycleBreakdown from "./features/roster/pages/CycleBreakdown";
 import RosterApprovalsPage from "./features/roster/pages/RosterApprovalsPage";
 import AttendanceDashboard from "./features/attendance/pages/AttendanceDashboard";
 import AttendanceLocations from "./features/attendance/pages/AttendanceLocations";
@@ -264,6 +265,14 @@ function App() {
               element={
                 <PrivateRoute permissions={["roster.create"]}>
                   <EditRoster />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="rosters/cycle/:scope/:unitId"
+              element={
+                <PrivateRoute permissions={["roster.read"]}>
+                  <CycleBreakdown />
                 </PrivateRoute>
               }
             />

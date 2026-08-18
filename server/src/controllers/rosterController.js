@@ -503,6 +503,156 @@ const rosterController = {
     }
   },
 
+  // GET /rosters/cycle-breakdown?scope=&unit_id=&month=YYYY-MM
+  // Merge every roster a unit has for one cycle into a single view: per employee,
+  // the effective schedule for each date (newest-approved roster wins; if none
+  // approved, the latest submitted), flagging dates where rosters disagree.
+  async cycleBreakdown(req, res) {
+    try {
+      const user = req.session.user;
+      const scope = req.query.scope;
+      const unitId = Number(req.query.unit_id);
+      if (!["LOCATION", "HQ_DEPARTMENT"].includes(scope) || !unitId) {
+        return res.status(400).json({ success: false, error: "scope and unit_id are required" });
+      }
+      const month = cycleRangeFromMonth(req.query.month) ? req.query.month : defaultCycleMonth();
+      const cycle = cycleRangeFromMonth(month);
+
+      const where = { ...buildListWhere(user), scope };
+      if (scope === "LOCATION") where.bazaar_id = unitId;
+      else where.department_id = unitId;
+      where.AND = [...(where.AND || []), cycleOverlapFilter(cycle)];
+
+      const rosters = await prisma.dutyRoster.findMany({
+        where,
+        include: {
+          location: { select: { id: true, name: true } },
+          department: { select: { id: true, name: true } },
+          createdBy: { select: { id: true, email: true } },
+          entries: {
+            include: {
+              employee: {
+                select: {
+                  id: true,
+                  full_name: true,
+                  cnic: true,
+                  employmentRecords: {
+                    where: { is_current: true, is_deleted: false },
+                    take: 1,
+                    select: { designation: { select: { title: true } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { approved_at: "desc" },
+      });
+
+      if (!rosters.length) {
+        return res.status(404).json({ success: false, error: "No rosters for this unit and cycle" });
+      }
+
+      const unitName =
+        scope === "LOCATION"
+          ? rosters[0].location?.name
+          : rosters[0].department?.name;
+
+      // Cycle dates
+      const dates = [];
+      for (let d = new Date(cycle.start); d <= cycle.end; d = new Date(d.getTime() + 86400000)) {
+        dates.push(new Date(d));
+      }
+
+      const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const effTime = (r) => r.approved_at || r.updatedAt || r.createdAt;
+      const covers = (r, date) =>
+        r.valid_from <= date && (r.valid_to == null || r.valid_to >= date);
+      const interpretDay = (sched, date) => {
+        const s = sched || {};
+        const info = s[DOW[date.getUTCDay()]] || null;
+        const cwo = s._collective_weekly_off;
+        const withinCwo =
+          cwo?.enabled && cwo.from && cwo.to &&
+          toDateOnly(cwo.from) <= date && toDateOnly(cwo.to) >= date;
+        if (withinCwo || info?.type === "weekly_off") return { kind: "weekly_off" };
+        if (info?.type === "offsite") return { kind: "offsite", location: info.location || null };
+        if (info?.type === "time")
+          return { kind: "time", time_from: info.time_from || null, time_to: info.time_to || null };
+        return null;
+      };
+
+      // employee_id -> { employee, entries: [{ roster, day_schedules }] }
+      const byEmp = new Map();
+      for (const r of rosters) {
+        for (const en of r.entries) {
+          if (!byEmp.has(en.employee_id)) {
+            byEmp.set(en.employee_id, { employee: en.employee, entries: [] });
+          }
+          byEmp.get(en.employee_id).entries.push({ roster: r, day_schedules: en.day_schedules });
+        }
+      }
+
+      const employees = [];
+      for (const [empId, info] of byEmp) {
+        const days = dates.map((date) => {
+          const ymd = formatYMD(date);
+          const interpreted = info.entries
+            .filter((e) => covers(e.roster, date))
+            .map((e) => ({
+              rosterId: e.roster.id,
+              status: e.roster.status,
+              at: effTime(e.roster),
+              sched: interpretDay(e.day_schedules, date),
+            }))
+            .filter((x) => x.sched);
+          if (!interpreted.length) return { date: ymd, kind: null };
+          const approved = interpreted.filter((x) => x.status === "APPROVED");
+          const pool = approved.length ? approved : interpreted;
+          pool.sort((a, b) => new Date(b.at) - new Date(a.at) || b.rosterId - a.rosterId);
+          const win = pool[0];
+          const distinct = new Set(interpreted.map((x) => JSON.stringify(x.sched)));
+          return {
+            date: ymd,
+            ...win.sched,
+            source_roster_id: win.rosterId,
+            source_status: win.status,
+            conflict: distinct.size > 1,
+            roster_count: interpreted.length,
+          };
+        });
+        employees.push({
+          employee_id: empId,
+          name: info.employee.full_name,
+          cnic: info.employee.cnic || null,
+          designation: info.employee.employmentRecords?.[0]?.designation?.title || null,
+          days,
+        });
+      }
+
+      res.json({
+        success: true,
+        unit: { scope, id: unitId, name: unitName || `Unit #${unitId}` },
+        cycle: { month, start: formatYMD(cycle.start), end: formatYMD(cycle.end), label: cycle.label },
+        rosters: rosters.map((r) => ({
+          id: r.id,
+          status: r.status,
+          roster_type: r.roster_type,
+          valid_from: r.valid_from,
+          valid_to: r.valid_to,
+          approved_at: r.approved_at,
+          created_by: r.createdBy?.email || null,
+          entries_count: r.entries.length,
+        })),
+        dates: dates.map((d) => formatYMD(d)),
+        employees,
+      });
+    } catch (e) {
+      console.error("Error building cycle breakdown", e);
+      res.status(500).json({ success: false, error: "Failed to build cycle breakdown" });
+    }
+  },
+
   // GET /rosters/:id
   async getById(req, res) {
     try {

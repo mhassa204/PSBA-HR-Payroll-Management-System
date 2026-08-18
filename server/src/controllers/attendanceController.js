@@ -22,6 +22,10 @@ function dayShort(d){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUT
 function formatHHmmFromUTCDate(d){ if(!d) return null; const h=String(d.getUTCHours()).padStart(2,'0'); const m=String(d.getUTCMinutes()).padStart(2,'0'); const s=String(d.getUTCSeconds()).padStart(2,'0'); return `${h}:${m}:${s}`; }
 function padSeconds(s){ if(!s) return s; const m=String(s).match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/); if(!m) return s; return `${m[1].padStart(2,'0')}:${m[2]}:${m[3]||'00'}`; }
 function parseHHmmToMinutes(s){ if(!s) return null; const m=String(s).match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/); if(!m) return null; return parseInt(m[1],10)*60+parseInt(m[2],10); }
+// Durations (elapsed time / late / early) are shown as HH:MM:SS.
+function fmtDurHMS(totalSeconds){ if(totalSeconds==null) return ''; const s=Math.abs(Math.round(totalSeconds)); const h=Math.floor(s/3600); const m=Math.floor((s%3600)/60); const sec=s%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
+// Seconds since UTC-midnight for a punch timestamp.
+function secOfDay(d){ return d.getUTCHours()*3600 + d.getUTCMinutes()*60 + d.getUTCSeconds(); }
 
 // Fetch face-attendance rows for a set of cnics in a date range.
 async function fetchAttendanceByCnics(cnics, start, end) {
@@ -77,7 +81,7 @@ async function locationFMO(req, res) {
         is_deleted: false,
         employmentRecords: { some: { is_current: true, is_deleted: false, location_id: locationId } },
       },
-      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
+      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true, department: { select: { name: true } }, location: { select: { name: true } } } } }
     });
 
     // Attendance for these employees in range, presence keyed by cnic|date
@@ -91,7 +95,11 @@ async function locationFMO(req, res) {
 
     const rows = employees.map((e, idx) => {
       const designation = e.employmentRecords?.[0]?.designation?.title || null;
-      const roleTag = e.employmentRecords?.[0]?.role_tag?.name || null;
+      const roleTag =
+        e.employmentRecords?.[0]?.role_tag?.name ||
+        e.employmentRecords?.[0]?.department?.name ||
+        e.employmentRecords?.[0]?.location?.name ||
+        null;
       const ecnic = norm(e.cnic);
       let present = 0; let absent = 0; let notMark = 0;
       const marks = days.map(({ date }) => {
@@ -143,15 +151,16 @@ async function locationAgainstRoster(req, res) {
         is_deleted: false,
         employmentRecords: { some: { is_current: true, is_deleted: false, location_id: locationId } },
       },
-      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
+      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true, department: { select: { name: true } }, location: { select: { name: true } } } } }
     });
 
     const resolver = await buildScheduleResolver(employees.map(e => e.id), start, end);
 
     const cnics = employees.map(e => norm(e.cnic)).filter(Boolean);
 
-    // Attendance logs (all types) for range, by cnic
-    const att = await fetchAttendanceByCnics(cnics, start, end);
+    // Attendance logs (all types), fetched one day past the range end so an
+    // overnight shift's next-morning check-out is available for mapping.
+    const att = await fetchAttendanceByCnics(cnics, start, addDays(end, 1));
 
     // Group punches by cnic+date, then pick first-in / last-out with the SAME
     // rules as the attendance dashboard: time-in = first CHECK_IN (or the
@@ -179,6 +188,12 @@ async function locationAgainstRoster(req, res) {
     for (const emp of employees) {
       const designation = emp.employmentRecords?.[0]?.designation?.title || null;
       const roleTag = emp.employmentRecords?.[0]?.role_tag?.name || null;
+      // "Actual cost center" — the staff member's assigned cost center. role_tag
+      // is the intended source but is often unset, so fall back to their
+      // department / location so the column is never blank in exports.
+      const empDeptName = emp.employmentRecords?.[0]?.department?.name || null;
+      const empLocationName = emp.employmentRecords?.[0]?.location?.name || null;
+      const actualCostCenter = roleTag || empDeptName || empLocationName || loc.name || null;
       const ecnic = norm(emp.cnic);
 
       for (const date of days) {
@@ -192,26 +207,49 @@ async function locationAgainstRoster(req, res) {
         const offsiteLocationName = day.offsite_location;
         const dutyIn = day.kind === 'time' ? day.time_from : null;
         const dutyOut = day.kind === 'time' ? day.time_to : null;
+        const dutyInMin = parseHHmmToMinutes(dutyIn);
+        const dutyOutMin = parseHHmmToMinutes(dutyOut);
+        // Overnight duty (e.g. 23:00 -> 05:00): the shift spans into the next day.
+        const overnight = dutyInMin != null && dutyOutMin != null && dutyInMin > dutyOutMin;
 
         const inOut = attByUserDate.get(`${ecnic}|${formatYMD(date)}`) || { in: null, out: null };
-        const time1 = formatHHmmFromUTCDate(inOut.in) || '';
-        const time2 = formatHHmmFromUTCDate(inOut.out) || '';
+        let inTs = inOut.in;
+        let outTs = inOut.out;
+        if (overnight) {
+          // Check-in is the first punch on the duty day; the check-out is the
+          // next morning's punch (last OUT within a tolerance window past the
+          // duty end), so both halves of the shift map to this one duty date.
+          const nextList = (punchesByUserDate.get(`${ecnic}|${formatYMD(addDays(date, 1))}`) || [])
+            .slice().sort((a, b) => a.timestamp - b.timestamp);
+          const TOL = 240; // minutes past duty end still counted as this shift's check-out
+          const morning = nextList.filter(
+            (p) => (p.timestamp.getUTCHours() * 60 + p.timestamp.getUTCMinutes()) <= dutyOutMin + TOL
+          );
+          const morningOuts = morning.filter((p) => p.type === 'OUT');
+          const chosen = morningOuts.length
+            ? morningOuts[morningOuts.length - 1]
+            : (morning.length ? morning[morning.length - 1] : null);
+          outTs = chosen ? chosen.timestamp : null;
+        }
 
-        const dutyMinutes = (parseHHmmToMinutes(dutyIn) != null && parseHHmmToMinutes(dutyOut) != null)
-          ? (parseHHmmToMinutes(dutyOut) - parseHHmmToMinutes(dutyIn))
+        const time1 = formatHHmmFromUTCDate(inTs) || '';
+        const time2 = formatHHmmFromUTCDate(outTs) || '';
+
+        // Scheduled duty length (seconds); overnight wraps past midnight.
+        const dutySeconds = (dutyInMin != null && dutyOutMin != null)
+          ? (overnight ? (dutyOutMin + 1440 - dutyInMin) : (dutyOutMin - dutyInMin)) * 60
           : null;
-        const actualMinutes = (inOut.in && inOut.out)
-          ? ((inOut.out.getTime() - inOut.in.getTime())/60000|0)
-          : null;
+        // Actually performed = last check-out minus first check-in (seconds).
+        const actualSeconds = (inTs && outTs) ? Math.round((outTs.getTime() - inTs.getTime()) / 1000) : null;
 
         let performedStatus = '';
         if (weeklyOff) {
           performedStatus = 'Weekly Off';
         } else if (offsite) {
           performedStatus = offsiteLocationName ? `At "${offsiteLocationName}"` : 'At Offsite';
-        } else if (dutyMinutes != null && actualMinutes != null) {
-          performedStatus = actualMinutes >= dutyMinutes ? 'Over-Time' : 'Less-Time';
-        } else if ((inOut.in && !inOut.out) || (!inOut.in && inOut.out)) {
+        } else if (dutySeconds != null && actualSeconds != null) {
+          performedStatus = actualSeconds >= dutySeconds ? 'Over-Time' : 'Less-Time';
+        } else if ((inTs && !outTs) || (!inTs && outTs)) {
           performedStatus = 'Single Mark';
         } else {
           performedStatus = '';
@@ -219,23 +257,23 @@ async function locationAgainstRoster(req, res) {
 
         // HQ rosters may allow a late-arrival grace window (minutes). A check-in
         // within grace is treated as on-time; only lateness beyond it is 'Late'.
-        const graceMin = day.grace_minutes || 0;
-        const timeInLateMin = (parseHHmmToMinutes(dutyIn) != null && inOut.in) ? ( (inOut.in.getUTCHours()*60+inOut.in.getUTCMinutes()) - parseHHmmToMinutes(dutyIn) ) : null;
-        const timeInStatus = (timeInLateMin == null)
+        const graceSec = (day.grace_minutes || 0) * 60;
+        const timeInLateSec = (dutyInMin != null && inTs) ? (secOfDay(inTs) - dutyInMin * 60) : null;
+        const timeInStatus = (timeInLateSec == null)
           ? ''
-          : (timeInLateMin > graceMin
+          : (timeInLateSec > graceSec
               ? 'Late'
-              : (timeInLateMin > 0 ? 'On Time' : 'Early'));
+              : (timeInLateSec > 0 ? 'On Time' : 'Early'));
 
-        const timeOutDiffMin = (parseHHmmToMinutes(dutyOut) != null && inOut.out) ? ( (inOut.out.getUTCHours()*60+inOut.out.getUTCMinutes()) - parseHHmmToMinutes(dutyOut) ) : null;
-        const timeOutStatus = (timeOutDiffMin != null && timeOutDiffMin < 0) ? 'Early' : (timeOutDiffMin != null && timeOutDiffMin > 0 ? 'Late-Sitting' : '');
+        const timeOutDiffSec = (dutyOutMin != null && outTs) ? (secOfDay(outTs) - dutyOutMin * 60) : null;
+        const timeOutStatus = (timeOutDiffSec != null && timeOutDiffSec < 0) ? 'Early' : (timeOutDiffSec != null && timeOutDiffSec > 0 ? 'Late-Sitting' : '');
 
         rows.push({
           employeeId: emp.id,
           cnic: emp.cnic || null,
           name: emp.full_name,
           designation,
-          actualCostCenter: roleTag,
+          actualCostCenter,
           biometricCostCenter: loc.name,
           date: formatYMD(date),
           dateLabel: `${dayName(date)}, ${date.toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`,
@@ -243,13 +281,13 @@ async function locationAgainstRoster(req, res) {
           time2,
           dutyIn: padSeconds(dutyIn) || '',
           dutyOut: padSeconds(dutyOut) || '',
-          dutyTimings: (dutyMinutes!=null) ? `${Math.floor(dutyMinutes/60)}:${String(dutyMinutes%60).padStart(2,'0')}` : '',
-          actualPerformed: (actualMinutes!=null) ? `${Math.floor(actualMinutes/60)}:${String(actualMinutes%60).padStart(2,'0')}` : '',
+          dutyTimings: fmtDurHMS(dutySeconds),
+          actualPerformed: fmtDurHMS(actualSeconds),
           performedStatus,
-          timeInLate: (timeInLateMin!=null) ? `${Math.abs(Math.floor(timeInLateMin/60))}:${String(Math.abs(timeInLateMin%60)).padStart(2,'0')}` : '',
+          timeInLate: (timeInLateSec != null) ? fmtDurHMS(timeInLateSec) : '',
           timeInStatus,
-          singleMark: (inOut.in && !inOut.out) || (!inOut.in && inOut.out),
-          timeOutEarlyLate: (timeOutDiffMin!=null) ? `${Math.abs(Math.floor(timeOutDiffMin/60))}:${String(Math.abs(timeOutDiffMin%60)).padStart(2,'0')}` : '',
+          singleMark: (inTs && !outTs) || (!inTs && outTs),
+          timeOutEarlyLate: (timeOutDiffSec != null) ? fmtDurHMS(timeOutDiffSec) : '',
           timeOutStatus,
           weeklyOff,
           offsite,
@@ -527,7 +565,7 @@ async function locationCheckInOut(req, res) {
         is_deleted: false,
         employmentRecords: { some: { is_current: true, is_deleted: false, location_id: locationId } },
       },
-      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true } } }
+      select: { id: true, full_name: true, cnic: true, employmentRecords: { where: { is_current: true, is_deleted: false }, include: { designation: true, role_tag: true, department: { select: { name: true } }, location: { select: { name: true } } } } }
     });
     const empByCnic = new Map();
     for (const emp of employees) {
@@ -559,7 +597,11 @@ async function locationCheckInOut(req, res) {
         cnic: emp.cnic || null,
         name: emp.full_name,
         designation: emp.employmentRecords?.[0]?.designation?.title || null,
-        costCenter: emp.employmentRecords?.[0]?.role_tag?.name || null,
+        costCenter:
+          emp.employmentRecords?.[0]?.role_tag?.name ||
+          emp.employmentRecords?.[0]?.department?.name ||
+          emp.employmentRecords?.[0]?.location?.name ||
+          null,
         date: ymd,
         day: dayName(date),
         checkIn: formatHHmmFromUTCDate(first ? first.timestamp : null) || '',
@@ -606,6 +648,7 @@ async function allLocationsCheckInOut(req, res) {
         employee: { select: { id: true, full_name: true, cnic: true } },
         designation: { select: { title: true } },
         role_tag: { select: { name: true } },
+        department: { select: { name: true } },
       },
     });
     const empByCnic = new Map();
@@ -641,7 +684,7 @@ async function allLocationsCheckInOut(req, res) {
         cnic: rec.employee.cnic || null,
         name: rec.employee.full_name,
         designation: rec.designation?.title || null,
-        costCenter: rec.role_tag?.name || null,
+        costCenter: rec.role_tag?.name || rec.department?.name || rec.location?.name || null,
         date: ymd,
         day: dayName(date),
         checkIn: formatHHmmFromUTCDate(first ? first.timestamp : null) || '',

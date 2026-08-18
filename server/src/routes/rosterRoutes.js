@@ -26,6 +26,15 @@ router.get(
 // don't. Registered before "/:id" so the literal path wins.
 router.get("/coverage", isAuthenticated, authorize("roster.read"), rosterController.coverage);
 
+// Combined breakdown of every roster a unit has for one cycle. Literal path,
+// so before "/:id".
+router.get(
+  "/cycle-breakdown",
+  isAuthenticated,
+  authorize("roster.read"),
+  rosterController.cycleBreakdown
+);
+
 // Organisation-wide late-arrival grace for HQ rosters (Establishment only —
 // enforced in the controller). Literal paths, so before "/:id".
 router.get(

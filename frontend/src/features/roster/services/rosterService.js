@@ -6,6 +6,11 @@ const rosterService = {
   // Per-cycle coverage: created / not created / pending / approved per unit
   coverage: (month) =>
     axios.get("/rosters/coverage", { params: month ? { month } : {} }).then((r) => r.data),
+  // Combined breakdown of every roster a unit has for one cycle
+  cycleBreakdown: ({ scope, unit_id, month }) =>
+    axios
+      .get("/rosters/cycle-breakdown", { params: { scope, unit_id, month } })
+      .then((r) => r.data),
   // Scope, eligible employees, cycle defaults, approver preview, last roster
   context: () => axios.get("/rosters/helpers/context").then((r) => r.data),
   create: (payload) => axios.post("/rosters", payload).then((r) => r.data),

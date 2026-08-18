@@ -436,6 +436,8 @@ const EmploymentTab = ({
                 options={[
                   { value: "active", label: "Active" },
                   { value: "inactive", label: "Inactive" },
+                  { value: "suspended", label: "Suspended" },
+                  { value: "off_duty", label: "Off Duty" },
                   { value: "terminated", label: "Terminated" },
                   { value: "resigned", label: "Resigned" },
                 ]}

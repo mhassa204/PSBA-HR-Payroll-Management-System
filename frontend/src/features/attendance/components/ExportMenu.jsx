@@ -9,7 +9,7 @@ import { toastBus } from '../../../utils/toastBus';
 // getRows(scope): returns rows keyed by column key for 'filtered' | 'all'.
 // extraActions: optional [{ label, onClick }] page-specific exports (e.g.
 // official multi-sheet formats) shown above the column picker.
-const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', title, counts, extraActions, scopes, header, buttonLabel = 'Export' }) => {
+const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', title, counts, extraActions, scopes, header, buttonLabel = 'Export', columnColors }) => {
   const cols = useMemo(
     () => (columns || []).map((c) => (typeof c === 'string' ? { key: c, label: c.replace(/\n/g, ' ') } : { key: c.key, label: (c.label || c.key).replace(/\n/g, ' ') })),
     [columns]
@@ -81,7 +81,7 @@ const ExportMenu = ({ columns, getRows, filenameBase, sheetName = 'Sheet1', titl
     const headers = selectedCols.map((c) => c.key);
     const filename = `${filenameBase}.${type === 'csv' ? 'csv' : 'xlsx'}`;
     if (type === 'csv') exportToCSV(filename, rows, headers, title);
-    else exportToExcel(filename, rows, sheetName, headers, title);
+    else exportToExcel(filename, rows, sheetName, headers, title, columnColors);
     toastBus.emit({ type: 'success', message: `Exported ${rows.length} ${scope} row(s) with ${headers.length} column(s) to ${type.toUpperCase()}.` });
     setOpen(false);
   };

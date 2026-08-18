@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { DAYS } from "../rosterUtils";
 import TimeSelect12 from "./TimeSelect12";
 import { toastBus } from "../../../utils/toastBus";
+import {
+  DESIGNATION_ORDER,
+  designationBucket,
+  isLongDuty,
+  staffCountSummary,
+} from "../../../utils/dutyRoster";
 
 // Editor for per-employee day schedules. Desktop: grouped tables with a column
 // per weekday. Mobile (< md): accordion cards per employee.
@@ -65,6 +71,14 @@ function DayEditor({ day, onChange, compact = false }) {
             value={day.time_to || ""}
             onChange={(v) => onChange({ ...day, time_to: v })}
           />
+          {isLongDuty(day.time_from, day.time_to) && (
+            <span
+              className="shrink-0 text-amber-700 font-semibold text-[11px] whitespace-nowrap"
+              title="Duty exceeds 8 hours"
+            >
+              ⚠ &gt;8h
+            </span>
+          )}
         </>
       )}
       {type === "offsite" && (
@@ -75,7 +89,9 @@ function DayEditor({ day, onChange, compact = false }) {
           onChange={(e) => onChange({ ...day, location: e.target.value })}
         />
       )}
-      {type === "weekly_off" && <span className="text-gray-400 text-xs">Off</span>}
+      {type === "weekly_off" && (
+        <span className="shrink-0 text-rose-700 font-bold text-xs">Weekly Off</span>
+      )}
     </div>
   );
 }
@@ -131,15 +147,28 @@ const RosterEntriesEditor = ({ employees, entries, onChange }) => {
     return m;
   }, [entries]);
 
+  // Arrange designation-wise: Incharge → Supervisor → Record Keeper →
+  // Security Guard → others. Within a group, alphabetical by name.
   const groups = useMemo(() => {
     const map = new Map();
     for (const e of employees) {
-      const key = e.role_tag_name || "Unassigned";
+      const key = designationBucket(e.designation);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(e);
     }
-    return Array.from(map.entries()).map(([name, list]) => ({ name, list }));
+    return DESIGNATION_ORDER.filter((label) => map.has(label)).map((label) => ({
+      name: label,
+      list: map
+        .get(label)
+        .slice()
+        .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "")),
+    }));
   }, [employees]);
+
+  const staffCounts = useMemo(
+    () => staffCountSummary(employees, (e) => e.designation),
+    [employees]
+  );
 
   const updateEntry = (empId, updater) => {
     onChange(entries.map((en) => (en.employee_id === empId ? updater({ ...en }) : en)));
@@ -250,6 +279,26 @@ const RosterEntriesEditor = ({ employees, entries, onChange }) => {
 
   return (
     <div className="space-y-6">
+      {/* Staff count summary (designation-wise) */}
+      {staffCounts.length > 0 && (
+        <div className="card-soft p-4">
+          <div className="text-sm font-semibold text-gray-700 mb-2">
+            Staff count ({employees.length})
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {staffCounts.map((c) => (
+              <span
+                key={c.label}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 text-xs px-3 py-1"
+              >
+                <span className="font-semibold">{c.count}</span>
+                {c.count === 1 ? c.label : `${c.label}s`}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Bulk fill panel */}
       <div className="card-soft p-4 space-y-3 border-l-4 border-blue-400">
         <div className="flex flex-wrap items-center justify-between gap-2">
