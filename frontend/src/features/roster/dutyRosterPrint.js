@@ -16,14 +16,20 @@ export function openDutyRosterPrint(roster) {
   for (const g of model.groups) {
     bodyRows += `<tr class="band"><td colspan="13">${esc(g.category)}</td></tr>`;
     for (const r of g.rows) {
-      const dayCells = r.dayCells.map((c) => `<td>${esc(c)}</td>`).join("");
+      const dayCells = r.dayCells
+        .map((c) => (c === "OFF" ? `<td class="off">OFF</td>` : `<td>${esc(c)}</td>`))
+        .join("");
+      const weeklyOffCell =
+        r.weeklyOff && r.weeklyOff !== "-"
+          ? `<td class="off">${esc(r.weeklyOff)}</td>`
+          : `<td>${esc(r.weeklyOff)}</td>`;
       bodyRows += `<tr>
         <td>${r.sr}</td>
         <td class="name">${esc(r.name)}</td>
         <td>${esc(r.designation)}</td>
         <td class="nowrap">${esc(r.cnic)}</td>
         <td class="nowrap">${esc(r.contact)}</td>
-        <td>${esc(r.weeklyOff)}</td>
+        ${weeklyOffCell}
         ${dayCells}
       </tr>`;
     }
@@ -36,7 +42,7 @@ export function openDutyRosterPrint(roster) {
 <title>Duty Roster — ${esc(model.unitName)}</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 12px; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .toolbar { text-align: right; margin-bottom: 8px; }
   .toolbar button { font-size: 13px; padding: 6px 14px; cursor: pointer; }
   .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
@@ -49,6 +55,7 @@ export function openDutyRosterPrint(roster) {
   th { background: #f0f0f0; font-weight: bold; }
   td.name { text-align: left; font-weight: bold; }
   td.nowrap { white-space: nowrap; }
+  td.off { color: #c0392b; font-weight: bold; }
   tr.band td { background: #dfe6ef; font-weight: bold; text-align: center; letter-spacing: 0.5px; font-size: 9px; }
   .footer { margin-top: 16px; font-size: 10px; font-style: italic; color: #555; text-align: center; }
   @media print {
