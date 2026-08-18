@@ -29,7 +29,8 @@ export function openDutyRosterPrint(roster) {
     }
   }
 
-  const logoUrl = `${window.location.origin}/psba.png`;
+  const leftLogo = `${window.location.origin}/psba.png`;
+  const rightLogo = `${window.location.origin}/punjab.png`;
 
   const html = `<!doctype html><html><head><meta charset="utf-8"/>
 <title>Duty Roster — ${esc(model.unitName)}</title>
@@ -49,9 +50,7 @@ export function openDutyRosterPrint(roster) {
   td.name { text-align: left; font-weight: bold; }
   td.nowrap { white-space: nowrap; }
   tr.band td { background: #dfe6ef; font-weight: bold; text-align: center; letter-spacing: 0.5px; font-size: 9px; }
-  .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 18px; font-size: 11px; }
-  .footer .sign { text-align: center; }
-  .footer .sign .line { border-top: 1px solid #333; width: 200px; margin-top: 34px; padding-top: 3px; }
+  .footer { margin-top: 16px; font-size: 10px; font-style: italic; color: #555; text-align: center; }
   @media print {
     .toolbar { display: none; }
     @page { size: A4 landscape; margin: 8mm; }
@@ -60,7 +59,7 @@ export function openDutyRosterPrint(roster) {
 <body>
   <div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button></div>
   <div class="head">
-    <img src="${logoUrl}" alt="logo" onerror="this.style.visibility='hidden'"/>
+    <img src="${leftLogo}" alt="Sahulat" onerror="this.style.visibility='hidden'"/>
     <div class="center">
       <h1>${esc(model.title)}</h1>
       ${model.timing ? `<div class="sub"><b>Bazaar Operational Timing:</b> ${esc(model.timing)}</div>` : ""}
@@ -68,7 +67,7 @@ export function openDutyRosterPrint(roster) {
     model.validTo ? esc(model.validTo) : "ONWARDS (PERMANENT)"
   }</div>
     </div>
-    <img src="${logoUrl}" alt="logo" onerror="this.style.visibility='hidden'"/>
+    <img src="${rightLogo}" alt="Government of Punjab" onerror="this.style.visibility='hidden'"/>
   </div>
   <table>
     <thead>
@@ -85,8 +84,7 @@ export function openDutyRosterPrint(roster) {
     <tbody>${bodyRows}</tbody>
   </table>
   <div class="footer">
-    <div><b>Note:</b> ${model.incharge ? `SB Incharge -- ${esc(model.incharge)}` : ""}</div>
-    <div class="sign"><div class="line">Authorised Signature</div></div>
+    This is a computer generated document and does not require signature.
   </div>
   <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 400); });</script>
 </body></html>`;

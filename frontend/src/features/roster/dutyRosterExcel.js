@@ -84,9 +84,11 @@ export function exportDutyRosterFormExcel(roster) {
     ws,
     r,
     0,
-    model.incharge ? `Note: SB Incharge -- ${model.incharge}` : "Note:",
-    { font: { bold: true, sz: 10 } }
+    "This is a computer generated document and does not require signature.",
+    { font: { italic: true, sz: 9, color: { rgb: "555555" } }, alignment: { horizontal: "center" } }
   );
+  for (let c = 1; c < NCOLS; c++) setCell(ws, r, c, "", {});
+  merges.push({ s: { r, c: 0 }, e: { r, c: NCOLS - 1 } });
 
   ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r, c: NCOLS - 1 } });
   ws["!merges"] = merges;
