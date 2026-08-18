@@ -181,11 +181,11 @@ function resolvePeriod(scope, body) {
     return { roster_type: "PERMANENT", valid_from: toDateOnly(body.valid_from), valid_to: null };
   }
 
-  // MONTHLY: cycle month, or (HQ only) a custom range
+  // MONTHLY: a cycle month, or a custom valid_from/valid_to range (both scopes).
   const cycle = cycleRangeFromMonth(body.month);
   if (cycle) return { roster_type: "MONTHLY", valid_from: cycle.start, valid_to: cycle.end };
 
-  if (scope === "HQ_DEPARTMENT" && body.valid_from && body.valid_to) {
+  if (body.valid_from && body.valid_to) {
     const from = toDateOnly(body.valid_from);
     const to = toDateOnly(body.valid_to);
     if (from > to) return { error: "valid_from must be on or before valid_to" };
@@ -193,10 +193,7 @@ function resolvePeriod(scope, body) {
   }
 
   return {
-    error:
-      scope === "LOCATION"
-        ? "month (YYYY-MM cycle month) is required"
-        : "Provide month (YYYY-MM) or a custom valid_from/valid_to range",
+    error: "Provide a cycle month (YYYY-MM) or a custom valid_from/valid_to range",
   };
 }
 
@@ -291,6 +288,46 @@ function canActOnApproval(user, roster) {
   if (user?.role?.name === "Super Admin") return true; // break-glass
   if (roster.scope === "HQ_DEPARTMENT") return roster.approver_user_id === user.id;
   return user?.role?.name === "Operations";
+}
+
+// Detect double-scheduling: another active (APPROVED/PENDING, non-deleted)
+// roster covering the same date for the same employee. This is a non-blocking
+// warning — overlaps are allowed (newest approved roster wins per date), but
+// the creator is told so it isn't accidental. Returns the first clashing roster
+// and the overlapping employee ids, or null when clear.
+async function findEmployeeDateOverlap({ employeeIds, period, excludeRosterId }, tx = prisma) {
+  if (!employeeIds.length) return null;
+  const and = [{ OR: [{ valid_to: null }, { valid_to: { gte: period.valid_from } }] }];
+  if (period.valid_to) and.push({ valid_from: { lte: period.valid_to } });
+  const where = {
+    is_deleted: false,
+    status: { in: ["APPROVED", "PENDING"] },
+    entries: { some: { employee_id: { in: employeeIds } } },
+    AND: and,
+  };
+  if (excludeRosterId) where.id = { not: excludeRosterId };
+  const clash = await tx.dutyRoster.findFirst({
+    where,
+    orderBy: { id: "desc" },
+    include: {
+      entries: { where: { employee_id: { in: employeeIds } }, select: { employee_id: true } },
+    },
+  });
+  if (!clash) return null;
+  return { roster: clash, employeeIds: clash.entries.map((e) => e.employee_id) };
+}
+
+// Build a human-readable warning for an overlap clash (non-blocking).
+function overlapMessage(overlap, eligible) {
+  const nameOf = new Map((eligible || []).map((e) => [e.id, e.full_name]));
+  const names = overlap.employeeIds.slice(0, 3).map((id) => nameOf.get(id) || `Employee #${id}`);
+  const extra = overlap.employeeIds.length > 3 ? ` and ${overlap.employeeIds.length - 3} more` : "";
+  const verb = overlap.employeeIds.length === 1 ? "already has" : "already have";
+  return (
+    `Heads up: ${names.join(", ")}${extra} ${verb} another roster (#${overlap.roster.id}, ` +
+    `${overlap.roster.status}) covering some of these dates. Both rosters are kept — for any ` +
+    `overlapping date the newest approved roster takes effect.`
+  );
 }
 
 const listInclude = {
@@ -770,6 +807,14 @@ const rosterController = {
       if (normalized.error)
         return res.status(400).json({ success: false, error: normalized.error });
 
+      // Overlapping dates are allowed (newest approved roster wins per date);
+      // surface a non-blocking warning so it isn't done by accident.
+      const overlap = await findEmployeeDateOverlap({
+        employeeIds: normalized.entries.map((e) => e.employee_id),
+        period,
+      });
+      const overlapWarning = overlap ? overlapMessage(overlap, eligible) : null;
+
       const approval = await resolveRosterApprover({
         scope: scopeInfo.scope,
         department_id: scopeInfo.department?.id,
@@ -811,7 +856,7 @@ const rosterController = {
         include: listInclude,
       });
 
-      res.status(201).json({ success: true, roster: created });
+      res.status(201).json({ success: true, roster: created, warning: overlapWarning });
     } catch (e) {
       console.error("Error creating roster", e);
       res.status(500).json({ success: false, error: "Failed to create roster" });
@@ -856,6 +901,15 @@ const rosterController = {
       if (normalized.error)
         return res.status(400).json({ success: false, error: normalized.error });
 
+      // Overlapping dates are allowed (newest approved wins per date); warn only
+      // (excluding the roster being edited itself).
+      const overlap = await findEmployeeDateOverlap({
+        employeeIds: normalized.entries.map((e) => e.employee_id),
+        period,
+        excludeRosterId: id,
+      });
+      const overlapWarning = overlap ? overlapMessage(overlap, eligible) : null;
+
       const approval = await resolveRosterApprover({
         scope: scopeInfo.scope,
         department_id: scopeInfo.department?.id,
@@ -888,7 +942,7 @@ const rosterController = {
         });
       });
 
-      res.json({ success: true, roster: updated });
+      res.json({ success: true, roster: updated, warning: overlapWarning });
     } catch (e) {
       console.error("Error updating roster", e);
       res.status(500).json({ success: false, error: "Failed to update roster" });

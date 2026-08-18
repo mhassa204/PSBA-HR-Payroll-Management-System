@@ -99,7 +99,7 @@ const EditRoster = () => {
     const payload = { title: title || null, roster_type: rosterType, entries };
     if (rosterType === "PERMANENT") {
       payload.valid_from = validFrom;
-    } else if (isHq && customRange) {
+    } else if (customRange) {
       payload.valid_from = validFrom;
       payload.valid_to = validTo;
     } else {
@@ -107,7 +107,8 @@ const EditRoster = () => {
     }
     setSaving(true);
     try {
-      await rosterService.update(roster.id, payload);
+      const res = await rosterService.update(roster.id, payload);
+      if (res?.warning) toastBus.emit({ type: "warning", message: res.warning });
       toastBus.emit({ type: "success", message: "Roster resubmitted for approval" });
       navigate("/rosters");
     } catch (e) {
@@ -188,7 +189,7 @@ const EditRoster = () => {
               onChange={(e) => setValidFrom(e.target.value)}
             />
           </div>
-        ) : isHq && customRange ? (
+        ) : customRange ? (
           <>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Valid From</label>
@@ -223,7 +224,7 @@ const EditRoster = () => {
           </div>
         )}
 
-        {isHq && rosterType === "MONTHLY" && (
+        {rosterType === "MONTHLY" && (
           <div className="flex items-end pb-1">
             <label className="flex items-center gap-2 text-xs text-gray-600">
               <input

@@ -76,7 +76,7 @@ const CreateRoster = () => {
     const payload = { title: title || null, roster_type: rosterType, entries };
     if (rosterType === "PERMANENT") {
       payload.valid_from = validFrom;
-    } else if (customRange && ctx?.scope === "HQ_DEPARTMENT") {
+    } else if (customRange) {
       payload.valid_from = validFrom;
       payload.valid_to = validTo;
     } else {
@@ -84,7 +84,8 @@ const CreateRoster = () => {
     }
     setSaving(true);
     try {
-      await rosterService.create(payload);
+      const res = await rosterService.create(payload);
+      if (res?.warning) toastBus.emit({ type: "warning", message: res.warning });
       toastBus.emit({
         type: "success",
         message: `Roster submitted for approval${ctx?.approver?.email ? ` to ${ctx.approver.email}` : ""}`,
@@ -181,7 +182,7 @@ const CreateRoster = () => {
               onChange={(e) => setValidFrom(e.target.value)}
             />
           </div>
-        ) : customRange && isHq ? (
+        ) : customRange ? (
           <>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Valid From</label>
@@ -219,7 +220,7 @@ const CreateRoster = () => {
           </div>
         )}
 
-        {isHq && rosterType === "MONTHLY" && (
+        {rosterType === "MONTHLY" && (
           <div className="flex items-end pb-1">
             <label className="flex items-center gap-2 text-xs text-gray-600">
               <input
