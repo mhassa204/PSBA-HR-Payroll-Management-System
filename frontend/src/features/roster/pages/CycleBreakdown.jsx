@@ -2,12 +2,23 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import rosterService from "../services/rosterService";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
-import { statusBadgeClass, timeRangeLabel } from "../rosterUtils";
+import { statusBadgeClass, timeRangeLabel, formatTime12 } from "../rosterUtils";
 import {
   designationRank,
   isLongDuty,
   staffCountSummary,
 } from "../../../utils/dutyRoster";
+import { exportToExcel } from "../../../lib/exportUtils";
+
+// Plain-text form of a breakdown cell for the Excel export.
+const cellExportText = (cell) => {
+  if (!cell || cell.kind == null) return "-";
+  if (cell.kind === "weekly_off") return "OFF";
+  if (cell.kind === "offsite")
+    return cell.location ? `OFFSITE: ${cell.location}` : "OFFSITE";
+  const t = `${formatTime12(cell.time_from)} TO ${formatTime12(cell.time_to)}`.toUpperCase();
+  return cell.conflict ? `${t} *` : t;
+};
 
 const SHORT_DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const dowOf = (ymd) => new Date(`${ymd}T00:00:00Z`).getUTCDay();
@@ -95,6 +106,24 @@ const CycleBreakdown = () => {
     return data.dates.filter((_, i) => sortedEmployees.some((e) => e.days[i]?.conflict)).length;
   }, [data, sortedEmployees]);
 
+  const exportGrid = () => {
+    const headers = ["Name", "Designation", ...data.dates];
+    const rows = sortedEmployees.map((e) => {
+      const row = { Name: e.name, Designation: e.designation || "" };
+      data.dates.forEach((ymd, i) => {
+        row[ymd] = cellExportText(e.days[i]);
+      });
+      return row;
+    });
+    exportToExcel(
+      `Cycle_Roster_${(data.unit.name || "Unit").replace(/[\\/:*?"<>|]+/g, "-")}_${data.cycle.month}.xlsx`,
+      rows,
+      "Cycle Roster",
+      headers,
+      `${data.unit.name} — ${data.cycle.label} (combined ${data.rosters.length} roster${data.rosters.length === 1 ? "" : "s"})`
+    );
+  };
+
   if (loading) return <LoadingSpinner text="Loading cycle breakdown..." />;
   if (error) return <div className="p-6 text-red-600">{error}</div>;
   if (!data) return null;
@@ -111,9 +140,14 @@ const CycleBreakdown = () => {
             {data.rosters.length} roster{data.rosters.length === 1 ? "" : "s"} combined
           </p>
         </div>
-        <button onClick={() => navigate("/rosters")} className="btn btn-outline">
-          Back
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportGrid} className="btn btn-secondary">
+            Export Excel
+          </button>
+          <button onClick={() => navigate("/rosters")} className="btn btn-outline">
+            Back
+          </button>
+        </div>
       </div>
 
       {/* The rosters that make up this cycle */}

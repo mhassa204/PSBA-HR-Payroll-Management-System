@@ -19,6 +19,8 @@ import {
   isLongDuty,
   staffCountSummary,
 } from "../../../utils/dutyRoster";
+import { openDutyRosterPrint } from "../dutyRosterPrint";
+import { exportDutyRosterFormExcel } from "../dutyRosterExcel";
 
 const ACTION_LABELS = {
   SUBMITTED: "Submitted",
@@ -142,6 +144,36 @@ const ViewRoster = () => {
           </p>
         </div>
         <div className="actions-inline flex gap-2">
+          <button
+            onClick={() => {
+              if (!openDutyRosterPrint(roster)) {
+                toastBus.emit({
+                  type: "error",
+                  message: "Allow pop-ups to open the printable roster form.",
+                });
+              }
+            }}
+            className="btn btn-primary"
+            title="Open the printable staff duty roster form (Print or Save as PDF)"
+          >
+            Duty Roster Form (PDF)
+          </button>
+          <button
+            onClick={() => {
+              try {
+                exportDutyRosterFormExcel(roster);
+              } catch (e) {
+                toastBus.emit({
+                  type: "error",
+                  message: "Failed to export the roster form to Excel.",
+                });
+              }
+            }}
+            className="btn btn-secondary"
+            title="Download the staff duty roster form as an Excel file"
+          >
+            Form (Excel)
+          </button>
           {canModify(roster, user) && (
             <button
               onClick={() => navigate(`/rosters/${roster.id}/edit`)}
