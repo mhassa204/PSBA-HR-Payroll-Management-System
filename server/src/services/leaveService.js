@@ -542,17 +542,34 @@ module.exports = {
     // (bazaars, mobile bazaars, special units). Per the HR-approved
     // workflow: Regional Incharge (recommendation) -> Operations Wing.
     // Regional Incharges are users with the "Regional Incharge" role whose
-    // RegionalAssignment rows cover the applicant's location; if none is
-    // assigned the leave goes straight to Operations.
+    // the bazaar's Regional Incharge (Location.regional_incharge_id, managed in
+    // the Regional Incharge module); if the bazaar has none the leave goes
+    // straight to Operations.
     if (applicantEmp.location && applicantEmp.location.type !== "HEAD_OFFICE") {
-      const regionalUsers = await tx.user.findMany({
-        where: {
-          is_deleted: false,
-          role: { name: "Regional Incharge", is_deleted: false, enabled: true },
-          regionalAssignments: { some: { location_id: applicantEmp.location.id } },
+      // The bazaar's Regional Incharge (Regional Incharge module) recommends.
+      // Coverage lives on Location.regional_incharge_id; we then need that
+      // person's login to route to. No incharge, or no account for them, and
+      // the leave goes straight to Operations as before.
+      const bazaar = await tx.location.findUnique({
+        where: { id: applicantEmp.location.id },
+        select: {
+          regionalIncharge: {
+            select: { is_active: true, is_deleted: true, employee_id: true },
+          },
         },
-        select: { id: true, email: true },
       });
+      const incharge = bazaar?.regionalIncharge;
+      const regionalUsers =
+        incharge && incharge.is_active && !incharge.is_deleted
+          ? await tx.user.findMany({
+              where: {
+                is_deleted: false,
+                employee_id: incharge.employee_id,
+                role: { is: { is_deleted: false, enabled: true } },
+              },
+              select: { id: true, email: true },
+            })
+          : [];
       const operationsUsers = await tx.user.findMany({
         where: {
           is_deleted: false,
@@ -1580,39 +1597,44 @@ module.exports = {
     });
   },
   // ---- Workflow administration -------------------------------------
+  // Read-only view of the Regional Incharge module, kept so the Leave Workflow
+  // settings screen can show who recommends for which bazaars. Coverage is
+  // edited in the Regional Incharge module, not here.
   listRegionalAssignments: async () => {
-    const users = await prisma.user.findMany({
-      where: { is_deleted: false, role: { name: "Regional Incharge", is_deleted: false } },
+    const incharges = await prisma.regionalIncharge.findMany({
+      where: { is_deleted: false },
       select: {
         id: true,
-        email: true,
-        employee: { select: { full_name: true } },
-        regionalAssignments: { select: { location: { select: { id: true, name: true, type: true } } } },
+        region_name: true,
+        is_active: true,
+        employee: {
+          select: { id: true, full_name: true, user: { select: { id: true, email: true } } },
+        },
+        locations: {
+          select: { id: true, name: true, type: true },
+          orderBy: { name: "asc" },
+        },
       },
-      orderBy: { email: "asc" },
+      orderBy: { region_name: "asc" },
     });
-    return users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      name: u.employee?.full_name || null,
-      locations: u.regionalAssignments.map((a) => a.location),
+    return incharges.map((r) => ({
+      id: r.id,
+      region_name: r.region_name,
+      is_active: r.is_active,
+      email: r.employee?.user?.email || null,
+      name: r.employee?.full_name || null,
+      // A region with no login cannot receive the recommendation stage
+      has_account: !!r.employee?.user,
+      locations: r.locations,
     }));
   },
-  setRegionalAssignments: async (userId, locationIds) => {
-    const user = await prisma.user.findFirst({
-      where: { id: Number(userId), is_deleted: false },
-      include: { role: true },
-    });
-    if (!user) throw new Error("User not found");
-    if (user.role?.name !== "Regional Incharge") throw new Error("User is not a Regional Incharge");
-    const ids = [...new Set((locationIds || []).map(Number).filter(Boolean))];
-    await prisma.$transaction([
-      prisma.regionalAssignment.deleteMany({ where: { user_id: user.id } }),
-      ...(ids.length
-        ? [prisma.regionalAssignment.createMany({ data: ids.map((l) => ({ user_id: user.id, location_id: l })) })]
-        : []),
-    ]);
-    return { count: ids.length };
+  // Retired: bazaar coverage moved to the Regional Incharge module, where it is
+  // one column on the bazaar (Location.regional_incharge_id) rather than a
+  // separate list per user. Kept so any old client gets a clear message.
+  setRegionalAssignments: async () => {
+    throw new Error(
+      "Bazaar coverage is now managed in the Regional Incharges module (Regional Incharges > All Regions)."
+    );
   },
   getDgRulesSetting: () => getDgRules(),
   saveDgRulesSetting: async (value, userId) => {

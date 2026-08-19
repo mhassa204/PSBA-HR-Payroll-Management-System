@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from '../../../lib/axios';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import { toastBus } from '../../../utils/toastBus';
@@ -9,56 +9,26 @@ import { toastBus } from '../../../utils/toastBus';
 const LeaveWorkflowSettings = () => {
   const [loading, setLoading] = useState(true);
   const [riUsers, setRiUsers] = useState([]);
-  const [locations, setLocations] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [dg, setDg] = useState({ enabled: false, rules: [] });
-  const [savingUser, setSavingUser] = useState(null);
   const [savingRules, setSavingRules] = useState(false);
-  const [draftLocs, setDraftLocs] = useState({}); // userId -> Set(location_id)
 
   const load = async () => {
     try {
       setLoading(true);
-      const [ri, locs, types, rules] = await Promise.all([
+      const [ri, types, rules] = await Promise.all([
         axios.get('/leaves/workflow/regional-assignments'),
-        axios.get('/attendance/locations'),
         axios.get('/leave-banks/types').catch(() => ({ data: { types: [] } })),
         axios.get('/leaves/workflow/dg-rules'),
       ]);
       setRiUsers(ri.data.users || []);
-      setLocations((locs.data.locations || []).filter((l) => l.type !== 'HEAD_OFFICE'));
       setLeaveTypes(types.data.types || []);
       setDg({ enabled: !!rules.data.enabled, rules: rules.data.rules || [] });
-      const drafts = {};
-      for (const u of ri.data.users || []) drafts[u.id] = new Set(u.locations.map((l) => l.id));
-      setDraftLocs(drafts);
     } catch (e) {
       toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to load workflow settings' });
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
-
-  const toggleLoc = (userId, locId) => {
-    setDraftLocs((prev) => {
-      const next = { ...prev };
-      const set = new Set(next[userId] || []);
-      if (set.has(locId)) set.delete(locId); else set.add(locId);
-      next[userId] = set;
-      return next;
-    });
-  };
-
-  const saveUser = async (userId) => {
-    try {
-      setSavingUser(userId);
-      await axios.put(`/leaves/workflow/regional-assignments/${userId}`, {
-        location_ids: [...(draftLocs[userId] || [])],
-      });
-      toastBus.emit({ type: 'success', message: 'Coverage saved' });
-    } catch (e) {
-      toastBus.emit({ type: 'error', message: e?.response?.data?.error || 'Failed to save coverage' });
-    } finally { setSavingUser(null); }
-  };
 
   const saveRules = async () => {
     try {
@@ -72,8 +42,6 @@ const LeaveWorkflowSettings = () => {
 
   const setRule = (idx, patch) => setDg((d) => ({ ...d, rules: d.rules.map((r, i) => (i === idx ? { ...r, ...patch } : r)) }));
 
-  const locById = useMemo(() => new Map(locations.map((l) => [l.id, l])), [locations]);
-
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" text="Loading workflow settings..." /></div>;
 
   return (
@@ -85,30 +53,50 @@ const LeaveWorkflowSettings = () => {
         </p>
       </div>
 
-      <div className="card-soft p-4 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700">Regional Incharge coverage</h2>
-          <p className="text-xs text-gray-500">Users with the "Regional Incharge" role and the locations whose leave applications they recommend. Create the accounts in Users first.</p>
-        </div>
-        {!riUsers.length && <div className="text-xs text-gray-500">No Regional Incharge users yet — create a user with the "Regional Incharge" role in the Users screen.</div>}
-        {riUsers.map((u) => (
-          <div key={u.id} className="border border-gray-200 rounded p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">{u.name || u.email} <span className="text-xs text-gray-500">({u.email})</span> <span className="badge badge-blue ml-2">{(draftLocs[u.id] || new Set()).size} location(s)</span></div>
-              <button className="btn btn-primary btn-sm text-xs" disabled={savingUser === u.id} onClick={() => saveUser(u.id)}>
-                {savingUser === u.id ? 'Saving…' : 'Save coverage'}
-              </button>
-            </div>
-            <div className="max-h-44 overflow-y-auto custom-thin-scroll grid grid-cols-1 md:grid-cols-3 gap-1 text-xs">
-              {locations.map((l) => (
-                <label key={l.id} className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={(draftLocs[u.id] || new Set()).has(l.id)} onChange={() => toggleLoc(u.id, l.id)} />
-                  <span className="truncate" title={l.name}>{l.name}</span>
-                </label>
-              ))}
-            </div>
+      {/* Coverage is owned by the Regional Incharges module now — this is a
+          read-only summary so the workflow can be understood from one screen. */}
+      <div className="card-soft p-4 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">Regional Incharge coverage</h2>
+            <p className="text-xs text-gray-500">
+              Which bazaars each regional incharge recommends leave for. Edit this in the Regional
+              Incharges module — a bazaar has exactly one incharge there.
+            </p>
           </div>
-        ))}
+          <a href="/regional-incharges" className="btn btn-outline btn-sm text-xs">
+            Open Regional Incharges
+          </a>
+        </div>
+        {!riUsers.length ? (
+          <div className="text-xs text-gray-500">
+            No regions defined yet — add them in Regional Incharges.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {riUsers.map((r) => (
+              <div key={r.id} className="border border-gray-200 rounded p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">
+                    {r.region_name}
+                    <span className="text-xs text-gray-500 ml-2">{r.name || "—"}</span>
+                  </div>
+                  <span className="badge badge-blue">{r.locations?.length || 0} bazaars</span>
+                </div>
+                {!r.has_account && (
+                  <div className="text-[11px] text-amber-700">
+                    No login for this incharge — leave will skip the recommendation stage and go
+                    straight to Operations.
+                  </div>
+                )}
+                {!r.is_active && <span className="badge badge-gray">INACTIVE</span>}
+                <div className="text-[11px] text-gray-500 truncate" title={(r.locations || []).map((l) => l.name).join(", ")}>
+                  {(r.locations || []).map((l) => l.name).join(", ") || "no bazaars assigned"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card-soft p-4 space-y-3">

@@ -220,6 +220,23 @@ const PlaneIcon = () => (
   </svg>
 );
 
+const MapPinIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z"
+    />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
 const LeftSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -346,6 +363,28 @@ const LeftSidebar = () => {
           href: "/rosters/approvals",
           icon: CheckCircleIcon,
           show: () => can("roster.approve"),
+        },
+      ],
+    },
+    {
+      name: "Regional Incharges",
+      href: "/regional-incharges",
+      icon: MapPinIcon,
+      description: "Regions & Bazaar Oversight",
+      color: "bg-teal-600",
+      show: () => can("regional_incharge.read"),
+      children: [
+        {
+          name: "All Regions",
+          href: "/regional-incharges",
+          icon: ViewColumnsIcon,
+          show: () => can("regional_incharge.read"),
+        },
+        {
+          name: "Bazaars by Incharge",
+          href: "/regional-incharges/bazaars",
+          icon: MapPinIcon,
+          show: () => can("regional_incharge.read"),
         },
       ],
     },

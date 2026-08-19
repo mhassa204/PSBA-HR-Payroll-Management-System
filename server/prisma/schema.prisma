@@ -67,6 +67,8 @@ model Employee {
   travelRequestStatusActions TravelRequestStatusEntry[]
   // Add missing back relation for travel claim status entries
   travelClaimStatusEntries TravelClaimStatusEntry[]
+  // Back-relation: the region this employee oversees, if any
+  regionalIncharge        RegionalIncharge?
   // New: back relation for departments headed by this employee
   headedDepartments       Department[]            @relation("DepartmentHead")
   // Back-relation: leaves where this employee is backup
@@ -504,9 +506,40 @@ model Location {
   users           User[]     @relation(name: "UserLocation")
   // back relation: regional incharge coverage
   regionalAssignments RegionalAssignment[] @relation(name: "LocationRegionalAssignments")
+  // The Regional Incharge who oversees this bazaar. One per bazaar; an
+  // incharge holds many. Assignable from either side in the UI.
+  regional_incharge_id Int?
+  regionalIncharge     RegionalIncharge? @relation(fields: [regional_incharge_id], references: [id], onDelete: SetNull)
 
   @@index([district_id])
   @@index([city_id])
+  @@index([regional_incharge_id])
+}
+
+// Regional Incharge — an employee who oversees a set of bazaars as an
+// additional duty (they remain posted at their own bazaar). The region name is
+// held here, so a region can be named, listed while empty, and handed to a
+// successor without touching every bazaar row.
+//
+// Regional Incharges recommend LEAVE for their bazaars (see leaveService).
+// They are deliberately NOT part of duty roster approval — bazaar rosters go
+// straight to Operations.
+model RegionalIncharge {
+  id             Int      @id @default(autoincrement())
+  employee_id    Int      @unique
+  // e.g. "Lahore-1", "Sargodha & Rawalpindi"
+  region_name    String   @unique
+  contact_number String?
+  notes          String?
+  is_active      Boolean  @default(true)
+  is_deleted     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  employee  Employee   @relation(fields: [employee_id], references: [id])
+  locations Location[]
+
+  @@index([is_active])
 }
 
 // New: Duty Roster master

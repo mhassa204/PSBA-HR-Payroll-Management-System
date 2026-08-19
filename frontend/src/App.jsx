@@ -41,6 +41,9 @@ import EditRoster from "./features/roster/pages/EditRoster";
 import ViewRoster from "./features/roster/pages/ViewRoster";
 import CycleBreakdown from "./features/roster/pages/CycleBreakdown";
 import RosterApprovalsPage from "./features/roster/pages/RosterApprovalsPage";
+import RegionalInchargeList from "./features/regionalIncharge/pages/RegionalInchargeList";
+import RegionalInchargeDetail from "./features/regionalIncharge/pages/RegionalInchargeDetail";
+import BazaarInchargeView from "./features/regionalIncharge/pages/BazaarInchargeView";
 import AttendanceDashboard from "./features/attendance/pages/AttendanceDashboard";
 import AttendanceLocations from "./features/attendance/pages/AttendanceLocations";
 import AttendanceLocationDetail from "./features/attendance/pages/AttendanceLocationDetail";
@@ -223,6 +226,32 @@ function App() {
               element={
                 <PrivateRoute permissions={["dashboard.read"]}>
                   <Dashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Regional Incharge routes */}
+            <Route
+              path="regional-incharges"
+              element={
+                <PrivateRoute permissions={["regional_incharge.read"]}>
+                  <RegionalInchargeList />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="regional-incharges/bazaars"
+              element={
+                <PrivateRoute permissions={["regional_incharge.read"]}>
+                  <BazaarInchargeView />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="regional-incharges/:id"
+              element={
+                <PrivateRoute permissions={["regional_incharge.read"]}>
+                  <RegionalInchargeDetail />
                 </PrivateRoute>
               }
             />
