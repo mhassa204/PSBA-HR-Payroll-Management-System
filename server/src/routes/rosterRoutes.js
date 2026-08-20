@@ -63,6 +63,14 @@ router.post(
 
 router.get("/:id", isAuthenticated, authorize("roster.read"), rosterController.getById);
 
+// Per-employee diff against the other rosters covering the same bazaar+period
+router.get(
+  "/:id/overlaps",
+  isAuthenticated,
+  authorize("roster.read"),
+  rosterController.overlaps
+);
+
 // Create/edit/delete are creator-scoped (ownership checked in the controller)
 router.post("/", isAuthenticated, authorize("roster.create"), rosterController.create);
 router.put("/:id", isAuthenticated, authorize("roster.create"), rosterController.update);

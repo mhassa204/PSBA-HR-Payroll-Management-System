@@ -21,6 +21,16 @@ class LocationService {
     return data.location || data;
   }
 
+  // Bazaar operational hours only - the narrow endpoint Operations is
+  // allowed to use (locations.timing.update).
+  async updateTiming(id, opening_time, closing_time) {
+    const { data } = await axiosInstance.patch(`/locations/${id}/timing`, {
+      opening_time,
+      closing_time,
+    });
+    return data;
+  }
+
   async deleteLocation(id) {
     const { data } = await axiosInstance.delete(`/locations/${id}`);
     return data;

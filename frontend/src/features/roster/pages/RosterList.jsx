@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import rosterService from "../services/rosterService";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import Pagination from "../../../components/ui/Pagination";
@@ -13,6 +13,7 @@ import {
   approverLabel,
   canModify,
   canDelete,
+  effectiveState,
   currentCycleMonth,
   cycleMonthLabel,
   cycleMonthRange,
@@ -65,15 +66,47 @@ const RosterList = () => {
   const [data, setData] = useState({ rosters: [], total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
 
-  // Filters
-  const [month, setMonth] = useState(""); // "" = all months
-  const [status, setStatus] = useState("ALL");
-  const [scope, setScope] = useState("ALL");
-  const [sort, setSort] = useState("recent");
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
+  // Filters live in the query string, not component state: opening a roster and
+  // coming back (browser Back, or the View page's Back button) restores the
+  // exact same filtered page instead of dumping you on an unfiltered page 1.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const month = searchParams.get("month") || "";
+  const status = searchParams.get("status") || "ALL";
+  const scope = searchParams.get("scope") || "ALL";
+  const region = searchParams.get("region") || "ALL";
+  const sort = searchParams.get("sort") || "recent";
+  const search = searchParams.get("q") || "";
+  const page = Number(searchParams.get("page")) || 1;
+  const limit = Number(searchParams.get("limit")) || 25;
+  const groupByRegion = searchParams.get("group") !== "off";
+  // "bazaar" = one row per bazaar for the month (the simple view);
+  // "list" = one row per roster document.
+  const view = searchParams.get("view") === "list" ? "list" : "bazaar";
+
+  // The search box is local while typing; it lands in the URL after a pause.
+  const [searchInput, setSearchInput] = useState(search);
+
+  // Values equal to the default are dropped so the URL stays short and a bare
+  // /rosters is the clean default view.
+  const DEFAULTS = { status: "ALL", scope: "ALL", region: "ALL", sort: "recent", page: 1, limit: 25 };
+  const applyParams = (patch, { keepPage = false } = {}) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(patch)) {
+          const isDefault =
+            value === "" || value === null || value === undefined ||
+            String(value) === String(DEFAULTS[key]);
+          if (isDefault) next.delete(key);
+          else next.set(key, String(value));
+        }
+        // any filter change restarts at page 1
+        if (!keepPage && !("page" in patch)) next.delete("page");
+        return next;
+      },
+      { replace: true }
+    );
+  };
 
   // Coverage (always for a concrete cycle month)
   const coverageMonth = month || currentCycleMonth();
@@ -103,27 +136,26 @@ const RosterList = () => {
 
   // Debounce the search box so typing doesn't hammer the API
   useEffect(() => {
-    const t = setTimeout(() => {
-      const next = searchInput.trim();
-      setSearch((prev) => {
-        if (prev !== next) setPage(1);
-        return next;
-      });
-    }, 400);
+    const next = searchInput.trim();
+    if (next === search) return;
+    const t = setTimeout(() => applyParams({ q: next }), 400);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
-  // Changing a filter always restarts at page 1. Batched with the filter change
-  // itself (same event) so the list is fetched once, not twice.
-  const withPageReset = (setter) => (value) => {
-    setter(value);
-    setPage(1);
-  };
-  const changeMonth = withPageReset(setMonth);
-  const changeStatus = withPageReset(setStatus);
-  const changeScope = withPageReset(setScope);
-  const changeSort = withPageReset(setSort);
-  const changeLimit = withPageReset(setLimit);
+  // Keep the box in step when the URL changes from elsewhere (Back, a tile
+  // click, Reset) rather than letting it drift from what is actually filtered.
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  const changeMonth = (v) => applyParams({ month: v });
+  const changeStatus = (v) => applyParams({ status: v });
+  const changeScope = (v) => applyParams({ scope: v });
+  const changeRegion = (v) => applyParams({ region: v });
+  const changeSort = (v) => applyParams({ sort: v });
+  const changeLimit = (v) => applyParams({ limit: v });
+  const changePage = (v) => applyParams({ page: v }, { keepPage: true });
 
   const loadList = async () => {
     setLoading(true);
@@ -131,12 +163,13 @@ const RosterList = () => {
       const params = { page, limit, sort };
       if (status !== "ALL") params.status = status;
       if (scope !== "ALL") params.scope = scope;
+      if (region !== "ALL") params.region_id = region;
       if (month) params.month = month;
       if (search) params.search = search;
       const res = await rosterService.list(params);
       setData(res);
       // The server clamps a stale page to the last available one
-      if (res.page && res.page !== page) setPage(res.page);
+      if (res.page && res.page !== page) changePage(res.page);
     } catch (e) {
       toastBus.emit({
         type: "error",
@@ -162,7 +195,7 @@ const RosterList = () => {
   useEffect(() => {
     loadList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, status, scope, month, search, sort]);
+  }, [page, limit, status, scope, region, month, search, sort]);
 
   useEffect(() => {
     loadCoverage();
@@ -267,25 +300,21 @@ const RosterList = () => {
       : grace?.departments?.find((d) => String(d.id) === String(graceTarget))?.roster_count ?? 0;
 
   const resetFilters = () => {
-    setMonth("");
-    setStatus("ALL");
-    setScope("ALL");
-    setSort("recent");
     setSearchInput("");
-    setSearch("");
-    setLimit(25);
-    setPage(1);
+    setSearchParams(new URLSearchParams(), { replace: true });
   };
 
   const filtersActive =
-    month || status !== "ALL" || scope !== "ALL" || search || sort !== "recent";
+    month ||
+    status !== "ALL" ||
+    scope !== "ALL" ||
+    region !== "ALL" ||
+    search ||
+    sort !== "recent";
 
-  // Clicking a coverage tile filters the table to the matching rosters
+  // Clicking a KPI tile filters the table to exactly the rosters it counted
   const applyCoverageFilter = (unitScope, unitStatus) => {
-    setMonth(coverageMonth);
-    setScope(unitScope);
-    setStatus(unitStatus);
-    setPage(1);
+    applyParams({ month: coverageMonth, scope: unitScope, status: unitStatus });
   };
 
   // Units without a roster have nothing to show in the table — list them instead
@@ -305,6 +334,89 @@ const RosterList = () => {
 
   const typeLabel = (r) =>
     r.roster_type === "PERMANENT" ? "Permanent" : cycleLabel(r) || "Monthly";
+
+  // Regions come from the coverage payload — every bazaar carries the region it
+  // belongs to, so no extra request is needed.
+  const regionOptions = useMemo(() => {
+    const map = new Map();
+    for (const u of coverage?.units || []) {
+      if (u.scope !== "LOCATION" || !u.region_id) continue;
+      if (!map.has(u.region_id)) {
+        map.set(u.region_id, { id: u.region_id, name: u.region_name, incharge: u.region_incharge });
+      }
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [coverage]);
+
+  // One row per bazaar/department for the selected month: how many of its
+  // rosters are approved, which one is applied, and which are still pending.
+  const unitRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (coverage?.units || [])
+      .filter((u) => (scope === "ALL" ? true : u.scope === scope))
+      .filter((u) => {
+        if (region === "ALL") return true;
+        if (region === "none") return u.scope === "LOCATION" && !u.region_id;
+        return String(u.region_id) === String(region);
+      })
+      .filter((u) => {
+        if (status === "ALL") return true;
+        if (status === "APPROVED") return (u.approved_ids || []).length > 0;
+        if (status === "PENDING") return (u.pending_ids || []).length > 0;
+        if (status === "REJECTED") return (u.rejected_ids || []).length > 0;
+        return true;
+      })
+      .filter((u) =>
+        q
+          ? [u.name, u.region_name, u.region_incharge]
+              .filter(Boolean)
+              .some((v) => String(v).toLowerCase().includes(q)) ||
+            [...(u.approved_ids || []), ...(u.pending_ids || [])].some((id) =>
+              String(id).includes(q)
+            )
+          : true
+      )
+      .sort((a, b) => {
+        // things needing attention first: pending, then nothing created
+        const rank = (u) =>
+          (u.pending_ids || []).length ? 0 : u.roster_count === 0 ? 1 : 2;
+        return rank(a) - rank(b) || a.name.localeCompare(b.name);
+      });
+  }, [coverage, scope, region, status, search]);
+
+  const regionOfRoster = (r) => {
+    if (r.scope === "HQ_DEPARTMENT") {
+      return { key: "hq", name: "HQ Departments", incharge: null };
+    }
+    const ri = r.location?.regionalIncharge;
+    if (!ri) return { key: "none", name: "No region assigned", incharge: null };
+    return { key: `r${ri.id}`, name: ri.region_name, incharge: ri.employee?.full_name || null };
+  };
+
+  // Rows grouped region-wise for display. Grouping is per page — the server
+  // still paginates, so a region's rosters can span pages.
+  // Serial numbers stay continuous down the page even when rows are grouped
+  const rowIndex = useMemo(() => {
+    const m = new Map();
+    (data.rosters || []).forEach((r, i) => m.set(r.id, i));
+    return m;
+  }, [data.rosters]);
+
+  const groupedRows = useMemo(() => {
+    const rows = data.rosters || [];
+    if (!groupByRegion) return [{ key: "all", name: null, incharge: null, rows }];
+    const groups = new Map();
+    rows.forEach((r) => {
+      const g = regionOfRoster(r);
+      if (!groups.has(g.key)) groups.set(g.key, { ...g, rows: [] });
+      groups.get(g.key).rows.push(r);
+    });
+    // HQ and unassigned sit at the end; named regions alphabetical
+    return [...groups.values()].sort((a, b) => {
+      const rank = (x) => (x.key === "hq" ? 2 : x.key === "none" ? 1 : 0);
+      return rank(a) - rank(b) || (a.name || "").localeCompare(b.name || "");
+    });
+  }, [data.rosters, groupByRegion]);
 
   // The cycle month a roster belongs to (named by the month its validity ends in).
   const rosterCycleMonth = (r) => {
@@ -412,59 +524,92 @@ const RosterList = () => {
                 <div className="text-xs font-medium text-gray-600 mb-1.5">
                   {g.title}{" "}
                   <span className="text-gray-400">
-                    ({g.stats.created} of {g.stats.total} created)
+                    ({g.stats.rosters.total} roster
+                    {g.stats.rosters.total === 1 ? "" : "s"} from {g.stats.created} of{" "}
+                    {g.stats.total} units)
                   </span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+
+                {/* Roster counts — these are what the table below lists, so a
+                    tile and the result count always agree. */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <StatTile
-                    label="Total units"
-                    value={g.stats.total}
-                    title={`All ${g.title.toLowerCase()} expected to submit a roster`}
-                    onClick={() => openDetail(g.key, ["APPROVED", "PENDING", "REJECTED", "NOT_CREATED"], `${g.title} — all units`)}
+                    label="Rosters"
+                    value={g.stats.rosters.total}
+                    title="Roster documents falling inside this cycle"
+                    onClick={() => applyCoverageFilter(g.key, "ALL")}
                   />
                   <StatTile
-                    label="Created"
+                    label="Approved"
+                    value={g.stats.rosters.approved}
+                    tone="green"
+                    title="Approved rosters in this cycle"
+                    onClick={() => applyCoverageFilter(g.key, "APPROVED")}
+                  />
+                  <StatTile
+                    label="Pending"
+                    value={g.stats.rosters.pending}
+                    tone="amber"
+                    title="Submitted and waiting for approval"
+                    onClick={() => applyCoverageFilter(g.key, "PENDING")}
+                  />
+                  <StatTile
+                    label="Rejected"
+                    value={g.stats.rosters.rejected}
+                    tone="red"
+                    title="Rejected — the unit must correct and resubmit"
+                    onClick={() => applyCoverageFilter(g.key, "REJECTED")}
+                  />
+                </div>
+
+                {/* Unit coverage — a different question: how many bazaars have
+                    anything at all. A bazaar with 3 rosters counts once here. */}
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <StatTile
+                    label="Units total"
+                    value={g.stats.total}
+                    title={`All ${g.title.toLowerCase()} expected to submit a roster`}
+                    onClick={() =>
+                      openDetail(
+                        g.key,
+                        ["APPROVED", "PENDING", "REJECTED", "NOT_CREATED"],
+                        `${g.title} — all units`
+                      )
+                    }
+                  />
+                  <StatTile
+                    label="Units covered"
                     value={g.stats.created}
                     tone="blue"
                     title="Units that submitted at least one roster for this cycle"
-                    onClick={() => applyCoverageFilter(g.key, "ALL")}
+                    onClick={() =>
+                      openDetail(
+                        g.key,
+                        ["APPROVED", "PENDING", "REJECTED"],
+                        `${g.title} — units with a roster`
+                      )
+                    }
                   />
                   <StatTile
                     label="Not created"
                     value={g.stats.notCreated}
                     tone="red"
                     title="Units with no roster at all for this cycle — click to list them"
-                    onClick={() => openDetail(g.key, ["NOT_CREATED"], `${g.title} — no roster for ${cycleMonthLabel(coverageMonth)}`)}
-                  />
-                  <StatTile
-                    label="Pending"
-                    value={g.stats.pending}
-                    tone="amber"
-                    title="Submitted and waiting for approval"
-                    onClick={() => applyCoverageFilter(g.key, "PENDING")}
-                  />
-                  <StatTile
-                    label="Approved"
-                    value={g.stats.approved}
-                    tone="green"
-                    title="Approved and in force for this cycle"
-                    onClick={() => applyCoverageFilter(g.key, "APPROVED")}
+                    onClick={() =>
+                      openDetail(
+                        g.key,
+                        ["NOT_CREATED"],
+                        `${g.title} — no roster for ${cycleMonthLabel(coverageMonth)}`
+                      )
+                    }
                   />
                 </div>
-                {g.stats.rejected > 0 && (
-                  <button
-                    onClick={() => applyCoverageFilter(g.key, "REJECTED")}
-                    className="text-[11px] text-red-600 mt-1.5 hover:underline"
-                  >
-                    {g.stats.rejected} unit(s) currently rejected — needs correction
-                  </button>
-                )}
               </div>
             ))}
             <p className="text-[11px] text-gray-400 pt-1">
-              {coverage.totalRosters} roster(s) fall inside this cycle. A unit that submitted more
-              than one roster is counted once, by its best status (approved &gt; pending &gt;
-              rejected).
+              Top row counts roster documents (what the table lists). Bottom row counts units — a
+              bazaar that filed several rosters for this cycle is one covered unit but several
+              rosters, which is why the two rows differ.
             </p>
           </div>
         )}
@@ -486,15 +631,39 @@ const RosterList = () => {
             <label className="block text-[11px] font-medium text-gray-600 mb-1">Month (cycle)</label>
             <select
               className="form-input w-full"
-              value={month}
+              /* The by-bazaar view summarises one cycle, so "All months" is not
+                 a state it can be in — show the cycle actually on screen. */
+              value={view === "bazaar" ? coverageMonth : month}
               onChange={(e) => changeMonth(e.target.value)}
             >
-              <option value="">All months</option>
+              {view === "list" && <option value="">All months</option>}
               {monthOptions.map((m) => (
                 <option key={m} value={m}>
                   {cycleMonthLabel(m)} ({cycleMonthRange(m)})
                 </option>
               ))}
+            </select>
+            {view === "bazaar" && (
+              <p className="text-[11px] text-gray-400 mt-1">
+                One cycle at a time — switch to "All rosters" to see every month.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-gray-600 mb-1">Region</label>
+            <select
+              className="form-input w-full"
+              value={region}
+              onChange={(e) => changeRegion(e.target.value)}
+            >
+              <option value="ALL">All regions</option>
+              {regionOptions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                  {r.incharge ? ` — ${r.incharge}` : ""}
+                </option>
+              ))}
+              <option value="none">No region assigned</option>
             </select>
           </div>
           <div>
@@ -537,18 +706,157 @@ const RosterList = () => {
               {s === "ALL" ? "All" : s.charAt(0) + s.slice(1).toLowerCase()}
             </button>
           ))}
+          <div className="flex items-center gap-1 ml-1">
+            <button
+              onClick={() => applyParams({ view: "" })}
+              className={`btn btn-sm ${view === "bazaar" ? "btn-primary" : "btn-outline"}`}
+              title="One row per bazaar for the selected month"
+            >
+              By bazaar
+            </button>
+            <button
+              onClick={() => applyParams({ view: "list" })}
+              className={`btn btn-sm ${view === "list" ? "btn-primary" : "btn-outline"}`}
+              title="One row per roster document"
+            >
+              All rosters
+            </button>
+          </div>
+          {view === "list" && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 ml-1">
+              <input
+                type="checkbox"
+                checked={groupByRegion}
+                onChange={(e) => applyParams({ group: e.target.checked ? "" : "off" })}
+              />
+              Group by region
+            </label>
+          )}
           {filtersActive && (
             <button onClick={resetFilters} className="btn btn-sm btn-ghost">
               Reset filters
             </button>
           )}
           <span className="text-xs text-gray-500 ml-auto">
-            {loading ? "Loading…" : `${data.total ?? 0} roster(s) found`}
+            {view === "bazaar"
+              ? `${unitRows.length} bazaar/department(s) — ${cycleMonthLabel(coverageMonth)}`
+              : loading
+              ? "Loading…"
+              : `${data.total ?? 0} roster(s) found`}
           </span>
         </div>
       </div>
 
-      {loading ? (
+      {view === "bazaar" ? (
+        coverageLoading ? (
+          <LoadingSpinner text="Loading bazaars..." />
+        ) : !unitRows.length ? (
+          <div className="card-soft p-8 text-center text-sm text-gray-500">
+            No bazaars or departments match the current filters.
+          </div>
+        ) : (
+          <div className="table-shell card-soft p-0 custom-thin-scroll overflow-x-auto">
+            <table className="table-enhanced min-w-full">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th className="text-left">Bazaar / Department</th>
+                  <th className="text-left">Region</th>
+                  <th className="text-left">Approved</th>
+                  <th className="text-left">In force</th>
+                  <th className="text-left">Awaiting approval</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unitRows.map((u, i) => {
+                  const approved = u.approved_ids || [];
+                  const pending = u.pending_ids || [];
+                  const rejected = u.rejected_ids || [];
+                  return (
+                    <tr key={`${u.scope}-${u.id}`} className={pending.length ? "bg-amber-50/40" : ""}>
+                      <td className="text-gray-500">{i + 1}</td>
+                      <td className="text-left">
+                        <div className="font-medium text-gray-800">{u.name}</div>
+                        {rejected.length > 0 && (
+                          <div className="text-[11px] text-red-600">
+                            rejected:{" "}
+                            {rejected.map((id, k) => (
+                              <span key={id}>
+                                {k > 0 && ", "}
+                                <button
+                                  onClick={() => navigate(`/rosters/${id}`)}
+                                  className="hover:underline font-medium"
+                                >
+                                  #{id}
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-left text-gray-600">
+                        {u.scope === "HQ_DEPARTMENT" ? "HQ" : u.region_name || "—"}
+                      </td>
+                      <td className="text-left whitespace-nowrap">
+                        {u.roster_count === 0 ? (
+                          <span className="badge badge-gray">none created</span>
+                        ) : (
+                          <span
+                            className={
+                              approved.length
+                                ? "font-semibold text-green-700"
+                                : "font-semibold text-amber-700"
+                            }
+                            title={`${approved.length} of this bazaar's ${u.roster_count} roster(s) for this month are approved`}
+                          >
+                            {approved.length} / {u.roster_count} approved
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-left whitespace-nowrap">
+                        {u.in_force_id ? (
+                          <button
+                            onClick={() => navigate(`/rosters/${u.in_force_id}`)}
+                            className="text-green-700 font-medium hover:underline"
+                            title="The roster attendance is actually using — open it"
+                          >
+                            #{u.in_force_id}
+                          </button>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="text-left">
+                        {!pending.length ? (
+                          <span className="text-gray-400">—</span>
+                        ) : (
+                          <span className="text-amber-800">
+                            {pending.map((id, k) => (
+                              <span key={id}>
+                                {k > 0 && ", "}
+                                <button
+                                  onClick={() => navigate(`/rosters/${id}`)}
+                                  className="font-medium hover:underline"
+                                  title="Open this pending roster to review and approve it"
+                                >
+                                  #{id}
+                                </button>
+                              </span>
+                            ))}
+                            <span className="text-[11px] text-gray-500 ml-1">
+                              ({pending.length} pending)
+                            </span>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : loading ? (
         <LoadingSpinner text="Loading rosters..." />
       ) : !data.rosters?.length ? (
         <div className="card-soft p-8 text-center text-sm text-gray-500">
@@ -578,10 +886,24 @@ const RosterList = () => {
                   <th className="text-left">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {data.rosters.map((r, i) => (
+              {groupedRows.map((g) => (
+                <tbody key={g.key}>
+                  {g.name && (
+                    <tr className="bg-slate-100">
+                      <td colSpan={10} className="text-left !py-1.5">
+                        <span className="text-xs font-semibold text-gray-700">{g.name}</span>
+                        {g.incharge && (
+                          <span className="text-[11px] text-gray-500 ml-2">· {g.incharge}</span>
+                        )}
+                        <span className="text-[11px] text-gray-400 ml-2">
+                          · {g.rows.length} roster{g.rows.length === 1 ? "" : "s"} on this page
+                        </span>
+                      </td>
+                    </tr>
+                  )}
+                  {g.rows.map((r) => (
                   <tr key={r.id}>
-                    <td className="text-gray-500">{firstIndex + i + 1}</td>
+                    <td className="text-gray-500">{firstIndex + (rowIndex.get(r.id) ?? 0) + 1}</td>
                     <td>{r.id}</td>
                     <td className="text-left">{r.title || "—"}</td>
                     <td className="text-left">{scopeLabel(r)}</td>
@@ -589,14 +911,32 @@ const RosterList = () => {
                     <td className="text-left whitespace-nowrap">{periodLabel(r)}</td>
                     <td>{r._count?.entries ?? 0}</td>
                     <td>
-                      <span className={statusBadgeClass(r.status)}>{r.status}</span>
-                      {cycleCountFor(r) > 1 && (
-                        <span
-                          className="ml-1 badge badge-blue"
-                          title={`${cycleCountFor(r)} rosters exist for this unit in this cycle`}
-                        >
-                          {cycleCountFor(r)} in cycle
-                        </span>
+                      {(() => {
+                        const st = effectiveState(r);
+                        return st ? (
+                          <span className={st.cls} title={st.hint}>
+                            {st.label}
+                          </span>
+                        ) : (
+                          <span className={statusBadgeClass(r.status)}>{r.status}</span>
+                        );
+                      })()}
+                      {r.same_period?.total > 1 && (
+                        <div className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">
+                          {r.same_period.total} rosters this month
+                          {r.in_force_roster_id && r.in_force_roster_id !== r.id && (
+                            <>
+                              {" · "}
+                              <button
+                                onClick={() => navigate(`/rosters/${r.in_force_roster_id}`)}
+                                className="text-blue-600 hover:underline"
+                                title="Open the roster currently applied for this bazaar"
+                              >
+                                #{r.in_force_roster_id} is applied
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="text-left">
@@ -638,8 +978,9 @@ const RosterList = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
+                  ))}
+                </tbody>
+              ))}
             </table>
           </div>
 
@@ -655,7 +996,16 @@ const RosterList = () => {
                     </div>
                     <div className="text-xs text-gray-500">{scopeLabel(r)}</div>
                   </div>
-                  <span className={statusBadgeClass(r.status)}>{r.status}</span>
+                  {(() => {
+                    const st = effectiveState(r);
+                    return st ? (
+                      <span className={st.cls} title={st.hint}>
+                        {st.label}
+                      </span>
+                    ) : (
+                      <span className={statusBadgeClass(r.status)}>{r.status}</span>
+                    );
+                  })()}
                 </div>
                 <div className="text-xs text-gray-500">
                   #{r.id} · {typeLabel(r)} · {periodLabel(r)} · {r._count?.entries ?? 0} employees
@@ -705,7 +1055,7 @@ const RosterList = () => {
               totalPages={data.totalPages || 1}
               totalItems={data.total || 0}
               pageSize={limit}
-              onPageChange={setPage}
+              onPageChange={changePage}
               onPageSizeChange={changeLimit}
               pageSizeOptions={[25, 50, 100, 200]}
             />

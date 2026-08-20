@@ -150,7 +150,13 @@ async function eligibleEmployeesFor(scopeInfo) {
   const where = {
     is_current: true,
     is_deleted: false,
-    employee: { is_deleted: false, status: "Active" },
+    employee: {
+      is_deleted: false,
+      status: "Active",
+      // A Regional Incharge oversees a whole region rather than working a
+      // bazaar shift, so he is not rostered at the bazaar he is posted to.
+      regionalIncharge: { is: null },
+    },
   };
   if (scopeInfo.scope === "LOCATION") where.location_id = scopeInfo.location.id;
   else where.department_id = scopeInfo.department.id;
@@ -330,8 +336,153 @@ function overlapMessage(overlap, eligible) {
   );
 }
 
+const ROSTER_DAYS_ORDER = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+
+// One day cell as a comparable string. Used to diff a roster against the other
+// rosters covering the same bazaar and period.
+function describeDay(cell) {
+  if (!cell || !cell.type) return "—";
+  if (cell.type === "weekly_off") return "Weekly off";
+  if (cell.type === "offsite") return `Offsite: ${cell.location || cell.location_name || "—"}`;
+  if (cell.type === "time") {
+    if (!cell.time_from && !cell.time_to) return "—";
+    return `${cell.time_from || "—"}-${cell.time_to || "—"}`;
+  }
+  return "—";
+}
+
+// Other live rosters for the same unit whose validity overlaps this one.
+// A bazaar filing a correction leaves several rosters on the same cycle, and
+// the later approval wins per date (see rosterScheduleService) — so it matters
+// which one actually carries an employee's timings.
+function overlappingRosterWhere(roster) {
+  const unit =
+    roster.scope === "HQ_DEPARTMENT"
+      ? { department_id: roster.department_id }
+      : { bazaar_id: roster.bazaar_id };
+  return {
+    is_deleted: false,
+    scope: roster.scope,
+    id: { not: roster.id },
+    ...unit,
+    AND: [
+      { valid_from: { lte: roster.valid_to ?? new Date("2999-12-31") } },
+      { OR: [{ valid_to: null }, { valid_to: { gte: roster.valid_from } }] },
+    ],
+  };
+}
+
+// Which roster is actually being used?
+//
+// rosterScheduleService feeds attendance from APPROVED rosters only, and when
+// several approved rosters cover the same date the one approved LAST wins
+// (tie-break: higher id). So for one bazaar and one period exactly one roster
+// is in force; the rest are either replaced or not applied at all.
+const EFFECTIVE = {
+  IN_FORCE: "IN_FORCE",           // approved and currently applied
+  SUPERSEDED: "SUPERSEDED",       // approved, but a later approval replaced it
+  AWAITING: "AWAITING_APPROVAL",  // pending — not applied to attendance
+  REJECTED: "REJECTED",
+};
+
+const approvalTime = (r) => new Date(r.approved_at || r.updatedAt || r.createdAt).getTime();
+const unitKeyOf = (r) => (r.scope === "HQ_DEPARTMENT" ? `D${r.department_id}` : `L${r.bazaar_id}`);
+const periodsOverlap = (a, b) => {
+  const aFrom = new Date(a.valid_from).getTime();
+  const aTo = a.valid_to ? new Date(a.valid_to).getTime() : Infinity;
+  const bFrom = new Date(b.valid_from).getTime();
+  const bTo = b.valid_to ? new Date(b.valid_to).getTime() : Infinity;
+  return aFrom <= bTo && bFrom <= aTo;
+};
+
+function effectiveStateOf(roster, familyOfUnit) {
+  if (roster.status === "REJECTED") return EFFECTIVE.REJECTED;
+  if (roster.status === "PENDING") return EFFECTIVE.AWAITING;
+  const replacedByLater = familyOfUnit.some(
+    (o) =>
+      o.id !== roster.id &&
+      o.status === "APPROVED" &&
+      periodsOverlap(o, roster) &&
+      (approvalTime(o) > approvalTime(roster) ||
+        (approvalTime(o) === approvalTime(roster) && o.id > roster.id))
+  );
+  return replacedByLater ? EFFECTIVE.SUPERSEDED : EFFECTIVE.IN_FORCE;
+}
+
+// Tag a page of rosters with their effective state and how many rosters share
+// the same unit and period, so the list can say which one is actually applied.
+async function annotateEffectiveState(rosters) {
+  if (!rosters.length) return rosters;
+  const bazaarIds = [...new Set(rosters.map((r) => r.bazaar_id).filter(Boolean))];
+  const departmentIds = [...new Set(rosters.map((r) => r.department_id).filter(Boolean))];
+
+  const related = await prisma.dutyRoster.findMany({
+    where: {
+      is_deleted: false,
+      OR: [
+        ...(bazaarIds.length ? [{ bazaar_id: { in: bazaarIds } }] : []),
+        ...(departmentIds.length ? [{ department_id: { in: departmentIds } }] : []),
+      ],
+    },
+    select: {
+      id: true,
+      scope: true,
+      status: true,
+      bazaar_id: true,
+      department_id: true,
+      valid_from: true,
+      valid_to: true,
+      approved_at: true,
+      updatedAt: true,
+      createdAt: true,
+    },
+  });
+
+  const byUnit = new Map();
+  for (const r of related) {
+    const key = unitKeyOf(r);
+    if (!byUnit.has(key)) byUnit.set(key, []);
+    byUnit.get(key).push(r);
+  }
+
+  return rosters.map((r) => {
+    const family = (byUnit.get(unitKeyOf(r)) || []).filter((o) => periodsOverlap(o, r));
+    const inForce = family.find(
+      (o) => o.status === "APPROVED" && effectiveStateOf(o, family) === EFFECTIVE.IN_FORCE
+    );
+    return {
+      ...r,
+      effective_state: effectiveStateOf(r, family),
+      in_force_roster_id: inForce ? inForce.id : null,
+      same_period: {
+        total: family.length,
+        approved: family.filter((o) => o.status === "APPROVED").length,
+        pending: family.filter((o) => o.status === "PENDING").length,
+      },
+    };
+  });
+}
+
 const listInclude = {
-  location: { select: { id: true, name: true, type: true } },
+  location: {
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      // Region the bazaar belongs to, so the list can be grouped region-wise
+      regionalIncharge: {
+        select: { id: true, region_name: true, employee: { select: { full_name: true } } },
+      },
+    },
+  },
   department: { select: { id: true, name: true } },
   createdBy: { select: { id: true, email: true } },
   approver: { select: { id: true, email: true, employee: { select: { full_name: true } } } },
@@ -360,6 +511,16 @@ const rosterController = {
       }
       if (req.query.roster_type && ["MONTHLY", "PERMANENT"].includes(req.query.roster_type)) {
         where.roster_type = req.query.roster_type;
+      }
+      // region_id filters to one region's bazaars; "none" finds bazaars that
+      // have no regional incharge yet.
+      if (req.query.region_id === "none") {
+        where.location = { is: { regional_incharge_id: null } };
+      } else if (req.query.region_id) {
+        const regionId = Number(req.query.region_id);
+        if (Number.isInteger(regionId)) {
+          where.location = { is: { regional_incharge_id: regionId } };
+        }
       }
 
       const cycle = cycleRangeFromMonth(req.query.month);
@@ -405,7 +566,7 @@ const rosterController = {
         total,
         totalPages,
         month: cycle ? req.query.month : null,
-        rosters,
+        rosters: await annotateEffectiveState(rosters),
       });
     } catch (e) {
       console.error("Error listing rosters", e);
@@ -435,7 +596,18 @@ const rosterController = {
       const [locations, departments, rosters] = await Promise.all([
         prisma.location.findMany({
           where: locationWhere,
-          select: { id: true, name: true, type: true },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            regionalIncharge: {
+              select: {
+                id: true,
+                region_name: true,
+                employee: { select: { full_name: true } },
+              },
+            },
+          },
           orderBy: { name: "asc" },
         }),
         prisma.department.findMany({
@@ -452,6 +624,11 @@ const rosterController = {
             department_id: true,
             status: true,
             roster_type: true,
+            valid_from: true,
+            valid_to: true,
+            approved_at: true,
+            updatedAt: true,
+            createdAt: true,
           },
           orderBy: { createdAt: "desc" },
         }),
@@ -468,9 +645,15 @@ const rosterController = {
         const key = keyOf(r.scope, unitId);
         const prev = byUnit.get(key);
         if (!prev) {
-          byUnit.set(key, { status: r.status, roster_id: r.id, roster_count: 1 });
+          byUnit.set(key, {
+            status: r.status,
+            roster_id: r.id,
+            roster_count: 1,
+            all: [r],
+          });
         } else {
           prev.roster_count += 1;
+          prev.all.push(r);
           if (RANK[r.status] > RANK[prev.status]) {
             prev.status = r.status;
             prev.roster_id = r.id;
@@ -478,7 +661,15 @@ const rosterController = {
         }
       }
 
+      // Two different questions, two different numbers — conflating them is
+      // what made the tiles look wrong:
+      //   units.*   how many bazaars/departments are in each state (coverage).
+      //             A bazaar with 3 rosters counts once, by its best status.
+      //   rosters.* how many roster documents are in each state. This is what
+      //             the table below the tiles lists, so the tiles and the list
+      //             agree only when both are read as roster counts.
       const blank = () => ({
+        // unit coverage
         total: 0,
         created: 0,
         notCreated: 0,
@@ -486,8 +677,20 @@ const rosterController = {
         approved: 0,
         rejected: 0,
         rosterCount: 0,
+        // roster documents
+        rosters: { total: 0, approved: 0, pending: 0, rejected: 0 },
       });
       const summary = { LOCATION: blank(), HQ_DEPARTMENT: blank(), overall: blank() };
+
+      for (const r of rosters) {
+        const bucket = summary[r.scope] || summary.LOCATION;
+        for (const b of [bucket.rosters, summary.overall.rosters]) {
+          b.total += 1;
+          if (r.status === "APPROVED") b.approved += 1;
+          else if (r.status === "PENDING") b.pending += 1;
+          else if (r.status === "REJECTED") b.rejected += 1;
+        }
+      }
 
       const buildUnits = (list, scope) =>
         list.map((u) => {
@@ -504,6 +707,18 @@ const rosterController = {
               else if (status === "REJECTED") bucket.rejected += 1;
             }
           }
+          // Which roster of this unit is actually applied, and the numbers
+          // behind each state — the page shows these as clickable links.
+          const family = hit?.all || [];
+          const inForce = family.find(
+            (r) => r.status === "APPROVED" && effectiveStateOf(r, family) === EFFECTIVE.IN_FORCE
+          );
+          const idsBy = (st) =>
+            family
+              .filter((r) => r.status === st)
+              .map((r) => r.id)
+              .sort((a, b) => a - b);
+
           return {
             scope,
             id: u.id,
@@ -512,6 +727,13 @@ const rosterController = {
             status,
             roster_id: hit?.roster_id || null,
             roster_count: hit?.roster_count || 0,
+            in_force_id: inForce ? inForce.id : null,
+            approved_ids: idsBy("APPROVED"),
+            pending_ids: idsBy("PENDING"),
+            rejected_ids: idsBy("REJECTED"),
+            region_id: u.regionalIncharge?.id || null,
+            region_name: u.regionalIncharge?.region_name || null,
+            region_incharge: u.regionalIncharge?.employee?.full_name || null,
           };
         });
 
@@ -722,10 +944,156 @@ const rosterController = {
       if (!roster || roster.is_deleted || !canViewRoster(user, roster)) {
         return res.status(404).json({ success: false, error: "Roster not found" });
       }
-      res.json({ success: true, roster });
+
+      // Cheap summary only — the per-employee diff is built on demand by
+      // GET /rosters/:id/overlaps when the user opens it.
+      const overlaps = await prisma.dutyRoster.findMany({
+        where: overlappingRosterWhere(roster),
+        select: {
+          id: true,
+          status: true,
+          valid_from: true,
+          valid_to: true,
+          createdAt: true,
+          approved_at: true,
+          createdBy: { select: { email: true } },
+          _count: { select: { entries: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      res.json({
+        success: true,
+        roster,
+        overlaps,
+        // so the detail page can offer Approve/Reject to the right people only
+        can_approve: canActOnApproval(user, roster),
+      });
     } catch (e) {
       console.error("Error fetching roster", e);
       res.status(500).json({ success: false, error: "Failed to fetch roster" });
+    }
+  },
+
+// GET /rosters/:id/overlaps — when several rosters cover the same bazaar and
+  // period, show exactly whose timings differ between them. Answers "which
+  // employee's times were changed in the other roster?".
+  // GET /rosters/:id/overlaps — the breakdown when a bazaar has several rosters
+  // for one month. Framed the only way that is actually useful: what is applied
+  // right now, and exactly what this roster changes.
+  async overlaps(req, res) {
+    try {
+      const user = req.session.user;
+      const id = parseInt(req.params.id);
+      const entryInclude = {
+        entries: { include: { employee: { select: { id: true, full_name: true } } } },
+        createdBy: { select: { email: true } },
+      };
+
+      const roster = await prisma.dutyRoster.findUnique({ where: { id }, include: entryInclude });
+      if (!roster || roster.is_deleted || !canViewRoster(user, roster)) {
+        return res.status(404).json({ success: false, error: "Roster not found" });
+      }
+
+      const unit =
+        roster.scope === "HQ_DEPARTMENT"
+          ? { department_id: roster.department_id }
+          : { bazaar_id: roster.bazaar_id };
+      const family = (
+        await prisma.dutyRoster.findMany({
+          where: { is_deleted: false, scope: roster.scope, ...unit },
+          include: entryInclude,
+          orderBy: { createdAt: "asc" },
+        })
+      ).filter((o) => periodsOverlap(o, roster));
+
+      const stateOf = (r) => effectiveStateOf(r, family);
+      const inForce = family.find((r) => stateOf(r) === EFFECTIVE.IN_FORCE) || null;
+      const thisState = stateOf(roster);
+
+      // Compare against what is applied today. If this roster IS the applied
+      // one, compare against the approved roster it replaced, so the reader
+      // still sees what changed.
+      const baseline =
+        thisState === EFFECTIVE.IN_FORCE
+          ? family
+              .filter((r) => r.id !== roster.id && r.status === "APPROVED")
+              .sort((a, b) => approvalTime(b) - approvalTime(a))[0] || null
+          : inForce;
+
+      const describeEntry = (entry) =>
+        ROSTER_DAYS_ORDER.reduce((acc, day) => {
+          acc[day] = describeDay(entry?.day_schedules?.[day]);
+          return acc;
+        }, {});
+
+      const mine = new Map(roster.entries.map((e) => [e.employee_id, e]));
+      const base = new Map((baseline?.entries || []).map((e) => [e.employee_id, e]));
+
+      const changes = [];
+      let dayChangeCount = 0;
+      if (baseline) {
+        for (const [employeeId, entry] of mine) {
+          const baseEntry = base.get(employeeId);
+          const here = describeEntry(entry);
+          const there = baseEntry ? describeEntry(baseEntry) : null;
+          const days = ROSTER_DAYS_ORDER.filter((d) => !there || here[d] !== there[d]).map((d) => ({
+            day: d,
+            applied: there ? there[d] : null,
+            proposed: here[d],
+          }));
+          if (there && !days.length) continue;
+          dayChangeCount += days.length;
+          changes.push({
+            employee_id: employeeId,
+            employee_name: entry.employee?.full_name || `Employee #${employeeId}`,
+            is_new: !baseEntry,
+            days,
+          });
+        }
+      }
+
+      const removed = baseline
+        ? [...base.keys()]
+            .filter((k) => !mine.has(k))
+            .map((k) => ({
+              employee_id: k,
+              employee_name: base.get(k).employee?.full_name || `Employee #${k}`,
+            }))
+        : [];
+
+      const light = (r) =>
+        r && {
+          id: r.id,
+          status: r.status,
+          effective_state: stateOf(r),
+          valid_from: r.valid_from,
+          valid_to: r.valid_to,
+          approved_at: r.approved_at,
+          createdAt: r.createdAt,
+          created_by: r.createdBy?.email || null,
+          entry_count: r.entries.length,
+        };
+
+      res.json({
+        success: true,
+        this_roster: light(roster),
+        in_force: light(inForce),
+        compared_with: light(baseline),
+        all_for_period: family.map(light).sort((a, b) => b.id - a.id),
+        summary: {
+          employees_affected: changes.length,
+          day_changes: dayChangeCount,
+          added: changes.filter((c) => c.is_new).length,
+          removed: removed.length,
+          identical: !!baseline && !changes.length && !removed.length,
+        },
+        changes,
+        removed,
+      });
+    } catch (e) {
+      console.error("Error comparing rosters", e);
+      res.status(500).json({ success: false, error: "Failed to compare rosters" });
     }
   },
 

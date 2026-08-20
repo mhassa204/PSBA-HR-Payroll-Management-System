@@ -4,7 +4,7 @@ import rosterService from "../services/rosterService";
 import RosterEntriesEditor from "../components/RosterEntriesEditor";
 import LoadingSpinner from "../../../components/ui/LoadingSpinner";
 import { toastBus } from "../../../utils/toastBus";
-import { blankDaySchedules, findIncompleteDay } from "../rosterUtils";
+import { blankDaySchedules, findIncompleteDay, cycleEndFor } from "../rosterUtils";
 
 const CreateRoster = () => {
   const navigate = useNavigate();
@@ -190,7 +190,13 @@ const CreateRoster = () => {
                 type="date"
                 className="form-input"
                 value={validFrom}
-                onChange={(e) => setValidFrom(e.target.value)}
+                onChange={(e) => {
+                  const from = e.target.value;
+                  setValidFrom(from);
+                  // The cycle always closes on the 20th, so the end date follows
+                  // from the start and is not a free choice.
+                  setValidTo(cycleEndFor(from));
+                }}
               />
             </div>
             <div>
@@ -199,8 +205,25 @@ const CreateRoster = () => {
                 type="date"
                 className="form-input"
                 value={validTo}
-                onChange={(e) => setValidTo(e.target.value)}
+                disabled={!validFrom}
+                min={validFrom || undefined}
+                max={cycleEndFor(validFrom) || undefined}
+                onChange={(e) => {
+                  // Keep it inside the cycle even if a date is typed rather
+                  // than picked — the browser only enforces min/max in the picker.
+                  const limit = cycleEndFor(validFrom);
+                  let next = e.target.value;
+                  if (next && validFrom && next < validFrom) next = validFrom;
+                  if (next && limit && next > limit) next = limit;
+                  setValidTo(next);
+                }}
+                title="Any date from the start date up to the end of that cycle"
               />
+              <p className="text-[11px] text-gray-400 mt-1">
+                {validFrom
+                  ? `Between ${validFrom} and ${cycleEndFor(validFrom)} (cycle ends on the 20th)`
+                  : "Pick a start date first"}
+              </p>
             </div>
           </>
         ) : (

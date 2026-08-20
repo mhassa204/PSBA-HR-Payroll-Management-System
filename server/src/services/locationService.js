@@ -121,6 +121,27 @@ const locationService = {
   },
 
   // Soft delete
+  // Writes only the two timing columns — nothing else on the row can change
+  // through this path, whatever the caller sends.
+  updateOperationalTiming: async (id, { opening_time, closing_time }) => {
+    const existing = await prisma.location.findFirst({
+      where: { id: Number(id), is_deleted: false },
+      select: { id: true },
+    });
+    if (!existing) throw new Error("Location not found");
+    return prisma.location.update({
+      where: { id: Number(id) },
+      data: { opening_time, closing_time },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        opening_time: true,
+        closing_time: true,
+      },
+    });
+  },
+
   deleteLocation: async (id) => {
     const location = await prisma.location.findUnique({
       where: { id: Number(id) },
