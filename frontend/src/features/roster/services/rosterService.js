@@ -3,6 +3,8 @@ import axios from "../../../lib/axios";
 const rosterService = {
   list: (params = {}) => axios.get("/rosters", { params }).then((r) => r.data),
   get: (id) => axios.get(`/rosters/${id}`).then((r) => r.data),
+  // Per-employee diff against the other rosters covering the same period
+  overlaps: (id) => axios.get(`/rosters/${id}/overlaps`).then((r) => r.data),
   // Per-cycle coverage: created / not created / pending / approved per unit
   coverage: (month) =>
     axios.get("/rosters/coverage", { params: month ? { month } : {} }).then((r) => r.data),

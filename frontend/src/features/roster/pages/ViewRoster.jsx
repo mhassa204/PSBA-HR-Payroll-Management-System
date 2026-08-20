@@ -13,6 +13,7 @@ import {
   approverLabel,
   canModify,
   timeRangeLabel,
+  EFFECTIVE_STATE,
 } from "../rosterUtils";
 import {
   designationRank,
@@ -61,6 +62,14 @@ function DayCell({ day }) {
   return <span className="text-gray-300">—</span>;
 }
 
+// The comparison endpoint returns raw stored values ("09:00-17:00"); show them
+// the same 12-hour way as the rest of the page.
+function prettyCell(text) {
+  if (!text) return "-";
+  const m = String(text).match(/^(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+  return m ? timeRangeLabel(m[1], m[2]) : text;
+}
+
 const ViewRoster = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -68,19 +77,85 @@ const ViewRoster = () => {
   const [roster, setRoster] = useState(null);
   const [error, setError] = useState(null);
   const [graceInput, setGraceInput] = useState("");
+  // Other rosters covering the same bazaar and period
+  const [overlaps, setOverlaps] = useState([]);
+  const [diff, setDiff] = useState(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  // Approve / reject straight from here, for whoever is the approver
+  const [canApprove, setCanApprove] = useState(false);
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [acting, setActing] = useState(false);
   const [savingGrace, setSavingGrace] = useState(false);
 
-  useEffect(() => {
+  const load = () =>
     rosterService
       .get(id)
       .then((res) => {
         setRoster(res.roster);
         setGraceInput(String(res.roster?.grace_minutes ?? 0));
+        setOverlaps(res.overlaps || []);
+        setCanApprove(!!res.can_approve);
+        setDiff(null);
       })
       .catch((e) => setError(e?.response?.data?.error || "Failed to load roster"));
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const doApprove = async () => {
+    setActing(true);
+    try {
+      await rosterService.approve(id);
+      toastBus.emit({ type: "success", message: `Roster #${id} approved` });
+      setConfirmApprove(false);
+      await load();
+    } catch (e) {
+      toastBus.emit({ type: "error", message: e?.response?.data?.error || "Failed to approve" });
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const doReject = async () => {
+    if (!reason.trim()) {
+      toastBus.emit({ type: "error", message: "A rejection reason is required." });
+      return;
+    }
+    setActing(true);
+    try {
+      await rosterService.reject(id, reason.trim());
+      toastBus.emit({ type: "success", message: `Roster #${id} rejected` });
+      setRejecting(false);
+      setReason("");
+      await load();
+    } catch (e) {
+      toastBus.emit({ type: "error", message: e?.response?.data?.error || "Failed to reject" });
+    } finally {
+      setActing(false);
+    }
+  };
+
   const isEstablishment = /^\s*establishment/i.test(user?.role?.name || "");
+
+  // The diff is only worth fetching when the user asks for it — it loads every
+  // entry of every overlapping roster.
+  const loadDiff = async () => {
+    setDiffLoading(true);
+    try {
+      setDiff(await rosterService.overlaps(id));
+    } catch (e) {
+      toastBus.emit({
+        type: "error",
+        message: e?.response?.data?.error || "Failed to compare rosters",
+      });
+    } finally {
+      setDiffLoading(false);
+    }
+  };
 
   const saveGrace = async () => {
     const minutes = Number(graceInput);
@@ -120,6 +195,8 @@ const ViewRoster = () => {
       (a.employee?.full_name || "").localeCompare(b.employee?.full_name || "")
   );
   const staffCounts = staffCountSummary(roster.entries || [], entryDesignation);
+
+  const approveSummary = diff?.summary;
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -174,6 +251,16 @@ const ViewRoster = () => {
           >
             Form (Excel)
           </button>
+          {canApprove && (
+            <>
+              <button onClick={() => setConfirmApprove(true)} className="btn btn-success">
+                Approve
+              </button>
+              <button onClick={() => setRejecting(true)} className="btn btn-error-soft">
+                Reject
+              </button>
+            </>
+          )}
           {canModify(roster, user) && (
             <button
               onClick={() => navigate(`/rosters/${roster.id}/edit`)}
@@ -182,16 +269,199 @@ const ViewRoster = () => {
               Edit
             </button>
           )}
-          <button onClick={() => navigate("/rosters")} className="btn btn-outline">
+          <button
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/rosters"))}
+            className="btn btn-outline"
+            title="Back to the roster list, with your filters intact"
+          >
             Back
           </button>
         </div>
       </div>
 
+      {/* Several rosters cover this bazaar and month. Say plainly which one
+          attendance is using, and exactly what this one changes. */}
+      {overlaps.length > 0 && (
+        <div className="card-soft p-4 border-l-4 border-blue-400 space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-gray-800">
+                This bazaar has {overlaps.length + 1} rosters for this month
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Attendance uses the approved roster with the latest approval. The others are not
+                applied.
+              </p>
+            </div>
+            <button onClick={loadDiff} disabled={diffLoading} className="btn btn-outline btn-sm">
+              {diffLoading ? "Loading..." : diff ? "Refresh" : "Show what changes"}
+            </button>
+          </div>
+
+          {diff && (
+            <>
+              {/* one row per roster: which is applied, which is waiting */}
+              <div className="overflow-x-auto custom-thin-scroll">
+                <table className="table-enhanced min-w-full">
+                  <thead>
+                    <tr>
+                      <th className="text-left">Roster</th>
+                      <th className="text-left">State</th>
+                      <th>Staff</th>
+                      <th className="text-left">Created by</th>
+                      <th className="text-left">Approved</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diff.all_for_period.map((r) => {
+                      const st = EFFECTIVE_STATE[r.effective_state];
+                      const isThis = r.id === diff.this_roster.id;
+                      return (
+                        <tr key={r.id} className={isThis ? "bg-blue-50/50" : ""}>
+                          <td className="text-left">
+                            {isThis ? (
+                              <span className="font-semibold">#{r.id} (this one)</span>
+                            ) : (
+                              <button
+                                onClick={() => navigate(`/rosters/${r.id}`)}
+                                className="text-blue-600 hover:underline"
+                              >
+                                #{r.id}
+                              </button>
+                            )}
+                          </td>
+                          <td className="text-left">
+                            <span className={st?.cls || "badge badge-gray"} title={st?.hint}>
+                              {st?.label || r.status}
+                            </span>
+                          </td>
+                          <td>{r.entry_count}</td>
+                          <td className="text-left">{r.created_by || "-"}</td>
+                          <td className="text-left whitespace-nowrap">
+                            {r.approved_at ? new Date(r.approved_at).toLocaleDateString() : "-"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* what this roster does to the applied one */}
+              {!diff.compared_with ? (
+                <div className="text-xs text-gray-600">
+                  Nothing approved yet for this month, so there is nothing to compare against - the
+                  timings below are what will apply once a roster is approved.
+                </div>
+              ) : diff.summary.identical ? (
+                <div className="text-xs text-gray-600">
+                  Identical to roster #{diff.compared_with.id} - same staff, same timings. A repeat
+                  submission with nothing to review.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-700">
+                    {diff.this_roster.effective_state === "IN_FORCE" ? (
+                      <>
+                        <span className="font-semibold text-green-700">This roster is applied.</span>{" "}
+                        Against the roster it replaced (#{diff.compared_with.id}) it changed{" "}
+                        <span className="font-semibold">{diff.summary.day_changes}</span> day
+                        {diff.summary.day_changes === 1 ? "" : "s"} for{" "}
+                        <span className="font-semibold">{diff.summary.employees_affected}</span>{" "}
+                        employee{diff.summary.employees_affected === 1 ? "" : "s"}.
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-semibold text-amber-700">
+                          Not applied - roster #{diff.in_force?.id} is in force.
+                        </span>{" "}
+                        Approving this one would change{" "}
+                        <span className="font-semibold">{diff.summary.day_changes}</span> day
+                        {diff.summary.day_changes === 1 ? "" : "s"} for{" "}
+                        <span className="font-semibold">{diff.summary.employees_affected}</span>{" "}
+                        employee{diff.summary.employees_affected === 1 ? "" : "s"}
+                        {diff.summary.added > 0 && `, add ${diff.summary.added}`}
+                        {diff.summary.removed > 0 && `, drop ${diff.summary.removed}`}.
+                      </>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto custom-thin-scroll">
+                    <table className="table-enhanced min-w-full">
+                      <thead>
+                        <tr>
+                          <th className="text-left">Employee</th>
+                          <th className="text-left">Day</th>
+                          <th className="text-left">Applied now (#{diff.compared_with.id})</th>
+                          <th className="text-left">This roster</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {diff.changes.map((emp) =>
+                          emp.days.map((d, i) => (
+                            <tr key={`${emp.employee_id}-${d.day}`}>
+                              <td className="text-left">
+                                {i === 0 ? (
+                                  <>
+                                    {emp.employee_name}
+                                    {emp.is_new && (
+                                      <span className="badge badge-blue ml-1">new</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  ""
+                                )}
+                              </td>
+                              <td className="text-left">{d.day}</td>
+                              <td className="text-left whitespace-nowrap text-gray-600">
+                                {d.applied ? prettyCell(d.applied) : "not rostered"}
+                              </td>
+                              <td className="text-left whitespace-nowrap font-medium text-amber-800">
+                                {prettyCell(d.proposed)}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                        {diff.removed.map((emp) => (
+                          <tr key={`rm-${emp.employee_id}`}>
+                            <td className="text-left">{emp.employee_name}</td>
+                            <td className="text-left" colSpan={2}>
+                              <span className="text-gray-600">
+                                in #{diff.compared_with.id}
+                              </span>
+                            </td>
+                            <td className="text-left text-red-700">dropped from this roster</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Status banners */}
       {roster.status === "PENDING" && (
         <div className="card-soft p-4 border-l-4 border-amber-400 text-sm text-gray-600">
           Pending approval with <span className="font-medium">{approverLabel(roster)}</span>.
+          {canApprove && (
+            <>
+              {" "}
+              <span className="font-medium text-amber-800">You can approve this roster.</span>
+              {overlaps.length > 0 && !diff && (
+                <>
+                  {" "}
+                  <button onClick={loadDiff} className="text-blue-600 hover:underline">
+                    Review what it changes first
+                  </button>
+                  .
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
       {roster.status === "REJECTED" && roster.rejection_reason && (
@@ -393,6 +663,91 @@ const ViewRoster = () => {
           </ol>
         </div>
       )}
+      {/* Approve — restate the effect so nobody approves blind */}
+      {confirmApprove && (
+        <div className="fixed inset-0 bg-black/40 backdrop-fade z-50 flex items-center justify-center p-4">
+          <div className="modal-surface w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold mb-2">Approve roster #{roster.id}?</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              {scopeLabel(roster)} · {periodLabel(roster)}
+            </p>
+            {overlaps.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-900 mb-3">
+                {approveSummary ? (
+                  <>
+                    This becomes the applied roster for the period. It changes{" "}
+                    <span className="font-semibold">{approveSummary.day_changes}</span> day
+                    {approveSummary.day_changes === 1 ? "" : "s"} for{" "}
+                    <span className="font-semibold">{approveSummary.employees_affected}</span>{" "}
+                    employee{approveSummary.employees_affected === 1 ? "" : "s"}
+                    {approveSummary.added > 0 && `, adds ${approveSummary.added}`}
+                    {approveSummary.removed > 0 && `, drops ${approveSummary.removed}`}.
+                  </>
+                ) : (
+                  <>
+                    {overlaps.length} other roster{overlaps.length === 1 ? "" : "s"} cover this
+                    period. Approving this one replaces whichever is applied now.{" "}
+                    <button
+                      onClick={() => {
+                        setConfirmApprove(false);
+                        loadDiff();
+                      }}
+                      className="underline font-medium"
+                    >
+                      See what changes
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mb-4">
+              Once approved the roster is locked — corrections are made by submitting a new one.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmApprove(false)} className="btn btn-secondary">
+                Cancel
+              </button>
+              <button onClick={doApprove} disabled={acting} className="btn btn-success">
+                {acting ? "Approving..." : "Approve"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject — reason is required */}
+      {rejecting && (
+        <div className="fixed inset-0 bg-black/40 backdrop-fade z-50 flex items-center justify-center p-4">
+          <div className="modal-surface w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold mb-2">Reject roster #{roster.id}</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              The creator sees your reason and can correct and resubmit.
+            </p>
+            <textarea
+              className="form-input w-full"
+              rows={3}
+              placeholder="Reason (required)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setRejecting(false);
+                  setReason("");
+                }}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button onClick={doReject} disabled={acting} className="btn btn-error">
+                {acting ? "Rejecting..." : "Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

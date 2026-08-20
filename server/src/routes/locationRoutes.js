@@ -45,6 +45,15 @@ router.put(
   authorizeAny(["locations.update", "locations.create", "locations.delete"]),
   locationController.updateLocation
 );
+// Operational hours only — Operations can keep bazaar timings right without
+// any other edit rights on the location.
+router.patch(
+  "/:id/timing",
+  isAuthenticated,
+  authorizeAny(["locations.timing.update", "locations.update"]),
+  locationController.updateOperationalTiming
+);
+
 router.delete(
   "/:id",
   isAuthenticated,

@@ -36,6 +36,36 @@ export function timeRangeLabel(from, to) {
 }
 
 
+// How a roster actually stands, as opposed to its raw status. Attendance uses
+// approved rosters only, latest approval winning — so of several rosters for
+// one bazaar and month, exactly one is "in force" and the rest are not applied.
+export const EFFECTIVE_STATE = {
+  IN_FORCE: {
+    label: "In force",
+    cls: "badge badge-green",
+    hint: "Approved and currently applied to attendance",
+  },
+  SUPERSEDED: {
+    label: "Replaced",
+    cls: "badge badge-gray",
+    hint: "Was approved, but a later approved roster replaced it",
+  },
+  AWAITING_APPROVAL: {
+    label: "Awaiting approval",
+    cls: "badge badge-amber",
+    hint: "Not applied yet — waiting for approval",
+  },
+  REJECTED: {
+    label: "Rejected",
+    cls: "badge badge-red",
+    hint: "Rejected — correct it and submit again",
+  },
+};
+
+export function effectiveState(roster) {
+  return EFFECTIVE_STATE[roster?.effective_state] || null;
+}
+
 export function statusBadgeClass(status) {
   if (status === "APPROVED") return "badge badge-green";
   if (status === "REJECTED") return "badge badge-red";
@@ -125,6 +155,20 @@ export function cycleMonthOptions(back = 17, forward = 1, today = new Date()) {
     out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
   }
   return out;
+}
+
+// A payroll cycle always ends on the 20th. Given any start date, the cycle it
+// belongs to closes on the 20th of the same month when the start is the 20th or
+// earlier, otherwise on the 20th of the next month:
+//   21 Jul -> 20 Aug      29 Aug -> 20 Sep      5 Aug -> 20 Aug
+export function cycleEndFor(startDate) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(startDate || ""));
+  if (!m) return "";
+  const year = parseInt(m[1], 10);
+  const month0 = parseInt(m[2], 10) - 1;
+  const day = parseInt(m[3], 10);
+  const end = new Date(Date.UTC(year, day >= 21 ? month0 + 1 : month0, 20));
+  return end.toISOString().slice(0, 10);
 }
 
 export function approverLabel(roster) {

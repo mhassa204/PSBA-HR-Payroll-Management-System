@@ -46,7 +46,7 @@ export function exportDutyRosterFormExcel(roster) {
     r++;
   };
   titleRow(model.title, titleStyle);
-  if (model.timing) titleRow(`Bazaar Operational Timing: ${model.timing}`, subStyle);
+  if (model.timing) titleRow(`Roster Operational Timing: ${model.timing}`, subStyle);
   titleRow(
     `FROM ${model.validFrom} TO ${model.validTo || "ONWARDS (PERMANENT)"}`,
     subStyle

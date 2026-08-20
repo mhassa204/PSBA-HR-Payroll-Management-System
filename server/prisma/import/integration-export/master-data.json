@@ -1,0 +1,1231 @@
+{
+ "designations": [
+  {
+   "id": 43,
+   "title": "Accounts Receivable Officer"
+  },
+  {
+   "id": 26,
+   "title": "Additional Director (Audit, Monitoring & Evaluation)"
+  },
+  {
+   "id": 27,
+   "title": "Additional Director (Operations & Revenue)"
+  },
+  {
+   "id": 28,
+   "title": "Additional Director (Projects, Planning & Special Initiatives)"
+  },
+  {
+   "id": 25,
+   "title": "Additional Director General (Headquarters, Finance & Startegic Planning)"
+  },
+  {
+   "id": 44,
+   "title": "Admin Officer"
+  },
+  {
+   "id": 31,
+   "title": "Architect"
+  },
+  {
+   "id": 45,
+   "title": "Asset Management Officer"
+  },
+  {
+   "id": 32,
+   "title": "Assistant Director (Account, Payroll & Reconciliation)"
+  },
+  {
+   "id": 33,
+   "title": "Assistant Director (Budget, Finance & Taxation)"
+  },
+  {
+   "id": 34,
+   "title": "Assistant Director (DevOps)"
+  },
+  {
+   "id": 30,
+   "title": "Assistant Director (Establishment)"
+  },
+  {
+   "id": 35,
+   "title": "Assistant Director (Headquarter, Admin/Operations)"
+  },
+  {
+   "id": 36,
+   "title": "Assistant Director (IT)"
+  },
+  {
+   "id": 37,
+   "title": "Assistant Director (Legal)"
+  },
+  {
+   "id": 38,
+   "title": "Assistant Director (Monitoring & Evaluation)"
+  },
+  {
+   "id": 55,
+   "title": "Assistant Director (Monitoring & Evaluation)"
+  },
+  {
+   "id": 39,
+   "title": "Assistant Director (Projects, Planning & Special Initiatives)"
+  },
+  {
+   "id": 40,
+   "title": "Assistant Director (Security & Surveillance)"
+  },
+  {
+   "id": 41,
+   "title": "Assistant Director, Operations & Revenue (Central & North)"
+  },
+  {
+   "id": 46,
+   "title": "Assistant Engineer Elctrical"
+  },
+  {
+   "id": 14,
+   "title": "Computer Operator"
+  },
+  {
+   "id": 22,
+   "title": "Driver"
+  },
+  {
+   "id": 7,
+   "title": "Electrician"
+  },
+  {
+   "id": 10,
+   "title": "Filling Assistant"
+  },
+  {
+   "id": 47,
+   "title": "Finance & Taxation Officer"
+  },
+  {
+   "id": 6,
+   "title": "Gardener"
+  },
+  {
+   "id": 51,
+   "title": "Graphic Designer"
+  },
+  {
+   "id": 18,
+   "title": "HR Operations Officer"
+  },
+  {
+   "id": 52,
+   "title": "Jr. System Administor"
+  },
+  {
+   "id": 50,
+   "title": "Monitoring & Evalution Assistant"
+  },
+  {
+   "id": 9,
+   "title": "Monitoring Supervisor"
+  },
+  {
+   "id": 15,
+   "title": "Network Support Associate"
+  },
+  {
+   "id": 11,
+   "title": "Office Attendant"
+  },
+  {
+   "id": 19,
+   "title": "Office Supervisor"
+  },
+  {
+   "id": 8,
+   "title": "Operations Assistant"
+  },
+  {
+   "id": 48,
+   "title": "Procurement Officer"
+  },
+  {
+   "id": 20,
+   "title": "Project Coordinator"
+  },
+  {
+   "id": 49,
+   "title": "Public Relations Officer"
+  },
+  {
+   "id": 53,
+   "title": "Record Keeper"
+  },
+  {
+   "id": 4,
+   "title": "Record Keeper"
+  },
+  {
+   "id": 56,
+   "title": "Research Assistant"
+  },
+  {
+   "id": 12,
+   "title": "Research Assistant"
+  },
+  {
+   "id": 5,
+   "title": "Sahulat Bazaar Incharge"
+  },
+  {
+   "id": 3,
+   "title": "Sahulat Bazaar Supervisor"
+  },
+  {
+   "id": 54,
+   "title": "Sahulat Bazaar Supervisor"
+  },
+  {
+   "id": 2,
+   "title": "Sanitation Attendant"
+  },
+  {
+   "id": 59,
+   "title": "Security & Parking Attendant"
+  },
+  {
+   "id": 58,
+   "title": "Security & Parking Attendant"
+  },
+  {
+   "id": 1,
+   "title": "Security & Parking Attendant"
+  },
+  {
+   "id": 23,
+   "title": "Site Supervisor"
+  },
+  {
+   "id": 24,
+   "title": "Software Assistant"
+  },
+  {
+   "id": 29,
+   "title": "Sr. Engineer (Civil)"
+  },
+  {
+   "id": 42,
+   "title": "Structural Design Engineer"
+  },
+  {
+   "id": 16,
+   "title": "Sub-Engineer (Civil)"
+  },
+  {
+   "id": 21,
+   "title": "Sub-Engineer (Electrical)"
+  },
+  {
+   "id": 17,
+   "title": "Sub-Engineer (Maintenance)"
+  },
+  {
+   "id": 57,
+   "title": "Supervisor FHD"
+  },
+  {
+   "id": 13,
+   "title": "Supervisor FHD"
+  }
+ ],
+ "departments": [
+  {
+   "id": 1,
+   "name": "Accounts Department"
+  },
+  {
+   "id": 2,
+   "name": "Admin Department"
+  },
+  {
+   "id": 3,
+   "name": "Audit Department"
+  },
+  {
+   "id": 4,
+   "name": "Civil Department"
+  },
+  {
+   "id": 5,
+   "name": "Competent Authority"
+  },
+  {
+   "id": 6,
+   "name": "Devops Department"
+  },
+  {
+   "id": 7,
+   "name": "Electrical Department"
+  },
+  {
+   "id": 8,
+   "name": "Establishment Department"
+  },
+  {
+   "id": 9,
+   "name": "Home Delivery Department"
+  },
+  {
+   "id": 10,
+   "name": "IT Department"
+  },
+  {
+   "id": 11,
+   "name": "Legal Department"
+  },
+  {
+   "id": 12,
+   "name": "Media Department"
+  },
+  {
+   "id": 16,
+   "name": "Monitoring & Evaluation"
+  },
+  {
+   "id": 13,
+   "name": "Monitoring Department"
+  },
+  {
+   "id": 14,
+   "name": "Operations Department"
+  },
+  {
+   "id": 15,
+   "name": "Projects & Management Unit Department"
+  }
+ ],
+ "districts": [
+  {
+   "id": 21,
+   "name": "Attock"
+  },
+  {
+   "id": 33,
+   "name": "Bahawalnagar"
+  },
+  {
+   "id": 32,
+   "name": "Bahawalpur"
+  },
+  {
+   "id": 19,
+   "name": "Bhakkar"
+  },
+  {
+   "id": 23,
+   "name": "Chakwal"
+  },
+  {
+   "id": 6,
+   "name": "Chiniot"
+  },
+  {
+   "id": 35,
+   "name": "Dera Ghazi Khan"
+  },
+  {
+   "id": 5,
+   "name": "Faisalabad"
+  },
+  {
+   "id": 9,
+   "name": "Gujranwala"
+  },
+  {
+   "id": 11,
+   "name": "Gujrat"
+  },
+  {
+   "id": 13,
+   "name": "Hafizabad"
+  },
+  {
+   "id": 8,
+   "name": "Jhang"
+  },
+  {
+   "id": 22,
+   "name": "Jhelum"
+  },
+  {
+   "id": 2,
+   "name": "Kasur"
+  },
+  {
+   "id": 26,
+   "name": "Khanewal"
+  },
+  {
+   "id": 17,
+   "name": "Khushab"
+  },
+  {
+   "id": 38,
+   "name": "Kot Addu"
+  },
+  {
+   "id": 1,
+   "name": "Lahore"
+  },
+  {
+   "id": 39,
+   "name": "Layyah"
+  },
+  {
+   "id": 27,
+   "name": "Lodhran"
+  },
+  {
+   "id": 12,
+   "name": "Mandi Bahauddin"
+  },
+  {
+   "id": 18,
+   "name": "Mianwali"
+  },
+  {
+   "id": 25,
+   "name": "Multan"
+  },
+  {
+   "id": 37,
+   "name": "Muzaffargarh"
+  },
+  {
+   "id": 4,
+   "name": "Nankana Sahib"
+  },
+  {
+   "id": 15,
+   "name": "Narowal"
+  },
+  {
+   "id": 30,
+   "name": "Okara"
+  },
+  {
+   "id": 31,
+   "name": "Pakpattan"
+  },
+  {
+   "id": 34,
+   "name": "Rahim Yar Khan"
+  },
+  {
+   "id": 36,
+   "name": "Rajanpur"
+  },
+  {
+   "id": 20,
+   "name": "Rawalpindi"
+  },
+  {
+   "id": 29,
+   "name": "Sahiwal"
+  },
+  {
+   "id": 16,
+   "name": "Sargodha"
+  },
+  {
+   "id": 3,
+   "name": "Sheikhupura"
+  },
+  {
+   "id": 14,
+   "name": "Sialkot"
+  },
+  {
+   "id": 24,
+   "name": "Talagang"
+  },
+  {
+   "id": 7,
+   "name": "Toba Tek Singh"
+  },
+  {
+   "id": 28,
+   "name": "Vehari"
+  },
+  {
+   "id": 10,
+   "name": "Wazirabad"
+  }
+ ],
+ "cities": [
+  {
+   "id": 118,
+   "name": "Ahmadpur East",
+   "district_id": 32
+  },
+  {
+   "id": 31,
+   "name": "Ahmadpur Sial",
+   "district_id": 8
+  },
+  {
+   "id": 141,
+   "name": "Alipur",
+   "district_id": 37
+  },
+  {
+   "id": 38,
+   "name": "Alipur Chatha",
+   "district_id": 10
+  },
+  {
+   "id": 116,
+   "name": "Arif Wala",
+   "district_id": 31
+  },
+  {
+   "id": 115,
+   "name": "Arifwala",
+   "district_id": 31
+  },
+  {
+   "id": 32,
+   "name": "Athara Hazari",
+   "district_id": 8
+  },
+  {
+   "id": 80,
+   "name": "Attock",
+   "district_id": 21
+  },
+  {
+   "id": 122,
+   "name": "Bahawalnagar",
+   "district_id": 33
+  },
+  {
+   "id": 117,
+   "name": "Bahawalpur",
+   "district_id": 32
+  },
+  {
+   "id": 69,
+   "name": "Bhakkar",
+   "district_id": 19
+  },
+  {
+   "id": 56,
+   "name": "Bhalwal",
+   "district_id": 16
+  },
+  {
+   "id": 57,
+   "name": "Bhera",
+   "district_id": 16
+  },
+  {
+   "id": 23,
+   "name": "Bhowana",
+   "district_id": 6
+  },
+  {
+   "id": 107,
+   "name": "Burewala",
+   "district_id": 28
+  },
+  {
+   "id": 19,
+   "name": "Chak Jhumra",
+   "district_id": 5
+  },
+  {
+   "id": 90,
+   "name": "Chakwal",
+   "district_id": 23
+  },
+  {
+   "id": 148,
+   "name": "Chaubara",
+   "district_id": 39
+  },
+  {
+   "id": 110,
+   "name": "Chichawatni",
+   "district_id": 29
+  },
+  {
+   "id": 22,
+   "name": "Chiniot",
+   "district_id": 6
+  },
+  {
+   "id": 123,
+   "name": "Chishtian",
+   "district_id": 33
+  },
+  {
+   "id": 91,
+   "name": "Choa Saidan Shah",
+   "district_id": 23
+  },
+  {
+   "id": 150,
+   "name": "Chowk Azam",
+   "district_id": 39
+  },
+  {
+   "id": 3,
+   "name": "Chunian",
+   "district_id": 2
+  },
+  {
+   "id": 144,
+   "name": "Daira Din Panah",
+   "district_id": 38
+  },
+  {
+   "id": 70,
+   "name": "Darya Khan",
+   "district_id": 19
+  },
+  {
+   "id": 49,
+   "name": "Daska",
+   "district_id": 14
+  },
+  {
+   "id": 112,
+   "name": "Depalpur",
+   "district_id": 30
+  },
+  {
+   "id": 131,
+   "name": "Dera Ghazi Khan",
+   "district_id": 35
+  },
+  {
+   "id": 132,
+   "name": "DG Khan",
+   "district_id": 35
+  },
+  {
+   "id": 89,
+   "name": "Dina",
+   "district_id": 22
+  },
+  {
+   "id": 104,
+   "name": "Dunyapur",
+   "district_id": 27
+  },
+  {
+   "id": 16,
+   "name": "Faisalabad",
+   "district_id": 5
+  },
+  {
+   "id": 151,
+   "name": "Farooqabad",
+   "district_id": 3
+  },
+  {
+   "id": 82,
+   "name": "Fateh Jang",
+   "district_id": 21
+  },
+  {
+   "id": 149,
+   "name": "Fatehpur",
+   "district_id": 39
+  },
+  {
+   "id": 8,
+   "name": "Ferozewala",
+   "district_id": 3
+  },
+  {
+   "id": 126,
+   "name": "Fort Abbas",
+   "district_id": 33
+  },
+  {
+   "id": 26,
+   "name": "Gojra",
+   "district_id": 7
+  },
+  {
+   "id": 76,
+   "name": "Gujar Khan",
+   "district_id": 20
+  },
+  {
+   "id": 33,
+   "name": "Gujranwala",
+   "district_id": 9
+  },
+  {
+   "id": 39,
+   "name": "Gujrat",
+   "district_id": 11
+  },
+  {
+   "id": 46,
+   "name": "Hafizabad",
+   "district_id": 13
+  },
+  {
+   "id": 124,
+   "name": "Haroonabad",
+   "district_id": 33
+  },
+  {
+   "id": 81,
+   "name": "Hasan Abdal",
+   "district_id": 21
+  },
+  {
+   "id": 119,
+   "name": "Hasilpur",
+   "district_id": 32
+  },
+  {
+   "id": 84,
+   "name": "Hazro",
+   "district_id": 21
+  },
+  {
+   "id": 67,
+   "name": "Isakhel",
+   "district_id": 18
+  },
+  {
+   "id": 102,
+   "name": "Jahanian",
+   "district_id": 26
+  },
+  {
+   "id": 42,
+   "name": "Jalalpur Jattan",
+   "district_id": 11
+  },
+  {
+   "id": 98,
+   "name": "Jalalpur Pirwala",
+   "district_id": 25
+  },
+  {
+   "id": 137,
+   "name": "Jampur",
+   "district_id": 36
+  },
+  {
+   "id": 85,
+   "name": "Jand",
+   "district_id": 21
+  },
+  {
+   "id": 17,
+   "name": "Jaranwala",
+   "district_id": 5
+  },
+  {
+   "id": 142,
+   "name": "Jatoi",
+   "district_id": 37
+  },
+  {
+   "id": 62,
+   "name": "Jauharabad",
+   "district_id": 17
+  },
+  {
+   "id": 29,
+   "name": "Jhang",
+   "district_id": 8
+  },
+  {
+   "id": 86,
+   "name": "Jhelum",
+   "district_id": 22
+  },
+  {
+   "id": 101,
+   "name": "Kabirwala",
+   "district_id": 26
+  },
+  {
+   "id": 105,
+   "name": "Kahror Pakka",
+   "district_id": 27
+  },
+  {
+   "id": 77,
+   "name": "Kahuta",
+   "district_id": 20
+  },
+  {
+   "id": 92,
+   "name": "Kallar Kahar",
+   "district_id": 23
+  },
+  {
+   "id": 79,
+   "name": "Kallar Syedan",
+   "district_id": 20
+  },
+  {
+   "id": 71,
+   "name": "Kallur Kot",
+   "district_id": 19
+  },
+  {
+   "id": 27,
+   "name": "Kamalia",
+   "district_id": 7
+  },
+  {
+   "id": 34,
+   "name": "Kamoke",
+   "district_id": 9
+  },
+  {
+   "id": 147,
+   "name": "Karor Lal Easan",
+   "district_id": 39
+  },
+  {
+   "id": 146,
+   "name": "Karor Lal Esan",
+   "district_id": 39
+  },
+  {
+   "id": 2,
+   "name": "Kasur",
+   "district_id": 2
+  },
+  {
+   "id": 121,
+   "name": "Khairpur Tamewali",
+   "district_id": 32
+  },
+  {
+   "id": 99,
+   "name": "Khanewal",
+   "district_id": 26
+  },
+  {
+   "id": 129,
+   "name": "Khanpur",
+   "district_id": 34
+  },
+  {
+   "id": 40,
+   "name": "Kharian",
+   "district_id": 11
+  },
+  {
+   "id": 63,
+   "name": "Khushab",
+   "district_id": 17
+  },
+  {
+   "id": 140,
+   "name": "Kot Addu",
+   "district_id": 37
+  },
+  {
+   "id": 143,
+   "name": "Kot Addu",
+   "district_id": 38
+  },
+  {
+   "id": 135,
+   "name": "Kot Chutta",
+   "district_id": 35
+  },
+  {
+   "id": 60,
+   "name": "Kot Momin",
+   "district_id": 16
+  },
+  {
+   "id": 5,
+   "name": "Kot Radha Kishan",
+   "district_id": 2
+  },
+  {
+   "id": 152,
+   "name": "Kot Sultan",
+   "district_id": 39
+  },
+  {
+   "id": 78,
+   "name": "Kotli Sattian",
+   "district_id": 20
+  },
+  {
+   "id": 1,
+   "name": "Lahore",
+   "district_id": 1
+  },
+  {
+   "id": 24,
+   "name": "Lalian",
+   "district_id": 6
+  },
+  {
+   "id": 93,
+   "name": "Lawa",
+   "district_id": 23
+  },
+  {
+   "id": 145,
+   "name": "Layyah",
+   "district_id": 39
+  },
+  {
+   "id": 130,
+   "name": "Liaquatpur",
+   "district_id": 34
+  },
+  {
+   "id": 103,
+   "name": "Lodhran",
+   "district_id": 27
+  },
+  {
+   "id": 108,
+   "name": "Mailsi",
+   "district_id": 28
+  },
+  {
+   "id": 45,
+   "name": "Malakwal",
+   "district_id": 12
+  },
+  {
+   "id": 43,
+   "name": "Mandi Bahauddin",
+   "district_id": 12
+  },
+  {
+   "id": 11,
+   "name": "Mandi Faizabad",
+   "district_id": 3
+  },
+  {
+   "id": 72,
+   "name": "Mankera",
+   "district_id": 19
+  },
+  {
+   "id": 100,
+   "name": "Mian Channu",
+   "district_id": 26
+  },
+  {
+   "id": 66,
+   "name": "Mianwali",
+   "district_id": 18
+  },
+  {
+   "id": 125,
+   "name": "Minchinabad",
+   "district_id": 33
+  },
+  {
+   "id": 96,
+   "name": "Multan",
+   "district_id": 25
+  },
+  {
+   "id": 95,
+   "name": "Multan Khurd",
+   "district_id": 24
+  },
+  {
+   "id": 9,
+   "name": "Muridke",
+   "district_id": 3
+  },
+  {
+   "id": 74,
+   "name": "Murree",
+   "district_id": 20
+  },
+  {
+   "id": 139,
+   "name": "Muzaffargarh",
+   "district_id": 37
+  },
+  {
+   "id": 12,
+   "name": "Nankana Sahib",
+   "district_id": 4
+  },
+  {
+   "id": 52,
+   "name": "Narowal",
+   "district_id": 15
+  },
+  {
+   "id": 64,
+   "name": "Noorpur Thal",
+   "district_id": 17
+  },
+  {
+   "id": 36,
+   "name": "Noshera Virkan",
+   "district_id": 9
+  },
+  {
+   "id": 35,
+   "name": "Nowshera Virkan",
+   "district_id": 9
+  },
+  {
+   "id": 111,
+   "name": "Okara",
+   "district_id": 30
+  },
+  {
+   "id": 114,
+   "name": "Pakpattan",
+   "district_id": 31
+  },
+  {
+   "id": 50,
+   "name": "Pasrur",
+   "district_id": 14
+  },
+  {
+   "id": 4,
+   "name": "Pattoki",
+   "district_id": 2
+  },
+  {
+   "id": 44,
+   "name": "Phalia",
+   "district_id": 12
+  },
+  {
+   "id": 87,
+   "name": "Pind Dadan Khan",
+   "district_id": 22
+  },
+  {
+   "id": 47,
+   "name": "Pindi Bhattian",
+   "district_id": 13
+  },
+  {
+   "id": 83,
+   "name": "Pindigheb",
+   "district_id": 21
+  },
+  {
+   "id": 68,
+   "name": "Piplan",
+   "district_id": 18
+  },
+  {
+   "id": 28,
+   "name": "Pir Mahal",
+   "district_id": 7
+  },
+  {
+   "id": 65,
+   "name": "Quaidabad",
+   "district_id": 17
+  },
+  {
+   "id": 127,
+   "name": "Rahim Yar Khan",
+   "district_id": 34
+  },
+  {
+   "id": 6,
+   "name": "Raiwind",
+   "district_id": 2
+  },
+  {
+   "id": 136,
+   "name": "Rajanpur",
+   "district_id": 36
+  },
+  {
+   "id": 73,
+   "name": "Rawalpindi",
+   "district_id": 20
+  },
+  {
+   "id": 113,
+   "name": "Renala Khurd",
+   "district_id": 30
+  },
+  {
+   "id": 138,
+   "name": "Rojhan",
+   "district_id": 36
+  },
+  {
+   "id": 128,
+   "name": "Sadiqabad",
+   "district_id": 34
+  },
+  {
+   "id": 109,
+   "name": "Sahiwal",
+   "district_id": 29
+  },
+  {
+   "id": 59,
+   "name": "Sahiwal (Sargodha)",
+   "district_id": 16
+  },
+  {
+   "id": 153,
+   "name": "Sahulat Bazaar Kahna Kacha (On the Go)__DEL__1786018724532_6rxmipks1",
+   "district_id": 1
+  },
+  {
+   "id": 51,
+   "name": "Sambrial",
+   "district_id": 14
+  },
+  {
+   "id": 21,
+   "name": "Sammundri",
+   "district_id": 5
+  },
+  {
+   "id": 20,
+   "name": "Samundri",
+   "district_id": 5
+  },
+  {
+   "id": 14,
+   "name": "Sangla Hill",
+   "district_id": 4
+  },
+  {
+   "id": 41,
+   "name": "Sarai Alamgir",
+   "district_id": 11
+  },
+  {
+   "id": 55,
+   "name": "Sargodha",
+   "district_id": 16
+  },
+  {
+   "id": 13,
+   "name": "Shahkot",
+   "district_id": 4
+  },
+  {
+   "id": 58,
+   "name": "Shahpur",
+   "district_id": 16
+  },
+  {
+   "id": 53,
+   "name": "Shakargarh",
+   "district_id": 15
+  },
+  {
+   "id": 10,
+   "name": "Sharaqpur Sharif",
+   "district_id": 3
+  },
+  {
+   "id": 7,
+   "name": "Sheikhupura",
+   "district_id": 3
+  },
+  {
+   "id": 30,
+   "name": "Shorkot",
+   "district_id": 8
+  },
+  {
+   "id": 97,
+   "name": "Shujabad",
+   "district_id": 25
+  },
+  {
+   "id": 48,
+   "name": "Sialkot",
+   "district_id": 14
+  },
+  {
+   "id": 61,
+   "name": "Sillanwali",
+   "district_id": 16
+  },
+  {
+   "id": 88,
+   "name": "Sohawa",
+   "district_id": 22
+  },
+  {
+   "id": 94,
+   "name": "Talagang",
+   "district_id": 24
+  },
+  {
+   "id": 18,
+   "name": "Tandlianwala",
+   "district_id": 5
+  },
+  {
+   "id": 133,
+   "name": "Taunsa",
+   "district_id": 35
+  },
+  {
+   "id": 134,
+   "name": "Taunsa Sharif",
+   "district_id": 35
+  },
+  {
+   "id": 75,
+   "name": "Taxila",
+   "district_id": 20
+  },
+  {
+   "id": 25,
+   "name": "Toba Tek Singh",
+   "district_id": 7
+  },
+  {
+   "id": 106,
+   "name": "Vehari",
+   "district_id": 28
+  },
+  {
+   "id": 15,
+   "name": "Warburton",
+   "district_id": 4
+  },
+  {
+   "id": 37,
+   "name": "Wazirabad",
+   "district_id": 10
+  },
+  {
+   "id": 120,
+   "name": "Yazman",
+   "district_id": 32
+  },
+  {
+   "id": 54,
+   "name": "Zafarwal",
+   "district_id": 15
+  }
+ ]
+}

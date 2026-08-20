@@ -1,0 +1,262 @@
+{
+ "generatedAt": "2026-08-20T11:13:58.705Z",
+ "totals": {
+  "locations": 86,
+  "locationsByType": {
+   "BAZAAR": 61,
+   "HEAD_OFFICE": 2,
+   "MOBILE_BAZAAR": 21,
+   "SPECIAL_UNIT": 2
+  },
+  "employees_current": 1657,
+  "employees_with_location": 1650,
+  "employees_without_location": 7
+ },
+ "designationCounts": {
+  "Security & Parking Attendant": 639,
+  "Record Keeper": 175,
+  "Sanitation Attendant": 345,
+  "Sahulat Bazaar Supervisor": 283,
+  "Computer Operator": 3,
+  "Supervisor FHD": 5,
+  "Gardener": 40,
+  "Operations Assistant": 12,
+  "Office Attendant": 9,
+  "Site Supervisor": 2,
+  "Electrician": 15,
+  "Sahulat Bazaar Incharge": 43,
+  "Monitoring Supervisor": 11,
+  "Filling Assistant": 11,
+  "Accounts Receivable Officer": 1,
+  "Assistant Director (Security & Surveillance)": 1,
+  "Structural Design Engineer": 1,
+  "(none)": 7,
+  "Additional Director (Audit, Monitoring & Evaluation)": 1,
+  "Research Assistant": 8,
+  "Sub-Engineer (Electrical)": 2,
+  "HR Operations Officer": 2,
+  "Network Support Associate": 3,
+  "Sub-Engineer (Maintenance)": 3,
+  "Assistant Director (Account, Payroll & Reconciliation)": 1,
+  "Driver": 2,
+  "Software Assistant": 2,
+  "Assistant Director (Establishment)": 1,
+  "Architect": 1,
+  "Assistant Director (IT)": 1,
+  "Assistant Director (Headquarter, Admin/Operations)": 1,
+  "Assistant Director (DevOps)": 1,
+  "Sr. Engineer (Civil)": 1,
+  "Public Relations Officer": 1,
+  "Graphic Designer": 1,
+  "Project Coordinator": 2,
+  "Procurement Officer": 1,
+  "Assistant Director (Budget, Finance & Taxation)": 1,
+  "Assistant Director (Monitoring & Evaluation)": 1,
+  "Additional Director General (Headquarters, Finance & Startegic Planning)": 1,
+  "Admin Officer": 1,
+  "Assistant Director (Legal)": 1,
+  "Additional Director (Projects, Planning & Special Initiatives)": 1,
+  "Office Supervisor": 2,
+  "Sub-Engineer (Civil)": 3,
+  "Additional Director (Operations & Revenue)": 1,
+  "Finance & Taxation Officer": 1,
+  "Monitoring & Evalution Assistant": 1,
+  "Assistant Director (Projects, Planning & Special Initiatives)": 1,
+  "Assistant Engineer Elctrical": 1,
+  "Asset Management Officer": 1,
+  "Assistant Director, Operations & Revenue (Central & North)": 1,
+  "Jr. System Administor": 1
+ },
+ "bazaarLocationsMissingInchargeOrSupervisor": [
+  {
+   "id": 85,
+   "name": "Sahulat Bazaar Bahawalnagar (On the Go)",
+   "type": "BAZAAR",
+   "staff": 0
+  },
+  {
+   "id": 44,
+   "name": "Sahulat Bazaar Mandi Bahauddin",
+   "type": "BAZAAR",
+   "staff": 6
+  },
+  {
+   "id": 86,
+   "name": "Sahulat Bazaar Raiwind Phase 2",
+   "type": "BAZAAR",
+   "staff": 1
+  },
+  {
+   "id": 81,
+   "name": "Sahulat Bazaar Renala Kurd",
+   "type": "BAZAAR",
+   "staff": 0
+  }
+ ],
+ "employeesWithSuspiciousNames": [],
+ "sharedMobileNumbers": [
+  {
+   "phone": "...6174",
+   "names": [
+    "Abdullah Mukhtar",
+    "Muhammad Danyal"
+   ]
+  },
+  {
+   "phone": "...9539",
+   "names": [
+    "Suleman Yousaf",
+    "Yousaf Kamal"
+   ]
+  },
+  {
+   "phone": "...0472",
+   "names": [
+    "Danish Adeeb",
+    "Muhammad Shabir"
+   ]
+  },
+  {
+   "phone": "...0700",
+   "names": [
+    "Arslan Ali",
+    "Muhammad Miraj Khalid"
+   ]
+  },
+  {
+   "phone": "...4753",
+   "names": [
+    "Muhammad Iqbal",
+    "Muhammad Nadeem Anwar"
+   ]
+  },
+  {
+   "phone": "...1113",
+   "names": [
+    "Asad Ali",
+    "Malik Moazzam Rahim Khokhar"
+   ]
+  },
+  {
+   "phone": "...1224",
+   "names": [
+    "Bilal Ilyas Gujar",
+    "Ehtisham"
+   ]
+  },
+  {
+   "phone": "...0396",
+   "names": [
+    "Muhammad Suleman",
+    "Muhammad Talha Kaleem"
+   ]
+  },
+  {
+   "phone": "...2969",
+   "names": [
+    "Asima Waheed",
+    "Haroon"
+   ]
+  },
+  {
+   "phone": "...7376",
+   "names": [
+    "Ghulam Mustafa",
+    "Umar Bilal"
+   ]
+  },
+  {
+   "phone": "...8125",
+   "names": [
+    "Saniu Azeem",
+    "Wishu Asghar"
+   ]
+  },
+  {
+   "phone": "...9542",
+   "names": [
+    "Ashfaq Masih",
+    "Ashraf Masih"
+   ]
+  },
+  {
+   "phone": "...7523",
+   "names": [
+    "Ali Raza",
+    "Allah Yar"
+   ]
+  },
+  {
+   "phone": "...4956",
+   "names": [
+    "Bilal Shahid",
+    "Muhammad Ahsan Shakeel"
+   ]
+  },
+  {
+   "phone": "...8923",
+   "names": [
+    "Syed Muhammad Aizaz Haider Shah",
+    "Syed Qamar Raza Shah"
+   ]
+  },
+  {
+   "phone": "...4390",
+   "names": [
+    "Abdul Majeed",
+    "Mansoor Ahmad"
+   ]
+  },
+  {
+   "phone": "...5613",
+   "names": [
+    "Haider Abbas",
+    "Qamar Hussain"
+   ]
+  },
+  {
+   "phone": "...2859",
+   "names": [
+    "Adnan Rafique",
+    "Nouman Masih"
+   ]
+  }
+ ],
+ "cnicChecks": [
+  {
+   "query": "3520142793937",
+   "found": []
+  },
+  {
+   "query": "3520295368762",
+   "found": [
+    {
+     "id": 1675,
+     "cnic": "3520295368762",
+     "full_name": "Ghazala Nawaz",
+     "is_deleted": false,
+     "status": "Active"
+    }
+   ]
+  },
+  {
+   "query": "3520115336235",
+   "found": [
+    {
+     "id": 301,
+     "cnic": "3520115336235",
+     "full_name": "Zaigham Yaseen",
+     "is_deleted": false,
+     "status": "Active"
+    }
+   ]
+  }
+ ],
+ "zaighamNameCheck": [
+  {
+   "cnic": "3520115336235",
+   "full_name": "Zaigham Yaseen",
+   "is_deleted": false
+  }
+ ]
+}

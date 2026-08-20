@@ -55,7 +55,15 @@ export function openDutyRosterPrint(roster) {
   th { background: #f0f0f0; font-weight: bold; }
   td.name { text-align: left; font-weight: bold; }
   td.nowrap { white-space: nowrap; }
-  td.off { color: #c0392b; font-weight: bold; }
+  /* Weekly off reads as a filled red cell, not red text. Backgrounds are
+     dropped by default when printing, so force them through. */
+  td.off {
+    background: #c0392b;
+    color: #fff;
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   tr.band td { background: #dfe6ef; font-weight: bold; text-align: center; letter-spacing: 0.5px; font-size: 9px; }
   .footer { margin-top: 16px; font-size: 10px; font-style: italic; color: #555; text-align: center; }
   @media print {
@@ -69,7 +77,7 @@ export function openDutyRosterPrint(roster) {
     <img src="${leftLogo}" alt="Sahulat" onerror="this.style.visibility='hidden'"/>
     <div class="center">
       <h1>${esc(model.title)}</h1>
-      ${model.timing ? `<div class="sub"><b>Bazaar Operational Timing:</b> ${esc(model.timing)}</div>` : ""}
+      ${model.timing ? `<div class="sub"><b>Roster Operational Timing:</b> ${esc(model.timing)}</div>` : ""}
       <div class="sub"><b>FROM</b> ${esc(model.validFrom)} <b>TO</b> ${
     model.validTo ? esc(model.validTo) : "ONWARDS (PERMANENT)"
   }</div>

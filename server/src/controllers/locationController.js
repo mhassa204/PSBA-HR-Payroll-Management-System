@@ -44,6 +44,53 @@ const locationController = {
     }
   },
 
+  // PATCH /locations/:id/timing — bazaar operational hours only.
+  //
+  // Deliberately narrow: Operations needs to keep trading hours correct (they
+  // are printed on every duty roster form) without being able to rename,
+  // relocate or delete a bazaar. Only these two columns are ever written.
+  updateOperationalTiming: async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ success: false, error: "Invalid location id." });
+      }
+
+      // "" clears an override and puts the bazaar back on the default hours
+      const clean = (value) => {
+        if (value === null || value === undefined || String(value).trim() === "") return null;
+        const m = String(value).trim().match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return undefined; // signals invalid
+        const h = Number(m[1]);
+        const min = Number(m[2]);
+        if (h > 23 || min > 59) return undefined;
+        return `${String(h).padStart(2, "0")}:${m[2]}`;
+      };
+
+      const opening = clean(req.body?.opening_time);
+      const closing = clean(req.body?.closing_time);
+      if (opening === undefined || closing === undefined) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Times must be in HH:mm form, or blank to clear." });
+      }
+      if (opening && closing && opening >= closing) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Opening time must be before closing time." });
+      }
+
+      const location = await locationService.updateOperationalTiming(id, {
+        opening_time: opening,
+        closing_time: closing,
+      });
+      res.status(200).json({ success: true, location });
+    } catch (error) {
+      console.error("Error updating operational timing:", error.message);
+      res.status(400).json({ success: false, error: error.message });
+    }
+  },
+
   deleteLocation: async (req, res) => {
     try {
       await locationService.deleteLocation(req.params.id);
